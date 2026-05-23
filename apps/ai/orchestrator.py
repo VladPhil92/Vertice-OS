@@ -448,7 +448,7 @@ def route_to_agent(
     "citizen", "governance", "policy", "territorial", "integrity", "comms", END
 ]:
     """Función de routing condicional para LangGraph."""
-    intent = state.get("intent", AgentIntent.UNKNOWN)
+    intent = state.get("intent") or AgentIntent.UNKNOWN
     if intent == AgentIntent.UNKNOWN:
         return "citizen"  # Default al agente ciudadano
     return intent.value

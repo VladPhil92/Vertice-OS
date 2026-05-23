@@ -57,7 +57,15 @@ async def generic_exception_handler(_request: Request, exc: Exception) -> JSONRe
 
 @app.get("/health", tags=["infra"])
 async def health() -> dict:
-    return {"status": "ok", "service": "ai-orchestrator", "version": "0.1.0"}
+    anthropic_key_ok = bool(os.getenv("ANTHROPIC_API_KEY"))
+    return {
+        "status": "ok" if anthropic_key_ok else "degraded",
+        "service": "ai-orchestrator",
+        "version": "0.1.0",
+        "checks": {
+            "anthropic_key": "ok" if anthropic_key_ok else "missing",
+        },
+    }
 
 
 @app.post("/civic/query", response_model=QueryResponse, tags=["orchestrator"])

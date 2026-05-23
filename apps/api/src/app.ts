@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit'
 import sensible from '@fastify/sensible'
 import { config } from './config'
 import { redis } from './lib/redis'
+import { prisma } from './lib/prisma'
 import { authRoutes } from './modules/auth/auth.routes'
 
 export function buildApp() {
@@ -41,16 +42,19 @@ export function buildApp() {
     sign: { algorithm: 'HS256' },
   })
 
-  app.register(rateLimit, {
-    global: true,
-    max: 100,
-    timeWindow: '1 minute',
-    redis,
-    errorResponseBuilder: () => ({
-      error: 'Demasiadas solicitudes',
-      code: 'RATE_LIMIT_EXCEEDED',
-    }),
-  })
+  // Rate limiting deshabilitado en test para simplificar fixtures
+  if (config.NODE_ENV !== 'test') {
+    app.register(rateLimit, {
+      global: true,
+      max: 100,
+      timeWindow: '1 minute',
+      redis,
+      errorResponseBuilder: () => ({
+        error: 'Demasiadas solicitudes',
+        code: 'RATE_LIMIT_EXCEEDED',
+      }),
+    })
+  }
 
   // ── Error handler global ─────────────────────────────────────────
 
@@ -68,13 +72,41 @@ export function buildApp() {
     })
   })
 
-  // ── Health check ─────────────────────────────────────────────────
+  // ── Health checks ────────────────────────────────────────────────
 
   app.get('/health', async () => ({
     status: 'ok',
     version: '0.1.0',
     timestamp: new Date().toISOString(),
   }))
+
+  app.get('/health/ready', async (_request, reply) => {
+    const checks: Record<string, 'ok' | 'fail'> = {}
+    let healthy = true
+
+    try {
+      await redis.ping()
+      checks.redis = 'ok'
+    } catch {
+      checks.redis = 'fail'
+      healthy = false
+    }
+
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      checks.database = 'ok'
+    } catch {
+      checks.database = 'fail'
+      healthy = false
+    }
+
+    return reply.status(healthy ? 200 : 503).send({
+      status: healthy ? 'ok' : 'degraded',
+      checks,
+      version: '0.1.0',
+      timestamp: new Date().toISOString(),
+    })
+  })
 
   // ── Routes ───────────────────────────────────────────────────────
 
