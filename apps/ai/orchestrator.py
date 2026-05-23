@@ -13,17 +13,21 @@ Agentes:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import uuid
 from enum import Enum
 from typing import Annotated, Any, Literal
 
 import anthropic
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing_extensions import TypedDict
 
 logger = logging.getLogger(__name__)
+
+ORCHESTRATOR_TIMEOUT_SECONDS = 30
 
 # ──────────────────────────────────────────────────────────────────────────────
 # State
@@ -44,11 +48,12 @@ class AgentState(TypedDict):
     intent: AgentIntent | None
     citizen_id: str | None
     territory: str | None
-    context: dict[str, Any]
+    context: dict[str, str]      # solo claves/valores string — ver SessionContext
     retrieved_docs: list[str]
     response: str | None
     confidence: float
     audit_log: list[dict]
+    audit_id: str
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -66,18 +71,33 @@ class BaseAgent:
         self.system_prompt = system_prompt
         self.client = anthropic.Anthropic()
 
-    def _call_llm(self, messages: list[dict], context: dict = None) -> str:
+    def _call_llm(self, messages: list[dict], context: dict[str, str] | None = None) -> str:
         """Llamada al LLM con el contexto enriquecido."""
         system = self.system_prompt
-        if context:
-            system += f"\n\n## Contexto de la sesión\n{context}"
 
-        response = self.client.messages.create(
-            model=self.MODEL,
-            max_tokens=self.MAX_TOKENS,
-            system=system,
-            messages=messages,
-        )
+        # Serialización segura: key-value por línea, sin interpolación de dicts arbitrarios
+        if context:
+            lines = [f"- {k}: {v}" for k, v in context.items() if v]
+            if lines:
+                system += "\n\n## Contexto de la sesión\n" + "\n".join(lines)
+
+        try:
+            response = self.client.messages.create(
+                model=self.MODEL,
+                max_tokens=self.MAX_TOKENS,
+                system=system,
+                messages=messages,
+            )
+        except anthropic.APIStatusError as exc:
+            logger.error("[%s] Anthropic API error %d: %s", self.name, exc.status_code, exc.message)
+            raise
+        except anthropic.APIConnectionError as exc:
+            logger.error("[%s] Anthropic connection error: %s", self.name, exc)
+            raise
+
+        if not response.content:
+            raise ValueError(f"[{self.name}] Anthropic devolvió contenido vacío")
+
         return response.content[0].text
 
     def _log_action(self, state: AgentState, action: str, result: str) -> dict:
@@ -394,12 +414,20 @@ Responde SOLO con una de estas palabras (sin explicación):
     def __call__(self, state: AgentState) -> AgentState:
         last_message = state["messages"][-1]["content"] if state["messages"] else ""
 
-        response = self.client.messages.create(
-            model=self.MODEL,
-            max_tokens=20,
-            system=self.SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": last_message}],
-        )
+        try:
+            response = self.client.messages.create(
+                model=self.MODEL,
+                max_tokens=20,
+                system=self.SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": last_message}],
+            )
+        except (anthropic.APIStatusError, anthropic.APIConnectionError) as exc:
+            logger.error("[RouterAgent] LLM error: %s", exc)
+            return {**state, "intent": AgentIntent.UNKNOWN}
+
+        if not response.content:
+            logger.warning("[RouterAgent] Anthropic devolvió contenido vacío")
+            return {**state, "intent": AgentIntent.UNKNOWN}
 
         intent_str = response.content[0].text.strip().lower()
         try:
@@ -479,11 +507,40 @@ orchestrator = build_orchestrator()
 # API Entry Point
 # ──────────────────────────────────────────────────────────────────────────────
 
+class SessionContext(BaseModel):
+    """Campos de contexto permitidos — lista blanca explícita para prevenir prompt injection."""
+
+    proposal_id: str | None = Field(None, max_length=36)
+    report_id: str | None = Field(None, max_length=36)
+    locality: str | None = Field(None, max_length=120)
+    neighborhood: str | None = Field(None, max_length=120)
+    topic: str | None = Field(None, max_length=200)
+
+    def to_safe_dict(self) -> dict[str, str]:
+        """Devuelve solo campos con valor, como strings seguros."""
+        return {k: str(v) for k, v in self.model_dump(exclude_none=True).items()}
+
+
 class QueryRequest(BaseModel):
-    message: str = Field(..., description="Mensaje del ciudadano")
-    citizen_id: str | None = Field(None, description="ID del ciudadano autenticado")
-    territory: str | None = Field(None, description="Territorio del ciudadano (localidad/barrio)")
-    context: dict[str, Any] = Field(default_factory=dict, description="Contexto adicional")
+    message: str = Field(..., min_length=1, max_length=10_000, description="Mensaje del ciudadano")
+    citizen_id: str | None = Field(
+        None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        description="UUID del ciudadano autenticado",
+    )
+    territory: str | None = Field(None, max_length=120, description="Localidad o barrio")
+    context: SessionContext = Field(default_factory=SessionContext, description="Contexto de sesión")
+
+    @field_validator("message")
+    @classmethod
+    def message_no_injection(cls, v: str) -> str:
+        """Rechaza mensajes que intentan romper el formato del system prompt."""
+        forbidden = ["## ", "<|system|>", "<|user|>", "<|assistant|>", "ignore previous"]
+        lower = v.lower()
+        for pattern in forbidden:
+            if pattern.lower() in lower:
+                raise ValueError("Formato de mensaje no permitido")
+        return v
 
 
 class QueryResponse(BaseModel):
@@ -495,25 +552,54 @@ class QueryResponse(BaseModel):
 
 async def process_civic_query(request: QueryRequest) -> QueryResponse:
     """Procesa una consulta ciudadana a través del orquestador multi-agente."""
-    import uuid
+    audit_id = str(uuid.uuid4())
 
     initial_state: AgentState = {
         "messages": [{"role": "user", "content": request.message}],
         "intent": None,
         "citizen_id": request.citizen_id,
         "territory": request.territory,
-        "context": request.context,
+        "context": request.context.to_safe_dict(),
         "retrieved_docs": [],
         "response": None,
         "confidence": 0.0,
         "audit_log": [],
+        "audit_id": audit_id,
     }
 
-    result = await orchestrator.ainvoke(initial_state)
+    try:
+        result = await asyncio.wait_for(
+            orchestrator.ainvoke(initial_state),
+            timeout=ORCHESTRATOR_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "[orchestrator] timeout audit_id=%s citizen_id=%s",
+            audit_id,
+            request.citizen_id,
+        )
+        return QueryResponse(
+            response="La consulta tardó demasiado. Por favor intenta de nuevo.",
+            agent_used="timeout",
+            confidence=0.0,
+            audit_id=audit_id,
+        )
+    except Exception:
+        logger.exception(
+            "[orchestrator] error inesperado audit_id=%s citizen_id=%s",
+            audit_id,
+            request.citizen_id,
+        )
+        return QueryResponse(
+            response="Ocurrió un error procesando tu consulta. Por favor intenta de nuevo.",
+            agent_used="error",
+            confidence=0.0,
+            audit_id=audit_id,
+        )
 
     return QueryResponse(
-        response=result["response"] or "No se pudo generar una respuesta.",
-        agent_used=result["intent"].value if result["intent"] else "unknown",
-        confidence=result["confidence"],
-        audit_id=str(uuid.uuid4()),
+        response=result.get("response") or "No se pudo generar una respuesta.",
+        agent_used=result["intent"].value if result.get("intent") else "unknown",
+        confidence=result.get("confidence", 0.0),
+        audit_id=audit_id,
     )
