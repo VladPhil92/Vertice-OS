@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Citizen {
+  id                String    @id @default(uuid()) @db.Uuid
+  did               String    @unique
+  cedulaHash        String    @unique @map("cedula_hash")
+  email             String?   @unique
+  passwordHash      String?   @map("password_hash")
+  localityId        Int?      @map("locality_id")
+  neighborhood      String?
+  reputationScore   Decimal   @default(0) @map("reputation_score") @db.Decimal(10, 4)
+  verificationLevel Int       @default(0) @map("verification_level") @db.SmallInt
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  lastActiveAt      DateTime? @map("last_active_at") @db.Timestamptz()
+
+  sessions Session[]
+
+  @@map("citizens")
+}
+
+// Refresh token store — un registro por sesión activa
+model Session {
+  id                String    @id @default(uuid()) @db.Uuid
+  citizenId         String    @map("citizen_id") @db.Uuid
+  refreshTokenHash  String    @unique @map("refresh_token_hash")
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz()
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz()
+  userAgent         String?   @map("user_agent")
+  ipAddress         String?   @map("ip_address")
+
+  citizen Citizen @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+
+  @@index([citizenId])
+  @@index([expiresAt])
+  @@map("sessions")
+}

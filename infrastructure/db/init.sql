@@ -29,6 +29,8 @@ CREATE TABLE citizens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     did TEXT UNIQUE NOT NULL,
     cedula_hash TEXT UNIQUE NOT NULL,         -- SHA-256, nunca texto plano
+    email TEXT UNIQUE,
+    password_hash TEXT,
     locality_id INTEGER REFERENCES localities(id),
     neighborhood TEXT,
     display_name TEXT,                         -- Nombre público (puede ser alias)
@@ -197,6 +199,21 @@ CREATE TABLE delegations (
 
 CREATE INDEX idx_delegations_delegator ON delegations(delegator_id, is_active);
 CREATE INDEX idx_delegations_delegate ON delegations(delegate_id, is_active);
+
+-- ── Sesiones de autenticación (refresh tokens) ───────────────────────────────
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    citizen_id UUID REFERENCES citizens(id) ON DELETE CASCADE NOT NULL,
+    refresh_token_hash TEXT UNIQUE NOT NULL,    -- HMAC-SHA256 del token, nunca el token en claro
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ,
+    user_agent TEXT,
+    ip_address TEXT
+);
+
+CREATE INDEX idx_sessions_citizen_id ON sessions(citizen_id);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
 
 -- ── Función para actualizar updated_at automáticamente ────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
