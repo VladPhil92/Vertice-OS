@@ -87,6 +87,20 @@ jobs:
         ports:
           - 6379:6379
 
+      neo4j:
+        image: neo4j:5.20-community
+        env:
+          NEO4J_AUTH: neo4j/vertice_test
+          NEO4J_PLUGINS: '["apoc"]'
+        options: >-
+          --health-cmd "wget -qO- http://localhost:7474 || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 8
+        ports:
+          - 7687:7687
+          - 7474:7474
+
     steps:
       - uses: actions/checkout@v4
 
@@ -112,6 +126,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://vertice:vertice_test@localhost:5432/vertice_test
           REDIS_URL: redis://localhost:6379
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: vertice_test
           NODE_ENV: test
         run: pnpm test
 
