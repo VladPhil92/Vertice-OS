@@ -1,0 +1,258 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- VÉRTICE OS — Database Init Script
+-- PostgreSQL + PostGIS
+-- ═══════════════════════════════════════════════════════════════════
+
+-- Enable PostGIS extension
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ── Localidades de Cartagena ─────────────────────────────────────────────────
+CREATE TABLE localities (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    code TEXT UNIQUE NOT NULL,
+    population_estimate INTEGER,
+    area_km2 DECIMAL(8,2),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO localities (name, code, population_estimate) VALUES
+  ('Histórica y del Caribe Norte', 'CTG-01', 295000),
+  ('De la Virgen y Turística', 'CTG-02', 380000),
+  ('Industrial y de la Bahía', 'CTG-03', 315000),
+  ('Bayunca', 'CTG-04', 45000);
+
+-- ── Ciudadanos verificados ────────────────────────────────────────────────────
+CREATE TABLE citizens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    did TEXT UNIQUE NOT NULL,
+    cedula_hash TEXT UNIQUE NOT NULL,         -- SHA-256, nunca texto plano
+    locality_id INTEGER REFERENCES localities(id),
+    neighborhood TEXT,
+    display_name TEXT,                         -- Nombre público (puede ser alias)
+    verification_level SMALLINT DEFAULT 0,    -- 0:básico, 1:verificado, 2:validado
+    reputation_score DECIMAL(10,4) DEFAULT 0,
+    participation_count INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_active_at TIMESTAMPTZ,
+    CONSTRAINT valid_verification CHECK (verification_level BETWEEN 0 AND 2),
+    CONSTRAINT valid_reputation CHECK (reputation_score >= 0)
+);
+
+CREATE INDEX idx_citizens_locality ON citizens(locality_id);
+CREATE INDEX idx_citizens_reputation ON citizens(reputation_score DESC);
+CREATE INDEX idx_citizens_active ON citizens(is_active, last_active_at DESC);
+
+-- ── Reportes territoriales ────────────────────────────────────────────────────
+CREATE TABLE territorial_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    citizen_id UUID REFERENCES citizens(id),
+    
+    -- Clasificación
+    category TEXT NOT NULL,
+    subcategory TEXT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    
+    -- Geoespacial (PostGIS)
+    location GEOGRAPHY(POINT, 4326) NOT NULL,
+    neighborhood TEXT,
+    locality_id INTEGER REFERENCES localities(id),
+    address_reference TEXT,
+    
+    -- IA scores
+    urgency_score DECIMAL(4,3),               -- 0.0 a 1.0 (ML)
+    sentiment_score DECIMAL(4,3),             -- -1.0 a 1.0
+    cluster_id TEXT,                           -- HDBSCAN cluster
+    
+    -- Estado
+    status TEXT DEFAULT 'open'
+        CHECK (status IN ('open', 'in_progress', 'resolved', 'rejected', 'duplicate')),
+    assigned_to TEXT,                          -- Responsable institucional
+    
+    -- Medios
+    media_urls TEXT[],                         -- Fotos/videos en IPFS
+    
+    -- Blockchain
+    ipfs_hash TEXT,                            -- Hash del reporte en IPFS
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ,
+    
+    CONSTRAINT valid_urgency CHECK (urgency_score IS NULL OR urgency_score BETWEEN 0 AND 1)
+);
+
+-- Índice espacial (crítico para queries geoespaciales)
+CREATE INDEX idx_reports_location ON territorial_reports USING GIST(location);
+CREATE INDEX idx_reports_status ON territorial_reports(status, created_at DESC);
+CREATE INDEX idx_reports_category ON territorial_reports(category, status);
+CREATE INDEX idx_reports_locality ON territorial_reports(locality_id, status);
+
+-- ── Propuestas de gobernanza ──────────────────────────────────────────────────
+CREATE TABLE proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    author_id UUID REFERENCES citizens(id),
+    
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    executive_summary TEXT,
+    category TEXT NOT NULL,
+    scope TEXT NOT NULL
+        CHECK (scope IN ('neighborhood', 'locality', 'city', 'regional', 'national')),
+    
+    -- Estado del ciclo de vida
+    status TEXT DEFAULT 'idea'
+        CHECK (status IN ('idea', 'draft', 'debate', 'voting', 'approved', 
+                          'rejected', 'executed', 'failed_execution', 'quorum_failed')),
+    
+    -- Métricas de participación
+    endorsement_count INTEGER DEFAULT 0,
+    comment_count INTEGER DEFAULT 0,
+    view_count INTEGER DEFAULT 0,
+    
+    -- Parámetros de votación (calculados al entrar en votación)
+    quorum_required DECIMAL(4,3),
+    approval_threshold DECIMAL(4,3),
+    eligible_voters INTEGER,
+    
+    -- Resultado
+    total_votes INTEGER DEFAULT 0,
+    approve_votes_weighted DECIMAL(12,4) DEFAULT 0,
+    reject_votes_weighted DECIMAL(12,4) DEFAULT 0,
+    abstain_votes_weighted DECIMAL(12,4) DEFAULT 0,
+    
+    -- Responsable de ejecución (si se aprueba)
+    assigned_executor TEXT,
+    execution_deadline DATE,
+    
+    -- Blockchain & IPFS
+    blockchain_tx_hash TEXT,
+    ipfs_proposal_uri TEXT,
+    ipfs_result_uri TEXT,
+    
+    -- Timestamps del ciclo de vida
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    draft_started_at TIMESTAMPTZ,
+    debate_started_at TIMESTAMPTZ,
+    voting_starts_at TIMESTAMPTZ,
+    voting_ends_at TIMESTAMPTZ,
+    decided_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_proposals_status ON proposals(status, created_at DESC);
+CREATE INDEX idx_proposals_author ON proposals(author_id);
+CREATE INDEX idx_proposals_category ON proposals(category, scope);
+
+-- ── Votos ─────────────────────────────────────────────────────────────────────
+-- Diseñado para privacidad: el voto individual es opaco
+CREATE TABLE votes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proposal_id UUID REFERENCES proposals(id) NOT NULL,
+    
+    -- Privacidad: no guardamos el citizen_id directamente
+    -- El nullifier_hash previene doble voto sin revelar identidad
+    nullifier_hash TEXT UNIQUE NOT NULL,       -- ZKP nullifier
+    
+    vote_weight DECIMAL(6,4) NOT NULL,         -- Ponderado por reputación
+    vote_value SMALLINT NOT NULL               -- 1=favor, -1=contra, 0=abstención
+        CHECK (vote_value IN (-1, 0, 1)),
+    
+    -- Delegación
+    is_delegated BOOLEAN DEFAULT FALSE,
+    delegation_depth SMALLINT DEFAULT 0,       -- 0=voto directo, 1,2,3=delegaciones
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    
+    CONSTRAINT valid_weight CHECK (vote_weight > 0 AND vote_weight <= 10)
+);
+
+CREATE INDEX idx_votes_proposal ON votes(proposal_id, vote_value);
+
+-- ── Delegaciones de voto ──────────────────────────────────────────────────────
+CREATE TABLE delegations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    delegator_id UUID REFERENCES citizens(id) NOT NULL,
+    delegate_id UUID REFERENCES citizens(id) NOT NULL,
+    
+    -- Alcance
+    delegation_type TEXT NOT NULL
+        CHECK (delegation_type IN ('general', 'domain', 'proposal', 'temporal')),
+    domain TEXT,                               -- Si es por dominio
+    proposal_id UUID REFERENCES proposals(id), -- Si es por propuesta
+    
+    -- Vigencia
+    is_active BOOLEAN DEFAULT TRUE,
+    valid_from TIMESTAMPTZ DEFAULT NOW(),
+    valid_until TIMESTAMPTZ,                   -- NULL = sin expiración
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ,
+    
+    CONSTRAINT no_self_delegation CHECK (delegator_id != delegate_id)
+);
+
+CREATE INDEX idx_delegations_delegator ON delegations(delegator_id, is_active);
+CREATE INDEX idx_delegations_delegate ON delegations(delegate_id, is_active);
+
+-- ── Función para actualizar updated_at automáticamente ────────────────────────
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER territorial_reports_updated_at
+    BEFORE UPDATE ON territorial_reports
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ── Vistas útiles ─────────────────────────────────────────────────────────────
+
+-- Vista: reportes activos con datos de localidad
+CREATE VIEW active_reports_view AS
+SELECT 
+    r.*,
+    l.name as locality_name,
+    ST_X(r.location::geometry) as longitude,
+    ST_Y(r.location::geometry) as latitude
+FROM territorial_reports r
+LEFT JOIN localities l ON r.locality_id = l.id
+WHERE r.status IN ('open', 'in_progress');
+
+-- Vista: resumen de participación por ciudadano
+CREATE VIEW citizen_participation_summary AS
+SELECT 
+    c.id,
+    c.did,
+    c.locality_id,
+    c.reputation_score,
+    c.verification_level,
+    COUNT(DISTINCT r.id) as reports_made,
+    COUNT(DISTINCT p.id) as proposals_made,
+    c.created_at,
+    c.last_active_at
+FROM citizens c
+LEFT JOIN territorial_reports r ON r.citizen_id = c.id
+LEFT JOIN proposals p ON p.author_id = c.id
+GROUP BY c.id;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- Seed data mínimo para desarrollo
+-- ═══════════════════════════════════════════════════════════════════
+
+-- Ciudadano de prueba (en producción esto NO existe)
+INSERT INTO citizens (did, cedula_hash, locality_id, neighborhood, display_name, verification_level, reputation_score)
+VALUES (
+    'did:polygon:0x1234567890abcdef',
+    encode(digest('1234567890', 'sha256'), 'hex'),
+    1,
+    'Getsemaní',
+    'Ciudadano Demo',
+    2,
+    0.75
+) ON CONFLICT DO NOTHING;
