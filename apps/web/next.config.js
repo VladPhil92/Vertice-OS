@@ -26,9 +26,11 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
+            // 'unsafe-inline' en script-src debe reemplazarse por nonces via middleware
+            // cuando se implemente apps/api. Ver docs/architecture/ARCHITECTURE.md §5.
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:",
+              "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.mapbox.com https://ipfs.io",

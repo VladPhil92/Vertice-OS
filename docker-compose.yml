@@ -34,8 +34,9 @@ services:
       - "4000:4000"
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://vertice:vertice@postgres:5432/vertice_os
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://vertice:${POSTGRES_PASSWORD}@postgres:5432/vertice_os
+      - MONGODB_URI=mongodb://vertice:${MONGO_ROOT_PASSWORD}@mongodb:27017/vertice_os
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - AI_SERVICE_URL=http://ai:8001
     depends_on:
       postgres:
@@ -68,7 +69,7 @@ services:
     environment:
       POSTGRES_DB: vertice_os
       POSTGRES_USER: vertice
-      POSTGRES_PASSWORD: vertice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -87,7 +88,7 @@ services:
     image: mongo:7.0
     environment:
       MONGO_INITDB_ROOT_USERNAME: vertice
-      MONGO_INITDB_ROOT_PASSWORD: vertice
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: vertice_os
     ports:
       - "27017:27017"
@@ -99,13 +100,15 @@ services:
   # ── Redis ─────────────────────────────────────────────────────────
   redis:
     image: redis:7.4-alpine
-    command: redis-server --requirepass vertice --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 512mb --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "vertice", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -116,7 +119,7 @@ services:
   neo4j:
     image: neo4j:5.21
     environment:
-      NEO4J_AUTH: neo4j/vertice_pass
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
       NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
     ports:
       - "7474:7474"  # Browser UI
