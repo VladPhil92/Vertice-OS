@@ -19,6 +19,9 @@ const schema = z.object({
   NEO4J_PASSWORD: z.string().default('vertice'),
   NEO4J_DATABASE: z.string().default('neo4j'),
 
+  AI_SERVICE_URL:    z.string().url().default('http://localhost:8001'),
+  AI_SERVICE_SECRET: z.string().default(''),
+
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 })
 

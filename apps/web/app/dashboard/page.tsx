@@ -10,7 +10,7 @@ const STAT_CARDS = [
 const QUICK_ACTIONS = [
   { href: '/dashboard/proposals/new', label: 'Nueva propuesta',   icon: FileText, description: 'Presenta una iniciativa ciudadana' },
   { href: '/dashboard/reports/new',   label: 'Reportar problema', icon: Map,       description: 'Reporta un problema en tu barrio' },
-  { href: '/dashboard/governance',    label: 'Votar ahora',       icon: Zap,       description: 'Propuestas abiertas para votación' },
+  { href: '/dashboard/legal/new',     label: 'Documento legal',   icon: Zap,       description: 'Genera una petición, tutela u otro recurso' },
   { href: '/dashboard/reputation',    label: 'Mi reputación',     icon: BarChart3, description: 'Historial de participación cívica' },
 ] as const
 

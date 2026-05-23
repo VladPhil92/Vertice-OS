@@ -9,6 +9,7 @@ Endpoints internos (requieren X-Service-Key):
   POST /territorial/analyze  — análisis de patrones en reportes territoriales
   POST /governance/synthesize — síntesis imparcial del debate de una propuesta
   POST /governance/draft-policy — borradores de política pública desde demandas ciudadanas
+  POST /legal/analyze        — análisis legal y generación de documento jurídico
 
 Infraestructura:
   GET  /health               — liveness check
@@ -18,6 +19,7 @@ Infraestructura:
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import Annotated
@@ -398,3 +400,202 @@ async def governance_draft_policy(
         draft=result.response,
         audit_id=result.audit_id,
     )
+
+# ── /legal/analyze ─────────────────────────────────────────────────────────────
+
+LEGAL_TYPES = [
+    "derecho_de_peticion",
+    "tutela",
+    "accion_popular",
+    "accion_de_cumplimiento",
+    "denuncia_penal",
+    "queja",
+]
+
+URGENCY_LEVELS = ["baja", "media", "alta", "critica"]
+
+INJECTION_PATTERNS = ["## ", "<|system|>", "<|user|>", "ignore previous", "<|assistant|>"]
+
+
+class LegalAnalysisRequest(BaseModel):
+    description: str = Field(
+        min_length=30,
+        max_length=8000,
+        description="Descripción detallada de la situación reportada por el ciudadano",
+    )
+    evidence_description: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Descripción de evidencias disponibles (fotos, documentos, testigos)",
+    )
+    location: str | None = Field(default=None, max_length=300, description="Ubicación donde ocurrió la situación")
+    citizen_name: str | None = Field(default=None, max_length=200, description="Nombre del ciudadano (para el documento)")
+    category: str = Field(default="general", max_length=100)
+    citizen_id: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    )
+
+    @field_validator("description")
+    @classmethod
+    def description_no_injection(cls, v: str) -> str:
+        lower = v.lower()
+        for pattern in INJECTION_PATTERNS:
+            if pattern.lower() in lower:
+                raise ValueError("Formato de descripción no permitido")
+        return v
+
+
+class LegalTargetEntity(BaseModel):
+    name: str
+    type: str
+    address: str
+    email: str
+    phone: str = "N/A"
+    contact_person: str = "Despacho"
+
+
+class LegalAnalysisResponse(BaseModel):
+    legal_type: str
+    urgency: str
+    rights_affected: list[str]
+    target_entity: LegalTargetEntity
+    response_deadline_days: int
+    document_draft: str
+    legal_orientation: str
+    alternative_remedies: list[str]
+    legal_basis: list[str]
+    next_steps: list[str]
+    audit_id: str
+
+
+def _build_legal_message(req: LegalAnalysisRequest) -> str:
+    evidence_block = ""
+    if req.evidence_description:
+        evidence_block = f"\n\nEVIDENCIAS DISPONIBLES:\n{req.evidence_description}"
+
+    location_block = f"\n\nUBICACIÓN: {req.location}" if req.location else ""
+    citizen_block = f"\n\nNOMBRE DEL CIUDADANO: {req.citizen_name}" if req.citizen_name else "\n\nNOMBRE DEL CIUDADANO: [El ciudadano proporcionará su nombre]"
+
+    return f"""SITUACIÓN REPORTADA POR CIUDADANO DE CARTAGENA DE INDIAS:
+
+DESCRIPCIÓN DEL HECHO:
+{req.description}
+
+CATEGORÍA: {req.category}{location_block}{evidence_block}{citizen_block}
+
+Analiza esta situación y:
+1. Determina el instrumento jurídico más apropiado
+2. Identifica la entidad responsable en Cartagena/Colombia
+3. Genera el documento legal completo listo para presentar
+4. Proporciona orientación práctica al ciudadano
+
+Responde ÚNICAMENTE con el JSON estructurado solicitado."""
+
+
+_FALLBACK_LEGAL_RESPONSE = LegalAnalysisResponse(
+    legal_type="derecho_de_peticion",
+    urgency="media",
+    rights_affected=["Derecho de petición (Art. 23 CP)"],
+    target_entity=LegalTargetEntity(
+        name="Alcaldía Distrital de Cartagena",
+        type="distrital",
+        address="Calle 36 No. 6-60, Centro Histórico, Cartagena",
+        email="alcaldia@cartagena.gov.co",
+        phone="(605) 650-5000",
+        contact_person="Secretario(a) General",
+    ),
+    response_deadline_days=15,
+    document_draft=(
+        "DERECHO DE PETICIÓN\n\n"
+        "Señores Alcaldía Distrital de Cartagena:\n\n"
+        "En ejercicio del derecho fundamental de petición (Art. 23 CP, Ley 1755/2015), "
+        "me dirijo a ustedes para solicitar atención a la situación descrita.\n\n"
+        "[Complete este documento con sus datos y la descripción detallada de la situación]\n\n"
+        "Atentamente,\n[Su nombre]\nC.C. No. _____"
+    ),
+    legal_orientation=(
+        "Un derecho de petición es el instrumento más accesible para ciudadanos. "
+        "No requiere abogado, es gratuito y puede enviarse por correo electrónico. "
+        "La entidad tiene 15 días hábiles para responder. "
+        "Si no responden, puede presentar una tutela por violación del derecho de petición."
+    ),
+    alternative_remedies=["Queja ante Personería Distrital", "Denuncia ante Procuraduría si hay falta disciplinaria"],
+    legal_basis=["Artículo 23 Constitución Política de Colombia", "Ley 1755 de 2015"],
+    next_steps=[
+        "Complete sus datos personales en el documento",
+        "Adjunte las evidencias disponibles",
+        "Envíe por correo electrónico a la entidad correspondiente",
+        "Guarde el acuse de recibo",
+        "Si no responden en 15 días hábiles, presente tutela",
+    ],
+    audit_id="fallback",
+)
+
+
+@app.post("/legal/analyze", response_model=LegalAnalysisResponse, tags=["legal"])
+async def legal_analyze(
+    request: LegalAnalysisRequest,
+    _auth: None = None,
+) -> LegalAnalysisResponse:
+    """
+    Analiza una situación ciudadana y genera el documento legal apropiado
+    (derecho de petición, tutela, acción popular, denuncia, etc.).
+    Incluye orientación jurídica basada en la normatividad colombiana.
+    """
+    logger.info(
+        "[legal/analyze] category=%s citizen_id=%s",
+        request.category,
+        request.citizen_id or "anon",
+    )
+
+    message = _build_legal_message(request)
+    context = SessionContext(
+        locality=request.location,
+        topic=request.category,
+    )
+
+    result = await process_with_intent(
+        message=message,
+        intent=AgentIntent.LEGAL,
+        context=context,
+        citizen_id=request.citizen_id,
+    )
+
+    # El LegalAgent devuelve JSON — parsearlo
+    try:
+        raw = result.response.strip()
+        # Extraer JSON si viene envuelto en markdown code block
+        if "```json" in raw:
+            raw = raw.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw:
+            raw = raw.split("```")[1].split("```")[0].strip()
+
+        data = json.loads(raw)
+
+        target = data.get("target_entity", {})
+        return LegalAnalysisResponse(
+            legal_type=data.get("legal_type", "derecho_de_peticion"),
+            urgency=data.get("urgency", "media"),
+            rights_affected=data.get("rights_affected", []),
+            target_entity=LegalTargetEntity(
+                name=target.get("name", "Alcaldía Distrital de Cartagena"),
+                type=target.get("type", "distrital"),
+                address=target.get("address", ""),
+                email=target.get("email", ""),
+                phone=target.get("phone", "N/A"),
+                contact_person=target.get("contact_person", "Despacho"),
+            ),
+            response_deadline_days=int(data.get("response_deadline_days", 15)),
+            document_draft=data.get("document_draft", ""),
+            legal_orientation=data.get("legal_orientation", ""),
+            alternative_remedies=data.get("alternative_remedies", []),
+            legal_basis=data.get("legal_basis", []),
+            next_steps=data.get("next_steps", []),
+            audit_id=result.audit_id,
+        )
+    except (json.JSONDecodeError, KeyError, ValueError) as exc:
+        logger.error("[legal/analyze] parse error: %s | raw=%s", exc, result.response[:200])
+        fallback = _FALLBACK_LEGAL_RESPONSE
+        fallback.audit_id = result.audit_id
+        return fallback

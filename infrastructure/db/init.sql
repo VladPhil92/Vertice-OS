@@ -308,6 +308,63 @@ CREATE INDEX idx_reputation_citizen ON reputation_events(citizen_id, created_at 
 CREATE INDEX idx_reputation_event_type ON reputation_events(citizen_id, event_type);
 CREATE INDEX idx_reputation_leaderboard ON reputation_events(citizen_id) INCLUDE (points);
 
+-- ── Módulo Legal ──────────────────────────────────────────────────────────────
+-- Documentos legales generados por IA a partir de reportes ciudadanos.
+-- Soporta: derecho de petición, tutela, acción popular, denuncia, queja.
+
+CREATE TABLE legal_documents (
+    id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    citizen_id              UUID        NOT NULL REFERENCES citizens(id) ON DELETE CASCADE,
+
+    legal_type              VARCHAR(40) NOT NULL,
+    status                  VARCHAR(20) NOT NULL DEFAULT 'draft',
+    urgency                 VARCHAR(10) NOT NULL DEFAULT 'media',
+
+    situation_description   TEXT        NOT NULL,
+    evidence_description    TEXT,
+    location                VARCHAR(300),
+    evidence_urls           JSONB       NOT NULL DEFAULT '[]',
+
+    rights_affected         JSONB       NOT NULL DEFAULT '[]',
+    target_entity           JSONB,
+    response_deadline_days  INTEGER     NOT NULL DEFAULT 15,
+    legal_basis             JSONB       NOT NULL DEFAULT '[]',
+    alternative_remedies    JSONB       NOT NULL DEFAULT '[]',
+    next_steps              JSONB       NOT NULL DEFAULT '[]',
+    legal_orientation       TEXT        NOT NULL DEFAULT '',
+    ai_audit_id             VARCHAR(36),
+
+    document_draft          TEXT        NOT NULL DEFAULT '',
+
+    submitted_at            TIMESTAMPTZ,
+    submitted_via           VARCHAR(10),
+    entity_response         TEXT,
+    entity_responded_at     TIMESTAMPTZ,
+    response_deadline_at    TIMESTAMPTZ,
+
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT valid_legal_type CHECK (legal_type IN (
+        'derecho_de_peticion', 'tutela', 'accion_popular',
+        'accion_de_cumplimiento', 'denuncia_penal', 'queja'
+    )),
+    CONSTRAINT valid_status CHECK (status IN (
+        'draft', 'ready', 'submitted', 'responded', 'escalated', 'closed'
+    )),
+    CONSTRAINT valid_urgency CHECK (urgency IN ('baja', 'media', 'alta', 'critica'))
+);
+
+CREATE INDEX idx_legal_citizen ON legal_documents(citizen_id, created_at DESC);
+CREATE INDEX idx_legal_status  ON legal_documents(citizen_id, status);
+CREATE INDEX idx_legal_type    ON legal_documents(legal_type, status);
+CREATE INDEX idx_legal_urgent  ON legal_documents(urgency, status)
+    WHERE status IN ('draft', 'ready', 'submitted');
+
+CREATE TRIGGER legal_documents_updated_at
+    BEFORE UPDATE ON legal_documents
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
 -- ═══════════════════════════════════════════════════════════════════
 -- Seed data mínimo para desarrollo
 -- ═══════════════════════════════════════════════════════════════════
