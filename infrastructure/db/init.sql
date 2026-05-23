@@ -47,6 +47,8 @@ CREATE TABLE citizens (
 CREATE INDEX idx_citizens_locality ON citizens(locality_id);
 CREATE INDEX idx_citizens_reputation ON citizens(reputation_score DESC);
 CREATE INDEX idx_citizens_active ON citizens(is_active, last_active_at DESC);
+-- Quórum: elegibles por localidad con nivel de verificación mínimo
+CREATE INDEX idx_citizens_locality_verification ON citizens(locality_id, verification_level) WHERE is_active = TRUE;
 
 -- ── Reportes territoriales ────────────────────────────────────────────────────
 CREATE TABLE territorial_reports (
@@ -93,6 +95,14 @@ CREATE INDEX idx_reports_location ON territorial_reports USING GIST(location);
 CREATE INDEX idx_reports_status ON territorial_reports(status, created_at DESC);
 CREATE INDEX idx_reports_category ON territorial_reports(category, status);
 CREATE INDEX idx_reports_locality ON territorial_reports(locality_id, status);
+-- FK sin índice explícito: "todos los reportes de un ciudadano" = full scan sin esto
+CREATE INDEX idx_reports_citizen_id ON territorial_reports(citizen_id);
+-- Dashboard de urgencia: reportes abiertos ordenados por score ML
+CREATE INDEX idx_reports_urgency ON territorial_reports(urgency_score DESC)
+    WHERE status IN ('open', 'in_progress') AND urgency_score IS NOT NULL;
+-- Agrupación HDBSCAN: traer todos los reportes de un cluster
+CREATE INDEX idx_reports_cluster ON territorial_reports(cluster_id)
+    WHERE cluster_id IS NOT NULL;
 
 -- ── Propuestas de gobernanza ──────────────────────────────────────────────────
 CREATE TABLE proposals (
@@ -148,6 +158,12 @@ CREATE TABLE proposals (
 CREATE INDEX idx_proposals_status ON proposals(status, created_at DESC);
 CREATE INDEX idx_proposals_author ON proposals(author_id);
 CREATE INDEX idx_proposals_category ON proposals(category, scope);
+-- Votaciones activas: encontrar propuestas cuyo período de voto no ha cerrado
+CREATE INDEX idx_proposals_voting_ends ON proposals(voting_ends_at)
+    WHERE status = 'voting';
+-- Ideas trending: ordenar por endorsements en fase de idea/draft
+CREATE INDEX idx_proposals_endorsements ON proposals(endorsement_count DESC)
+    WHERE status IN ('idea', 'draft');
 
 -- ── Votos ─────────────────────────────────────────────────────────────────────
 -- Diseñado para privacidad: el voto individual es opaco
@@ -172,7 +188,9 @@ CREATE TABLE votes (
     CONSTRAINT valid_weight CHECK (vote_weight > 0 AND vote_weight <= 10)
 );
 
-CREATE INDEX idx_votes_proposal ON votes(proposal_id, vote_value);
+-- Índice cubriente: conteo ponderado de votos sin heap fetch
+-- SELECT vote_value, SUM(vote_weight) FROM votes WHERE proposal_id = ? GROUP BY vote_value
+CREATE INDEX idx_votes_tally ON votes(proposal_id, vote_value, vote_weight);
 
 -- ── Delegaciones de voto ──────────────────────────────────────────────────────
 CREATE TABLE delegations (
@@ -199,6 +217,12 @@ CREATE TABLE delegations (
 
 CREATE INDEX idx_delegations_delegator ON delegations(delegator_id, is_active);
 CREATE INDEX idx_delegations_delegate ON delegations(delegate_id, is_active);
+-- Delegaciones activas para una propuesta específica (resolución de voto delegado)
+CREATE INDEX idx_delegations_proposal ON delegations(proposal_id, is_active)
+    WHERE proposal_id IS NOT NULL;
+-- Delegaciones por dominio temático (movilidad, salud, etc.)
+CREATE INDEX idx_delegations_domain ON delegations(domain, is_active)
+    WHERE domain IS NOT NULL;
 
 -- ── Sesiones de autenticación (refresh tokens) ───────────────────────────────
 CREATE TABLE sessions (
@@ -214,6 +238,9 @@ CREATE TABLE sessions (
 
 CREATE INDEX idx_sessions_citizen_id ON sessions(citizen_id);
 CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+-- Lookup de sesión válida: el path más frecuente en cada request autenticado
+CREATE INDEX idx_sessions_active ON sessions(citizen_id, expires_at)
+    WHERE revoked_at IS NULL;
 
 -- ── Función para actualizar updated_at automáticamente ────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
