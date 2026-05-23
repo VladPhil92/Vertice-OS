@@ -14,6 +14,11 @@ const schema = z.object({
 
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14).default(12),
 
+  NEO4J_URI:      z.string().default('bolt://localhost:7687'),
+  NEO4J_USER:     z.string().default('neo4j'),
+  NEO4J_PASSWORD: z.string().default('vertice'),
+  NEO4J_DATABASE: z.string().default('neo4j'),
+
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 })
 

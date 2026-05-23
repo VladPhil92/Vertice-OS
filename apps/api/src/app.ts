@@ -12,6 +12,7 @@ import { authRoutes } from './modules/auth/auth.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
 import { territorialRoutes } from './modules/territorial/territorial.routes'
 import { governanceRoutes } from './modules/governance/governance.routes'
+import { reputationRoutes } from './modules/reputation/reputation.routes'
 
 export function buildApp() {
   const app = Fastify({
@@ -117,6 +118,7 @@ export function buildApp() {
   app.register(identityRoutes, { prefix: '/identity' })
   app.register(territorialRoutes, { prefix: '/territorial' })
   app.register(governanceRoutes, { prefix: '/governance' })
+  app.register(reputationRoutes, { prefix: '/reputation' })
 
   return app
 }

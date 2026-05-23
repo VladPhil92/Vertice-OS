@@ -285,6 +285,29 @@ LEFT JOIN territorial_reports r ON r.citizen_id = c.id
 LEFT JOIN proposals p ON p.author_id = c.id
 GROUP BY c.id;
 
+-- ── Módulo 06 — Reputación ────────────────────────────────────────────────────
+-- Historial de eventos que generan o reducen reputación.
+-- El score se computa como SUM(points); Neo4j mantiene el grafo de relaciones.
+
+CREATE TABLE reputation_events (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    citizen_id   UUID        NOT NULL REFERENCES citizens(id) ON DELETE CASCADE,
+    event_type   VARCHAR(50) NOT NULL,
+    points       INTEGER     NOT NULL,
+    reference_id VARCHAR(36),          -- ID del objeto relacionado (proposal, report, etc.)
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT valid_event_type CHECK (event_type IN (
+        'vote_cast', 'proposal_created', 'proposal_approved', 'proposal_rejected',
+        'report_submitted', 'report_resolved', 'endorsement_given', 'badge_earned',
+        'delegation_given', 'delegation_received'
+    ))
+);
+
+CREATE INDEX idx_reputation_citizen ON reputation_events(citizen_id, created_at DESC);
+CREATE INDEX idx_reputation_event_type ON reputation_events(citizen_id, event_type);
+CREATE INDEX idx_reputation_leaderboard ON reputation_events(citizen_id) INCLUDE (points);
+
 -- ═══════════════════════════════════════════════════════════════════
 -- Seed data mínimo para desarrollo
 -- ═══════════════════════════════════════════════════════════════════
