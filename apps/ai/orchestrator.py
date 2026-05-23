@@ -63,7 +63,7 @@ class AgentState(TypedDict):
 class BaseAgent:
     """Clase base para todos los agentes de VÉRTICE OS."""
 
-    MODEL = "claude-sonnet-4-20250514"
+    MODEL = "claude-sonnet-4-6"
     MAX_TOKENS = 1024
 
     def __init__(self, name: str, system_prompt: str):
@@ -72,20 +72,30 @@ class BaseAgent:
         self.client = anthropic.Anthropic()
 
     def _call_llm(self, messages: list[dict], context: dict[str, str] | None = None) -> str:
-        """Llamada al LLM con el contexto enriquecido."""
-        system = self.system_prompt
+        """Llamada al LLM con prompt caching en el system prompt estático."""
+        # El system prompt es estático por agente → candidato ideal para cache
+        system_blocks: list[dict] = [
+            {
+                "type": "text",
+                "text": self.system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
 
-        # Serialización segura: key-value por línea, sin interpolación de dicts arbitrarios
+        # El contexto de sesión varía por request → NO se cachea
         if context:
             lines = [f"- {k}: {v}" for k, v in context.items() if v]
             if lines:
-                system += "\n\n## Contexto de la sesión\n" + "\n".join(lines)
+                system_blocks.append({
+                    "type": "text",
+                    "text": "## Contexto de la sesión\n" + "\n".join(lines),
+                })
 
         try:
             response = self.client.messages.create(
                 model=self.MODEL,
                 max_tokens=self.MAX_TOKENS,
-                system=system,
+                system=system_blocks,
                 messages=messages,
             )
         except anthropic.APIStatusError as exc:
@@ -454,9 +464,18 @@ def route_to_agent(
     return intent.value
 
 
+def _entry_point(
+    state: AgentState,
+) -> Literal["router", "citizen", "governance", "policy", "territorial", "integrity", "comms"]:
+    """Si el intent ya está fijado, salta el router directamente al agente."""
+    intent = state.get("intent")
+    if intent is not None and intent != AgentIntent.UNKNOWN:
+        return intent.value  # type: ignore[return-value]
+    return "router"
+
+
 def build_orchestrator() -> StateGraph:
     """Construye el grafo de orquestación de agentes."""
-    # Instanciar agentes
     router = RouterAgent()
     citizen = CitizenAgent()
     governance = GovernanceAgent()
@@ -465,10 +484,8 @@ def build_orchestrator() -> StateGraph:
     integrity = IntegrityAgent()
     comms = CommsAgent()
 
-    # Construir grafo
     workflow = StateGraph(AgentState)
 
-    # Nodos
     workflow.add_node("router", router)
     workflow.add_node("citizen", citizen)
     workflow.add_node("governance", governance)
@@ -477,8 +494,20 @@ def build_orchestrator() -> StateGraph:
     workflow.add_node("integrity", integrity)
     workflow.add_node("comms", comms)
 
-    # Edges
-    workflow.add_edge(START, "router")
+    # START → router o directo al agente si intent ya está fijado
+    workflow.add_conditional_edges(
+        START,
+        _entry_point,
+        {
+            "router": "router",
+            "citizen": "citizen",
+            "governance": "governance",
+            "policy": "policy",
+            "territorial": "territorial",
+            "integrity": "integrity",
+            "comms": "comms",
+        },
+    )
     workflow.add_conditional_edges(
         "router",
         route_to_agent,
@@ -492,7 +521,6 @@ def build_orchestrator() -> StateGraph:
         },
     )
 
-    # Todos los agentes terminan en END
     for agent_name in ["citizen", "governance", "policy", "territorial", "integrity", "comms"]:
         workflow.add_edge(agent_name, END)
 
@@ -600,6 +628,61 @@ async def process_civic_query(request: QueryRequest) -> QueryResponse:
     return QueryResponse(
         response=result.get("response") or "No se pudo generar una respuesta.",
         agent_used=result["intent"].value if result.get("intent") else "unknown",
+        confidence=result.get("confidence", 0.0),
+        audit_id=audit_id,
+    )
+
+
+async def process_with_intent(
+    message: str,
+    intent: AgentIntent,
+    context: SessionContext | None = None,
+    citizen_id: str | None = None,
+) -> QueryResponse:
+    """
+    Envía una consulta directamente al agente indicado, omitiendo el router.
+    Usado por los endpoints estructurados (/territorial/analyze, /governance/*).
+    """
+    audit_id = str(uuid.uuid4())
+
+    initial_state: AgentState = {
+        "messages": [{"role": "user", "content": message}],
+        "intent": intent,
+        "citizen_id": citizen_id,
+        "territory": None,
+        "context": context.to_safe_dict() if context else {},
+        "retrieved_docs": [],
+        "response": None,
+        "confidence": 0.0,
+        "audit_log": [],
+        "audit_id": audit_id,
+    }
+
+    try:
+        result = await asyncio.wait_for(
+            orchestrator.ainvoke(initial_state),
+            timeout=ORCHESTRATOR_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.error("[process_with_intent] timeout audit_id=%s intent=%s", audit_id, intent.value)
+        return QueryResponse(
+            response="La consulta tardó demasiado. Por favor intenta de nuevo.",
+            agent_used="timeout",
+            confidence=0.0,
+            audit_id=audit_id,
+        )
+    except Exception:
+        logger.exception("[process_with_intent] error inesperado audit_id=%s", audit_id)
+        return QueryResponse(
+            response="Ocurrió un error procesando tu consulta. Por favor intenta de nuevo.",
+            agent_used="error",
+            confidence=0.0,
+            audit_id=audit_id,
+        )
+
+    return QueryResponse(
+        response=result.get("response") or "No se pudo generar una respuesta.",
+        agent_used=intent.value,
         confidence=result.get("confidence", 0.0),
         audit_id=audit_id,
     )
