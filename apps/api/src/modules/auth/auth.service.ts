@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../../lib/prisma'
 import { generateRefreshToken, hashToken, refreshTokenExpiresAt, AccessTokenPayload } from '../../lib/jwt'
+import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { config } from '../../config'
 import type { RegisterInput, LoginInput } from './auth.schema'
 import type { AuthTokenResponse, CitizenPublicProfile } from './auth.types'
@@ -138,13 +139,25 @@ export async function refreshAccessToken(
 export async function revokeSession(rawRefreshToken: string): Promise<void> {
   const tokenHash = hashToken(rawRefreshToken)
 
+  const session = await prisma.session.findUnique({
+    where: { refreshTokenHash: tokenHash },
+    select: { citizenId: true },
+  })
+
   await prisma.session.updateMany({
     where: { refreshTokenHash: tokenHash, revokedAt: null },
     data: { revokedAt: new Date() },
   })
+
+  if (session) {
+    await delCache('profile', session.citizenId)
+  }
 }
 
 export async function getCitizenProfile(citizenId: string): Promise<CitizenPublicProfile> {
+  const cached = await getCache<CitizenPublicProfile>('profile', citizenId)
+  if (cached) return cached
+
   const citizen = await prisma.citizen.findUniqueOrThrow({
     where: { id: citizenId },
     select: {
@@ -160,7 +173,7 @@ export async function getCitizenProfile(citizenId: string): Promise<CitizenPubli
     },
   })
 
-  return {
+  const profile: CitizenPublicProfile = {
     id: citizen.id,
     did: citizen.did,
     email: citizen.email,
@@ -171,4 +184,7 @@ export async function getCitizenProfile(citizenId: string): Promise<CitizenPubli
     created_at: citizen.createdAt,
     last_active_at: citizen.lastActiveAt,
   }
+
+  await setCache('profile', citizenId, profile, TTL.PROFILE)
+  return profile
 }

@@ -22,8 +22,8 @@ const cookieOpts = {
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
-  // POST /auth/register
-  app.post('/register', async (request, reply) => {
+  // POST /auth/register — 5 intentos/hora para frenar registro masivo
+  app.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
     const parsed = RegisterSchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
@@ -33,8 +33,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send(result)
   })
 
-  // POST /auth/token  (login)
-  app.post('/token', async (request, reply) => {
+  // POST /auth/token — 10/min, protección brute-force
+  app.post('/token', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = LoginSchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
@@ -49,8 +49,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(tokenResponse)
   })
 
-  // POST /auth/refresh
-  app.post('/refresh', async (request, reply) => {
+  // POST /auth/refresh — 30/min
+  app.post('/refresh', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const rawToken = request.cookies[REFRESH_COOKIE]
     if (!rawToken) {
       return reply.status(401).send({ error: 'Sin token de refresco', code: 'NO_REFRESH_TOKEN' })
@@ -60,8 +60,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(result)
   })
 
-  // POST /auth/logout
-  app.post('/logout', async (request, reply) => {
+  // POST /auth/logout — 20/min
+  app.post('/logout', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const rawToken = request.cookies[REFRESH_COOKIE]
     if (rawToken) {
       await revokeSession(rawToken)
