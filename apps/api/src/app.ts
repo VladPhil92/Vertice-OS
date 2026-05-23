@@ -10,6 +10,7 @@ import { redis } from './lib/redis'
 import { prisma } from './lib/prisma'
 import { authRoutes } from './modules/auth/auth.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
+import { territorialRoutes } from './modules/territorial/territorial.routes'
 
 export function buildApp() {
   const app = Fastify({
@@ -113,6 +114,7 @@ export function buildApp() {
 
   app.register(authRoutes, { prefix: '/auth' })
   app.register(identityRoutes, { prefix: '/identity' })
+  app.register(territorialRoutes, { prefix: '/territorial' })
 
   return app
 }

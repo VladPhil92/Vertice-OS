@@ -33,4 +33,6 @@ export async function delCache(namespace: string, id: string): Promise<void> {
 export const TTL = {
   PROFILE: 300,      // 5 min — perfil del ciudadano (datos estables)
   SESSION: 60,       // 1 min — validación de sesión activa
+  REPORT: 120,       // 2 min — reporte territorial individual
+  STATS: 600,        // 10 min — estadísticas agregadas
 } as const
