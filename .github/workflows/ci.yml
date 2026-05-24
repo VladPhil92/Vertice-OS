@@ -30,6 +30,9 @@ jobs:
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
 
+      - name: Generar Prisma Client
+        run: pnpm --filter @vertice/api db:generate
+
       - name: Lint TypeScript/JavaScript
         run: pnpm lint
 
