@@ -6,4 +6,6 @@ dist/
 coverage/
 coverage.json
 .env
-deployments/
+# Deployments locales — commitar testnets/mainnet después de revisión
+deployments/hardhat.json
+deployments/localhost.json

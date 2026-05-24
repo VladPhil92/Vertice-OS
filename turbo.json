@@ -7,12 +7,14 @@
     "ANTHROPIC_API_KEY",
     "POLYGON_RPC_URL",
     "IPFS_GATEWAY",
-    "MAPBOX_TOKEN"
+    "MAPBOX_TOKEN",
+    "VOYAGE_API_KEY",
+    "PINECONE_API_KEY"
   ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "artifacts/**"]
     },
     "dev": {
       "cache": false,
@@ -29,6 +31,13 @@
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "outputs": []
+    },
+    "compile": {
+      "outputs": ["artifacts/**", "typechain-types/**"]
+    },
+    "coverage": {
+      "dependsOn": ["compile"],
+      "outputs": ["coverage/**"]
     }
   }
 }
