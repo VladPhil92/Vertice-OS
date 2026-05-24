@@ -3,6 +3,7 @@ RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 
 # ── Install dependencies ──────────────────────────────────────────────────────
 FROM base AS deps
+
 WORKDIR /app
 # Copy workspace manifests so pnpm can resolve workspace packages
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
@@ -38,3 +39,12 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 CMD ["node", "apps/web/server.js"]
+
+# ── Development (docker-compose local) ───────────────────────────────────────
+FROM base AS development
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+# Source is volume-mounted by docker-compose; deps pre-installed above
+EXPOSE 3000
+ENV NEXT_TELEMETRY_DISABLED=1
+CMD ["pnpm", "--filter", "@vertice/web", "dev"]

@@ -32,3 +32,12 @@ COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/prisma ./prisma
 USER nodeapp
 EXPOSE 4000
 CMD ["node", "dist/index.js"]
+
+# ── Development (docker-compose local) ───────────────────────────────────────
+FROM base AS development
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+# Source is volume-mounted by docker-compose
+EXPOSE 4000
+ENV NODE_ENV=development
+CMD ["pnpm", "--filter", "@vertice/api", "dev"]

@@ -9,14 +9,15 @@ services:
   # ── Frontend ──────────────────────────────────────────────────────
   web:
     build:
-      context: ./apps/web
+      context: .
+      dockerfile: apps/web/Dockerfile
       target: development
     ports:
       - "3000:3000"
     volumes:
-      - ./apps/web:/app
-      - /app/node_modules
-      - /app/.next
+      - ./apps/web:/app/apps/web
+      - ./packages:/app/packages
+      - /app/apps/web/.next
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:4000
@@ -26,10 +27,12 @@ services:
     networks:
       - vertice-network
 
-  # ── API Gateway (GraphQL) ─────────────────────────────────────────
+  # ── API Gateway ────────────────────────────────────────────────────
   api:
     build:
-      context: ./apps/api
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: development
     ports:
       - "4000:4000"
     environment:
@@ -43,7 +46,10 @@ services:
       - AI_SERVICE_SECRET=${AI_SERVICE_SECRET}
       - JWT_SECRET=${JWT_SECRET}
       - BCRYPT_ROUNDS=12
-    command: sh -c "npx prisma migrate deploy && node dist/index.js"
+    command: sh -c "npx prisma migrate deploy && pnpm --filter @vertice/api dev"
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages:/app/packages
     depends_on:
       postgres:
         condition: service_healthy
