@@ -35,16 +35,16 @@ const SCOPE_LABELS: Record<string, string> = {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  infraestructura: 'Infraestructura',
-  movilidad:       'Movilidad',
-  seguridad:       'Seguridad',
-  medio_ambiente:  'Medio ambiente',
-  salud:           'Salud',
-  educacion:       'Educación',
-  cultura:         'Cultura',
-  economia:        'Economía',
-  gobierno:        'Gobierno',
-  otro:            'Otro',
+  infraestructura:   'Infraestructura',
+  movilidad:         'Movilidad',
+  seguridad:         'Seguridad',
+  medio_ambiente:    'Medio ambiente',
+  salud:             'Salud',
+  educacion:         'Educación',
+  cultura:           'Cultura',
+  servicios_publicos: 'Servicios Públicos',
+  gobernanza:        'Gobernanza',
+  otro:              'Otro',
 }
 
 function formatDate(iso: string) {

@@ -5,16 +5,16 @@ import { useState } from 'react'
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const CATEGORIES = [
-  { value: 'infraestructura', label: 'Infraestructura' },
-  { value: 'movilidad',       label: 'Movilidad' },
-  { value: 'seguridad',       label: 'Seguridad' },
-  { value: 'medio_ambiente',  label: 'Medio ambiente' },
-  { value: 'salud',           label: 'Salud' },
-  { value: 'educación',       label: 'Educación' },
-  { value: 'cultura',         label: 'Cultura' },
-  { value: 'economía',        label: 'Economía' },
-  { value: 'gobierno',        label: 'Gobierno' },
-  { value: 'otro',            label: 'Otro' },
+  { value: 'infraestructura',   label: 'Infraestructura' },
+  { value: 'movilidad',         label: 'Movilidad' },
+  { value: 'seguridad',         label: 'Seguridad' },
+  { value: 'medio_ambiente',    label: 'Medio ambiente' },
+  { value: 'salud',             label: 'Salud' },
+  { value: 'educacion',         label: 'Educación' },
+  { value: 'cultura',           label: 'Cultura' },
+  { value: 'servicios_publicos', label: 'Servicios Públicos' },
+  { value: 'gobernanza',        label: 'Gobernanza' },
+  { value: 'otro',              label: 'Otro' },
 ] as const
 
 const SCOPES = [
