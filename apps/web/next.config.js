@@ -1,7 +1,11 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   experimental: {
     serverComponentsExternalPackages: ['mapbox-gl'],
+    outputFileTracingRoot: path.join(__dirname, '../../'),
   },
   images: {
     domains: ['ipfs.io', 'gateway.pinata.cloud'],
