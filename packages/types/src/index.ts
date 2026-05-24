@@ -90,16 +90,16 @@ export interface Locality {
 
 export type ReportCategory =
   | 'infraestructura'
-  | 'seguridad'
-  | 'ambiente'
   | 'servicios_publicos'
-  | 'espacio_publico'
-  | 'movilidad'
+  | 'seguridad'
+  | 'medio_ambiente'
+  | 'transporte'
   | 'salud'
   | 'educacion'
+  | 'cultura'
   | 'otro'
 
-export type ReportStatus = 'open' | 'in_review' | 'resolved' | 'rejected'
+export type ReportStatus = 'open' | 'in_progress' | 'resolved' | 'rejected' | 'duplicate'
 
 export interface TerritorialReport {
   id: string

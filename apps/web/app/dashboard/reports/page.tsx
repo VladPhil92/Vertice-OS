@@ -11,12 +11,13 @@ type ReportStatus = 'open' | 'in_progress' | 'resolved' | 'rejected'
 
 type Category =
   | 'infraestructura'
-  | 'servicios_públicos'
+  | 'servicios_publicos'
   | 'seguridad'
   | 'medio_ambiente'
-  | 'movilidad'
+  | 'transporte'
   | 'salud'
-  | 'educación'
+  | 'educacion'
+  | 'cultura'
   | 'otro'
 
 interface Report {
@@ -44,12 +45,13 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const CATEGORY_LABELS: Record<Category, string> = {
   infraestructura:    'Infraestructura',
-  servicios_públicos: 'Servicios Públicos',
+  servicios_publicos: 'Servicios Públicos',
   seguridad:          'Seguridad',
   medio_ambiente:     'Medio Ambiente',
-  movilidad:          'Movilidad',
+  transporte:         'Transporte',
   salud:              'Salud',
-  educación:          'Educación',
+  educacion:          'Educación',
+  cultura:            'Cultura',
   otro:               'Otro',
 }
 

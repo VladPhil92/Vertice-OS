@@ -9,12 +9,13 @@ import { useState, type FormEvent, type ChangeEvent } from 'react'
 
 type Category =
   | 'infraestructura'
-  | 'servicios_públicos'
+  | 'servicios_publicos'
   | 'seguridad'
   | 'medio_ambiente'
-  | 'movilidad'
+  | 'transporte'
   | 'salud'
-  | 'educación'
+  | 'educacion'
+  | 'cultura'
   | 'otro'
 
 interface ReportFormData {
@@ -30,13 +31,14 @@ interface ReportFormData {
 // ---------------------------------------------------------------------------
 
 const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'infraestructura',    label: 'Infraestructura' },
-  { value: 'servicios_públicos', label: 'Servicios Públicos' },
+  { value: 'infraestructura',   label: 'Infraestructura' },
+  { value: 'servicios_publicos', label: 'Servicios Públicos' },
   { value: 'seguridad',          label: 'Seguridad' },
   { value: 'medio_ambiente',     label: 'Medio Ambiente' },
-  { value: 'movilidad',          label: 'Movilidad' },
+  { value: 'transporte',         label: 'Transporte' },
   { value: 'salud',              label: 'Salud' },
-  { value: 'educación',          label: 'Educación' },
+  { value: 'educacion',          label: 'Educación' },
+  { value: 'cultura',            label: 'Cultura' },
   { value: 'otro',               label: 'Otro' },
 ]
 
