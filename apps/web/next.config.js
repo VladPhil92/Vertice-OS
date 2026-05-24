@@ -19,6 +19,13 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Prevent search engines from indexing private dashboard pages
+        source: '/dashboard/:path*',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },

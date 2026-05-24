@@ -32,7 +32,12 @@ export default function LoginPage() {
       const data = await res.json() as { access_token: string; citizen_id: string; expires_in: number }
       localStorage.setItem('access_token', data.access_token)
       localStorage.setItem('citizen_id', data.citizen_id)
-      window.location.href = '/dashboard'
+      // Cookie readable by Next.js Edge Middleware — used for server-side route protection.
+      // Lifetime matches the refresh token (7 days); actual JWT validity enforced by the API.
+      document.cookie = `vertice_auth=1; path=/; max-age=${7 * 24 * 3600}; SameSite=Strict`
+      // Redirect to the originally requested page, or the dashboard
+      const params = new URLSearchParams(window.location.search)
+      window.location.href = params.get('next') ?? '/dashboard'
     } catch {
       setError('No se pudo conectar con el servidor')
     } finally {

@@ -49,6 +49,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     localStorage.removeItem('access_token')
     localStorage.removeItem('citizen_id')
+    // Clear the middleware auth cookie
+    document.cookie = 'vertice_auth=; path=/; max-age=0; SameSite=Strict'
     router.push('/auth/login')
   }
 
