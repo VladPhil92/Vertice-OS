@@ -16,7 +16,6 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@vertice/types": "workspace:*",
     "@fastify/cookie": "^9.3.1",
     "@fastify/cors": "^9.0.1",
     "@fastify/helmet": "^11.1.1",
@@ -33,7 +32,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@vertice/config": "workspace:*",
     "@types/bcrypt": "^5.0.2",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.2",
