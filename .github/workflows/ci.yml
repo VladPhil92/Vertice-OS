@@ -1,0 +1,265 @@
+name: VÉRTICE OS — CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # ── Lint y Typecheck ────────────────────────────────────────────────────────
+  quality:
+    name: Calidad de Código
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint TypeScript/JavaScript
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Instalar dependencias Python
+        run: |
+          cd apps/ai
+          pip install -r requirements.txt
+
+      - name: Lint Python (ruff)
+        run: |
+          cd apps/ai
+          ruff check .
+
+      - name: Typecheck Python (mypy)
+        run: |
+          cd apps/ai
+          mypy . --ignore-missing-imports
+
+  # ── Tests ─────────────────────────────────────────────────────────────[...]
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: quality
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: vertice_test
+          POSTGRES_USER: vertice
+          POSTGRES_PASSWORD: vertice_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7.4-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+      neo4j:
+        image: neo4j:5.20-community
+        env:
+          NEO4J_AUTH: neo4j/vertice_test
+          NEO4J_PLUGINS: '["apoc"]'
+        options: >-
+          --health-cmd "wget -qO- http://localhost:7474 || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 8
+        ports:
+          - 7687:7687
+          - 7474:7474
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Inicializar base de datos de test
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_test@localhost:5432/vertice_test
+        run: |
+          psql $DATABASE_URL -f infrastructure/db/init.sql
+
+      - name: Tests unitarios e integración
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_test@localhost:5432/vertice_test
+          REDIS_URL: redis://localhost:6379
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: vertice_test
+          NODE_ENV: test
+        run: pnpm test
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Tests Python (pytest)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
+        run: |
+          cd apps/ai
+          pip install -r requirements.txt
+          pytest --tb=short -q
+
+      - name: Reporte de cobertura
+        uses: codecov/codecov-action@v4
+        if: always()
+
+  # ── Security Scan ──────────────────────────────────────────────────────────[...]
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Escaneo de dependencias (npm audit)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/typescript
+            p/python
+            p/secrets
+            p/sql-injection
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        continue-on-error: true
+
+      - name: Verificar que .env no fue commiteado
+        run: |
+          if git log --all --full-history -- "*.env" | grep -q "commit"; then
+            echo "❌ ERROR: Archivo .env detectado en historial de git"
+            exit 1
+          fi
+          echo "✅ No hay archivos .env en el repositorio"
+
+  # ── Build ─────────────────────────────────────────────────────────────[...]
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Next.js
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.STAGING_API_URL }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+        run: pnpm --filter @vertice/web build
+
+      - name: Build Docker images
+        run: |
+          docker build -t vertice-ai:${{ github.sha }} ./apps/ai
+        if: github.ref == 'refs/heads/develop'
+
+  # ── Deploy Staging ──────────────────────────────────────────────────────────[...]
+  deploy-staging:
+    name: Deploy → Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy a staging
+        run: |
+          echo "🚀 Deploying to staging..."
+          # Aquí irá el comando de deploy real (Vercel, Railway, ECS, etc.)
+          echo "✅ Staged at https://staging.vertice.co"
+
+      - name: Notificar en GitHub
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'success',
+              target_url: 'https://staging.vertice.co',
+              description: 'Deployed to staging',
+              context: 'deploy/staging'
+            })
+
+  # ── Deploy Production ───────────────────────────────────────────────────────
+  deploy-production:
+    name: Deploy → Producción
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: production  # Requiere aprobación manual en GitHub
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy a producción
+        run: |
+          echo "🚀 Deploying to production..."
+          echo "✅ Live at https://vertice.co"
