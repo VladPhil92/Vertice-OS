@@ -1,234 +1,258 @@
 # VÉRTICE OS
 
-> **Sistema Operativo Cívico de Nueva Generación**  
-> *Diferentes en cada región, unidos en un solo país.*
+> **Sistema Operativo Cívico — Cartagena de Indias, Colombia**  
+> *Infraestructura permanente para la democracia continua.*
 
-[![Estado](https://img.shields.io/badge/Estado-Alpha%20v0.1.0-gold?style=flat-square)](https://github.com/VladPhil92/Vertice-OS)
-[![Licencia](https://img.shields.io/badge/Licencia-Propietaria-navy?style=flat-square)](./LICENSE)
-[![Ciudad Piloto](https://img.shields.io/badge/Piloto-Cartagena%20de%20Indias-red?style=flat-square)](https://es.wikipedia.org/wiki/Cartagena_de_Indias)
+[![Estado](https://img.shields.io/badge/Estado-Alpha%20v0.1.0-C8A84B?style=flat-square)](https://github.com/VladPhil92/Vertice-OS)
+[![CI](https://img.shields.io/github/actions/workflow/status/VladPhil92/Vertice-OS/ci.yml?style=flat-square&label=CI)](https://github.com/VladPhil92/Vertice-OS/actions)
+[![Licencia](https://img.shields.io/badge/Licencia-Propietaria-1A2744?style=flat-square)](./LICENSE)
+[![Ciudad Piloto](https://img.shields.io/badge/Piloto-Cartagena%20de%20Indias-C0392B?style=flat-square)](https://es.wikipedia.org/wiki/Cartagena_de_Indias)
 
 ---
 
 ## ¿Qué es VÉRTICE OS?
 
-VÉRTICE OS es una infraestructura cívica de próxima generación diseñada para transformar la participación política en Colombia y América Latina. No es una aplicación política tradicional — es un **sistema operativo para la democracia continua**.
+VÉRTICE OS es infraestructura cívica de nueva generación — no una aplicación política, sino el **substrato permanente** de la vida democrática de una ciudad. Los ciudadanos reportan problemas en su territorio, proponen y votan políticas públicas, delegan su voto en quien confían, y acumulan reputación cívica verificada on-chain. La IA sirve de mediadora y sintetizadora; la blockchain garantiza la inmutabilidad de cada decisión.
 
 > *"La política no debería ocurrir solo cada cuatro años."*
 
-### Principios Fundacionales
+---
 
-- **Participación continua** — no solo en ciclos electorales
-- **Inteligencia territorial** — datos del territorio en tiempo real
-- **Gobernanza transparente** — cada decisión es trazable y auditable
-- **Identidad soberana** — los ciudadanos controlan sus propios datos
-- **IA al servicio de lo público** — no de intereses privados
+## Estado de implementación
+
+| # | Módulo | Estado | Descripción |
+|---|--------|--------|-------------|
+| 01 | **Identidad Cívica Digital** | ✅ Implementado | DID W3C, verificación cédula/email, 3 niveles |
+| 02 | **Motor Territorial** | ✅ Implementado | Reportes PostGIS, clustering, análisis IA |
+| 03 | **Gobernanza y Decisión** | ✅ Implementado | Propuestas, votación ponderada, delegación líquida |
+| 04 | **Capa IA Multi-Agente** | ✅ Implementado | LangGraph, 6 agentes, RAG Pinecone + Voyage AI |
+| 05 | **Blockchain & Confianza** | ✅ Implementado | CivicSBT (ERC-5192), VotingRegistry, Polygon Amoy |
+| 06 | **Reputación Cívica** | ✅ Implementado | Neo4j, eventos, niveles observador→embajador |
+| 07 | **Legal Ciudadano** | ✅ Implementado | Generador IA de derechos de petición, tutelas, etc. |
 
 ---
 
-## Arquitectura del Sistema
+## Arquitectura
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        VÉRTICE OS                           │
-├──────────────┬──────────────┬───────────────┬──────────────┤
-│   Identidad  │  Territorio  │  Gobernanza   │  Reputación  │
-│    Cívica    │  Inteligente │   & Decisión  │    Cívica    │
-├──────────────┴──────────────┴───────────────┴──────────────┤
-│                    CAPA MULTI-AGENTE IA                     │
-│  Ciudadano · Gobernanza · Política · Territorio · Integridad│
-├─────────────────────────────────────────────────────────────┤
-│              BLOCKCHAIN & CAPA DE CONFIANZA                 │
-│         Polygon PoS · EAS · IPFS · Soulbound Tokens        │
-├──────────────┬──────────────┬───────────────┬──────────────┤
-│  PostgreSQL  │   MongoDB    │    Neo4j      │   Pinecone   │
-│  + PostGIS   │  (NoSQL)     │   (Graph)     │  (Vectors)   │
-└──────────────┴──────────────┴───────────────┴──────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                  apps/web  (Next.js 14 — :3000)              │
+│  Landing · Dashboard · Identidad · Reportes · Gobernanza     │
+│           Reputación · Legal · Design System                 │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ GraphQL / REST
+┌───────────────────────────▼──────────────────────────────────┐
+│                  apps/api  (Fastify — :4000)                  │
+│  auth · identity · territorial · governance · reputation     │
+│  legal ── Prisma ORM ── PostgreSQL 16 + PostGIS              │
+└──────┬────────────────────┬───────────────────┬──────────────┘
+       │                    │                   │
+   Redis 7            Neo4j 5.21         apps/ai (FastAPI — :8001)
+  (caché/sessions)    (reputación)       LangGraph · 6 agentes
+                                         RAG Pinecone + Voyage AI
+┌──────────────────────────────────────────────────────────────┐
+│              contracts/  (Polygon PoS — Amoy testnet)        │
+│        CivicSBT (ERC-5192 Soulbound) · VotingRegistry       │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Módulos del Sistema
+## Stack
 
-| # | Módulo | Estado | Tech Stack |
-|---|--------|--------|------------|
-| 01 | Identidad Cívica Digital | 🟡 En diseño | DID, ZKP, W3C VC |
-| 02 | Motor de Inteligencia Territorial | 🟡 En diseño | PostGIS, Mapbox, HDBSCAN |
-| 03 | Motor de Gobernanza y Decisión | 🔴 Planificado | Liquid Democracy, On-chain |
-| 04 | Capa Multi-Agente IA | 🟡 En diseño | LangGraph, Claude API |
-| 05 | Blockchain & Capa de Confianza | 🔴 Planificado | Polygon, EAS |
-| 06 | Reputación y Contribución Cívica | 🔴 Planificado | Neo4j, Graph Analysis |
-| 07 | Infraestructura de Automatización | 🔴 Planificado | Temporal.io, n8n |
-| 08 | Ecosistema de Medios y Narrativa | 🔴 Planificado | Streaming, CDN |
+| Capa | Tecnología |
+|------|-----------|
+| **Frontend** | Next.js 14 App Router, TypeScript strict, Tailwind CSS, Framer Motion, Mapbox GL |
+| **Backend** | Fastify 4, TypeScript, Prisma ORM, Zod validation, JWT + bcrypt |
+| **IA** | Claude claude-sonnet-4-20250514, LangGraph, FastAPI, Voyage AI voyage-3, Pinecone |
+| **DB principal** | PostgreSQL 16 + PostGIS 3.4 |
+| **Caché** | Redis 7 |
+| **Grafo** | Neo4j 5.21 (reputación y detección de manipulación) |
+| **Blockchain** | Polygon PoS, Solidity ^0.8.24, Hardhat, OpenZeppelin 5 |
+| **Infra** | Docker Compose (dev), Kubernetes (prod), Terraform (AWS EKS + RDS) |
+| **CI/CD** | GitHub Actions: lint → typecheck → test → build → deploy |
 
 ---
 
-## Stack Tecnológico
+## Inicio rápido (desarrollo local)
 
-### Frontend
-- **Next.js 14** (App Router + Server Components)
-- **React 18** con Suspense
-- **Framer Motion** — animaciones cinematicas
-- **Mapbox GL JS** — visualización territorial
-- **Tailwind CSS** + Radix UI primitives
-- **PWA** — acceso móvil sin fricción
+### Prerequisitos
+- Node.js ≥ 20, pnpm ≥ 10
+- Docker + Docker Compose
+- Python 3.12 (para el servicio AI)
 
-### Backend
-- **Node.js / TypeScript** — microservicios alta frecuencia
-- **Python** — servicios AI/ML
-- **Go** — voting engine (alta performance)
-- **GraphQL** (Apollo Federation) — API gateway
-- **gRPC** — comunicación interna
+### 1. Clonar e instalar
 
-### Bases de Datos
-- **PostgreSQL + PostGIS** — datos relacionales + geoespaciales
-- **MongoDB** — datos no estructurados
-- **Neo4j** — grafo de relaciones y reputación
-- **Pinecone / Weaviate** — vector DB para RAG
-- **Redis** — caché, sesiones, rate limiting
-- **IPFS** — documentos públicos descentralizados
+```bash
+git clone https://github.com/VladPhil92/Vertice-OS.git
+cd Vertice-OS
+pnpm install
+```
 
-### IA
-- **Claude API** (Anthropic) — LLM principal
-- **LangGraph** — orquestación multi-agente
-- **Hugging Face** — modelos fine-tuned en español
-- **Temporal.io** — workflows de larga duración
+### 2. Configurar variables de entorno
 
-### Blockchain
-- **Polygon PoS** — transacciones ~$0.001 USD
-- **EAS** (Ethereum Attestation Service)
-- **Hardhat** — desarrollo de contratos
-- **The Graph** — indexación de eventos on-chain
+```bash
+cp .env.example .env
+# Editar .env con tus valores (ver secciones comentadas)
+# Mínimo requerido para desarrollo:
+#   POSTGRES_PASSWORD, JWT_SECRET, ANTHROPIC_API_KEY
+```
 
-### Infraestructura
-- **AWS + GCP** (multi-cloud)
-- **Kubernetes** (EKS/GKE)
-- **Terraform** IaC
-- **Cloudflare** — DDoS, CDN, Workers
-- **HashiCorp Vault** — gestión de secretos
+### 3. Levantar infraestructura
+
+```bash
+docker-compose up -d   # PostgreSQL + PostGIS, Redis, Neo4j
+```
+
+### 4. Aplicar migraciones y arrancar
+
+```bash
+pnpm --filter @vertice/api db:deploy    # Crea las 9 tablas + seed de localidades
+pnpm dev                                # Arranca web (:3000), api (:4000) en paralelo
+```
+
+### 5. Servicio IA (opcional)
+
+```bash
+cd apps/ai
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8001
+```
+
+---
+
+## Estructura del monorepo
+
+```
+vertice-os/
+├── apps/
+│   ├── web/                    # Next.js 14 — App Router
+│   │   └── app/dashboard/      # 9 páginas del panel ciudadano
+│   ├── api/                    # Fastify — 6 módulos con tests
+│   │   ├── src/modules/        # auth · identity · territorial · governance · reputation · legal
+│   │   └── prisma/             # Schema + migración inicial
+│   └── ai/                     # FastAPI — orquestador LangGraph
+│       ├── orchestrator.py     # 6 agentes IA
+│       ├── rag.py              # Pipeline RAG Pinecone + Voyage AI
+│       └── scripts/            # index_documents.py para Cartagena
+├── packages/
+│   ├── types/                  # @vertice/types — interfaces TypeScript compartidas
+│   ├── ui/                     # @vertice/ui — 8 componentes design system
+│   └── config/                 # @vertice/config — TSConfig + ESLint bases
+├── contracts/                  # Solidity ^0.8.24 — Polygon PoS
+│   ├── contracts/              # CivicSBT.sol · VotingRegistry.sol
+│   ├── test/                   # Tests Hardhat/Chai
+│   └── scripts/deploy.ts       # Deploy + verificación Polygonscan
+├── infrastructure/
+│   ├── db/                     # init_extensions.sql (PostGIS)
+│   ├── kubernetes/             # Manifiestos K8s por servicio
+│   └── terraform/              # IaC AWS: EKS · RDS · ElastiCache · VPC
+├── docs/
+│   ├── architecture/ARCHITECTURE.md
+│   └── governance/GOVERNANCE.md
+├── docker-compose.yml          # Dev local completo
+├── turbo.json                  # Turborepo pipeline
+└── .github/workflows/ci.yml   # CI/CD: calidad → tests → build → deploy
+```
+
+---
+
+## Comandos frecuentes
+
+```bash
+# Desarrollo
+pnpm dev                                    # Todos los apps en paralelo
+pnpm --filter @vertice/web dev              # Solo frontend
+pnpm --filter @vertice/api dev              # Solo API
+
+# Base de datos
+pnpm --filter @vertice/api db:generate      # Regenerar Prisma client
+pnpm --filter @vertice/api db:migrate       # Crear nueva migración
+pnpm --filter @vertice/api db:deploy        # Aplicar migraciones
+pnpm --filter @vertice/api db:studio        # Prisma Studio
+
+# Tests
+pnpm test                                   # Todos los workspaces
+pnpm --filter @vertice/api test             # Solo API (Jest, ~210 tests)
+
+# Smart contracts
+pnpm --filter @vertice/contracts compile    # Compilar + typechain
+pnpm --filter @vertice/contracts test       # Tests Hardhat
+pnpm --filter @vertice/contracts deploy:amoy  # Deploy a Polygon Amoy
+
+# Indexar documentos cívicos (RAG)
+cd apps/ai
+python scripts/index_documents.py \
+  --source docs/plan-desarrollo.txt \
+  --doc-type plan \
+  --locality CTG-01
+
+# Infraestructura
+cd infrastructure/terraform
+terraform init -backend-config=backend.tfvars
+terraform plan
+terraform apply
+
+kubectl apply -k infrastructure/kubernetes/
+```
+
+---
+
+## Pipeline CI/CD
+
+```
+push → quality (lint + typecheck TypeScript/Python)
+     → test (Jest + pytest con PostgreSQL + Redis + Neo4j)
+     → security (semgrep + audit)
+     → build (Next.js + Docker)
+     → deploy:staging (rama develop)
+     → deploy:production (rama main, aprobación manual)
+```
 
 ---
 
 ## Agentes IA
 
-```
-┌─────────────────────────────────────────────────────┐
-│              ROUTER AGENT (Orquestador)              │
-└──────────┬──────────┬────────────┬──────────────────┘
-           │          │            │
-    ┌──────▼──┐ ┌────▼────┐ ┌────▼──────┐
-    │Ciudadano│ │Gobernanza│ │  Política  │
-    └─────────┘ └─────────┘ └───────────┘
-    ┌──────────────┐ ┌──────────┐ ┌──────┐
-    │  Territorial │ │Integridad│ │Comms │
-    └──────────────┘ └──────────┘ └──────┘
-           │
-    ┌──────▼──────────────────────────────┐
-    │  Memory Layer (Redis + Pinecone)     │
-    └─────────────────────────────────────┘
-```
-
 | Agente | Función |
 |--------|---------|
-| **Ciudadano** | Guía de participación y preguntas cívicas |
-| **Gobernanza** | Síntesis de debates e identificación de consenso |
-| **Política** | Conversión de demandas ciudadanas en propuestas de política |
-| **Territorial** | Análisis de tendencias y prioridades por territorio |
-| **Integridad** | Detección de bots, manipulación y desinformación coordinada |
-| **Comunicación** | Discursos, informes y narrativa estratégica |
+| **Router** | Orquestador — clasifica la intención y delega al agente correcto |
+| **Ciudadano** | Responde preguntas cívicas, guía participación |
+| **Gobernanza** | Sintetiza debates, identifica consenso en propuestas |
+| **Política** | Convierte demandas ciudadanas en borradores de política pública |
+| **Territorial** | Analiza patrones en reportes por barrio/localidad |
+| **Integridad** | Detecta bots, coordinación inauténtica y desinformación |
+| **Legal** | Genera documentos jurídicos (tutelas, derechos de petición, etc.) |
 
 ---
 
-## Hoja de Ruta
+## Seguridad
 
-### Fase I — Fundación (Meses 1–4)
-- [ ] MVP de identidad cívica digital
-- [ ] Sistema de reporte territorial básico
-- [ ] Onboarding primeros 500 ciudadanos (Cartagena piloto)
-- [ ] Agente ciudadano IA (beta)
-- [ ] Dashboard territorial piloto
-
-### Fase II — Gobernanza (Meses 5–10)
-- [ ] Motor de gobernanza y votación verificable
-- [ ] Sistema de reputación cívica
-- [ ] Capa blockchain básica
-- [ ] 4 agentes IA adicionales
-- [ ] Módulo de co-creación de políticas públicas
-
-### Fase III — Escala (Meses 11–18)
-- [ ] Inteligencia territorial predictiva
-- [ ] Integración institucional pública
-- [ ] Sistema anti-corrupción automatizado
-- [ ] Arquitectura multi-ciudad
-- [ ] Agente de integridad completo
-
-### Fase IV — Latinoamérica (Mes 19+)
-- [ ] Protocolo open-source VÉRTICE
-- [ ] SDK para gobiernos aliados
-- [ ] Expansión a 5 países
-- [ ] DAO de gobernanza de la plataforma
+- Cédulas almacenadas **solo como hash SHA-256** — nunca en texto plano
+- JWT de corta vida (15 min) + refresh tokens con rotación
+- Rate limiting por Redis en todos los endpoints
+- `ANTHROPIC_API_KEY` solo en el backend/AI — nunca expuesta al frontend
+- Semgrep SAST en CI (TypeScript + Python + secrets)
+- Votos con nullifier hash — privacidad ante correlación on-chain
+- Soulbound Tokens no transferibles — la reputación no se vende
 
 ---
 
-## Estructura del Repositorio
+## Contexto legal (Colombia)
 
-```
-vertice-os/
-├── apps/
-│   ├── web/              # Frontend Next.js
-│   ├── api/              # Backend microservicios
-│   └── ai/               # Servicios de IA y agentes
-├── docs/
-│   ├── architecture/     # Documentación de arquitectura
-│   ├── api/              # Documentación de APIs
-│   └── governance/       # Marco de gobernanza
-├── infrastructure/
-│   ├── terraform/        # IaC
-│   ├── kubernetes/       # Manifiestos K8s
-│   └── docker/           # Dockerfiles
-├── design/
-│   ├── landing/          # Landing page (HTML cinematic)
-│   └── assets/           # Assets de diseño
-└── contracts/            # Smart contracts Solidity
-```
-
----
-
-## Implicaciones Legales (Colombia)
-
-- **Ley 1581/2012** — Protección de datos personales (habeas data)
-- **Decreto 1377/2013** — Reglamentación tratamiento de datos
-- **CPACA** — Para integraciones con entidades públicas
+- **Art. 23 CP** — Derecho de petición (Módulo Legal)
+- **Art. 86 CP** — Acción de tutela (Módulo Legal)
+- **Ley 1581/2012** — Habeas data / protección de datos personales
+- **Ley 472/1998** — Acciones populares (Módulo Legal)
 - Los procesos de votación son **consultas ciudadanas**, no actos administrativos vinculantes
-
----
-
-## Monetización Ética
-
-- **B2G** — Licenciamiento a municipios y departamentos
-- **Consulting institucional** — Implementación territorial
-- **Formación y certificación** — Liderazgo cívico digital
-- **API pública premium** — Datos territoriales anonimizados
-- **Grants internacionales** — BID, USAID, Open Society, CAF Digital
-
-> ⚠️ **Lo que NUNCA se monetiza:** datos individuales de ciudadanos, atención publicitaria, o acceso diferenciado por dinero.
-
----
-
-## Contribuir
-
-Este proyecto está en fase alpha privada. Para solicitar acceso como colaborador técnico o aliado institucional:
-
-📧 Contactar a través del repositorio oficial.
 
 ---
 
 ## Créditos
 
 **Fundador y Arquitecto de Producto:** Juan Pablo Valderrama Pino  
-**Ciudad Piloto:** Cartagena de Indias, Colombia  
-**Organización:** CTG One Corporation
+**Organización:** CTG One Corporation  
+**Ciudad Piloto:** Cartagena de Indias, Bolívar, Colombia
 
 ---
 
-*VÉRTICE OS — Infraestructura para la democracia continua.*  
-*Diferentes en cada región, unidos en un solo país.*
+*VÉRTICE OS — Infraestructura para la democracia continua.*
