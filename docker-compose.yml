@@ -35,9 +35,15 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://vertice:${POSTGRES_PASSWORD}@postgres:5432/vertice_os
-      - MONGODB_URI=mongodb://vertice:${MONGO_ROOT_PASSWORD}@mongodb:27017/vertice_os
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - AI_SERVICE_URL=http://ai:8001
+      - AI_SERVICE_SECRET=${AI_SERVICE_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - BCRYPT_ROUNDS=12
+    command: sh -c "npx prisma migrate deploy && node dist/index.js"
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,7 +80,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./infrastructure/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./infrastructure/db/init_extensions.sql:/docker-entrypoint-initdb.d/01_extensions.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vertice -d vertice_os"]
       interval: 10s

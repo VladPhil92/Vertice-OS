@@ -118,11 +118,12 @@ jobs:
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
 
-      - name: Inicializar base de datos de test
+      - name: Aplicar migraciones de base de datos
         env:
           DATABASE_URL: postgresql://vertice:vertice_test@localhost:5432/vertice_test
         run: |
-          psql $DATABASE_URL -f infrastructure/db/init.sql
+          pnpm --filter @vertice/api db:generate
+          pnpm --filter @vertice/api exec prisma migrate deploy
 
       - name: Tests unitarios e integración
         env:
