@@ -16,7 +16,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -29,6 +29,9 @@ export default function LoginPage() {
         return
       }
 
+      const data = await res.json() as { access_token: string; citizen_id: string; expires_in: number }
+      localStorage.setItem('access_token', data.access_token)
+      localStorage.setItem('citizen_id', data.citizen_id)
       window.location.href = '/dashboard'
     } catch {
       setError('No se pudo conectar con el servidor')

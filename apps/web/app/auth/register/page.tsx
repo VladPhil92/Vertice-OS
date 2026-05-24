@@ -2,23 +2,25 @@
 
 import { useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, AlertCircle, CheckCircle } from 'lucide-react'
+import { ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react'
 
 const LOCALITIES = [
-  'Histórica y del Caribe Norte',
-  'De la Virgen y Turística',
-  'Industrial de la Bahía',
+  { id: 1, name: 'Histórica y del Caribe Norte' },
+  { id: 2, name: 'De la Virgen y Turística' },
+  { id: 3, name: 'Industrial y de la Bahía' },
+  { id: 4, name: 'Bayunca' },
 ] as const
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({
     email: '',
     password: '',
-    display_name: '',
-    locality: '',
+    cedula: '',
+    locality_id: '' as '' | number,
     neighborhood: '',
   })
 
@@ -28,10 +30,15 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
+      const body = {
+        ...form,
+        locality_id: form.locality_id === '' ? undefined : Number(form.locality_id),
+      }
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       })
 
       if (!res.ok) {
@@ -48,6 +55,10 @@ export default function RegisterPage() {
     }
   }
 
+  function update(field: string, value: string) {
+    setForm(prev => ({ ...prev, [field]: value }))
+  }
+
   if (done) {
     return (
       <div className="flex min-h-screen items-center justify-center px-6">
@@ -61,8 +72,8 @@ export default function RegisterPage() {
             Cuenta creada
           </h1>
           <p className="mb-8 font-mono text-sm text-secondary">
-            Tu cuenta fue registrada. Ahora debes verificar tu identidad cívica
-            para participar en propuestas y votaciones.
+            Tu cuenta fue registrada. Ingresa con tu correo y contraseña,
+            luego verifica tu identidad cívica para participar en propuestas y votaciones.
           </p>
           <a href="/auth/login" className="btn-primary">
             Ingresar ahora
@@ -100,7 +111,7 @@ export default function RegisterPage() {
               Crear cuenta ciudadana
             </h1>
             <p className="mt-2 font-mono text-xs text-secondary">
-              Paso 1 de 2 — Datos básicos. La verificación de cédula es el paso siguiente.
+              Paso 1 de 2 — Datos básicos. La verificación de cédula se hace desde el panel.
             </p>
           </div>
 
@@ -112,42 +123,97 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {[
-              { key: 'display_name', label: 'Nombre público', type: 'text', placeholder: 'Cómo te verán en la plataforma', autoComplete: 'name' },
-              { key: 'email', label: 'Correo electrónico', type: 'email', placeholder: 'ciudadano@ejemplo.com', autoComplete: 'email' },
-              { key: 'password', label: 'Contraseña (mín. 8 caracteres)', type: 'password', placeholder: '••••••••', autoComplete: 'new-password' },
-              { key: 'neighborhood', label: 'Barrio', type: 'text', placeholder: 'Ej: Getsemaní, Manga, Bocagrande…', autoComplete: 'off' },
-            ].map(({ key, label, type, placeholder, autoComplete }) => (
-              <div key={key} className="flex flex-col gap-1.5">
-                <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
-                  {label}
-                </label>
-                <input
-                  type={type}
-                  required
-                  autoComplete={autoComplete}
-                  value={form[key as keyof typeof form]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary"
-                  placeholder={placeholder}
-                />
-              </div>
-            ))}
-
-            {/* Locality select */}
+            {/* Email */}
             <div className="flex flex-col gap-1.5">
               <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
-                Localidad
+                Correo electrónico
+              </label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={form.email}
+                onChange={(e) => update('email', e.target.value)}
+                className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary"
+                placeholder="ciudadano@ejemplo.com"
+              />
+            </div>
+
+            {/* Password */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+                Contraseña
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="new-password"
+                  value={form.password}
+                  onChange={(e) => update('password', e.target.value)}
+                  className="w-full border border-border bg-bg px-4 py-3 pr-12 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary"
+                  placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número"
+                />
+                <button
+                  type="button"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-tertiary hover:text-secondary"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Ocultar' : 'Mostrar'}
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Cédula */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+                Cédula de ciudadanía
+              </label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                pattern="[0-9]{6,10}"
+                autoComplete="off"
+                value={form.cedula}
+                onChange={(e) => update('cedula', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary"
+                placeholder="Solo dígitos, 6–10 caracteres"
+              />
+              <span className="font-mono text-[10px] text-tertiary">
+                Se almacena como hash SHA-256 — nunca en texto plano
+              </span>
+            </div>
+
+            {/* Barrio */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+                Barrio <span className="text-tertiary/60">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                autoComplete="off"
+                value={form.neighborhood}
+                onChange={(e) => update('neighborhood', e.target.value)}
+                className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary"
+                placeholder="Ej: Getsemaní, Manga, Bocagrande…"
+              />
+            </div>
+
+            {/* Localidad */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+                Localidad <span className="text-tertiary/60">(opcional)</span>
               </label>
               <select
-                required
-                value={form.locality}
-                onChange={(e) => setForm({ ...form, locality: e.target.value })}
+                value={form.locality_id}
+                onChange={(e) => setForm(prev => ({ ...prev, locality_id: e.target.value === '' ? '' : Number(e.target.value) }))}
                 className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active"
               >
-                <option value="" disabled>Selecciona tu localidad</option>
+                <option value="">Selecciona tu localidad</option>
                 {LOCALITIES.map((loc) => (
-                  <option key={loc} value={loc}>{loc}</option>
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
                 ))}
               </select>
             </div>
@@ -177,6 +243,10 @@ export default function RegisterPage() {
             </p>
           </div>
         </div>
+
+        <p className="mt-6 text-center font-mono text-[10px] text-tertiary">
+          Tus datos están protegidos bajo la Ley 1581 de 2012 (Habeas Data Colombia)
+        </p>
       </motion.div>
     </div>
   )
