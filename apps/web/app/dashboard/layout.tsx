@@ -38,9 +38,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return exact ? pathname === href : pathname.startsWith(href)
   }
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } catch {
+      // Ignore network errors — still clear local state
+    }
     localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('citizen_id')
     router.push('/auth/login')
   }
 

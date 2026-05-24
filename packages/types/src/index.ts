@@ -69,7 +69,7 @@ export interface AuthTokens {
 export interface JWTPayload {
   sub: string
   did: string
-  level: VerificationLevel
+  lvl: number    // verificationLevel — abbreviated in JWT to keep token small
   iat: number
   exp: number
 }
