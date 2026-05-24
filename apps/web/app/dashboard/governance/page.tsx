@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { FileText, Vote } from 'lucide-react'
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { apiFetch } from '@/lib/api'
 
 interface Proposal {
   id:                      string
@@ -90,8 +89,7 @@ export default function GovernancePage() {
   const [voting, setVoting]       = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${API}/governance/proposals?status=voting`)
-      .then((r) => r.json())
+    apiFetch<{ proposals: Proposal[] }>('/governance/proposals?status=voting')
       .then((b) => setProposals(b.proposals ?? []))
       .catch(() => setError('Error cargando propuestas'))
       .finally(() => setLoading(false))
@@ -99,17 +97,15 @@ export default function GovernancePage() {
 
   async function castVote(proposalId: string, value: 1 | 0 | -1) {
     if (voted[proposalId] !== undefined || voting) return
-    const token = localStorage.getItem('access_token')
-    if (!token) { window.location.href = '/auth/login'; return }
     setVoting(proposalId)
     try {
-      const res = await fetch(`${API}/governance/proposals/${proposalId}/vote`, {
+      await apiFetch(`/governance/proposals/${proposalId}/vote`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ vote_value: value }),
       })
-      if (res.status === 401) { window.location.href = '/auth/login'; return }
-      if (res.ok) setVoted((prev) => ({ ...prev, [proposalId]: value }))
+      setVoted((prev) => ({ ...prev, [proposalId]: value }))
+    } catch {
+      // apiFetch handles 401 redirect automatically
     } finally {
       setVoting(null)
     }

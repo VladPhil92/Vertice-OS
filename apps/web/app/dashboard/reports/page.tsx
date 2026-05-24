@@ -2,6 +2,7 @@
 
 import { FileText, Loader2, Plus, AlertTriangle } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { apiFetch } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,8 +41,6 @@ interface ApiResponse {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const CATEGORY_LABELS: Record<Category, string> = {
   infraestructura:    'Infraestructura',
@@ -107,9 +106,7 @@ export default function ReportsPage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`${API_BASE}/territorial/reports`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data: ApiResponse = await res.json()
+        const data = await apiFetch<ApiResponse>('/territorial/reports')
         setReports(data.reports ?? [])
       } catch {
         setError('No se pudieron cargar los reportes. Verifica la conexión e intenta de nuevo.')

@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { FileText, Plus, Clock, CheckCircle, AlertTriangle, XCircle, ArrowUpRight } from 'lucide-react'
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { apiFetch } from '@/lib/api'
 
 interface LegalDocumentSummary {
   id:           string
@@ -53,12 +52,7 @@ export default function LegalListPage() {
   useEffect(() => {
     async function load() {
       try {
-        const token = localStorage.getItem('access_token')
-        const res = await fetch(`${API}/legal`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!res.ok) throw new Error('Error cargando documentos')
-        const body = await res.json()
+        const body = await apiFetch<{ documents: LegalDocumentSummary[] }>('/legal')
         setDocs(body.documents ?? [])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido')

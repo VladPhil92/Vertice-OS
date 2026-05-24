@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Loader2, Info } from 'lucide-react'
 import { useState, type FormEvent, type ChangeEvent } from 'react'
+import { apiFetch } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,7 +47,6 @@ const DESCRIPTION_MIN = 30
 const DESCRIPTION_MAX = 5000
 const TITLE_MAX = 200
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const INPUT_CLASS =
   'w-full bg-surface border border-border focus:border-gold/50 px-4 py-3 font-mono text-sm text-primary outline-none transition-colors placeholder:text-tertiary'
@@ -90,14 +90,8 @@ export default function NewReportPage() {
     setLoading(true)
 
     try {
-      const token = localStorage.getItem('access_token')
-
-      const res = await fetch(`${API_BASE}/territorial/reports`, {
+      await apiFetch('/territorial/reports', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify({
           category: form.category,
           title: form.title.trim(),
@@ -107,16 +101,8 @@ export default function NewReportPage() {
         }),
       })
 
-      if (res.status === 201) {
-        window.location.href = '/dashboard/reports'
-        return
-      }
-
-      const data = await res.json().catch(() => ({}))
-      setError(
-        (data as { message?: string }).message ??
-          `Error inesperado (código ${res.status}). Intenta nuevamente.`,
-      )
+      window.location.href = '/dashboard/reports'
+      return
     } catch {
       setError('No se pudo conectar con el servidor. Verifica tu conexión.')
     } finally {

@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { apiFetch } from '@/lib/api'
 
 const CATEGORIES = [
   { value: 'infraestructura',   label: 'Infraestructura' },
@@ -69,16 +68,10 @@ export default function NewProposalPage() {
       return
     }
 
-    const token = localStorage.getItem('access_token')
-
     setLoading(true)
     try {
-      const res = await fetch(`${API}/governance/proposals`, {
-        method:  'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          Authorization:   `Bearer ${token ?? ''}`,
-        },
+      await apiFetch('/governance/proposals', {
+        method: 'POST',
         body: JSON.stringify({
           title:             form.title.trim(),
           category:          form.category,
@@ -88,20 +81,9 @@ export default function NewProposalPage() {
         }),
       })
 
-      if (res.status === 401) {
-        window.location.href = '/auth/login'
-        return
-      }
-
-      if (res.status === 201) {
-        window.location.href = '/dashboard/proposals'
-        return
-      }
-
-      const body = await res.json().catch(() => null)
-      setError(body?.message ?? `Error ${res.status}. Intenta de nuevo.`)
-    } catch {
-      setError('No se pudo conectar con el servidor. Verifica tu conexión.')
+      window.location.href = '/dashboard/proposals'
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor.')
     } finally {
       setLoading(false)
     }

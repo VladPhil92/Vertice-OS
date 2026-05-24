@@ -6,6 +6,7 @@ import {
   FileText, Upload, MapPin, ArrowRight, ArrowLeft,
   AlertCircle, CheckCircle, Clock, Shield, Scale,
 } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
 
 // ── Tipos locales ─────────────────────────────────────────────────────────────
 
@@ -83,20 +84,10 @@ export default function NewLegalDocumentPage() {
     setStep('analyzing')
 
     try {
-      // Primero llama a la API principal que internamente llama al servicio IA
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/legal`, {
+      const data = await apiFetch<LegalResult>('/legal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(form),
       })
-
-      if (!res.ok) {
-        const data = await res.json() as { error?: string }
-        throw new Error(data.error ?? 'Error al analizar la situación')
-      }
-
-      const data = await res.json() as LegalResult
       setResult(data)
       setEditedDraft(data.document_draft)
       setStep('result')
@@ -111,17 +102,13 @@ export default function NewLegalDocumentPage() {
     if (!result) return
 
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/legal/${result.id}`, {
+      await apiFetch(`/legal/${result.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ document_draft: editedDraft }),
       })
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/legal/${result.id}/submit`, {
+      await apiFetch(`/legal/${result.id}/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ submitted_via: via }),
       })
 

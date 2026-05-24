@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Star, CheckSquare, FileText, Map, Award, TrendingUp } from 'lucide-react'
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { apiFetch } from '@/lib/api'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -98,7 +96,6 @@ function formatDate(iso: string | null) {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ReputationPage() {
-  const router = useRouter()
   const [profile, setProfile] = useState<ReputationProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
@@ -106,16 +103,7 @@ export default function ReputationPage() {
   useEffect(() => {
     async function load() {
       try {
-        const token = localStorage.getItem('access_token')
-        const res = await fetch(`${API}/reputation/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.status === 401) {
-          router.replace('/auth/login')
-          return
-        }
-        if (!res.ok) throw new Error(`Error ${res.status} al cargar reputación`)
-        const data: ReputationProfile = await res.json()
+        const data = await apiFetch<ReputationProfile>('/reputation/me')
         setProfile(data)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido')
@@ -124,7 +112,7 @@ export default function ReputationPage() {
       }
     }
     load()
-  }, [router])
+  }, [])
 
   const levelCfg = profile ? LEVEL_CONFIG[profile.level] : null
 

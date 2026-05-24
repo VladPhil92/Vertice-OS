@@ -7,10 +7,9 @@ import {
   FileText, Copy, Mail, MapPin, User, Phone, Building2,
   Shield, Scale, Check,
 } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const LEGAL_TYPE_LABELS: Record<string, string> = {
   derecho_de_peticion:    'Derecho de Petición',
@@ -168,22 +167,7 @@ export default function LegalDocumentDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const token = localStorage.getItem('access_token')
-        const res = await fetch(`${API}/legal/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (res.status === 401) {
-          router.push('/auth/login')
-          return
-        }
-        if (res.status === 404) {
-          setNotFound(true)
-          return
-        }
-        if (!res.ok) throw new Error('Error cargando documento')
-
-        const data = (await res.json()) as LegalDocument
+        const data = await apiFetch<LegalDocument>(`/legal/${id}`)
         setDoc(data)
         setDraft(data.document_draft)
       } catch {
@@ -202,16 +186,10 @@ export default function LegalDocumentDetailPage() {
     setSaving(true)
     setSaved(false)
     try {
-      const token = localStorage.getItem('access_token')
-      const res = await fetch(`${API}/legal/${id}`, {
-        method:  'PUT',
-        headers: {
-          Authorization:  `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      await apiFetch(`/legal/${id}`, {
+        method: 'PUT',
         body: JSON.stringify({ document_draft: draft }),
       })
-      if (!res.ok) throw new Error()
       setDoc((prev) => prev ? { ...prev, document_draft: draft } : prev)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -227,17 +205,10 @@ export default function LegalDocumentDetailPage() {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const token = localStorage.getItem('access_token')
-      const res = await fetch(`${API}/legal/${id}/submit`, {
-        method:  'POST',
-        headers: {
-          Authorization:  `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      const updated = await apiFetch<LegalDocument>(`/legal/${id}/submit`, {
+        method: 'POST',
         body: JSON.stringify({ submitted_via: submitVia }),
       })
-      if (!res.ok) throw new Error('No se pudo registrar el envío')
-      const updated = (await res.json()) as LegalDocument
       setDoc(updated)
       setSubmitDone(true)
     } catch (err) {

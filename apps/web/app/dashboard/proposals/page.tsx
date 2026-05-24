@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ThumbsUp } from 'lucide-react'
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { apiFetch } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,12 +179,8 @@ export default function ProposalsPage() {
     setLoading(true)
     setError(null)
 
-    fetch(`${API}/governance/proposals`)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then((data: { proposals: Proposal[] }) => {
+    apiFetch<{ proposals: Proposal[] }>('/governance/proposals')
+      .then((data) => {
         if (!cancelled) setProposals(data.proposals ?? [])
       })
       .catch(() => {
@@ -202,8 +197,6 @@ export default function ProposalsPage() {
     if (endorsingId) return
     setEndorsingId(id)
 
-    const token = localStorage.getItem('access_token')
-
     // Optimistic update
     setProposals(prev =>
       prev.map(p =>
@@ -212,32 +205,9 @@ export default function ProposalsPage() {
     )
 
     try {
-      const res = await fetch(`${API}/governance/proposals/${id}/endorse`, {
-        method:  'POST',
-        headers: { Authorization: `Bearer ${token ?? ''}` },
-      })
-
-      if (res.status === 401) {
-        // Roll back optimistic update before redirect
-        setProposals(prev =>
-          prev.map(p =>
-            p.id === id ? { ...p, endorsement_count: p.endorsement_count - 1 } : p,
-          ),
-        )
-        window.location.href = '/auth/login'
-        return
-      }
-
-      if (!res.ok) {
-        // Roll back
-        setProposals(prev =>
-          prev.map(p =>
-            p.id === id ? { ...p, endorsement_count: p.endorsement_count - 1 } : p,
-          ),
-        )
-      }
+      await apiFetch(`/governance/proposals/${id}/endorse`, { method: 'POST' })
     } catch {
-      // Roll back on network error
+      // Roll back on any error (apiFetch handles 401 redirect automatically)
       setProposals(prev =>
         prev.map(p =>
           p.id === id ? { ...p, endorsement_count: p.endorsement_count - 1 } : p,

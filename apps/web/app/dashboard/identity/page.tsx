@@ -3,12 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, CheckCircle, ChevronDown, ChevronUp, Loader2, ShieldCheck } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const LOCALITIES = [
   { id: 1, name: 'Histórica y del Caribe Norte' },
@@ -155,11 +154,10 @@ function VerificationStepper({ level }: StepperProps) {
 
 interface ActiveStepCardProps {
   level: 0 | 1 | 2
-  token: string
   onSuccess: () => Promise<void>
 }
 
-function ActiveStepCard({ level, token, onSuccess }: ActiveStepCardProps) {
+function ActiveStepCard({ level, onSuccess }: ActiveStepCardProps) {
   const [cedula,        setCedula]        = useState('')
   const [emailToken,    setEmailToken]    = useState('')
   const [devToken,      setDevToken]      = useState<string | null>(null)
@@ -167,13 +165,6 @@ function ActiveStepCard({ level, token, onSuccess }: ActiveStepCardProps) {
   const [success,       setSuccess]       = useState<string | null>(null)
   const [error,         setError]         = useState<string | null>(null)
   const [emailSent,     setEmailSent]     = useState(false)
-
-  function authHeaders(): HeadersInit {
-    return {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    }
-  }
 
   async function handleCedulaSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -187,27 +178,14 @@ function ActiveStepCard({ level, token, onSuccess }: ActiveStepCardProps) {
 
     setLoading(true)
     try {
-      const res = await fetch(`${API}/identity/verify/cedula`, {
-        method:  'POST',
-        headers: authHeaders(),
-        body:    JSON.stringify({ cedula }),
+      await apiFetch('/identity/verify/cedula', {
+        method: 'POST',
+        body: JSON.stringify({ cedula }),
       })
-
-      if (res.status === 401) {
-        window.location.href = '/auth/login'
-        return
-      }
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null) as { message?: string } | null
-        setError(body?.message ?? `Error ${res.status}. Intenta de nuevo.`)
-        return
-      }
-
       setSuccess('Cédula verificada correctamente.')
       await onSuccess()
-    } catch {
-      setError('No se pudo conectar con el servidor.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor.')
     } finally {
       setLoading(false)
     }
@@ -218,30 +196,14 @@ function ActiveStepCard({ level, token, onSuccess }: ActiveStepCardProps) {
     setSuccess(null)
     setLoading(true)
     try {
-      const res = await fetch(`${API}/identity/verify/email`, {
-        method:  'POST',
-        headers: authHeaders(),
+      const data = await apiFetch<{ message?: string; token?: string }>('/identity/verify/email', {
+        method: 'POST',
       })
-
-      if (res.status === 401) {
-        window.location.href = '/auth/login'
-        return
-      }
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null) as { message?: string } | null
-        setError(body?.message ?? `Error ${res.status}.`)
-        return
-      }
-
-      const data = await res.json() as { message?: string; token?: string }
       setEmailSent(true)
       setSuccess(data.message ?? 'Token enviado a tu correo.')
-      if (data.token) {
-        setDevToken(data.token)
-      }
-    } catch {
-      setError('No se pudo conectar con el servidor.')
+      if (data.token) setDevToken(data.token)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor.')
     } finally {
       setLoading(false)
     }
@@ -259,27 +221,14 @@ function ActiveStepCard({ level, token, onSuccess }: ActiveStepCardProps) {
 
     setLoading(true)
     try {
-      const res = await fetch(`${API}/identity/verify/email/confirm`, {
-        method:  'POST',
-        headers: authHeaders(),
-        body:    JSON.stringify({ token: emailToken.trim() }),
+      await apiFetch('/identity/verify/email/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ token: emailToken.trim() }),
       })
-
-      if (res.status === 401) {
-        window.location.href = '/auth/login'
-        return
-      }
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null) as { message?: string } | null
-        setError(body?.message ?? `Error ${res.status}. Token inválido o expirado.`)
-        return
-      }
-
       setSuccess('Email verificado. Identidad completa.')
       await onSuccess()
-    } catch {
-      setError('No se pudo conectar con el servidor.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor.')
     } finally {
       setLoading(false)
     }
@@ -567,11 +516,7 @@ function DIDDocCard({ doc, loading }: DIDDocCardProps) {
 // Profile card
 // ---------------------------------------------------------------------------
 
-interface ProfileCardProps {
-  token: string
-}
-
-function ProfileCard({ token }: ProfileCardProps) {
+function ProfileCard() {
   const [form, setForm]       = useState<ProfileForm>({ neighborhood: '', locality_id: '' })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -588,29 +533,13 @@ function ProfileCard({ token }: ProfileCardProps) {
     if (form.locality_id !== '')  body.locality_id  = form.locality_id
 
     try {
-      const res = await fetch(`${API}/identity/profile`, {
-        method:  'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization:  `Bearer ${token}`,
-        },
+      await apiFetch('/identity/profile', {
+        method: 'PUT',
         body: JSON.stringify(body),
       })
-
-      if (res.status === 401) {
-        window.location.href = '/auth/login'
-        return
-      }
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null) as { message?: string } | null
-        setError(data?.message ?? `Error ${res.status}.`)
-        return
-      }
-
       setSuccess('Perfil actualizado correctamente.')
-    } catch {
-      setError('No se pudo conectar con el servidor.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor.')
     } finally {
       setLoading(false)
     }
@@ -717,23 +646,10 @@ export default function IdentityPage() {
   const [loadingDid,    setLoadingDid]    = useState(true)
   const [pageError,  setPageError]  = useState<string | null>(null)
 
-  function getToken(): string | null {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem('access_token')
-  }
-
-  async function fetchStatus(token: string) {
+  async function fetchStatus() {
     setLoadingStatus(true)
     try {
-      const res = await fetch(`${API}/identity/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.status === 401) {
-        router.push('/auth/login')
-        return
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: IdentityStatus = await res.json()
+      const data = await apiFetch<IdentityStatus>('/identity/status')
       setStatus(data)
     } catch {
       setPageError('No se pudo cargar el estado de identidad.')
@@ -742,44 +658,27 @@ export default function IdentityPage() {
     }
   }
 
-  async function fetchDIDDoc(token: string) {
+  async function fetchDIDDoc() {
     setLoadingDid(true)
     try {
-      const res = await fetch(`${API}/identity/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.status === 401) {
-        router.push('/auth/login')
-        return
-      }
-      if (!res.ok) return   // DID may not exist yet at level 0 — silently skip
-      const data: DIDDocument = await res.json()
+      const data = await apiFetch<DIDDocument>('/identity/me')
       setDidDoc(data)
     } catch {
-      // Non-critical: DID doc display is optional
+      // Non-critical: DID doc may not exist yet at level 0
     } finally {
       setLoadingDid(false)
     }
   }
 
   useEffect(() => {
-    const token = getToken()
-    if (!token) {
-      router.push('/auth/login')
-      return
-    }
-    void fetchStatus(token)
-    void fetchDIDDoc(token)
+    void fetchStatus()
+    void fetchDIDDoc()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleVerificationSuccess() {
-    const token = getToken()
-    if (!token) return
-    await Promise.all([fetchStatus(token), fetchDIDDoc(token)])
+    await Promise.all([fetchStatus(), fetchDIDDoc()])
   }
-
-  const token = getToken() ?? ''
 
   return (
     <div className="min-h-screen">
@@ -894,7 +793,6 @@ export default function IdentityPage() {
             {/* ── Section 3: Active action card ───────────────────────── */}
             <ActiveStepCard
               level={status.level}
-              token={token}
               onSuccess={handleVerificationSuccess}
             />
 
@@ -902,7 +800,7 @@ export default function IdentityPage() {
             <DIDDocCard doc={didDoc} loading={loadingDid} />
 
             {/* ── Section 5: Profile ──────────────────────────────────── */}
-            <ProfileCard token={token} />
+            <ProfileCard />
 
           </div>
         )}
