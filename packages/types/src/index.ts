@@ -193,10 +193,10 @@ export interface ReputationProfile {
 // ── Documentos legales ────────────────────────────────────────────────────────
 
 export type LegalDocumentType =
-  | 'derecho_peticion'
+  | 'derecho_de_peticion'
   | 'tutela'
   | 'accion_popular'
-  | 'accion_cumplimiento'
+  | 'accion_de_cumplimiento'
   | 'denuncia_penal'
   | 'queja'
 
@@ -205,9 +205,10 @@ export type LegalDocumentStatus =
   | 'ready'
   | 'submitted'
   | 'responded'
+  | 'escalated'
   | 'closed'
 
-export type LegalUrgency = 'alta' | 'media' | 'baja'
+export type LegalUrgency = 'baja' | 'media' | 'alta' | 'critica'
 
 export interface TargetEntity {
   name: string
