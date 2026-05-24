@@ -133,34 +133,7 @@ export default function ReputationPage() {
     : []
 
   return (
-    <div className="min-h-screen">
-      {/* ── Top bar ────────────────────────────────────────────────────────── */}
-      <header className="border-b border-border bg-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <a href="/dashboard" className="flex items-center gap-2">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-                <polygon points="12,2 22,21 2,21" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
-              </svg>
-              <span className="font-display text-xs font-700 uppercase tracking-widest text-primary">
-                VÉRTICE OS
-              </span>
-            </a>
-            <span className="text-tertiary">/</span>
-            <a href="/dashboard" className="font-mono text-[11px] text-secondary uppercase tracking-[0.15em] hover:text-primary transition-colors">
-              Dashboard
-            </a>
-            <span className="text-tertiary">/</span>
-            <span className="font-mono text-[11px] text-gold uppercase tracking-[0.15em]">
-              Reputación
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="status-dot" />
-          </div>
-        </div>
-      </header>
-
+    <div>
       <main className="mx-auto max-w-5xl px-6 py-10">
         {/* ── Page header ────────────────────────────────────────────────── */}
         <div className="mb-10">

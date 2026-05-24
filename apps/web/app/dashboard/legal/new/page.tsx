@@ -132,24 +132,7 @@ export default function NewLegalDocumentPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-border bg-surface/60 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-4xl items-center gap-4 px-6 py-4">
-          <a href="/dashboard" className="text-tertiary hover:text-secondary transition-colors">
-            <ArrowLeft size={16} />
-          </a>
-          <div>
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gold">
-              Asistente Legal
-            </span>
-            <h1 className="font-display text-lg font-700 text-primary leading-tight">
-              Nuevo documento jurídico
-            </h1>
-          </div>
-        </div>
-      </header>
-
+    <div>
       <main className="mx-auto max-w-4xl px-6 py-10">
         <AnimatePresence mode="wait">
 

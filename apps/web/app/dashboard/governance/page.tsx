@@ -116,27 +116,7 @@ export default function GovernancePage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-border bg-surface/60 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
-            <a href="/dashboard" className="flex items-center gap-2">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-                <polygon points="12,2 22,21 2,21" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
-              </svg>
-              <span className="font-display text-xs font-700 uppercase tracking-widest text-primary">VÉRTICE OS</span>
-            </a>
-            <span className="text-tertiary">/</span>
-            <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-secondary">Gobernanza</span>
-            <span className="text-tertiary">/</span>
-            <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-gold">Votaciones</span>
-          </div>
-          <a href="/dashboard/proposals" className="btn-ghost text-[10px] py-2 px-4">
-            Ver todas las propuestas
-          </a>
-        </div>
-      </header>
-
+    <div>
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="mb-8">
           <span className="section-tag">Gobernanza Líquida</span>

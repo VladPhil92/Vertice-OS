@@ -308,80 +308,36 @@ export default function LegalDocumentDetailPage() {
   const typeLabel  = LEGAL_TYPE_LABELS[doc.legal_type] ?? doc.legal_type
 
   return (
-    <div className="min-h-screen">
+    <div>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 border-b border-border bg-surface/70 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
-
-          {/* Breadcrumb */}
-          <div className="flex min-w-0 items-center gap-2 flex-wrap">
-            <a href="/dashboard" className="flex items-center gap-2 flex-shrink-0">
-              <svg viewBox="0 0 24 24" className="h-4 w-4 flex-shrink-0" fill="none">
-                <polygon points="12,2 22,21 2,21" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
-              </svg>
-              <span className="font-display text-[10px] font-700 uppercase tracking-widest text-primary hidden sm:block">
-                VÉRTICE OS
-              </span>
-            </a>
-            <span className="text-tertiary flex-shrink-0">/</span>
-            <a
-              href="/dashboard/legal"
-              className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary hover:text-primary transition-colors flex-shrink-0"
-            >
-              Documentos Legales
-            </a>
-            <span className="text-tertiary flex-shrink-0">/</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-gold truncate max-w-[160px]">
-              {typeLabel}
-            </span>
-          </div>
-
-          {/* Badges + actions */}
-          <div className="flex flex-shrink-0 items-center gap-2">
-            {/* Status badge */}
-            <div className={`hidden sm:flex items-center gap-1 font-mono text-[10px] ${statusCfg.color}`}>
-              <StatusIcon size={11} />
-              <span>{statusCfg.label}</span>
-            </div>
-
-            {/* Urgency badge */}
-            <span
-              className={`hidden sm:block rounded border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider ${URGENCY_BADGE[doc.urgency] ?? ''}`}
-            >
-              {doc.urgency}
-            </span>
-
-            {/* Actions */}
-            {editable && (
-              <button
-                onClick={() => {
-                  const el = document.getElementById('section-documento')
-                  el?.scrollIntoView({ behavior: 'smooth' })
-                }}
-                className="btn-ghost py-1.5 px-3 text-[10px] hidden sm:block"
-              >
-                Editar borrador
-              </button>
-            )}
-            {editable && (
-              <button
-                onClick={() => {
-                  const el = document.getElementById('section-enviar')
-                  el?.scrollIntoView({ behavior: 'smooth' })
-                }}
-                className="btn-primary py-1.5 px-3 text-[10px]"
-              >
-                Enviar
-              </button>
-            )}
-            <a href="/dashboard/legal" className="btn-ghost py-1.5 px-3 text-[10px] flex items-center gap-1">
-              <ArrowLeft size={12} />
-              <span className="hidden sm:block">Lista</span>
-            </a>
-          </div>
+      {/* ── Sub-header: acciones del documento ─────────────────────────────── */}
+      <div className="border-b border-border bg-surface/60 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <a href="/dashboard/legal" className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-tertiary hover:text-secondary transition-colors">
+            <ArrowLeft size={11} />
+            Doc. Legales
+          </a>
+          <span className="text-tertiary">/</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-gold truncate max-w-[160px]">
+            {typeLabel}
+          </span>
         </div>
-      </header>
+
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1 font-mono text-[10px] ${statusCfg.color}`}>
+            <StatusIcon size={11} />
+            <span>{statusCfg.label}</span>
+          </div>
+          {editable && (
+            <button
+              onClick={() => document.getElementById('section-enviar')?.scrollIntoView({ behavior: 'smooth' })}
+              className="btn-primary py-1.5 px-3 text-[10px]"
+            >
+              Enviar
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* ── Main content ───────────────────────────────────────────────────── */}
       <main className="mx-auto max-w-5xl px-6 py-10 flex flex-col gap-10">
