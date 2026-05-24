@@ -16,35 +16,8 @@ const QUICK_ACTIONS = [
 
 export default function DashboardPage() {
   return (
-    <div className="min-h-screen">
-      {/* Top bar */}
-      <header className="border-b border-border bg-surface/60 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
-            <a href="/" className="flex items-center gap-2">
-              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
-                <polygon points="12,2 22,21 2,21" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
-              </svg>
-              <span className="font-display text-xs font-700 uppercase tracking-widest text-primary">
-                VÉRTICE OS
-              </span>
-            </a>
-            <span className="text-tertiary">/</span>
-            <span className="font-mono text-[11px] text-secondary uppercase tracking-[0.15em]">
-              Dashboard
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="status-dot" />
-            <a href="/auth/login" className="btn-ghost text-[10px] py-2 px-4">
-              Salir
-            </a>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-6 py-10">
+    <div>
+      <main className="mx-auto max-w-5xl px-6 py-10">
         {/* Welcome */}
         <div className="mb-10">
           <span className="section-tag">Panel ciudadano</span>
@@ -115,3 +88,4 @@ export default function DashboardPage() {
     </div>
   )
 }
+
