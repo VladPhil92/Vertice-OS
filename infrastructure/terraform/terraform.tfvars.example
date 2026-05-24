@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+# VÉRTICE OS — Terraform Example Variables
+# ---------------------------------------------------------------------------
+# Copy this file to terraform.tfvars and fill in real values.
+# NEVER commit terraform.tfvars — it is listed in .gitignore.
+# For db_password use AWS Secrets Manager or HashiCorp Vault in production.
+# ---------------------------------------------------------------------------
+
+aws_region  = "us-east-1"
+environment = "staging"
+project     = "vertice-os"
+
+# Network
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+# EKS
+eks_cluster_version     = "1.30"
+eks_node_instance_types = ["t3.medium"]
+eks_node_min_size       = 2
+eks_node_max_size       = 10
+eks_node_desired_size   = 3
+
+# RDS
+db_instance_class    = "db.t3.medium"
+db_allocated_storage = 50
+db_name              = "vertice_os"
+db_username          = "vertice"
+db_password          = "CHANGE_ME_USE_VAULT"  # Replace with a strong secret from Vault / Secrets Manager
+
+# Redis
+redis_node_type       = "cache.t3.micro"
+redis_num_cache_nodes = 1
