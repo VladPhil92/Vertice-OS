@@ -1,6 +1,6 @@
 'use client'
 
-import { FileText, Loader2, Plus, AlertTriangle } from 'lucide-react'
+import { FileText, Loader2, Plus, AlertTriangle, Map } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/lib/api'
 
@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api'
 // Types
 // ---------------------------------------------------------------------------
 
-type ReportStatus = 'open' | 'in_progress' | 'resolved' | 'rejected'
+type ReportStatus = 'open' | 'in_progress' | 'resolved' | 'rejected' | 'duplicate'
 
 type Category =
   | 'infraestructura'
@@ -32,10 +32,13 @@ interface Report {
   status: ReportStatus
   urgency_score?: number
   created_at: string
+  lat: number
+  lng: number
 }
 
 interface ApiResponse {
-  reports: Report[]
+  data: Report[]
+  count: number
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +62,7 @@ const STATUS_LABELS: Record<ReportStatus, string> = {
   in_progress: 'En gestión',
   resolved:    'Resuelto',
   rejected:    'Rechazado',
+  duplicate:   'Duplicado',
 }
 
 const STATUS_CLASS: Record<ReportStatus, string> = {
@@ -66,6 +70,7 @@ const STATUS_CLASS: Record<ReportStatus, string> = {
   in_progress: 'text-gold',
   resolved:    'text-tertiary',
   rejected:    'text-red-400',
+  duplicate:   'text-tertiary',
 }
 
 const MONTHS_ES = [
@@ -106,8 +111,8 @@ export default function ReportsPage() {
       setLoading(true)
       setError(null)
       try {
-        const data = await apiFetch<ApiResponse>('/territorial/reports')
-        setReports(data.reports ?? [])
+        const data = await apiFetch<ApiResponse>('/territorial/reports?limit=200&offset=0', { public: true })
+        setReports(data.data ?? [])
       } catch {
         setError('No se pudieron cargar los reportes. Verifica la conexión e intenta de nuevo.')
       } finally {
@@ -128,7 +133,7 @@ export default function ReportsPage() {
     <div>
       <main className="mx-auto max-w-5xl px-6 py-10">
         {/* Page header */}
-        <div className="mb-8 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <span className="section-tag">Módulo Territorial</span>
             <h1 className="font-display text-3xl font-bold text-primary">Reportes ciudadanos</h1>
@@ -136,11 +141,27 @@ export default function ReportsPage() {
               Situaciones reportadas por la comunidad en Cartagena de Indias.
             </p>
           </div>
-          {!loading && !error && (
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
-              {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {!loading && !error && (
+              <span className="mr-2 font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+                {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            <a
+              href="/dashboard/reports/map"
+              className="flex items-center gap-1.5 border border-border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary transition-colors hover:border-gold/40 hover:text-gold"
+            >
+              <Map size={11} />
+              Ver mapa
+            </a>
+            <a
+              href="/dashboard/reports/new"
+              className="flex items-center gap-1.5 border border-gold/40 bg-gold/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gold transition-colors hover:bg-gold/20"
+            >
+              <Plus size={11} />
+              Nuevo
+            </a>
+          </div>
         </div>
 
         {/* Filters */}
@@ -231,7 +252,9 @@ export default function ReportsPage() {
         {!loading && !error && filtered.length > 0 && (
           <div className="flex flex-col gap-px bg-border">
             {filtered.map((report) => (
-              <ReportCard key={report.id} report={report} />
+              <a key={report.id} href={`/dashboard/reports/${report.id}`} className="block">
+                <ReportCard report={report} />
+              </a>
             ))}
           </div>
         )}
@@ -246,7 +269,6 @@ export default function ReportsPage() {
 
 function ReportCard({ report }: { report: Report }) {
   const {
-    id,
     category,
     title,
     description,

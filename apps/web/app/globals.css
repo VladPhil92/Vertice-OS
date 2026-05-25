@@ -267,6 +267,52 @@
   }
 }
 
+/* ── Mapbox GL — overrides para el tema oscuro VÉRTICE OS ─────────────────── */
+
+.mapboxgl-popup-content {
+  background: #0c0c14 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7) !important;
+  min-width: 220px;
+}
+.mapboxgl-popup-close-button {
+  color: rgba(240, 237, 232, 0.35) !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  padding: 6px 8px !important;
+  right: 0 !important;
+  top: 0 !important;
+}
+.mapboxgl-popup-close-button:hover {
+  color: #f0ede8 !important;
+  background: transparent !important;
+}
+.mapboxgl-popup-tip {
+  display: none !important;
+}
+.mapboxgl-ctrl-group {
+  background: #0c0c14 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0 !important;
+}
+.mapboxgl-ctrl-group button {
+  background: transparent !important;
+}
+.mapboxgl-ctrl button .mapboxgl-ctrl-icon {
+  filter: invert(0.8) !important;
+}
+.mapboxgl-ctrl button:hover .mapboxgl-ctrl-icon {
+  filter: invert(1) !important;
+}
+.mapboxgl-ctrl-attrib {
+  background: rgba(5, 5, 8, 0.7) !important;
+}
+.mapboxgl-ctrl-attrib a {
+  color: rgba(240, 237, 232, 0.35) !important;
+}
+
 @keyframes scanLine {
   0% {
     top: 0;
