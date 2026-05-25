@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { requireVerified } from '../../middleware/auth'
+import { requireVerified, requireModerator } from '../../middleware/auth'
 import { CreateReportSchema, ListReportsSchema, NearbySchema, UpdateStatusSchema } from './territorial.schema'
 import {
   createReport,
@@ -61,9 +61,9 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send(report)
   })
 
-  // PATCH /territorial/reports/:id/status — actualizar estado
+  // PATCH /territorial/reports/:id/status — actualizar estado (solo moderadores)
   app.patch('/reports/:id/status', {
-    preHandler: requireVerified,
+    preHandler: requireModerator,
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const parsed = UpdateStatusSchema.safeParse(request.body)
@@ -72,5 +72,24 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     }
     const report = await updateReportStatus(id, parsed.data)
     return reply.send(report)
+  })
+
+  // ── Admin / Moderación ────────────────────────────────────────────────────
+
+  // GET /territorial/admin/reports — listar reportes con filtro de estado (cola de moderación)
+  app.get('/admin/reports', {
+    preHandler: requireModerator,
+  }, async (request, reply) => {
+    const { status, category, locality_id } = request.query as {
+      status?: string; category?: string; locality_id?: string
+    }
+    const reports = await listReports({
+      status: status as Parameters<typeof listReports>[0]['status'],
+      category: category as Parameters<typeof listReports>[0]['category'],
+      locality_id: locality_id ? Number(locality_id) : undefined,
+      limit: 100,
+      offset: 0,
+    })
+    return reply.send({ data: reports, count: reports.length })
   })
 }

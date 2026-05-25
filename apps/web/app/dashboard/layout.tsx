@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   ShieldCheck,
@@ -11,21 +11,34 @@ import {
   Star,
   Scale,
   Menu,
-  X,
+  Shield,
   LogOut,
 } from 'lucide-react'
 
 // ─── Nav items ───────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { href: '/dashboard',            label: 'Panel',          icon: LayoutDashboard, exact: true  },
-  { href: '/dashboard/identity',   label: 'Identidad',      icon: ShieldCheck,     exact: false },
-  { href: '/dashboard/reports',    label: 'Reportes',       icon: Map,             exact: false },
-  { href: '/dashboard/proposals',  label: 'Propuestas',     icon: FileText,        exact: false },
-  { href: '/dashboard/governance', label: 'Gobernanza',     icon: Vote,            exact: false },
-  { href: '/dashboard/reputation', label: 'Reputación',     icon: Star,            exact: false },
-  { href: '/dashboard/legal',      label: 'Doc. Legales',   icon: Scale,           exact: false },
+  { href: '/dashboard',            label: 'Panel',          icon: LayoutDashboard, exact: true,  adminOnly: false },
+  { href: '/dashboard/identity',   label: 'Identidad',      icon: ShieldCheck,     exact: false, adminOnly: false },
+  { href: '/dashboard/reports',    label: 'Reportes',       icon: Map,             exact: false, adminOnly: false },
+  { href: '/dashboard/proposals',  label: 'Propuestas',     icon: FileText,        exact: false, adminOnly: false },
+  { href: '/dashboard/governance', label: 'Gobernanza',     icon: Vote,            exact: false, adminOnly: false },
+  { href: '/dashboard/reputation', label: 'Reputación',     icon: Star,            exact: false, adminOnly: false },
+  { href: '/dashboard/legal',      label: 'Doc. Legales',   icon: Scale,           exact: false, adminOnly: false },
+  { href: '/dashboard/admin',      label: 'Moderación',     icon: Shield,          exact: false, adminOnly: true  },
 ] as const
+
+function getTokenRole(): string {
+  if (typeof window === 'undefined') return 'citizen'
+  try {
+    const token = localStorage.getItem('access_token')
+    if (!token) return 'citizen'
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return (payload.role as string) ?? 'citizen'
+  } catch {
+    return 'citizen'
+  }
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -33,6 +46,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const router   = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [role, setRole] = useState<string>('citizen')
+
+  useEffect(() => {
+    setRole(getTokenRole())
+  }, [])
 
   function isActive(href: string, exact: boolean) {
     return exact ? pathname === href : pathname.startsWith(href)
@@ -77,7 +95,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Navigation */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
-        {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
+        {NAV_ITEMS.filter(item => !item.adminOnly || ['moderator', 'admin'].includes(role)).map(({ href, label, icon: Icon, exact }) => {
           const active = isActive(href, exact)
           return (
             <a

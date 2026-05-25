@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcrypt'
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../../lib/prisma'
-import { generateRefreshToken, hashToken, refreshTokenExpiresAt, AccessTokenPayload } from '../../lib/jwt'
+import { generateRefreshToken, hashToken, refreshTokenExpiresAt, AccessTokenPayload, CitizenRole } from '../../lib/jwt'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
 import { sendPasswordReset } from '../../lib/email'
@@ -70,7 +70,7 @@ export async function loginCitizen(
 ): Promise<AuthTokenResponse & { refresh_token: string }> {
   const citizen = await prisma.citizen.findUnique({
     where: { email: input.email },
-    select: { id: true, did: true, passwordHash: true, verificationLevel: true },
+    select: { id: true, did: true, passwordHash: true, verificationLevel: true, role: true },
   })
 
   // Respuesta idéntica para email inexistente y password incorrecta — previene user enumeration
@@ -86,6 +86,7 @@ export async function loginCitizen(
     sub: citizen.id,
     did: citizen.did,
     lvl: citizen.verificationLevel,
+    role: (citizen.role as CitizenRole) ?? 'citizen',
   }
 
   const accessToken = app.jwt.sign(payload, { expiresIn: config.JWT_ACCESS_EXPIRY_SECONDS })

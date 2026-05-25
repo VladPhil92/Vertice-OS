@@ -26,6 +26,7 @@ export const PROPOSAL_STATUSES = [
   'voting',
   'approved',
   'rejected',
+  'archived',
   'executed',
   'failed_execution',
   'quorum_failed',
@@ -64,6 +65,7 @@ export interface Proposal {
   abstain_votes_weighted: number
   assigned_executor: string | null
   execution_deadline: string | null
+  rejection_reason: string | null
   blockchain_tx_hash: string | null
   ipfs_proposal_uri: string | null
   ipfs_result_uri: string | null
@@ -166,6 +168,7 @@ export interface ProposalRow {
   abstain_votes_weighted: string | number
   assigned_executor: string | null
   execution_deadline: Date | string | null
+  rejection_reason: string | null
   blockchain_tx_hash: string | null
   ipfs_proposal_uri: string | null
   ipfs_result_uri: string | null

@@ -1,10 +1,13 @@
 import crypto from 'crypto'
 import { config } from '../config'
 
+export type CitizenRole = 'citizen' | 'moderator' | 'admin'
+
 export interface AccessTokenPayload {
   sub: string           // citizen UUID
   did: string
   lvl: number           // verificationLevel
+  role: CitizenRole
   iat?: number
   exp?: number
 }

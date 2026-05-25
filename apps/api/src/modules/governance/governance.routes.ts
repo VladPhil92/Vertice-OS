@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { requireVerified } from '../../middleware/auth'
+import { requireVerified, requireModerator } from '../../middleware/auth'
 import {
   CreateProposalSchema,
   ListProposalsSchema,
@@ -19,6 +19,9 @@ import {
   revokeDelegation,
   getMyDelegations,
   getGovernanceStats,
+  adminAdvanceProposal,
+  adminArchiveProposal,
+  adminListProposals,
 } from './governance.service'
 
 export async function governanceRoutes(app: FastifyInstance): Promise<void> {
@@ -135,5 +138,35 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string }
     await revokeDelegation(id, request.citizen.sub)
     return reply.send({ success: true })
+  })
+
+  // ── Admin / Moderación ────────────────────────────────────────────────────
+
+  // GET /governance/admin/proposals — listar todas las propuestas (con filtro opcional de estado)
+  app.get('/admin/proposals', {
+    preHandler: requireModerator,
+  }, async (request, reply) => {
+    const { status } = request.query as { status?: string }
+    const proposals = await adminListProposals(status)
+    return reply.send({ data: proposals, count: proposals.length })
+  })
+
+  // POST /governance/admin/proposals/:id/advance — forzar avance de ciclo de vida
+  app.post('/admin/proposals/:id/advance', {
+    preHandler: requireModerator,
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const proposal = await adminAdvanceProposal(id)
+    return reply.send(proposal)
+  })
+
+  // POST /governance/admin/proposals/:id/archive — archivar / rechazar propuesta
+  app.post('/admin/proposals/:id/archive', {
+    preHandler: requireModerator,
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { reason } = (request.body ?? {}) as { reason?: string }
+    const proposal = await adminArchiveProposal(id, reason ?? 'Archivada por moderador')
+    return reply.send(proposal)
   })
 }

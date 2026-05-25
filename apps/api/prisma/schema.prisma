@@ -38,6 +38,7 @@ model Citizen {
   reputationScore    Decimal   @default(0) @map("reputation_score") @db.Decimal(10, 4)
   participationCount Int       @default(0) @map("participation_count")
   isActive           Boolean   @default(true) @map("is_active")
+  role               String    @default("citizen") @map("role")
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   lastActiveAt       DateTime? @map("last_active_at") @db.Timestamptz(6)
 

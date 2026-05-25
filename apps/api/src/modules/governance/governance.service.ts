@@ -647,3 +647,61 @@ export async function getGovernanceStats(): Promise<GovernanceStats> {
   await setCache('stats', 'global', stats, TTL.STATS)
   return stats
 }
+
+// ── Admin: force-advance any proposal ────────────────────────────────────────
+
+export async function adminAdvanceProposal(proposalId: string): Promise<Proposal> {
+  const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+    SELECT * FROM proposals WHERE id = ${proposalId}::uuid
+  `)
+  if (rows.length === 0) throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
+  const proposal = normalizeProposal(rows[0])
+
+  const TRANSITIONS: Partial<Record<ProposalStatus, string>> = {
+    idea:    'draft',
+    draft:   'debate',
+    debate:  'voting',
+    voting:  'approved',
+  }
+  const next = TRANSITIONS[proposal.status]
+  if (!next) throw makeError('No se puede avanzar desde el estado actual', 400, 'INVALID_TRANSITION')
+
+  const updated = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+    UPDATE proposals SET status = ${next}::text, updated_at = NOW()
+    WHERE id = ${proposalId}::uuid RETURNING *
+  `)
+  await delCache('proposal', proposalId)
+  return normalizeProposal(updated[0])
+}
+
+// ── Admin: archive / reject any proposal ─────────────────────────────────────
+
+export async function adminArchiveProposal(proposalId: string, reason: string): Promise<Proposal> {
+  const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+    UPDATE proposals
+    SET status = 'archived', rejection_reason = ${reason}, updated_at = NOW()
+    WHERE id = ${proposalId}::uuid
+    RETURNING *
+  `)
+  if (rows.length === 0) throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
+  await delCache('proposal', proposalId)
+  return normalizeProposal(rows[0])
+}
+
+// ── Admin: list all proposals with any filter ─────────────────────────────────
+
+export async function adminListProposals(status?: string): Promise<ProposalSummary[]> {
+  const whereClause = status
+    ? Prisma.sql`WHERE status = ${status}`
+    : Prisma.empty
+
+  const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+    SELECT id, author_id, title, category, scope, status, endorsement_count,
+           total_votes, created_at, updated_at
+    FROM proposals
+    ${whereClause}
+    ORDER BY created_at DESC
+    LIMIT 200
+  `)
+  return rows.map(normalizeProposalSummary)
+}
