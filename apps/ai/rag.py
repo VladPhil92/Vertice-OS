@@ -58,14 +58,20 @@ def _hash_embedding(text: str) -> list[float]:
     return [(b / 127.5) - 1.0 for b in digest[:EMBEDDING_DIM // 4] * 4]
 
 
-async def _embed(text: str) -> list[float]:
-    """Genera embedding para el texto. Prioridad: Voyage AI → hash fallback."""
+async def _embed(text: str, input_type: str = "query") -> list[float]:
+    """Genera embedding para el texto. Prioridad: Voyage AI → hash fallback.
+
+    Args:
+        text:       Texto a embeder.
+        input_type: ``"query"`` para consultas de recuperación,
+                    ``"document"`` para indexación.
+    """
     voyage_key = os.getenv("VOYAGE_API_KEY", "")
 
     if _VOYAGE_AVAILABLE and voyage_key:
         try:
             vo = voyageai.AsyncClient(api_key=voyage_key)
-            result = await vo.embed([text], model=EMBEDDING_MODEL, input_type="query")
+            result = await vo.embed([text], model=EMBEDDING_MODEL, input_type=input_type)
             return result.embeddings[0]
         except Exception as exc:
             logger.warning("[rag] error generando embedding con Voyage AI: %s", exc)
@@ -121,7 +127,7 @@ class RAGPipeline:
             return []
 
         try:
-            embedding = await _embed(query)
+            embedding = await _embed(query, input_type="query")
 
             # Construir filtro de metadatos
             metadata_filter: dict[str, Any] = {}
@@ -156,6 +162,66 @@ class RAGPipeline:
             logger.warning("[rag] error en retrieve: %s", exc)
             return []
 
+    async def upsert_batch(
+        self,
+        items: list[tuple[str, str, dict[str, Any]]],
+    ) -> int:
+        """
+        Indexa un lote de fragmentos en Pinecone con una sola llamada a Voyage AI.
+
+        Voyage AI soporta hasta 128 inputs por llamada — esta función respeta ese
+        límite dividiendo lotes mayores automáticamente.
+
+        Args:
+            items: Lista de tuplas ``(doc_id, text, metadata)``.
+
+        Returns:
+            Número de fragmentos indexados correctamente.
+        """
+        if not self._ensure_initialized():
+            return 0
+        if not items:
+            return 0
+
+        VOYAGE_BATCH_LIMIT = 128
+        total_indexed = 0
+
+        for batch_start in range(0, len(items), VOYAGE_BATCH_LIMIT):
+            batch = items[batch_start : batch_start + VOYAGE_BATCH_LIMIT]
+            texts = [text for _, text, _ in batch]
+
+            # Obtener embeddings en una sola llamada
+            voyage_key = os.getenv("VOYAGE_API_KEY", "")
+            embeddings: list[list[float]] = []
+
+            if _VOYAGE_AVAILABLE and voyage_key:
+                try:
+                    vo = voyageai.AsyncClient(api_key=voyage_key)
+                    result = await vo.embed(texts, model=EMBEDDING_MODEL, input_type="document")
+                    embeddings = result.embeddings
+                except Exception as exc:
+                    logger.warning("[rag] error en batch embed con Voyage AI: %s", exc)
+
+            # Fallback hash si Voyage falló o no está disponible
+            if len(embeddings) != len(batch):
+                embeddings = [_hash_embedding(t) for t in texts]
+
+            vectors = []
+            for (doc_id, text, metadata), embedding in zip(batch, embeddings):
+                vectors.append({
+                    "id": doc_id,
+                    "values": embedding,
+                    "metadata": {**metadata, "text": text[:2000]},
+                })
+
+            try:
+                self._index.upsert(vectors=vectors)
+                total_indexed += len(vectors)
+            except Exception as exc:
+                logger.warning("[rag] error en upsert batch (tamaño=%d): %s", len(vectors), exc)
+
+        return total_indexed
+
     async def upsert_document(
         self,
         doc_id: str,
@@ -164,6 +230,7 @@ class RAGPipeline:
     ) -> bool:
         """
         Indexa un fragmento de documento en Pinecone.
+        Wrapper de un solo elemento sobre ``upsert_batch``.
 
         Args:
             doc_id:   Identificador único del fragmento.
@@ -173,21 +240,8 @@ class RAGPipeline:
         Returns:
             True si se indexó correctamente, False en caso de error.
         """
-        if not self._ensure_initialized():
-            return False
-
-        try:
-            embedding = await _embed(text)
-            metadata_with_text = {**metadata, "text": text[:2000]}  # Pinecone limit
-            self._index.upsert(vectors=[{
-                "id": doc_id,
-                "values": embedding,
-                "metadata": metadata_with_text,
-            }])
-            return True
-        except Exception as exc:
-            logger.warning("[rag] error en upsert: %s", exc)
-            return False
+        count = await self.upsert_batch([(doc_id, text, metadata)])
+        return count > 0
 
     def format_context(self, fragments: list[str], max_chars: int = 3000) -> str:
         """

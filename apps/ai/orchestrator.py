@@ -26,6 +26,8 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, field_validator
 from typing_extensions import TypedDict
 
+from rag import rag_pipeline
+
 logger = logging.getLogger(__name__)
 
 ORCHESTRATOR_TIMEOUT_SECONDS = 30
@@ -73,8 +75,21 @@ class BaseAgent:
         self.system_prompt = system_prompt
         self.client = anthropic.Anthropic()
 
-    def _call_llm(self, messages: list[dict], context: dict[str, str] | None = None) -> str:
-        """Llamada al LLM con prompt caching en el system prompt estático."""
+    def _call_llm(
+        self,
+        messages: list[dict],
+        context: dict[str, str] | None = None,
+        retrieved_docs: list[str] | None = None,
+    ) -> str:
+        """Llamada al LLM con prompt caching en el system prompt estático.
+
+        Args:
+            messages:      Historial de mensajes para la API.
+            context:       Contexto de sesión (ciudadano, localidad, etc.).
+            retrieved_docs: Fragmentos recuperados por el pipeline RAG.
+                            Se inyectan como bloque adicional en el system prompt,
+                            sin cache (cambian por consulta).
+        """
         # El system prompt es estático por agente → candidato ideal para cache
         system_blocks: list[dict] = [
             {
@@ -91,6 +106,15 @@ class BaseAgent:
                 system_blocks.append({
                     "type": "text",
                     "text": "## Contexto de la sesión\n" + "\n".join(lines),
+                })
+
+        # Contexto documental RAG — varía por consulta → NO se cachea
+        if retrieved_docs:
+            formatted = rag_pipeline.format_context(retrieved_docs)
+            if formatted:
+                system_blocks.append({
+                    "type": "text",
+                    "text": "## Contexto documental recuperado\n" + formatted,
                 })
 
         try:
@@ -162,6 +186,7 @@ Formato de respuesta:
         response = self._call_llm(
             state["messages"],
             context=state.get("context"),
+            retrieved_docs=state.get("retrieved_docs") or [],
         )
         log_entry = self._log_action(state, "citizen_guidance", response)
         return {
@@ -251,6 +276,7 @@ Conocimientos base:
         response = self._call_llm(
             state["messages"],
             context=state.get("context"),
+            retrieved_docs=state.get("retrieved_docs") or [],
         )
         log_entry = self._log_action(state, "policy_draft", response)
         return {
@@ -298,6 +324,7 @@ Al analizar territorio, siempre incluye:
         response = self._call_llm(
             state["messages"],
             context=state.get("context"),
+            retrieved_docs=state.get("retrieved_docs") or [],
         )
         log_entry = self._log_action(state, "territorial_analysis", response)
         return {
@@ -587,6 +614,7 @@ Para otros: formato apropiado según el instrumento.
         response = self._call_llm(
             state["messages"],
             context=state.get("context"),
+            retrieved_docs=state.get("retrieved_docs") or [],
         )
         log_entry = self._log_action(state, "legal_document_generated", response)
         return {
@@ -595,6 +623,63 @@ Para otros: formato apropiado según el instrumento.
             "confidence": 0.88,
             "audit_log": state["audit_log"] + [log_entry],
         }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# RAG retrieval node
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Intents that benefit from document retrieval
+RAG_INTENTS: frozenset[AgentIntent] = frozenset({
+    AgentIntent.CITIZEN,
+    AgentIntent.POLICY,
+    AgentIntent.TERRITORIAL,
+    AgentIntent.LEGAL,
+})
+
+# Territory name → Pinecone locality code
+_TERRITORY_CODES: dict[str, str] = {
+    "historica":  "CTG-01",
+    "histórica":  "CTG-01",
+    "virgen":     "CTG-02",
+    "la virgen":  "CTG-02",
+    "industrial": "CTG-03",
+    "bayunca":    "CTG-04",
+}
+
+
+async def rag_retrieval_node(state: AgentState) -> AgentState:
+    """Retrieve relevant document fragments before calling specialized agents."""
+    # Build query from last message + optional territory
+    last_message: str = ""
+    messages = state.get("messages", [])
+    if messages:
+        last = messages[-1]
+        # LangGraph messages can be dicts or objects with .content
+        last_message = last.get("content", "") if isinstance(last, dict) else getattr(last, "content", "")
+
+    territory = state.get("territory") or ""
+    query = f"{last_message} {territory}".strip() if territory else last_message
+
+    # Resolve territory string to locality code for filtering
+    locality_code: str | None = None
+    territory_lower = territory.lower()
+    for key, code in _TERRITORY_CODES.items():
+        if key in territory_lower:
+            locality_code = code
+            break
+
+    try:
+        docs = await rag_pipeline.retrieve(query, top_k=4, filter_locality=locality_code)
+    except Exception as exc:
+        logger.warning("[rag_retrieval_node] error en retrieve: %s", exc)
+        docs = []
+
+    # Keep existing docs if retrieve returned nothing
+    existing = state.get("retrieved_docs") or []
+    new_docs = docs if docs else existing
+
+    return {**state, "retrieved_docs": new_docs}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -665,10 +750,17 @@ def route_to_agent(
 
 def _entry_point(
     state: AgentState,
-) -> Literal["router", "citizen", "governance", "policy", "territorial", "integrity", "comms", "legal"]:
-    """Si el intent ya está fijado, salta el router directamente al agente."""
+) -> Literal["router", "rag_retrieval", "citizen", "governance", "policy", "territorial", "integrity", "comms", "legal"]:
+    """Si el intent ya está fijado, salta el router.
+
+    Para intents RAG-capable (citizen, policy, territorial, legal) va primero
+    por ``rag_retrieval`` antes de llegar al agente especializado.
+    Para los demás (governance, integrity, comms) va directo al agente.
+    """
     intent = state.get("intent")
     if intent is not None and intent != AgentIntent.UNKNOWN:
+        if intent in RAG_INTENTS:
+            return "rag_retrieval"
         return intent.value  # type: ignore[return-value]
     return "router"
 
@@ -687,6 +779,7 @@ def build_orchestrator() -> StateGraph:
     workflow = StateGraph(AgentState)
 
     workflow.add_node("router", router)
+    workflow.add_node("rag_retrieval", rag_retrieval_node)
     workflow.add_node("citizen", citizen)
     workflow.add_node("governance", governance)
     workflow.add_node("policy", policy)
@@ -695,31 +788,44 @@ def build_orchestrator() -> StateGraph:
     workflow.add_node("comms", comms)
     workflow.add_node("legal", legal)
 
-    # START → router o directo al agente si intent ya está fijado
+    # START → rag_retrieval (RAG intents) | router | direct agent (non-RAG with known intent)
     workflow.add_conditional_edges(
         START,
         _entry_point,
         {
             "router": "router",
-            "citizen": "citizen",
+            "rag_retrieval": "rag_retrieval",
             "governance": "governance",
-            "policy": "policy",
-            "territorial": "territorial",
             "integrity": "integrity",
             "comms": "comms",
-            "legal": "legal",
         },
     )
+
+    # router → rag_retrieval (RAG intents) | direct agent (non-RAG intents)
     workflow.add_conditional_edges(
         "router",
+        lambda state: (
+            "rag_retrieval"
+            if state.get("intent") in RAG_INTENTS
+            else route_to_agent(state)
+        ),
+        {
+            "rag_retrieval": "rag_retrieval",
+            "governance": "governance",
+            "integrity": "integrity",
+            "comms": "comms",
+            "citizen": "citizen",  # fallback for UNKNOWN → citizen
+        },
+    )
+
+    # rag_retrieval → specific RAG-capable agent based on intent
+    workflow.add_conditional_edges(
+        "rag_retrieval",
         route_to_agent,
         {
             "citizen": "citizen",
-            "governance": "governance",
             "policy": "policy",
             "territorial": "territorial",
-            "integrity": "integrity",
-            "comms": "comms",
             "legal": "legal",
         },
     )

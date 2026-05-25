@@ -24,7 +24,7 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -599,3 +599,170 @@ async def legal_analyze(
         fallback = _FALLBACK_LEGAL_RESPONSE
         fallback.audit_id = result.audit_id
         return fallback
+
+
+# ── /rag/status — estado del pipeline RAG ─────────────────────────────────────
+
+@app.get("/rag/status", tags=["rag"])
+async def rag_status(
+    _auth: None = None,
+) -> dict:
+    """
+    Retorna el estado del pipeline RAG (Pinecone + Voyage AI).
+    Requiere X-Service-Key.
+    """
+    import os
+
+    try:
+        import voyageai  # type: ignore[import]
+        voyage_available = True
+    except ImportError:
+        voyage_available = False
+
+    try:
+        from pinecone import Pinecone as _PC  # type: ignore[import]
+        pinecone_available = True
+    except ImportError:
+        pinecone_available = False
+
+    rag_ok = rag_pipeline.status == "ok"
+    return {
+        "status": "ok" if rag_ok else "degraded",
+        "rag_status": rag_pipeline.status,
+        "index_name": config.PINECONE_INDEX,
+        "voyage_available": voyage_available and bool(os.getenv("VOYAGE_API_KEY")),
+        "pinecone_available": pinecone_available and bool(config.PINECONE_API_KEY),
+    }
+
+
+# ── /rag/index — indexación de documentos en segundo plano ───────────────────
+
+# Registro de tareas de indexación en memoria (se pierde al reiniciar)
+_indexing_tasks: dict[str, dict] = {}
+
+
+class RagIndexRequest(BaseModel):
+    doc_name: str | None = Field(
+        default=None,
+        description="Nombre parcial del documento a indexar. None para indexar todos.",
+    )
+    dry_run: bool = Field(
+        default=False,
+        description="Si es True, simula la indexación sin escribir en Pinecone.",
+    )
+
+
+class RagIndexResponse(BaseModel):
+    task_id: str
+    status: str
+    message: str
+
+
+async def _run_indexing_task(task_id: str, doc_name: str | None, dry_run: bool) -> None:
+    """Tarea de indexación que corre en segundo plano."""
+    import sys
+    from pathlib import Path
+
+    # Importar el módulo de seed desde scripts/
+    scripts_path = Path(__file__).parent / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
+
+    try:
+        from seed_cartagena import seed_all  # type: ignore[import]
+
+        _indexing_tasks[task_id]["status"] = "running"
+        results = await seed_all(dry_run=dry_run, doc_name=doc_name)
+
+        indexed_total = sum(results.values())
+        indexed_docs = [name for name, count in results.items() if count > 0]
+        skipped_docs = [name for name, count in results.items() if count == 0]
+
+        _indexing_tasks[task_id].update({
+            "status": "completed",
+            "indexed": indexed_total,
+            "skipped": len(skipped_docs),
+            "documents": indexed_docs,
+        })
+        logger.info(
+            "[rag/index] task_id=%s completado: %d chunks en %d docs",
+            task_id, indexed_total, len(indexed_docs),
+        )
+    except Exception as exc:
+        logger.exception("[rag/index] task_id=%s error: %s", task_id, exc)
+        _indexing_tasks[task_id].update({
+            "status": "error",
+            "error": str(exc),
+        })
+
+
+@app.post(
+    "/rag/index",
+    response_model=RagIndexResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["rag"],
+)
+async def rag_index(
+    request: RagIndexRequest,
+    background_tasks: BackgroundTasks,
+    _auth: None = None,
+) -> RagIndexResponse:
+    """
+    Dispara la indexación de documentos cívicos de Cartagena en Pinecone.
+    La indexación corre en segundo plano — retorna 202 Accepted con un task_id.
+    Requiere X-Service-Key.
+
+    Para verificar el estado de la tarea: GET /rag/index/{task_id}
+    """
+    task_id = str(uuid.uuid4())
+
+    _indexing_tasks[task_id] = {
+        "status": "pending",
+        "doc_name": request.doc_name,
+        "dry_run": request.dry_run,
+        "task_id": task_id,
+        "indexed": 0,
+        "skipped": 0,
+        "documents": [],
+    }
+
+    background_tasks.add_task(
+        _run_indexing_task,
+        task_id=task_id,
+        doc_name=request.doc_name,
+        dry_run=request.dry_run,
+    )
+
+    logger.info(
+        "[rag/index] tarea iniciada task_id=%s doc_name=%s dry_run=%s",
+        task_id,
+        request.doc_name or "all",
+        request.dry_run,
+    )
+
+    return RagIndexResponse(
+        task_id=task_id,
+        status="pending",
+        message=(
+            f"Indexación {'(dry-run) ' if request.dry_run else ''}iniciada en segundo plano. "
+            f"Consulta el estado en GET /rag/index/{task_id}"
+        ),
+    )
+
+
+@app.get("/rag/index/{task_id}", tags=["rag"])
+async def rag_index_status(
+    task_id: str,
+    _auth: None = None,
+) -> dict:
+    """
+    Consulta el estado de una tarea de indexación iniciada con POST /rag/index.
+    Requiere X-Service-Key.
+    """
+    task = _indexing_tasks.get(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tarea no encontrada: {task_id}",
+        )
+    return task

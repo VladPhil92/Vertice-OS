@@ -127,6 +127,6 @@ class TestRouteToAgent:
 
 class TestAgentIntentEnum:
     def test_all_expected_values_exist(self):
-        expected = {"citizen", "governance", "policy", "territorial", "integrity", "comms", "unknown"}
+        expected = {"citizen", "governance", "policy", "territorial", "integrity", "comms", "legal", "unknown"}
         actual = {e.value for e in AgentIntent}
         assert actual == expected
