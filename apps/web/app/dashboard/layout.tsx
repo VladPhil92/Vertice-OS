@@ -72,7 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useServerEvents(['territorial', 'governance'], handleRealtimeEvent)
 
   function isActive(href: string, exact: boolean) {
-    return exact ? pathname === href : pathname.startsWith(href)
+    return exact ? pathname === href : (pathname?.startsWith(href) ?? false)
   }
 
   async function handleSignOut() {

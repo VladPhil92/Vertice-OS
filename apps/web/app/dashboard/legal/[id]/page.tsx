@@ -142,7 +142,7 @@ function Section({ label, icon: Icon, children }: {
 export default function LegalDocumentDetailPage() {
   const params   = useParams()
   const router   = useRouter()
-  const id       = params.id as string
+  const id       = (params?.id ?? '') as string
 
   const [doc,        setDoc]        = useState<LegalDocument | null>(null)
   const [loading,    setLoading]    = useState(true)

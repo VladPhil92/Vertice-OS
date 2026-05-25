@@ -124,7 +124,7 @@ test.describe('Create report', () => {
       if (route.request().method() === 'POST') {
         return route.fulfill({
           status: 201,
-          json: { id: 'new-report-uuid', ...MOCK_REPORTS[0] },
+          json: { ...MOCK_REPORTS[0], id: 'new-report-uuid' },
         })
       }
       return route.fulfill({ status: 200, json: { data: [], count: 0 } })
