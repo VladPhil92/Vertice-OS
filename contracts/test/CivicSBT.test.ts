@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { ZeroAddress } from "ethers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import type { CivicSBT } from "../typechain-types";
 import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -96,7 +97,7 @@ describe("CivicSBT", function () {
         sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       )
         .to.emit(sbt, "BadgeMinted")
-        .withArgs(citizen.address, 0n, DID, BadgeType.CITIZEN_VERIFIED, expect.anything());
+        .withArgs(citizen.address, 0n, DID, BadgeType.CITIZEN_VERIFIED, anyValue);
     });
 
     it("sets tokenURI correctly", async function () {

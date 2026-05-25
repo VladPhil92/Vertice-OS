@@ -212,7 +212,7 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
         address auth
     )
         internal
-        override(ERC721, ERC721URIStorage)
+        override(ERC721)
         returns (address)
     {
         address from = _ownerOf(tokenId);

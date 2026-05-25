@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { ZeroAddress } from "ethers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import type { VotingRegistry } from "../typechain-types";
 import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -73,7 +74,7 @@ describe("VotingRegistry", function () {
         )
       )
         .to.emit(registry, "VotingFinalized")
-        .withArgs(proposalId, proposalHash, true, true, 100n, expect.anything(), ipfsURI);
+        .withArgs(proposalId, proposalHash, true, true, 100n, anyValue, ipfsURI);
     });
 
     it("increments totalRecorded after each record", async function () {
