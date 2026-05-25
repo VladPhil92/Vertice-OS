@@ -13,12 +13,19 @@
     --color-border: rgba(255, 255, 255, 0.06);
     --color-border-active: rgba(255, 255, 255, 0.15);
 
-    /* Brand */
-    --color-gold: #c8a84b;
+    /* ── Sistema Cromático Institucional (Sistema 1) ─────────────────────── */
+    --color-gold: #c8a84b;          /* Oro institucional VÉRTICE */
     --color-gold-dim: rgba(200, 168, 75, 0.15);
-    --color-red: #c0392b;
-    --color-navy: #1a2744;
+    --color-citizen: #ffb522;       /* Amarillo Ciudadano — ACTIVA */
+    --color-citizen-dim: rgba(255, 181, 34, 0.12);
+    --color-azure: #1a7fbf;         /* Azul Claro institucional */
+    --color-azure-dim: rgba(26, 127, 191, 0.12);
+    --color-red: #c0392b;           /* Rojo Acción — MOVILIZA */
+    --color-red-dim: rgba(192, 57, 43, 0.12);
+    --color-navy: #1a2744;          /* Azul Institucional oscuro */
     --color-navy-light: #253565;
+    --color-emerald: #27ae60;       /* Tendencia positiva */
+    --color-emerald-dim: rgba(39, 174, 96, 0.12);
 
     /* Text */
     --color-text-primary: #f0ede8;
@@ -26,8 +33,18 @@
     --color-text-tertiary: rgba(240, 237, 232, 0.22);
 
     /* Accent */
-    --color-cyan: #4ecdc4;
+    --color-cyan: #4ecdc4;          /* Agua / Transparencia */
     --color-cyan-dim: rgba(78, 205, 196, 0.12);
+
+    /* ── Colores de módulos (Sistema 2) ────────────────────────────────── */
+    --mod-mobility:  #1a7fbf;
+    --mod-water:     #4ecdc4;
+    --mod-security:  #c0392b;
+    --mod-health:    #27ae60;
+    --mod-education: #ffb522;
+    --mod-services:  #8e44ad;
+    --mod-culture:   #e67e22;
+    --mod-economy:   #1a2744;
 
     /* Typography */
     --font-display: var(--font-syne), sans-serif;
