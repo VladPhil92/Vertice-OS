@@ -14,11 +14,14 @@ import {
   Shield,
   Sparkles,
   LogOut,
+  Home,
+  Plus,
+  User,
 } from 'lucide-react'
 import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
 import { LiveToast, useToasts } from '@/components/ui/LiveToast'
 
-// ─── Nav items ───────────────────────────────────────────────────────────────
+// ─── Nav items (sidebar) ──────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
   { href: '/dashboard',            label: 'Panel',          icon: LayoutDashboard, exact: true,  adminOnly: false },
@@ -30,6 +33,16 @@ const NAV_ITEMS = [
   { href: '/dashboard/legal',      label: 'Doc. Legales',   icon: Scale,           exact: false, adminOnly: false },
   { href: '/dashboard/ai',         label: 'Asistente IA',   icon: Sparkles,        exact: false, adminOnly: false },
   { href: '/dashboard/admin',      label: 'Moderación',     icon: Shield,          exact: false, adminOnly: true  },
+] as const
+
+// ─── Bottom nav items (mobile) ────────────────────────────────────────────────
+
+const BOTTOM_NAV = [
+  { href: '/dashboard',            label: 'Inicio',   icon: Home,   exact: true  },
+  { href: '/dashboard/reports',    label: 'Mapa',     icon: Map,    exact: false },
+  { href: '/dashboard/reports/new',label: 'Reportar', icon: Plus,   exact: false, fab: true },
+  { href: '/dashboard/governance', label: 'Decidir',  icon: Vote,   exact: false },
+  { href: '/dashboard/reputation', label: 'Perfil',   icon: User,   exact: false },
 ] as const
 
 function getTokenRole(): string {
@@ -86,7 +99,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     localStorage.removeItem('access_token')
     localStorage.removeItem('citizen_id')
-    // Clear the middleware auth cookie
     document.cookie = 'vertice_auth=; path=/; max-age=0; SameSite=Strict'
     router.push('/auth/login')
   }
@@ -151,12 +163,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen">
       <LiveToast messages={toasts} onDismiss={dismiss} />
+
       {/* Desktop sidebar — always visible on lg+ */}
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
 
-      {/* Mobile overlay */}
+      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
@@ -171,7 +184,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main area */}
       <div className="flex flex-1 flex-col">
-        {/* Mobile top bar */}
+        {/* Mobile top bar (hidden — bottom nav replaces it on mobile) */}
         <div className="flex items-center justify-between border-b border-border bg-surface/60 px-4 py-3 lg:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -202,6 +215,58 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+
+      {/* ── Mobile bottom navigation ─────────────────────────────────────── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-bg/95 backdrop-blur-md lg:hidden">
+        <div className="flex items-end justify-around px-2 pb-safe pt-2">
+          {BOTTOM_NAV.map(({ href, label, icon: Icon, exact, ...rest }) => {
+            const isFab = 'fab' in rest && rest.fab
+            const active = isActive(href, exact)
+
+            if (isFab) {
+              return (
+                <a
+                  key={href}
+                  href={href}
+                  className="flex flex-col items-center pb-1"
+                  aria-label={label}
+                >
+                  {/* FAB — gold circle */}
+                  <div className="flex h-14 w-14 -translate-y-4 items-center justify-center rounded-full bg-gold shadow-[0_4px_24px_rgba(200,168,75,0.45)] transition-transform active:scale-95">
+                    <Icon size={22} strokeWidth={2} className="text-bg" />
+                  </div>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-gold -mt-3">
+                    {label}
+                  </span>
+                </a>
+              )
+            }
+
+            return (
+              <a
+                key={href}
+                href={href}
+                className="flex flex-col items-center gap-1 px-3 pb-2 pt-1"
+                aria-label={label}
+              >
+                <Icon
+                  size={20}
+                  strokeWidth={active ? 2 : 1.5}
+                  className={active ? 'text-gold' : 'text-tertiary'}
+                />
+                <span
+                  className={[
+                    'font-mono text-[9px] uppercase tracking-[0.1em]',
+                    active ? 'text-gold' : 'text-tertiary',
+                  ].join(' ')}
+                >
+                  {label}
+                </span>
+              </a>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }
