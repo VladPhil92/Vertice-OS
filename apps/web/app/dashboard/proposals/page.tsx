@@ -137,7 +137,7 @@ function ProposalCard({ proposal, onEndorse, endorsing }: ProposalCardProps) {
       {/* Footer: endorse + date */}
       <div className="mt-auto flex items-center justify-between pt-2 border-t border-border">
         <button
-          onClick={() => onEndorse(proposal.id)}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEndorse(proposal.id) }}
           disabled={endorsing}
           title="Avalar esta propuesta"
           className="flex items-center gap-2 font-mono text-[11px] text-tertiary hover:text-gold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -179,9 +179,9 @@ export default function ProposalsPage() {
     setLoading(true)
     setError(null)
 
-    apiFetch<{ proposals: Proposal[] }>('/governance/proposals')
+    apiFetch<{ data: Proposal[]; count: number }>('/governance/proposals', { public: true })
       .then((data) => {
-        if (!cancelled) setProposals(data.proposals ?? [])
+        if (!cancelled) setProposals(data.data ?? [])
       })
       .catch(() => {
         if (!cancelled) setError('No se pudieron cargar las propuestas. Intenta de nuevo.')
@@ -346,12 +346,13 @@ export default function ProposalsPage() {
         {!loading && !error && filtered.length > 0 && (
           <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map(proposal => (
-              <ProposalCard
-                key={proposal.id}
-                proposal={proposal}
-                onEndorse={handleEndorse}
-                endorsing={endorsingId === proposal.id}
-              />
+              <a key={proposal.id} href={`/dashboard/proposals/${proposal.id}`} className="block">
+                <ProposalCard
+                  proposal={proposal}
+                  onEndorse={handleEndorse}
+                  endorsing={endorsingId === proposal.id}
+                />
+              </a>
             ))}
           </div>
         )}
