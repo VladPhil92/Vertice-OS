@@ -89,8 +89,8 @@ export default function GovernancePage() {
   const [voting, setVoting]       = useState<string | null>(null)
 
   useEffect(() => {
-    apiFetch<{ proposals: Proposal[] }>('/governance/proposals?status=voting')
-      .then((b) => setProposals(b.proposals ?? []))
+    apiFetch<{ data: Proposal[]; count: number }>('/governance/proposals?status=voting', { public: true })
+      .then((b) => setProposals(b.data ?? []))
       .catch(() => setError('Error cargando propuestas'))
       .finally(() => setLoading(false))
   }, [])
