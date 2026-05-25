@@ -321,3 +321,90 @@ def test_legal_analyze_description_too_long():
         "description": "a" * 8001,
     })
     assert response.status_code == 422
+
+
+# ── /rag/status ────────────────────────────────────────────────────────────────
+
+def test_rag_status_returns_expected_structure():
+    response = client.get("/rag/status")
+    assert response.status_code == 200
+    body = response.json()
+    assert "status" in body
+    assert body["status"] in ("ok", "degraded")
+    assert "rag_status" in body
+    assert body["rag_status"] in ("ok", "no_api_key", "not_installed", "error")
+    assert "index_name" in body
+    assert "voyage_available" in body
+    assert "pinecone_available" in body
+
+
+def test_rag_status_reflects_pipeline_status(monkeypatch):
+    """rag_status field mirrors rag_pipeline.status."""
+    with patch("main.rag_pipeline") as mock_pipeline:
+        mock_pipeline.status = "no_api_key"
+        response = client.get("/rag/status")
+    assert response.status_code == 200
+    assert response.json()["rag_status"] == "no_api_key"
+    assert response.json()["status"] == "degraded"
+
+
+def test_rag_status_ok_when_pipeline_ok(monkeypatch):
+    with patch("main.rag_pipeline") as mock_pipeline:
+        mock_pipeline.status = "ok"
+        response = client.get("/rag/status")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+# ── /rag/index ─────────────────────────────────────────────────────────────────
+
+def test_rag_index_returns_202_accepted():
+    """POST /rag/index debe devolver 202 Accepted con task_id."""
+    response = client.post("/rag/index", json={})
+    assert response.status_code == 202
+    body = response.json()
+    assert "task_id" in body
+    assert "status" in body
+    assert body["status"] == "pending"
+    assert "message" in body
+
+
+def test_rag_index_task_id_is_uuid():
+    import re
+    response = client.post("/rag/index", json={})
+    task_id = response.json()["task_id"]
+    assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", task_id)
+
+
+def test_rag_index_dry_run_flag_appears_in_message():
+    response = client.post("/rag/index", json={"dry_run": True})
+    assert response.status_code == 202
+    assert "dry-run" in response.json()["message"].lower()
+
+
+def test_rag_index_accepts_doc_name_filter():
+    response = client.post("/rag/index", json={"doc_name": "POT Cartagena"})
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "pending"
+
+
+# ── /rag/index/{task_id} ───────────────────────────────────────────────────────
+
+def test_rag_index_status_not_found_for_unknown_task():
+    response = client.get("/rag/index/00000000-0000-0000-0000-000000000000")
+    assert response.status_code == 404
+    assert "no encontrada" in response.json()["detail"].lower()
+
+
+def test_rag_index_status_returns_task_for_known_id():
+    """Crear tarea y luego consultar su estado."""
+    create_resp = client.post("/rag/index", json={})
+    assert create_resp.status_code == 202
+    task_id = create_resp.json()["task_id"]
+
+    status_resp = client.get(f"/rag/index/{task_id}")
+    assert status_resp.status_code == 200
+    body = status_resp.json()
+    assert body["task_id"] == task_id
+    assert body["status"] in ("pending", "running", "completed", "error")
