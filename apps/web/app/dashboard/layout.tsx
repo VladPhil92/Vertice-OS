@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   LayoutDashboard,
   ShieldCheck,
@@ -15,6 +15,8 @@ import {
   Sparkles,
   LogOut,
 } from 'lucide-react'
+import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
+import { LiveToast, useToasts } from '@/components/ui/LiveToast'
 
 // ─── Nav items ───────────────────────────────────────────────────────────────
 
@@ -49,10 +51,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router   = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [role, setRole] = useState<string>('citizen')
+  const { toasts, addToast, dismiss } = useToasts()
 
   useEffect(() => {
     setRole(getTokenRole())
   }, [])
+
+  const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
+    if (event.type === 'report:created') {
+      addToast('Nuevo reporte ciudadano registrado', '#4ECDC4')
+    } else if (event.type === 'report:status_changed') {
+      addToast(`Reporte actualizado a: ${event.payload.status as string}`, '#C8A84B')
+    } else if (event.type === 'proposal:vote_cast') {
+      addToast('Nuevo voto registrado en una propuesta', '#FFB522')
+    } else if (event.type === 'proposal:endorsed') {
+      addToast('Una propuesta recibió un nuevo aval', '#27AE60')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useServerEvents(['territorial', 'governance'], handleRealtimeEvent)
 
   function isActive(href: string, exact: boolean) {
     return exact ? pathname === href : pathname.startsWith(href)
@@ -133,6 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
+      <LiveToast messages={toasts} onDismiss={dismiss} />
       {/* Desktop sidebar — always visible on lg+ */}
       <div className="hidden lg:flex">
         <Sidebar />

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { recordReputationEvent } from '../reputation/reputation.service'
+import { publish } from '../../lib/pubsub'
 import type {
   TerritorialReport,
   ReportSummary,
@@ -113,6 +114,10 @@ export async function createReport(
   const report = rowToReport(rows[0])
   recordReputationEvent({ citizen_id: citizenId, event_type: 'report_submitted', reference_id: report.id })
     .catch((err: unknown) => console.error('[territorial] reputation event failed:', err))
+  publish('territorial', 'report:created', {
+    id: report.id, category: report.category, status: report.status,
+    neighborhood: report.neighborhood, urgency_score: report.urgency_score,
+  }).catch(() => null)
   return report
 }
 
@@ -270,6 +275,9 @@ export async function updateReportStatus(
   // Invalidar caché — el estado cambió
   await delCache('report', id)
   await delCache('stats', 'global')
+  publish('territorial', 'report:status_changed', {
+    id: report.id, status: report.status, category: report.category,
+  }).catch(() => null)
   return report
 }
 

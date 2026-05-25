@@ -21,6 +21,7 @@ import {
   ProposalStatus,
 } from './governance.types'
 import type { CreateProposalInput, ListProposalsInput, AdvanceStageInput, CreateDelegationInput } from './governance.schema'
+import { publish } from '../../lib/pubsub'
 
 function fireReputation(params: Parameters<typeof recordReputationEvent>[0]): void {
   recordReputationEvent(params).catch((err: unknown) =>
@@ -228,6 +229,7 @@ export async function endorseProposal(
 
   await delCache('proposal', proposalId)
   fireReputation({ citizen_id: citizenId, event_type: 'endorsement_given', reference_id: proposalId })
+  publish('governance', 'proposal:endorsed', { proposal_id: proposalId, endorsement_count: newCount, status: currentStatus }).catch(() => null)
 
   return { proposal_id: proposalId, endorsement_count: newCount, status: currentStatus, advanced }
 }
@@ -454,6 +456,7 @@ export async function castVote(
 
   const vote = voteRows[0]
   fireReputation({ citizen_id: citizenId, event_type: 'vote_cast', reference_id: proposalId })
+  publish('governance', 'proposal:vote_cast', { proposal_id: proposalId, vote_value: voteValue }).catch(() => null)
   return {
     vote_id: vote.id,
     vote_weight: totalWeight,
