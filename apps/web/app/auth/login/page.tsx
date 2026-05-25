@@ -150,6 +150,11 @@ export default function LoginPage() {
                 Regístrate aquí
               </a>
             </p>
+            <p className="mt-3 font-mono text-xs text-tertiary">
+              <a href="/auth/forgot-password" className="text-secondary hover:text-primary">
+                ¿Olvidaste tu contraseña?
+              </a>
+            </p>
           </div>
         </div>
 

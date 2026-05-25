@@ -3,13 +3,14 @@ import { prisma } from '../../lib/prisma'
 import { redis } from '../../lib/redis'
 import { getCache, delCache, TTL } from '../../lib/cache'
 import { config } from '../../config'
+import { sendEmailVerification } from '../../lib/email'
 import type { DIDDocument, VerificationStatus } from './identity.types'
 import type { UpdateProfileInput } from './identity.schema'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
 const EMAIL_VERIFY_PREFIX = 'vertice:email_verify'
-const EMAIL_VERIFY_TTL = 24 * 60 * 60 // 24 horas
+const EMAIL_VERIFY_TTL = 15 * 60 // 15 minutos
 
 const LEVEL_NAMES: VerificationStatus['level_name'][] = [
   'registrado',
@@ -188,11 +189,13 @@ export async function requestEmailVerification(citizenId: string): Promise<{
   const token = crypto.randomBytes(32).toString('hex')
   await redis.set(emailVerifyKey(citizenId), token, 'EX', EMAIL_VERIFY_TTL)
 
-  // En producción se enviaría por email. En dev se retorna en la respuesta.
+  await sendEmailVerification(citizen.email, token)
+
   if (config.NODE_ENV === 'production') {
     return { message: 'Token enviado al email registrado' }
   }
-  return { message: 'Token generado (modo desarrollo)', token }
+  // Dev: also return token in response so developers can test without email
+  return { message: 'Token enviado al email registrado (modo desarrollo)', token }
 }
 
 export async function confirmEmail(citizenId: string, token: string): Promise<VerificationStatus> {

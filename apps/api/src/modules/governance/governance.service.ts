@@ -399,13 +399,44 @@ export async function castVote(
     throw makeError('Ya has votado en esta propuesta', 409, 'ALREADY_VOTED')
   }
 
-  // Update weighted tally on proposal
+  // ── Liquid democracy: aggregate delegated weight ───────────────────────────
+  // Find delegators who trust this citizen (general or domain delegation)
+  // and have NOT already voted directly — their weight is added to this vote.
+  const delegators = await prisma.$queryRaw<Array<{
+    delegator_id: string
+    reputation_score: string
+  }>>(Prisma.sql`
+    SELECT d.delegator_id, c.reputation_score
+    FROM delegations d
+    JOIN citizens c ON c.id = d.delegator_id
+    WHERE d.delegate_id   = ${citizenId}::uuid
+      AND d.is_active     = true
+      AND d.delegation_type IN ('general', 'domain')
+      AND NOT EXISTS (
+        SELECT 1 FROM votes v
+        WHERE v.nullifier_hash = encode(
+          hmac(
+            concat(d.delegator_id::text, ':', ${proposalId}),
+            ${config.JWT_SECRET},
+            'sha256'
+          ), 'hex'
+        )
+      )
+  `)
+
+  const delegatedWeight = delegators.reduce(
+    (sum, d) => sum + computeVoteWeight(Number(d.reputation_score)),
+    0,
+  )
+  const totalWeight = voteWeight + delegatedWeight
+
+  // Update weighted tally on proposal with combined weight
   await prisma.$queryRaw(Prisma.sql`
     UPDATE proposals SET
       total_votes = total_votes + 1,
-      approve_votes_weighted  = approve_votes_weighted  + CASE WHEN ${voteValue} =  1 THEN ${voteWeight}::decimal ELSE 0 END,
-      reject_votes_weighted   = reject_votes_weighted   + CASE WHEN ${voteValue} = -1 THEN ${voteWeight}::decimal ELSE 0 END,
-      abstain_votes_weighted  = abstain_votes_weighted  + CASE WHEN ${voteValue} =  0 THEN ${voteWeight}::decimal ELSE 0 END
+      approve_votes_weighted  = approve_votes_weighted  + CASE WHEN ${voteValue} =  1 THEN ${totalWeight}::decimal ELSE 0 END,
+      reject_votes_weighted   = reject_votes_weighted   + CASE WHEN ${voteValue} = -1 THEN ${totalWeight}::decimal ELSE 0 END,
+      abstain_votes_weighted  = abstain_votes_weighted  + CASE WHEN ${voteValue} =  0 THEN ${totalWeight}::decimal ELSE 0 END
     WHERE id = ${proposalId}::uuid
   `)
 
@@ -414,10 +445,11 @@ export async function castVote(
   const vote = voteRows[0]
   return {
     vote_id: vote.id,
-    vote_weight: Number(vote.vote_weight),
+    vote_weight: totalWeight,
     vote_value: vote.vote_value,
     proposal_id: proposalId,
     created_at: vote.created_at,
+    delegated_count: delegators.length,
   }
 }
 

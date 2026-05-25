@@ -8,6 +8,8 @@ import {
   refreshAccessToken,
   revokeSession,
   getCitizenProfile,
+  requestPasswordReset,
+  resetPassword,
 } from './auth.service'
 import { config } from '../../config'
 
@@ -74,5 +76,29 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get('/me', { preHandler: requireAuth }, async (request, reply) => {
     const profile = await getCitizenProfile(request.citizen.sub)
     return reply.send(profile)
+  })
+
+  // POST /auth/forgot-password — 3/hora para frenar enumeración de emails
+  app.post('/forgot-password', { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } }, async (request, reply) => {
+    const body = request.body as { email?: unknown }
+    if (typeof body.email !== 'string' || !body.email.includes('@')) {
+      return reply.status(400).send({ error: 'Email inválido' })
+    }
+    // Always returns 200 — prevents email enumeration
+    await requestPasswordReset(body.email.toLowerCase().trim())
+    return reply.send({ message: 'Si el email existe, recibirás instrucciones en breve' })
+  })
+
+  // POST /auth/reset-password — 5/hora
+  app.post('/reset-password', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
+    const body = request.body as { token?: unknown; new_password?: unknown }
+    if (typeof body.token !== 'string' || !body.token) {
+      return reply.status(400).send({ error: 'Token requerido' })
+    }
+    if (typeof body.new_password !== 'string' || body.new_password.length < 8) {
+      return reply.status(400).send({ error: 'La contraseña debe tener al menos 8 caracteres' })
+    }
+    await resetPassword(body.token, body.new_password)
+    return reply.send({ message: 'Contraseña actualizada. Inicia sesión con tus nuevas credenciales.' })
   })
 }

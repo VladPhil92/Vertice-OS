@@ -4,9 +4,14 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../../lib/prisma'
 import { generateRefreshToken, hashToken, refreshTokenExpiresAt, AccessTokenPayload } from '../../lib/jwt'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
+import { redis } from '../../lib/redis'
+import { sendPasswordReset } from '../../lib/email'
 import { config } from '../../config'
 import type { RegisterInput, LoginInput } from './auth.schema'
 import type { AuthTokenResponse, CitizenPublicProfile } from './auth.types'
+
+const PWD_RESET_PREFIX = 'vertice:pwd_reset'
+const PWD_RESET_TTL    = 30 * 60 // 30 minutos
 
 // Cédulas se almacenan como SHA-256 — nunca en texto plano
 function hashCedula(cedula: string): string {
@@ -187,4 +192,47 @@ export async function getCitizenProfile(citizenId: string): Promise<CitizenPubli
 
   await setCache('profile', citizenId, profile, TTL.PROFILE)
   return profile
+}
+
+// ── Forgot / reset password ───────────────────────────────────────────────────
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const citizen = await prisma.citizen.findUnique({
+    where: { email },
+    select: { id: true, email: true },
+  })
+
+  // Return silently even if email not found — prevents user enumeration
+  if (!citizen?.email) return
+
+  const token = crypto.randomBytes(32).toString('hex')
+  await redis.set(`${PWD_RESET_PREFIX}:${token}`, citizen.id, 'EX', PWD_RESET_TTL)
+  await sendPasswordReset(citizen.email, token)
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  const citizenId = await redis.get(`${PWD_RESET_PREFIX}:${token}`)
+  if (!citizenId) {
+    throw Object.assign(new Error('Token inválido o expirado'), {
+      statusCode: 400,
+      code: 'INVALID_RESET_TOKEN',
+    })
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS)
+
+  await prisma.$transaction([
+    prisma.citizen.update({
+      where: { id: citizenId },
+      data: { passwordHash },
+    }),
+    // Revoke all active sessions — force re-login everywhere
+    prisma.session.updateMany({
+      where: { citizenId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ])
+
+  await redis.del(`${PWD_RESET_PREFIX}:${token}`)
+  await delCache('profile', citizenId)
 }
