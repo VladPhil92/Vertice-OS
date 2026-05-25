@@ -1,12 +1,10 @@
 'use client'
 
-import { ArrowLeft, Loader2, Info } from 'lucide-react'
-import { useState, type FormEvent, type ChangeEvent } from 'react'
+import { ArrowLeft, Loader2, Info, MapPin, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
+import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react'
 import { apiFetch } from '@/lib/api'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Category =
   | 'infraestructura'
@@ -19,20 +17,20 @@ type Category =
   | 'cultura'
   | 'otro'
 
+type GeoStatus = 'idle' | 'detecting' | 'ok' | 'fallback' | 'denied'
+
 interface ReportFormData {
-  category: Category
-  title: string
-  description: string
-  neighborhood: string
+  category:          Category
+  title:             string
+  description:       string
+  neighborhood:      string
   address_reference: string
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'infraestructura',   label: 'Infraestructura' },
+  { value: 'infraestructura',    label: 'Infraestructura' },
   { value: 'servicios_publicos', label: 'Servicios Públicos' },
   { value: 'seguridad',          label: 'Seguridad' },
   { value: 'medio_ambiente',     label: 'Medio Ambiente' },
@@ -43,28 +41,54 @@ const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'otro',               label: 'Otro' },
 ]
 
-const DESCRIPTION_MIN = 30
-const DESCRIPTION_MAX = 5000
-const TITLE_MAX = 200
-
+const CARTAGENA_CENTER = { lat: 10.391, lng: -75.4794 }
+const DESCRIPTION_MIN  = 20
+const DESCRIPTION_MAX  = 2000
+const TITLE_MAX        = 200
 
 const INPUT_CLASS =
   'w-full bg-surface border border-border focus:border-gold/50 px-4 py-3 font-mono text-sm text-primary outline-none transition-colors placeholder:text-tertiary'
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NewReportPage() {
   const [form, setForm] = useState<ReportFormData>({
-    category: 'infraestructura',
-    title: '',
-    description: '',
-    neighborhood: '',
+    category:          'infraestructura',
+    title:             '',
+    description:       '',
+    neighborhood:      '',
     address_reference: '',
   })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+
+  const [coords, setCoords]       = useState<{ lat: number; lng: number } | null>(null)
+  const [geoStatus, setGeoStatus] = useState<GeoStatus>('idle')
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState<string | null>(null)
+
+  // Auto-detect on mount
+  useEffect(() => {
+    requestLocation()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function requestLocation() {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setCoords(CARTAGENA_CENTER)
+      setGeoStatus('fallback')
+      return
+    }
+    setGeoStatus('detecting')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setGeoStatus('ok')
+      },
+      () => {
+        setCoords(CARTAGENA_CENTER)
+        setGeoStatus(window.location.protocol === 'https:' ? 'denied' : 'fallback')
+      },
+      { timeout: 8000, maximumAge: 60_000 },
+    )
+  }
 
   function handleChange(
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
@@ -77,7 +101,6 @@ export default function NewReportPage() {
     e.preventDefault()
     setError(null)
 
-    // Client-side guards
     if (form.title.trim().length === 0) {
       setError('El título es obligatorio.')
       return
@@ -87,45 +110,49 @@ export default function NewReportPage() {
       return
     }
 
+    const location = coords ?? CARTAGENA_CENTER
     setLoading(true)
 
     try {
       await apiFetch('/territorial/reports', {
         method: 'POST',
         body: JSON.stringify({
-          category: form.category,
-          title: form.title.trim(),
-          description: form.description.trim(),
-          neighborhood: form.neighborhood.trim() || undefined,
+          category:          form.category,
+          title:             form.title.trim(),
+          description:       form.description.trim(),
+          lat:               location.lat,
+          lng:               location.lng,
+          neighborhood:      form.neighborhood.trim() || undefined,
           address_reference: form.address_reference.trim() || undefined,
+          media_urls:        [],
         }),
       })
 
       window.location.href = '/dashboard/reports'
-      return
     } catch {
-      setError('No se pudo conectar con el servidor. Verifica tu conexión.')
+      setError('No se pudo enviar el reporte. Verifica tu conexión e intenta de nuevo.')
     } finally {
       setLoading(false)
     }
   }
 
-  const descLen = form.description.length
-  const descOverMin = descLen >= DESCRIPTION_MIN
+  const descLen    = form.description.length
+  const descOk     = descLen >= DESCRIPTION_MIN
 
   return (
     <div>
       <main className="mx-auto max-w-2xl px-6 py-10">
-        {/* Back link */}
+
+        {/* Back */}
         <a
           href="/dashboard"
-          className="mb-8 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-secondary hover:text-primary transition-colors"
+          className="mb-8 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-secondary transition-colors hover:text-primary"
         >
           <ArrowLeft size={12} strokeWidth={1.5} />
           Volver al dashboard
         </a>
 
-        {/* Section header */}
+        {/* Header */}
         <div className="mb-8">
           <span className="section-tag">Módulo Territorial</span>
           <h1 className="font-display text-3xl font-bold text-primary">Reportar situación</h1>
@@ -135,14 +162,13 @@ export default function NewReportPage() {
           </p>
         </div>
 
-        {/* Error banner */}
+        {/* Error */}
         {error && (
           <div className="mb-6 border border-red/40 bg-red/10 px-4 py-3">
             <p className="font-mono text-[12px] text-red-400">{error}</p>
           </div>
         )}
 
-        {/* Form */}
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
 
           {/* Category */}
@@ -161,9 +187,7 @@ export default function NewReportPage() {
               className={INPUT_CLASS}
             >
               {CATEGORIES.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </div>
@@ -215,11 +239,11 @@ export default function NewReportPage() {
             <div className="flex items-center justify-between">
               <span
                 className={`font-mono text-[10px] transition-colors ${
-                  descLen > 0 && !descOverMin ? 'text-red-400' : 'text-tertiary'
+                  descLen > 0 && !descOk ? 'text-red-400' : 'text-tertiary'
                 }`}
               >
-                {descLen > 0 && !descOverMin
-                  ? `Mínimo ${DESCRIPTION_MIN - descLen} caracteres más`
+                {descLen > 0 && !descOk
+                  ? `Faltan ${DESCRIPTION_MIN - descLen} caracteres`
                   : `Mínimo ${DESCRIPTION_MIN} caracteres`}
               </span>
               <span
@@ -238,7 +262,8 @@ export default function NewReportPage() {
               htmlFor="neighborhood"
               className="font-mono text-[10px] uppercase tracking-[0.25em] text-tertiary"
             >
-              Barrio <span className="text-tertiary text-[9px] normal-case tracking-normal">(opcional)</span>
+              Barrio{' '}
+              <span className="normal-case tracking-normal text-[9px] text-tertiary">(opcional)</span>
             </label>
             <input
               id="neighborhood"
@@ -257,7 +282,8 @@ export default function NewReportPage() {
               htmlFor="address_reference"
               className="font-mono text-[10px] uppercase tracking-[0.25em] text-tertiary"
             >
-              Referencia de dirección <span className="text-tertiary text-[9px] normal-case tracking-normal">(opcional)</span>
+              Referencia de dirección{' '}
+              <span className="normal-case tracking-normal text-[9px] text-tertiary">(opcional)</span>
             </label>
             <input
               id="address_reference"
@@ -270,26 +296,66 @@ export default function NewReportPage() {
             />
           </div>
 
-          {/* Evidence note */}
-          <div className="flex items-start gap-3 border border-border bg-surface px-4 py-3">
-            <Info size={14} strokeWidth={1.5} className="mt-0.5 shrink-0 text-cyan" />
-            <p className="font-mono text-[11px] text-secondary">
-              Puedes adjuntar fotos en una próxima versión.
-            </p>
+          {/* Geolocation status */}
+          <div className="flex items-start gap-3 border border-border bg-surface px-4 py-3.5">
+            <MapPin size={14} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary mb-1">
+                Ubicación del reporte
+              </p>
+              {geoStatus === 'detecting' && (
+                <div className="flex items-center gap-2">
+                  <Loader2 size={11} className="animate-spin text-secondary" />
+                  <span className="font-mono text-[11px] text-secondary">Detectando tu ubicación…</span>
+                </div>
+              )}
+              {geoStatus === 'ok' && coords && (
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={11} className="text-emerald-400" />
+                  <span className="font-mono text-[11px] text-emerald-400">
+                    Ubicación detectada — {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                  </span>
+                </div>
+              )}
+              {(geoStatus === 'fallback' || geoStatus === 'idle') && (
+                <div className="flex items-center gap-2">
+                  <Info size={11} className="text-secondary" />
+                  <span className="font-mono text-[11px] text-secondary">
+                    Usando Cartagena centro como ubicación
+                  </span>
+                </div>
+              )}
+              {geoStatus === 'denied' && (
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={11} className="text-gold" />
+                  <span className="font-mono text-[11px] text-gold">
+                    Permiso denegado — usando Cartagena centro
+                  </span>
+                </div>
+              )}
+            </div>
+            {geoStatus !== 'detecting' && (
+              <button
+                type="button"
+                onClick={requestLocation}
+                className="flex-shrink-0 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary transition-colors hover:text-primary"
+                aria-label="Re-detectar ubicación"
+              >
+                <RefreshCw size={11} strokeWidth={1.5} />
+                Actualizar
+              </button>
+            )}
           </div>
 
           {/* Submit */}
           <div className="flex items-center justify-between pt-2">
-            <a
-              href="/dashboard"
-              className="btn-ghost py-3 px-6 text-[11px]"
-            >
+            <a href="/dashboard" className="btn-ghost py-3 px-6 text-[11px]">
               Cancelar
             </a>
             <button
               type="submit"
-              disabled={loading}
-              className="btn-primary py-3 px-8 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              disabled={loading || geoStatus === 'detecting'}
+              className="btn-primary py-3 px-8 disabled:cursor-not-allowed disabled:opacity-50 disabled:transform-none"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
