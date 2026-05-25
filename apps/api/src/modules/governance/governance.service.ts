@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
 import { config } from '../../config'
+import { recordReputationEvent } from '../reputation/reputation.service'
 import {
   Proposal,
   ProposalSummary,
@@ -20,6 +21,12 @@ import {
   ProposalStatus,
 } from './governance.types'
 import type { CreateProposalInput, ListProposalsInput, AdvanceStageInput, CreateDelegationInput } from './governance.schema'
+
+function fireReputation(params: Parameters<typeof recordReputationEvent>[0]): void {
+  recordReputationEvent(params).catch((err: unknown) =>
+    console.error('[governance] reputation event failed:', err),
+  )
+}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -113,7 +120,9 @@ export async function createProposal(
     )
     RETURNING *
   `)
-  return normalizeProposal(rows[0])
+  const created = normalizeProposal(rows[0])
+  fireReputation({ citizen_id: authorId, event_type: 'proposal_created', reference_id: created.id })
+  return created
 }
 
 // ── listProposals ──────────────────────────────────────────────────────────────
@@ -218,6 +227,7 @@ export async function endorseProposal(
   }
 
   await delCache('proposal', proposalId)
+  fireReputation({ citizen_id: citizenId, event_type: 'endorsement_given', reference_id: proposalId })
 
   return { proposal_id: proposalId, endorsement_count: newCount, status: currentStatus, advanced }
 }
@@ -443,6 +453,7 @@ export async function castVote(
   await delCache('proposal', proposalId)
 
   const vote = voteRows[0]
+  fireReputation({ citizen_id: citizenId, event_type: 'vote_cast', reference_id: proposalId })
   return {
     vote_id: vote.id,
     vote_weight: totalWeight,

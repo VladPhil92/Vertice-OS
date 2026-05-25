@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
+import { recordReputationEvent } from '../reputation/reputation.service'
 import type {
   TerritorialReport,
   ReportSummary,
@@ -109,7 +110,10 @@ export async function createReport(
       NULL::timestamptz AS resolved_at
   `)
 
-  return rowToReport(rows[0])
+  const report = rowToReport(rows[0])
+  recordReputationEvent({ citizen_id: citizenId, event_type: 'report_submitted', reference_id: report.id })
+    .catch((err: unknown) => console.error('[territorial] reputation event failed:', err))
+  return report
 }
 
 // ── Listar reportes ───────────────────────────────────────────────────────────

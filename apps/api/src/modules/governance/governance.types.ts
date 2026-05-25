@@ -111,6 +111,7 @@ export interface VoteReceipt {
   vote_value: number
   proposal_id: string
   created_at: Date
+  delegated_count: number
 }
 
 export interface EndorseResult {

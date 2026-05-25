@@ -23,6 +23,7 @@
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/sensible": "^5.5.0",
     "@prisma/client": "^5.14.0",
+    "@sentry/node": "^10.53.1",
     "@types/nodemailer": "^8.0.0",
     "bcrypt": "^5.1.1",
     "fastify": "^4.27.0",

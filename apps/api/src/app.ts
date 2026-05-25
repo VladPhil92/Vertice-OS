@@ -8,12 +8,15 @@ import sensible from '@fastify/sensible'
 import { config } from './config'
 import { redis } from './lib/redis'
 import { prisma } from './lib/prisma'
+import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
 import { territorialRoutes } from './modules/territorial/territorial.routes'
 import { governanceRoutes } from './modules/governance/governance.routes'
 import { reputationRoutes } from './modules/reputation/reputation.routes'
 import { legalRoutes } from './modules/legal/legal.routes'
+
+initSentry()
 
 export function buildApp() {
   const app = Fastify({
@@ -63,12 +66,18 @@ export function buildApp() {
 
   // ── Error handler global ─────────────────────────────────────────
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500
     const code = (error as { code?: string }).code ?? 'INTERNAL_ERROR'
 
     if (statusCode >= 500) {
       app.log.error(error)
+      captureException(error, {
+        url: request.url,
+        method: request.method,
+        statusCode,
+        code,
+      })
     }
 
     reply.status(statusCode).send({

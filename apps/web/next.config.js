@@ -1,4 +1,5 @@
 const path = require('path');
+const { withSentryConfig } = require('@sentry/nextjs');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -11,15 +12,15 @@ const nextConfig = {
     domains: ['ipfs.io', 'gateway.pinata.cloud'],
   },
   env: {
-    NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
-    NEXT_PUBLIC_POLYGON_RPC: process.env.NEXT_PUBLIC_POLYGON_RPC,
+    NEXT_PUBLIC_MAPBOX_TOKEN:  process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+    NEXT_PUBLIC_API_URL:       process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_WS_URL:        process.env.NEXT_PUBLIC_WS_URL,
+    NEXT_PUBLIC_POLYGON_RPC:   process.env.NEXT_PUBLIC_POLYGON_RPC,
+    NEXT_PUBLIC_SENTRY_DSN:    process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
   async headers() {
     return [
       {
-        // Prevent search engines from indexing private dashboard pages
         source: '/dashboard/:path*',
         headers: [
           { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
@@ -37,15 +38,13 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            // 'unsafe-inline' en script-src debe reemplazarse por nonces via middleware
-            // cuando se implemente apps/api. Ver docs/architecture/ARCHITECTURE.md §5.
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              "script-src 'self' 'unsafe-inline' https://*.sentry.io",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.mapbox.com https://ipfs.io",
-              "connect-src 'self' https://*.mapbox.com wss: ws:",
+              "connect-src 'self' https://*.mapbox.com wss: ws: https://*.sentry.io",
               "worker-src blob:",
             ].join('; '),
           },
@@ -55,4 +54,14 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  org:     process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  // Upload source maps in CI only — never in local dev
+  silent:           !process.env.CI,
+  widenClientFileUpload: true,
+  hideSourceMaps:   true,
+  disableLogger:    true,
+  // Skip source map upload if DSN is not configured
+  dryRun: !process.env.NEXT_PUBLIC_SENTRY_DSN,
+});
