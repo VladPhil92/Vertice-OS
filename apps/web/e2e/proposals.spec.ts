@@ -48,8 +48,8 @@ async function setupAuth(page: Page) {
 test.describe('Proposals list', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuth(page)
-    await page.route(`${API}/governance/proposals`, (route) =>
-      route.fulfill({ status: 200, json: { proposals: MOCK_PROPOSALS } }),
+    await page.route(`${API}/governance/proposals*`, (route) =>
+      route.fulfill({ status: 200, json: { data: MOCK_PROPOSALS, count: 2 } }),
     )
   })
 
@@ -144,7 +144,7 @@ test.describe('Create proposal', () => {
           json: { id: 'new-prop-uuid', title: 'Mi nueva propuesta' },
         })
       }
-      return route.fulfill({ status: 200, json: { proposals: [] } })
+      return route.fulfill({ status: 200, json: { data: [], count: 0 } })
     })
 
     await page.goto('/dashboard/proposals/new')

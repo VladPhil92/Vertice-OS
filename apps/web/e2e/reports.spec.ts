@@ -45,8 +45,8 @@ async function setupAuth(page: Page) {
 test.describe('Reports list', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuth(page)
-    await page.route(`${API}/territorial/reports`, (route) =>
-      route.fulfill({ status: 200, json: { reports: MOCK_REPORTS } }),
+    await page.route(`${API}/territorial/reports*`, (route) =>
+      route.fulfill({ status: 200, json: { data: MOCK_REPORTS, count: 2 } }),
     )
   })
 
@@ -91,15 +91,18 @@ test.describe('Reports list', () => {
 
   test('links to create new report', async ({ page }) => {
     await page.goto('/dashboard/reports')
-    await expect(page.getByRole('link', { name: /nuevo reporte/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /nuevo/i }).filter({ hasText: /^nuevo$/i })).toBeVisible()
   })
 })
 
 // ─── Create report ────────────────────────────────────────────────────────────
 
 test.describe('Create report', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
     await setupAuth(page)
+    // Grant geolocation so the form isn't stuck in 'detecting' state
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation({ latitude: 10.391, longitude: -75.4794 })
   })
 
   test('renders form fields', async ({ page }) => {
@@ -113,7 +116,7 @@ test.describe('Create report', () => {
     await page.goto('/dashboard/reports/new')
     const desc = page.getByLabel(/descripción/i)
     await desc.fill('Test descripción corta')
-    await expect(page.getByText(/22\s*\/\s*5000/)).toBeVisible()
+    await expect(page.getByText(/22\/2000/)).toBeVisible()
   })
 
   test('submits form and redirects to reports list', async ({ page }) => {
@@ -124,7 +127,7 @@ test.describe('Create report', () => {
           json: { id: 'new-report-uuid', ...MOCK_REPORTS[0] },
         })
       }
-      return route.fulfill({ status: 200, json: { reports: [] } })
+      return route.fulfill({ status: 200, json: { data: [], count: 0 } })
     })
 
     await page.goto('/dashboard/reports/new')
@@ -135,7 +138,7 @@ test.describe('Create report', () => {
       'La calle presenta múltiples huecos y acumulación de basura que generan riesgo para los peatones y conductores del sector.',
     )
 
-    await page.getByRole('button', { name: /publicar reporte/i }).click()
+    await page.getByRole('button', { name: /enviar reporte/i }).click()
     await expect(page).toHaveURL('/dashboard/reports')
   })
 
@@ -144,7 +147,7 @@ test.describe('Create report', () => {
       if (route.request().method() === 'POST') {
         return route.fulfill({ status: 400, json: { message: 'Descripción muy corta' } })
       }
-      return route.fulfill({ status: 200, json: { reports: [] } })
+      return route.fulfill({ status: 200, json: { data: [], count: 0 } })
     })
 
     await page.goto('/dashboard/reports/new')
@@ -152,7 +155,7 @@ test.describe('Create report', () => {
     await page.getByLabel(/título/i).fill('Inseguridad en el parque')
     await page.getByLabel(/descripción/i).fill('Descripción de prueba para el test del formulario de reporte ciudadano.')
 
-    await page.getByRole('button', { name: /publicar reporte/i }).click()
-    await expect(page.getByText(/descripción muy corta/i)).toBeVisible()
+    await page.getByRole('button', { name: /enviar reporte/i }).click()
+    await expect(page.getByText(/no se pudo enviar el reporte/i)).toBeVisible()
   })
 })

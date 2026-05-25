@@ -41,14 +41,31 @@ test.describe('Dashboard home', () => {
     await page.route(`${API}/reputation/me`, (route) =>
       route.fulfill({
         status: 200,
-        json: { score: 1250, level: 'Ciudadano Activo', breakdown: {} },
+        json: {
+          reputation_score: 1250,
+          level: 'activista',
+          total_votes: 5,
+          total_proposals: 2,
+          total_reports: 3,
+          badges_count: 1,
+          event_counts: {},
+          last_activity_at: null,
+          calculated_at: new Date().toISOString(),
+        },
       }),
+    )
+    // Also mock recent-activity endpoints used by dashboard
+    await page.route(`${API}/territorial/reports*`, (route) =>
+      route.fulfill({ status: 200, json: { data: [], count: 0 } }),
+    )
+    await page.route(`${API}/governance/proposals*`, (route) =>
+      route.fulfill({ status: 200, json: { data: [], count: 0 } }),
     )
   })
 
-  test('shows welcome heading', async ({ page }) => {
+  test('shows dashboard heading', async ({ page }) => {
     await page.goto('/dashboard')
-    await expect(page.getByRole('heading', { name: /bienvenido a vértice os/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /vértice os/i })).toBeVisible()
   })
 
   test('loads and displays live stats', async ({ page }) => {
@@ -66,8 +83,8 @@ test.describe('Dashboard home', () => {
     await page.goto('/dashboard')
     await expect(page.getByRole('link', { name: /nueva propuesta/i })).toBeVisible()
     await expect(page.getByRole('link', { name: /reportar problema/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /documento legal/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /mi reputación/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /consultar ia/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /doc\. legal/i })).toBeVisible()
   })
 
   test('still renders when stats API fails', async ({ page }) => {
@@ -81,7 +98,7 @@ test.describe('Dashboard home', () => {
 
     await page.goto('/dashboard')
     // Page should still render the heading despite failed stats
-    await expect(page.getByRole('heading', { name: /bienvenido/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /vértice os/i })).toBeVisible()
     // Stats show 0 as fallback
     await expect(page.getByText('0').first()).toBeVisible()
   })
