@@ -12,6 +12,7 @@ import {
   Scale,
   Menu,
   Shield,
+  Sparkles,
   LogOut,
 } from 'lucide-react'
 
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/governance', label: 'Gobernanza',     icon: Vote,            exact: false, adminOnly: false },
   { href: '/dashboard/reputation', label: 'Reputación',     icon: Star,            exact: false, adminOnly: false },
   { href: '/dashboard/legal',      label: 'Doc. Legales',   icon: Scale,           exact: false, adminOnly: false },
+  { href: '/dashboard/ai',         label: 'Asistente IA',   icon: Sparkles,        exact: false, adminOnly: false },
   { href: '/dashboard/admin',      label: 'Moderación',     icon: Shield,          exact: false, adminOnly: true  },
 ] as const
 

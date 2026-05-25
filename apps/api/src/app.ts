@@ -15,6 +15,7 @@ import { territorialRoutes } from './modules/territorial/territorial.routes'
 import { governanceRoutes } from './modules/governance/governance.routes'
 import { reputationRoutes } from './modules/reputation/reputation.routes'
 import { legalRoutes } from './modules/legal/legal.routes'
+import { aiRoutes } from './modules/ai/ai.routes'
 
 initSentry()
 
@@ -130,6 +131,7 @@ export function buildApp() {
   app.register(governanceRoutes, { prefix: '/governance' })
   app.register(reputationRoutes, { prefix: '/reputation' })
   app.register(legalRoutes, { prefix: '/legal' })
+  app.register(aiRoutes, { prefix: '/ai' })
 
   return app
 }
