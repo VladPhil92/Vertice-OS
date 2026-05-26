@@ -25,10 +25,11 @@ const schema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
   // ── Blockchain (Polygon) — opcionales: si no están, el minting se omite ──
-  POLYGON_RPC_URL:     z.string().url().optional(),
-  POLYGON_PRIVATE_KEY: z.string().optional(),
-  CIVIC_SBT_ADDRESS:   z.string().optional(),
-  IPFS_GATEWAY:        z.string().url().default('https://ipfs.io/ipfs'),
+  POLYGON_RPC_URL:        z.string().url().optional(),
+  POLYGON_PRIVATE_KEY:    z.string().optional(),
+  CIVIC_SBT_ADDRESS:      z.string().optional(),
+  VOTING_REGISTRY_ADDRESS: z.string().optional(),
+  IPFS_GATEWAY:           z.string().url().default('https://ipfs.io/ipfs'),
 })
 
 const parsed = schema.safeParse(process.env)

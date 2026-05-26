@@ -22,6 +22,7 @@ import {
 } from './governance.types'
 import type { CreateProposalInput, ListProposalsInput, AdvanceStageInput, CreateDelegationInput } from './governance.schema'
 import { publish } from '../../lib/pubsub'
+import { recordProposalVoting, buildProposalContentHash } from '../../lib/blockchain'
 
 function fireReputation(params: Parameters<typeof recordReputationEvent>[0]): void {
   recordReputationEvent(params).catch((err: unknown) =>
@@ -320,6 +321,9 @@ export async function advanceProposalStage(
         SET status = ${result}, decided_at = NOW()
         WHERE id = ${proposalId}::uuid RETURNING *
       `)
+
+      // Registrar resultado on-chain (fire-and-forget — no bloquea la respuesta HTTP)
+      triggerVotingRegistry(proposal, result).catch(() => null)
       break
     }
 
@@ -352,6 +356,42 @@ function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quo
     : 0
 
   return approvalRate >= cfg.approval ? 'approved' : 'rejected'
+}
+
+/**
+ * Registra el resultado on-chain en VotingRegistry. Fire-and-forget.
+ * Si el contrato no está configurado, se omite silenciosamente.
+ */
+async function triggerVotingRegistry(
+  proposal: Proposal,
+  result: 'approved' | 'rejected' | 'quorum_failed',
+): Promise<void> {
+  const contentHash = buildProposalContentHash(proposal.title, proposal.description)
+  const approved     = result === 'approved'
+  const quorumReached = result !== 'quorum_failed'
+
+  // Placeholder IPFS URI para Fase I — en Fase II se sube el JSON real
+  const ipfsURI = proposal.ipfs_result_uri
+    ?? `${config.IPFS_GATEWAY}/QmVerticeResult?proposal=${encodeURIComponent(proposal.id)}`
+
+  const txHash = await recordProposalVoting(
+    proposal.id,
+    contentHash,
+    proposal.total_votes,
+    proposal.approve_votes_weighted,
+    proposal.reject_votes_weighted,
+    proposal.abstain_votes_weighted,
+    approved,
+    quorumReached,
+    ipfsURI,
+  )
+
+  if (txHash) {
+    await prisma.proposal.update({
+      where: { id: proposal.id },
+      data: { blockchainTxHash: txHash },
+    }).catch((err: unknown) => console.error('[governance] failed to persist blockchainTxHash:', err))
+  }
 }
 
 // ── castVote ──────────────────────────────────────────────────────────────────
