@@ -4,8 +4,13 @@ import { redis } from '../../lib/redis'
 import { getCache, delCache, TTL } from '../../lib/cache'
 import { config } from '../../config'
 import { sendEmailVerification } from '../../lib/email'
+import {
+  isValidWalletAddress,
+  mintCitizenBadge,
+  buildCitizenBadgeURI,
+} from '../../lib/blockchain'
 import type { DIDDocument, VerificationStatus } from './identity.types'
-import type { UpdateProfileInput } from './identity.schema'
+import type { UpdateProfileInput, ConnectWalletInput } from './identity.schema'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -211,13 +216,86 @@ export async function confirmEmail(citizenId: string, token: string): Promise<Ve
   const updated = await prisma.citizen.update({
     where: { id: citizenId },
     data: { verificationLevel: 2, lastActiveAt: new Date() },
-    select: { id: true, did: true, verificationLevel: true },
+    select: { id: true, did: true, verificationLevel: true, walletAddress: true },
   })
 
   await redis.del(emailVerifyKey(citizenId))
   await delCache('profile', citizenId)
 
+  // Si el ciudadano ya tiene wallet conectada, disparar mint del SBT de identidad
+  if (updated.walletAddress) {
+    triggerIdentityBadgeMint(citizenId, updated.did, updated.walletAddress).catch(() => null)
+  }
+
   return buildVerificationStatus(updated)
+}
+
+// ── Wallet Polygon ────────────────────────────────────────────────────────────
+
+/**
+ * Conecta una wallet Polygon al perfil del ciudadano.
+ * Si el ciudadano ya tiene nivel 2 (identidad completa), dispara el mint del SBT.
+ */
+export async function connectWallet(
+  citizenId: string,
+  input: ConnectWalletInput,
+): Promise<{ wallet_address: string; sbt_pending: boolean }> {
+  const address = input.wallet_address
+
+  if (!isValidWalletAddress(address)) {
+    throw Object.assign(new Error('Dirección de wallet inválida'), {
+      statusCode: 400,
+      code: 'INVALID_WALLET_ADDRESS',
+    })
+  }
+
+  // Verificar que no esté registrada por otro ciudadano
+  const conflict = await prisma.citizen.findUnique({
+    where: { walletAddress: address },
+    select: { id: true },
+  })
+  if (conflict && conflict.id !== citizenId) {
+    throw Object.assign(new Error('Esta wallet ya está registrada en otra cuenta'), {
+      statusCode: 409,
+      code: 'WALLET_ALREADY_TAKEN',
+    })
+  }
+
+  const citizen = await prisma.citizen.update({
+    where: { id: citizenId },
+    data: { walletAddress: address, lastActiveAt: new Date() },
+    select: { id: true, did: true, verificationLevel: true, sbtTokenId: true },
+  })
+
+  await delCache('profile', citizenId)
+
+  // Mint si el ciudadano tiene nivel 2 y aún no tiene SBT
+  const sbtPending = citizen.verificationLevel >= 2 && !citizen.sbtTokenId
+  if (sbtPending) {
+    triggerIdentityBadgeMint(citizenId, citizen.did, address).catch(() => null)
+  }
+
+  return { wallet_address: address, sbt_pending: sbtPending }
+}
+
+/**
+ * Dispara el mint on-chain del CITIZEN_VERIFIED badge en fire-and-forget.
+ * Si el mint tiene éxito, persiste el tokenId en la DB.
+ */
+async function triggerIdentityBadgeMint(
+  citizenId: string,
+  did: string,
+  walletAddress: string,
+): Promise<void> {
+  const tokenURI = buildCitizenBadgeURI(did, 2)
+  const tokenId  = await mintCitizenBadge(walletAddress, did, tokenURI)
+
+  if (tokenId !== null) {
+    await prisma.citizen.update({
+      where: { id: citizenId },
+      data: { sbtTokenId: tokenId },
+    }).catch((err: unknown) => console.error('[identity] failed to persist sbtTokenId:', err))
+  }
 }
 
 // ── Perfil territorial ────────────────────────────────────────────────────────

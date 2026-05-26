@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { requireAuth, requireVerified } from '../../middleware/auth'
-import { ConfirmCedulaSchema, ConfirmEmailTokenSchema, UpdateProfileSchema } from './identity.schema'
+import { ConfirmCedulaSchema, ConfirmEmailTokenSchema, UpdateProfileSchema, ConnectWalletSchema } from './identity.schema'
 import {
   resolveDID,
   getOwnDIDDocument,
@@ -9,6 +9,7 @@ import {
   requestEmailVerification,
   confirmEmail,
   updateCitizenProfile,
+  connectWallet,
 } from './identity.service'
 
 const DID_CONTENT_TYPE = 'application/did+ld+json'
@@ -102,5 +103,26 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
     await updateCitizenProfile(request.citizen.sub, parsed.data)
     return reply.send({ message: 'Perfil territorial actualizado' })
+  })
+
+  // ── Wallet Polygon ────────────────────────────────────────────────────────
+
+  // POST /identity/wallet — conectar billetera Polygon para recibir SBT
+  app.post('/wallet', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = ConnectWalletSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
+    }
+
+    const result = await connectWallet(request.citizen.sub, parsed.data)
+    return reply.send({
+      message: result.sbt_pending
+        ? 'Wallet conectada — badge de identidad siendo emitido en Polygon'
+        : 'Wallet conectada — completa tu verificación de identidad para recibir el badge',
+      ...result,
+    })
   })
 }
