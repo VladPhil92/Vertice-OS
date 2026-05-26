@@ -22,13 +22,14 @@ VÉRTICE OS es infraestructura cívica de nueva generación — no una aplicaci�
 
 | # | Módulo | Estado | Descripción |
 |---|--------|--------|-------------|
-| 01 | **Identidad Cívica Digital** | ✅ Implementado | DID W3C, verificación cédula/email, 3 niveles |
-| 02 | **Motor Territorial** | ✅ Implementado | Reportes PostGIS, clustering, análisis IA |
-| 03 | **Gobernanza y Decisión** | ✅ Implementado | Propuestas, votación ponderada, delegación líquida |
-| 04 | **Capa IA Multi-Agente** | ✅ Implementado | LangGraph, 6 agentes, RAG Pinecone + Voyage AI |
-| 05 | **Blockchain & Confianza** | ✅ Implementado | CivicSBT (ERC-5192), VotingRegistry, Polygon Amoy |
-| 06 | **Reputación Cívica** | ✅ Implementado | Neo4j, eventos, niveles observador→embajador |
-| 07 | **Legal Ciudadano** | ✅ Implementado | Generador IA de derechos de petición, tutelas, etc. |
+| 01 | **Identidad Cívica Digital** | ✅ Implementado | DID W3C, verificación cédula/email, niveles 0–3 |
+| 02 | **Motor Territorial** | ✅ Implementado | Reportes PostGIS, clustering, mapa Mapbox, análisis IA |
+| 03 | **Gobernanza y Decisión** | ✅ Implementado | Propuestas 5 etapas, votación ponderada, delegación líquida |
+| 04 | **Capa IA Multi-Agente** | ✅ Implementado | LangGraph 7 agentes, RAG Pinecone + Voyage AI, FastAPI |
+| 05 | **Blockchain & Confianza** | 🟡 Contratos listos | CivicSBT (ERC-5192) + VotingRegistry — 53 tests ✓ — deploy Amoy pendiente |
+| 06 | **Reputación Cívica** | ✅ Implementado | Score acumulativo, Neo4j, 5 niveles, badges on-chain |
+| 07 | **Legal Ciudadano** | ✅ Implementado | Generador IA de derechos de petición, tutelas, acciones populares |
+| 08 | **Eventos en Tiempo Real** | ✅ Implementado | SSE + Redis pub/sub, heartbeat 25s, reconexión exponencial |
 
 ---
 
@@ -173,7 +174,7 @@ pnpm --filter @vertice/api db:studio        # Prisma Studio
 
 # Tests
 pnpm test                                   # Todos los workspaces
-pnpm --filter @vertice/api test             # Solo API (Jest, ~210 tests)
+pnpm --filter @vertice/api test             # Solo API (Jest, ~231 tests)
 
 # Smart contracts
 pnpm --filter @vertice/contracts compile    # Compilar + typechain
