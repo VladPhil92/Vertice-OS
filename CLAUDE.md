@@ -216,41 +216,50 @@ docs/XXX      → documentación
 ## MÓDULOS — ESTADO Y PRIORIDADES
 
 ### Módulo 01 — Identidad Cívica Digital
-- **Estado:** 🔴 No iniciado
-- **Prioridad:** CRÍTICA (bloquea todo lo demás)
+- **Estado:** 🟢 Implementado (API completa — rutas, servicio, schema, tests)
 - **Archivos clave:** `apps/api/src/modules/identity/`
-- **Dependencias externas:** Polygon testnet, librería DID W3C
-- **Issues GitHub asignados:** #007–#012
+- **Implementado:** DID generation, verificación de cédula (SHA-256), verificación de email, niveles de verificación 0–3, integración con reputación
+- **Pendiente:** Deploy contratos en Polygon Amoy testnet
 
 ### Módulo 02 — Motor Territorial
-- **Estado:** 🔴 No iniciado
-- **Prioridad:** Alta (MVP Sprint 7-8)
-- **Archivos clave:** `apps/api/src/modules/territorial/`, `apps/web/components/map/`
-- **Schema DB:** YA existe en `infrastructure/db/init.sql` (tabla `territorial_reports`)
+- **Estado:** 🟢 Implementado (API + frontend completos)
+- **Archivos clave:** `apps/api/src/modules/territorial/`, `apps/web/app/dashboard/reports/`
+- **Implementado:** CRUD reportes, PostGIS nearby, filtros, estadísticas, mapa Mapbox, formulario con geolocalización, vista detalle
 
 ### Módulo 03 — Gobernanza y Decisión
-- **Estado:** 🔴 No iniciado
-- **Prioridad:** Media (Fase II)
-- **Leer primero:** `docs/governance/GOVERNANCE.md`
+- **Estado:** 🟢 Implementado (API + frontend completos)
+- **Archivos clave:** `apps/api/src/modules/governance/`, `apps/web/app/dashboard/governance/`
+- **Implementado:** Propuestas, 5 etapas (idea→draft→debate→voting→resultado), democracia líquida, delegaciones, quórum configurable por alcance, avales
 
 ### Módulo 04 — Capa IA Multi-Agente
-- **Estado:** 🟡 Parcialmente implementado
-- **Archivos existentes:** `apps/ai/orchestrator.py` (LangGraph, 6 agentes)
-- **Pendiente:** FastAPI wrapper, RAG pipeline, indexación documentos Cartagena
+- **Estado:** 🟢 Implementado
+- **Archivos existentes:** `apps/ai/orchestrator.py` (LangGraph, 6 agentes), `apps/ai/rag/pipeline.py`, `apps/ai/main.py` (FastAPI)
+- **Implementado:** RAG pipeline con Pinecone, rutas REST /ai/query y /rag/*, 28 tests de cobertura
 
 ### Módulo 05 — Blockchain
-- **Estado:** 🔴 No iniciado
-- **Prioridad:** Baja (Fase II)
-- **Contratos a escribir:** VotingRegistry.sol, CivicSBT.sol
+- **Estado:** 🟡 Contratos escritos y testeados, pendiente deploy
+- **Contratos:** `contracts/contracts/CivicSBT.sol`, `contracts/contracts/VotingRegistry.sol`
+- **Implementado:** 53 tests en Hardhat (26 CivicSBT + 27 VotingRegistry), todos pasan
+- **Pendiente:** Deploy en Polygon Amoy testnet, configurar secrets DEPLOYER_PRIVATE_KEY
 
 ### Módulo 06 — Reputación
-- **Estado:** 🔴 No iniciado
-- **Prioridad:** Media (Fase II)
-- **Depende de:** Neo4j corriendo, Módulo 01 completo
+- **Estado:** 🟢 Implementado (API + frontend completos)
+- **Archivos clave:** `apps/api/src/modules/reputation/`, `apps/web/app/dashboard/reputation/`
+- **Implementado:** Score acumulativo, eventos de reputación, Neo4j para grafo, UI con ring SVG, tabs Resumen/Actividad/Logros, badges
+
+### Módulo 07 — Eventos en Tiempo Real (SSE)
+- **Estado:** 🟢 Implementado y testeado
+- **Archivos clave:** `apps/api/src/modules/events/`, `apps/api/src/lib/pubsub.ts`, `apps/web/lib/useServerEvents.ts`
+- **Implementado:** SSE endpoint `/events`, Redis pub/sub, heartbeat 25s, reconexión exponencial frontend, publishers integrados en territorial y governance, 21 tests
 
 ### Frontend Landing
-- **Estado:** 🟢 Implementado (vertice-os.html)
-- **Próximo:** Migrar a Next.js App Router en `apps/web/app/page.tsx`
+- **Estado:** 🟢 Implementado en Next.js App Router
+- **Archivos:** `apps/web/app/page.tsx`, `apps/web/components/sections/` (Hero, HowItWorks, Modules, AI, Roadmap), Footer
+
+### Dashboard Web
+- **Estado:** 🟢 Implementado (diseño completo desde mockups)
+- **Archivos:** `apps/web/app/dashboard/` (layout, panel, reputation, reports, governance, legal, admin, ai)
+- **Implementado:** Sidebar desktop, bottom nav mobile con FAB dorado, datos reales de API, diseño dark gold
 
 ---
 
