@@ -1,5 +1,6 @@
 import Redis from 'ioredis'
 import { config } from '../config'
+import { logger } from './logger'
 
 export const redis = new Redis(config.REDIS_URL, {
   maxRetriesPerRequest: 3,
@@ -8,5 +9,5 @@ export const redis = new Redis(config.REDIS_URL, {
 })
 
 redis.on('error', (err) => {
-  console.error('[redis] connection error:', err.message)
+  logger.error('[redis] connection error', (err as Error).message)
 })

@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma'
 import { redis } from '../../lib/redis'
 import { getCache, delCache, TTL } from '../../lib/cache'
 import { config } from '../../config'
+import { logger } from '../../lib/logger'
 import { sendEmailVerification } from '../../lib/email'
 import {
   isValidWalletAddress,
@@ -294,7 +295,7 @@ async function triggerIdentityBadgeMint(
     await prisma.citizen.update({
       where: { id: citizenId },
       data: { sbtTokenId: tokenId },
-    }).catch((err: unknown) => console.error('[identity] failed to persist sbtTokenId:', err))
+    }).catch((err: unknown) => logger.error('[identity] failed to persist sbtTokenId', err))
   }
 }
 

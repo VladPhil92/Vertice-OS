@@ -1,5 +1,6 @@
 import { JsonRpcProvider, Wallet, Contract, isAddress, keccak256, toUtf8Bytes } from 'ethers'
 import { config } from '../config'
+import { logger } from './logger'
 
 // ── ABI mínimo de CivicSBT (solo las funciones que usa el backend) ────────────
 
@@ -126,7 +127,7 @@ export async function checkHasBadge(did: string, badgeType: BadgeTypeValue): Pro
   try {
     return await contract.hasBadge(did, badgeType) as boolean
   } catch (err) {
-    console.error('[blockchain] hasBadge error:', err)
+    logger.error('[blockchain] hasBadge error', err)
     return false
   }
 }
@@ -148,7 +149,7 @@ export async function mintCitizenBadge(
     // Verificar idempotencia on-chain antes de gastar gas
     const alreadyHas = await contract.hasBadge(citizenDID, BadgeType.CITIZEN_VERIFIED)
     if (alreadyHas) {
-      console.info(`[blockchain] ${citizenDID} ya tiene CITIZEN_VERIFIED badge — omitiendo mint`)
+      logger.info(`[blockchain] ${citizenDID} ya tiene CITIZEN_VERIFIED badge — omitiendo mint`)
       return null
     }
 
@@ -161,10 +162,10 @@ export async function mintCitizenBadge(
     const receipt = await tx.wait()
 
     const tokenId = receipt?.logs?.[0] ? String((receipt.logs[0] as { args?: bigint[] }).args?.[0] ?? 0n) : '0'
-    console.info(`[blockchain] CITIZEN_VERIFIED minted → tokenId=${tokenId} tx=${receipt?.hash ?? 'unknown'}`)
+    logger.info(`[blockchain] CITIZEN_VERIFIED minted → tokenId=${tokenId} tx=${receipt?.hash ?? 'unknown'}`)
     return tokenId
   } catch (err) {
-    console.error('[blockchain] mintBadge error:', err)
+    logger.error('[blockchain] mintBadge error', err)
     return null
   }
 }
@@ -220,7 +221,7 @@ export async function recordProposalVoting(
     // Idempotencia: no re-registrar si ya está grabado
     const alreadyRecorded = await contract.isRecorded(proposalId) as boolean
     if (alreadyRecorded) {
-      console.info(`[blockchain] proposal ${proposalUUID} ya está registrado en VotingRegistry`)
+      logger.info(`[blockchain] proposal ${proposalUUID} ya está registrado en VotingRegistry`)
       return null
     }
 
@@ -238,10 +239,10 @@ export async function recordProposalVoting(
     )
     const receipt = await tx.wait()
     const hash = receipt?.hash ?? 'unknown'
-    console.info(`[blockchain] VotingRegistry recorded → proposal=${proposalUUID} tx=${hash}`)
+    logger.info(`[blockchain] VotingRegistry recorded → proposal=${proposalUUID} tx=${hash}`)
     return hash
   } catch (err) {
-    console.error('[blockchain] recordVoting error:', err)
+    logger.error('[blockchain] recordVoting error', err)
     return null
   }
 }

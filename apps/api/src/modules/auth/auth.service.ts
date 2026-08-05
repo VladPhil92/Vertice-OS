@@ -8,6 +8,7 @@ import { redis } from '../../lib/redis'
 import { sendPasswordReset } from '../../lib/email'
 import { runCypher } from '../../lib/neo4j'
 import { config } from '../../config'
+import { logger } from '../../lib/logger'
 import type { RegisterInput, LoginInput } from './auth.schema'
 import type { AuthTokenResponse, CitizenPublicProfile } from './auth.types'
 
@@ -58,7 +59,7 @@ export async function registerCitizen(input: RegisterInput): Promise<{ citizen_i
   runCypher(
     'MERGE (c:Citizen {id: $id}) SET c.did = $did, c.createdAt = datetime()',
     { id: citizen.id, did: citizen.did },
-  ).catch((err: unknown) => console.error('[auth] neo4j citizen node failed:', err))
+  ).catch((err: unknown) => logger.error('[auth] neo4j citizen node failed', err))
 
   return { citizen_id: citizen.id, did: citizen.did }
 }

@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
+import { logger } from './logger'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,7 @@ function getTransporter(): Transporter {
     // Dev fallback: log to console, don't throw
     _transporter = {
       sendMail: async (opts: { to: string; subject: string; html: string }) => {
-        console.info('[email:dev] To=%s Subject=%s', opts.to, opts.subject)
+        logger.info('[email:dev]', { to: opts.to, subject: opts.subject })
         return { messageId: 'dev' }
       },
     } as unknown as Transporter

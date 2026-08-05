@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
+import { logger } from '../../lib/logger'
 import { recordReputationEvent } from '../reputation/reputation.service'
 import { publish } from '../../lib/pubsub'
 import type {
@@ -113,7 +114,7 @@ export async function createReport(
 
   const report = rowToReport(rows[0])
   recordReputationEvent({ citizen_id: citizenId, event_type: 'report_submitted', reference_id: report.id })
-    .catch((err: unknown) => console.error('[territorial] reputation event failed:', err))
+    .catch((err: unknown) => logger.error('[territorial] reputation event failed', err))
   publish('territorial', 'report:created', {
     id: report.id, category: report.category, status: report.status,
     neighborhood: report.neighborhood, urgency_score: report.urgency_score,

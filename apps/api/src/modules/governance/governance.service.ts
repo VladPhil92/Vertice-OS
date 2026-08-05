@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { createHmac } from 'crypto'
 import { prisma } from '../../lib/prisma'
+import { logger } from '../../lib/logger'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
 import { config } from '../../config'
@@ -26,7 +27,7 @@ import { recordProposalVoting, buildProposalContentHash } from '../../lib/blockc
 
 function fireReputation(params: Parameters<typeof recordReputationEvent>[0]): void {
   recordReputationEvent(params).catch((err: unknown) =>
-    console.error('[governance] reputation event failed:', err),
+    logger.error('[governance] reputation event failed', err),
   )
 }
 
@@ -390,7 +391,7 @@ async function triggerVotingRegistry(
     await prisma.proposal.update({
       where: { id: proposal.id },
       data: { blockchainTxHash: txHash },
-    }).catch((err: unknown) => console.error('[governance] failed to persist blockchainTxHash:', err))
+    }).catch((err: unknown) => logger.error('[governance] failed to persist blockchainTxHash', err))
   }
 }
 

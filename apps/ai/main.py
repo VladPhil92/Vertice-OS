@@ -24,6 +24,11 @@ import logging
 import uuid
 from typing import Annotated
 
+import sentry_sdk
+import structlog
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
+
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -40,11 +45,29 @@ from orchestrator import (
 )
 from rag import rag_pipeline
 
-logging.basicConfig(
-    level=config.LOG_LEVEL,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+if config.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=config.SENTRY_DSN,
+        integrations=[StarletteIntegration(), FastApiIntegration()],
+        environment=config.NODE_ENV,
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer() if config.NODE_ENV == "production"
+        else structlog.dev.ConsoleRenderer(),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(
+        logging.getLevelName(config.LOG_LEVEL)
+    ),
+    logger_factory=structlog.PrintLoggerFactory(),
 )
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ── App ────────────────────────────────────────────────────────────────────────
 

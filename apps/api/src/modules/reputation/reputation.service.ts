@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { runCypher } from '../../lib/neo4j'
 import { prisma } from '../../lib/prisma'
+import { logger } from '../../lib/logger'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import {
   ReputationProfile,
@@ -139,7 +140,7 @@ export async function recordReputationEvent(input: RecordEventInput): Promise<Re
 
   // Record graph relation in Neo4j (fire-and-forget pattern: errors logged, not thrown)
   recordGraphRelation(citizen_id, event_type, reference_id ?? null).catch((err: unknown) => {
-    console.error('[reputation] neo4j graph relation failed:', err)
+    logger.error('[reputation] neo4j graph relation failed', err)
   })
 
   // Invalidate profile cache
