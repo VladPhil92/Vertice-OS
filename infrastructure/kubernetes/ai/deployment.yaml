@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: ai
-          image: gcr.io/vertice-os/ai:latest  # Replace with versioned tag in CI/CD
+          image: ghcr.io/vladphil92/vertice-ai:latest  # Replace with versioned tag in CI/CD
           imagePullPolicy: Always
           ports:
             - containerPort: 8001

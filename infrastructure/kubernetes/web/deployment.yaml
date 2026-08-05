@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: gcr.io/vertice-os/web:latest  # Replace with versioned tag in CI/CD
+          image: ghcr.io/vladphil92/vertice-web:latest  # Replace with versioned tag in CI/CD
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

@@ -95,20 +95,6 @@ services:
     networks:
       - vertice-network
 
-  # ── MongoDB ───────────────────────────────────────────────────────
-  mongodb:
-    image: mongo:7.0
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: vertice
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: vertice_os
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    networks:
-      - vertice-network
-
   # ── Redis ─────────────────────────────────────────────────────────
   redis:
     image: redis:7.4-alpine
@@ -144,7 +130,6 @@ services:
 # ── Volumes ────────────────────────────────────────────────────────
 volumes:
   postgres-data:
-  mongo-data:
   redis-data:
   neo4j-data:
 
