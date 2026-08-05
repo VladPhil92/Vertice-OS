@@ -22,7 +22,9 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
+
+import redis.asyncio as aioredis
 
 import sentry_sdk
 import structlog
@@ -660,8 +662,44 @@ async def rag_status(
 
 # ── /rag/index — indexación de documentos en segundo plano ───────────────────
 
-# Registro de tareas de indexación en memoria (se pierde al reiniciar)
-_indexing_tasks: dict[str, dict] = {}
+# Persistencia de tareas en Redis — sobrevive reinicios del pod
+_TASK_PREFIX = "vertice:rag:task"
+_TASK_TTL    = 86_400  # 24 h — las tareas se auto-eliminan al día siguiente
+
+_redis_client: aioredis.Redis | None = None  # type: ignore[type-arg]
+
+def _get_redis() -> aioredis.Redis | None:  # type: ignore[type-arg]
+    global _redis_client
+    if _redis_client is None:
+        try:
+            _redis_client = aioredis.from_url(config.REDIS_URL, decode_responses=True)
+        except Exception as exc:
+            logger.warning("[rag] Redis no disponible, usando memoria: %s", exc)
+    return _redis_client
+
+async def _save_task(task_id: str, data: dict[str, Any]) -> None:
+    key = f"{_TASK_PREFIX}:{task_id}"
+    r = _get_redis()
+    if r is not None:
+        try:
+            await r.set(key, json.dumps(data), ex=_TASK_TTL)
+            return
+        except Exception as exc:
+            logger.warning("[rag] Redis write error, falling back to memory: %s", exc)
+    _memory_tasks[task_id] = data
+
+async def _load_task(task_id: str) -> dict[str, Any] | None:
+    key = f"{_TASK_PREFIX}:{task_id}"
+    r = _get_redis()
+    if r is not None:
+        try:
+            raw = await r.get(key)
+            return json.loads(raw) if raw else None
+        except Exception as exc:
+            logger.warning("[rag] Redis read error, falling back to memory: %s", exc)
+    return _memory_tasks.get(task_id)
+
+_memory_tasks: dict[str, dict[str, Any]] = {}  # fallback si Redis no está disponible
 
 
 class RagIndexRequest(BaseModel):
@@ -691,32 +729,34 @@ async def _run_indexing_task(task_id: str, doc_name: str | None, dry_run: bool) 
     if str(scripts_path) not in sys.path:
         sys.path.insert(0, str(scripts_path))
 
+    task = await _load_task(task_id) or {}
     try:
         from seed_cartagena import seed_all  # type: ignore[import]
 
-        _indexing_tasks[task_id]["status"] = "running"
+        task["status"] = "running"
+        await _save_task(task_id, task)
+
         results = await seed_all(dry_run=dry_run, doc_name=doc_name)
 
         indexed_total = sum(results.values())
         indexed_docs = [name for name, count in results.items() if count > 0]
         skipped_docs = [name for name, count in results.items() if count == 0]
 
-        _indexing_tasks[task_id].update({
+        task.update({
             "status": "completed",
             "indexed": indexed_total,
             "skipped": len(skipped_docs),
             "documents": indexed_docs,
         })
+        await _save_task(task_id, task)
         logger.info(
             "[rag/index] task_id=%s completado: %d chunks en %d docs",
             task_id, indexed_total, len(indexed_docs),
         )
     except Exception as exc:
         logger.exception("[rag/index] task_id=%s error: %s", task_id, exc)
-        _indexing_tasks[task_id].update({
-            "status": "error",
-            "error": str(exc),
-        })
+        task.update({"status": "error", "error": str(exc)})
+        await _save_task(task_id, task)
 
 
 @app.post(
@@ -739,15 +779,16 @@ async def rag_index(
     """
     task_id = str(uuid.uuid4())
 
-    _indexing_tasks[task_id] = {
+    initial: dict[str, Any] = {
         "status": "pending",
-        "doc_name": request.doc_name,
+        "doc_name": request.doc_name or "",
         "dry_run": request.dry_run,
         "task_id": task_id,
         "indexed": 0,
         "skipped": 0,
         "documents": [],
     }
+    await _save_task(task_id, initial)
 
     background_tasks.add_task(
         _run_indexing_task,
@@ -782,7 +823,7 @@ async def rag_index_status(
     Consulta el estado de una tarea de indexación iniciada con POST /rag/index.
     Requiere X-Service-Key.
     """
-    task = _indexing_tasks.get(task_id)
+    task = await _load_task(task_id)
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

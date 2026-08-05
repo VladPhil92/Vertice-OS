@@ -14,13 +14,14 @@ Documentos indexados (Fase II):
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 from typing import Any
 
+import structlog
+
 import config
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ── Pinecone ──────────────────────────────────────────────────────────────────
 

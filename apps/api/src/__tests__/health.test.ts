@@ -1,5 +1,6 @@
 const mockRedisPing = jest.fn().mockResolvedValue('PONG')
 const mockPrismaQueryRaw = jest.fn().mockResolvedValue([{ '?column?': 1 }])
+const mockVerifyConnectivity = jest.fn().mockResolvedValue({})
 
 jest.mock('../lib/redis', () => ({
   redis: {
@@ -13,6 +14,11 @@ jest.mock('../lib/redis', () => ({
 
 jest.mock('../lib/prisma', () => ({
   prisma: { $queryRaw: mockPrismaQueryRaw },
+}))
+
+jest.mock('../lib/neo4j', () => ({
+  getNeo4jDriver: () => ({ verifyConnectivity: mockVerifyConnectivity }),
+  closeNeo4j: jest.fn(),
 }))
 
 import { buildApp } from '../app'
@@ -37,15 +43,17 @@ describe('GET /health/ready', () => {
   beforeEach(() => {
     mockRedisPing.mockResolvedValue('PONG')
     mockPrismaQueryRaw.mockResolvedValue([{ '?column?': 1 }])
+    mockVerifyConnectivity.mockResolvedValue({})
   })
 
-  it('returns 200 when Redis and DB are reachable', async () => {
+  it('returns 200 when Redis, DB, and Neo4j are reachable', async () => {
     const res = await app.inject({ method: 'GET', url: '/health/ready' })
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.payload)
     expect(body.status).toBe('ok')
     expect(body.checks.redis).toBe('ok')
     expect(body.checks.database).toBe('ok')
+    expect(body.checks.neo4j).toBe('ok')
   })
 
   it('returns 503 and marks degraded when Redis fails', async () => {
@@ -68,5 +76,17 @@ describe('GET /health/ready', () => {
     expect(body.status).toBe('degraded')
     expect(body.checks.redis).toBe('ok')
     expect(body.checks.database).toBe('fail')
+  })
+
+  it('returns 503 and marks degraded when Neo4j fails', async () => {
+    mockVerifyConnectivity.mockRejectedValueOnce(new Error('ServiceUnavailable'))
+
+    const res = await app.inject({ method: 'GET', url: '/health/ready' })
+    expect(res.statusCode).toBe(503)
+    const body = JSON.parse(res.payload)
+    expect(body.status).toBe('degraded')
+    expect(body.checks.neo4j).toBe('fail')
+    expect(body.checks.redis).toBe('ok')
+    expect(body.checks.database).toBe('ok')
   })
 })

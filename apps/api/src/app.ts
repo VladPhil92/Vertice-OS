@@ -8,6 +8,7 @@ import sensible from '@fastify/sensible'
 import { config } from './config'
 import { redis } from './lib/redis'
 import { prisma } from './lib/prisma'
+import { getNeo4jDriver } from './lib/neo4j'
 import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
@@ -113,6 +114,14 @@ export function buildApp() {
       checks.database = 'ok'
     } catch {
       checks.database = 'fail'
+      healthy = false
+    }
+
+    try {
+      await getNeo4jDriver().verifyConnectivity()
+      checks.neo4j = 'ok'
+    } catch {
+      checks.neo4j = 'fail'
       healthy = false
     }
 
