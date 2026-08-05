@@ -24,7 +24,7 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -204,7 +204,7 @@ Por favor identifica:
 @app.post("/territorial/analyze", response_model=TerritorialAnalysisResponse, tags=["territorial"])
 async def territorial_analyze(
     request: TerritorialAnalysisRequest,
-    _auth: None = None,
+    _auth: None = Depends(verify_service_key),
 ) -> TerritorialAnalysisResponse:
     """
     Analiza patrones en reportes territoriales usando el TerritorialAgent.
@@ -290,7 +290,7 @@ Genera una síntesis imparcial que incluya:
 @app.post("/governance/synthesize", response_model=DebateSynthesisResponse, tags=["governance"])
 async def governance_synthesize(
     request: DebateSynthesisRequest,
-    _auth: None = None,
+    _auth: None = Depends(verify_service_key),
 ) -> DebateSynthesisResponse:
     """
     Sintetiza el debate de una propuesta usando el GovernanceAgent.
@@ -370,7 +370,7 @@ Convierte esta demanda en una propuesta estructurada de política pública con l
 @app.post("/governance/draft-policy", response_model=PolicyDraftResponse, tags=["governance"])
 async def governance_draft_policy(
     request: PolicyDraftRequest,
-    _auth: None = None,
+    _auth: None = Depends(verify_service_key),
 ) -> PolicyDraftResponse:
     """
     Convierte una demanda ciudadana en un borrador estructurado de política pública.
@@ -536,7 +536,7 @@ _FALLBACK_LEGAL_RESPONSE = LegalAnalysisResponse(
 @app.post("/legal/analyze", response_model=LegalAnalysisResponse, tags=["legal"])
 async def legal_analyze(
     request: LegalAnalysisRequest,
-    _auth: None = None,
+    _auth: None = Depends(verify_service_key),
 ) -> LegalAnalysisResponse:
     """
     Analiza una situación ciudadana y genera el documento legal apropiado
@@ -605,7 +605,7 @@ async def legal_analyze(
 
 @app.get("/rag/status", tags=["rag"])
 async def rag_status(
-    _auth: None = None,
+    _auth: None = Depends(verify_service_key),
 ) -> dict:
     """
     Retorna el estado del pipeline RAG (Pinecone + Voyage AI).
@@ -705,7 +705,7 @@ async def _run_indexing_task(task_id: str, doc_name: str | None, dry_run: bool) 
 async def rag_index(
     request: RagIndexRequest,
     background_tasks: BackgroundTasks,
-    _auth: None = None,
+    _auth: None = Depends(verify_service_key),
 ) -> RagIndexResponse:
     """
     Dispara la indexación de documentos cívicos de Cartagena en Pinecone.
@@ -753,7 +753,7 @@ async def rag_index(
 @app.get("/rag/index/{task_id}", tags=["rag"])
 async def rag_index_status(
     task_id: str,
-    _auth: None = None,
+    _auth: None = Depends(verify_service_key),
 ) -> dict:
     """
     Consulta el estado de una tarea de indexación iniciada con POST /rag/index.

@@ -34,7 +34,10 @@ CREATE TABLE citizens (
     locality_id INTEGER REFERENCES localities(id),
     neighborhood TEXT,
     display_name TEXT,                         -- Nombre público (puede ser alias)
+    role TEXT NOT NULL DEFAULT 'citizen',       -- citizen | moderator | admin
     verification_level SMALLINT DEFAULT 0,    -- 0:básico, 1:verificado, 2:validado
+    wallet_address TEXT UNIQUE,               -- Billetera Polygon conectada
+    sbt_token_id TEXT,                        -- tokenId del SBT de identidad en Polygon
     reputation_score DECIMAL(10,4) DEFAULT 0,
     participation_count INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
@@ -118,8 +121,8 @@ CREATE TABLE proposals (
     
     -- Estado del ciclo de vida
     status TEXT DEFAULT 'idea'
-        CHECK (status IN ('idea', 'draft', 'debate', 'voting', 'approved', 
-                          'rejected', 'executed', 'failed_execution', 'quorum_failed')),
+        CHECK (status IN ('idea', 'draft', 'debate', 'voting', 'approved',
+                          'rejected', 'executed', 'failed_execution', 'quorum_failed', 'archived')),
     
     -- Métricas de participación
     endorsement_count INTEGER DEFAULT 0,
@@ -137,6 +140,9 @@ CREATE TABLE proposals (
     reject_votes_weighted DECIMAL(12,4) DEFAULT 0,
     abstain_votes_weighted DECIMAL(12,4) DEFAULT 0,
     
+    -- Moderación
+    rejection_reason TEXT,
+
     -- Responsable de ejecución (si se aprueba)
     assigned_executor TEXT,
     execution_deadline DATE,
@@ -366,17 +372,25 @@ CREATE TRIGGER legal_documents_updated_at
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ═══════════════════════════════════════════════════════════════════
--- Seed data mínimo para desarrollo
+-- Seed data para desarrollo — SOLO ejecutar con NODE_ENV=development
+-- En producción: prisma migrate deploy (no ejecutar este bloque)
 -- ═══════════════════════════════════════════════════════════════════
 
--- Ciudadano de prueba (en producción esto NO existe)
-INSERT INTO citizens (did, cedula_hash, locality_id, neighborhood, display_name, verification_level, reputation_score)
-VALUES (
-    'did:polygon:0x1234567890abcdef',
-    encode(digest('1234567890', 'sha256'), 'hex'),
-    1,
-    'Getsemaní',
-    'Ciudadano Demo',
-    2,
-    0.75
-) ON CONFLICT DO NOTHING;
+DO $$
+BEGIN
+  IF current_setting('app.node_env', TRUE) = 'development'
+     OR current_setting('app.node_env', TRUE) IS NULL THEN
+
+    INSERT INTO citizens (did, cedula_hash, locality_id, neighborhood, display_name, verification_level, reputation_score)
+    VALUES (
+        'did:vertice:demo-citizen-getsemani',
+        encode(digest('1234567890', 'sha256'), 'hex'),
+        1,
+        'Getsemaní',
+        'Ciudadano Demo',
+        2,
+        0.75
+    ) ON CONFLICT DO NOTHING;
+
+  END IF;
+END $$;

@@ -2,6 +2,7 @@ import { buildApp } from './app'
 import { config } from './config'
 import { prisma } from './lib/prisma'
 import { redis } from './lib/redis'
+import { closeNeo4j } from './lib/neo4j'
 
 async function main() {
   const app = buildApp()
@@ -16,6 +17,7 @@ async function main() {
     await app.close()
     await prisma.$disconnect()
     await redis.quit()
+    await closeNeo4j()
     process.exit(0)
   }
 
