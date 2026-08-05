@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Syne, DM_Mono, Fraunces } from 'next/font/google';
 import './globals.css';
 
@@ -57,9 +58,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Nonce generated per-request by middleware.ts — Next.js uses html[nonce] to
+  // stamp all its own generated <script> tags, enabling the nonce-based CSP
+  const nonce = headers().get('x-nonce') ?? ''
+
   return (
     <html
       lang="es"
+      nonce={nonce}
       className={`${syne.variable} ${dmMono.variable} ${fraunces.variable}`}
     >
       <body className="bg-bg text-primary antialiased">{children}</body>

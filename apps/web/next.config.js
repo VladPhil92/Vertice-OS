@@ -4,12 +4,17 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Moved from experimental.serverComponentsExternalPackages (deprecated in Next.js 14.1)
+  serverExternalPackages: ['mapbox-gl'],
   experimental: {
-    serverComponentsExternalPackages: ['mapbox-gl'],
     outputFileTracingRoot: path.join(__dirname, '../../'),
   },
   images: {
-    domains: ['ipfs.io', 'gateway.pinata.cloud'],
+    // remotePatterns replaces deprecated images.domains
+    remotePatterns: [
+      { protocol: 'https', hostname: 'ipfs.io' },
+      { protocol: 'https', hostname: 'gateway.pinata.cloud' },
+    ],
   },
   env: {
     NEXT_PUBLIC_MAPBOX_TOKEN:  process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
@@ -18,40 +23,7 @@ const nextConfig = {
     NEXT_PUBLIC_POLYGON_RPC:   process.env.NEXT_PUBLIC_POLYGON_RPC,
     NEXT_PUBLIC_SENTRY_DSN:    process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
-  async headers() {
-    return [
-      {
-        source: '/dashboard/:path*',
-        headers: [
-          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
-        ],
-      },
-      {
-        source: '/(.*)',
-        headers: [
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self)',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://*.sentry.io",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https://*.mapbox.com https://ipfs.io",
-              "connect-src 'self' https://*.mapbox.com wss: ws: https://*.sentry.io",
-              "worker-src blob:",
-            ].join('; '),
-          },
-        ],
-      },
-    ];
-  },
+  // Security headers and CSP are handled by middleware.ts (nonce-based, per-request)
 };
 
 module.exports = withSentryConfig(nextConfig, {

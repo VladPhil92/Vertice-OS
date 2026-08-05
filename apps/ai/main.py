@@ -86,7 +86,7 @@ app.add_middleware(
     allow_origins=config.CORS_ORIGIN.split(","),
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-Service-Key", "Authorization"],
 )
 
 # ── Exception handlers ─────────────────────────────────────────────────────────
