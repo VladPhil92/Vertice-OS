@@ -18,13 +18,20 @@ import asyncio
 import logging
 import uuid
 from enum import StrEnum
-from typing import Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 import anthropic
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, field_validator
 from typing_extensions import TypedDict
+
+# Solo para tipado: los tests sustituyen `anthropic` y `langgraph` por mocks en
+# sys.modules, que no son paquetes reales, así que estos símbolos no pueden
+# importarse en tiempo de ejecución.
+if TYPE_CHECKING:
+    from anthropic.types import MessageParam, TextBlockParam
+    from langgraph.graph.state import CompiledStateGraph
 
 from rag import rag_pipeline
 
@@ -121,8 +128,8 @@ class BaseAgent:
             response = self.client.messages.create(
                 model=self.MODEL,
                 max_tokens=self.MAX_TOKENS,
-                system=system_blocks,
-                messages=messages,
+                system=cast("list[TextBlockParam]", system_blocks),
+                messages=cast("list[MessageParam]", messages),
             )
         except anthropic.APIStatusError as exc:
             logger.error("[%s] Anthropic API error %d: %s", self.name, exc.status_code, exc.message)
@@ -134,7 +141,12 @@ class BaseAgent:
         if not response.content:
             raise ValueError(f"[{self.name}] Anthropic devolvió contenido vacío")
 
-        return response.content[0].text
+        block = response.content[0]
+        if block.type != "text":
+            raise ValueError(
+                f"[{self.name}] se esperaba un bloque de texto, llegó '{block.type}'"
+            )
+        return block.text
 
     def _log_action(self, state: AgentState, action: str, result: str) -> dict:
         return {
@@ -675,11 +687,12 @@ async def rag_retrieval_node(state: AgentState) -> AgentState:
         logger.warning("[rag_retrieval_node] error en retrieve: %s", exc)
         docs = []
 
-    # Keep existing docs if retrieve returned nothing
+    # Append newly retrieved docs to whatever the state already carried
+    # (e.g. from a prior turn), de-duplicating and capping the total.
     existing = state.get("retrieved_docs") or []
-    new_docs = docs if docs else existing
+    merged = existing + [d for d in docs if d not in existing]
 
-    return {**state, "retrieved_docs": new_docs}
+    return {**state, "retrieved_docs": merged[:8]}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -723,7 +736,12 @@ Responde SOLO con una de estas palabras (sin explicación):
             logger.warning("[RouterAgent] Anthropic devolvió contenido vacío")
             return {**state, "intent": AgentIntent.UNKNOWN}
 
-        intent_str = response.content[0].text.strip().lower()
+        block = response.content[0]
+        if block.type != "text":
+            logger.warning("[RouterAgent] respuesta sin bloque de texto")
+            return {**state, "intent": AgentIntent.UNKNOWN}
+
+        intent_str = block.text.strip().lower()
         try:
             intent = AgentIntent(intent_str)
         except ValueError:
@@ -772,7 +790,7 @@ def _entry_point(
     return "router"
 
 
-def build_orchestrator() -> StateGraph:
+def build_orchestrator() -> CompiledStateGraph:
     """Construye el grafo de orquestación de agentes."""
     router = RouterAgent()
     citizen = CitizenAgent()

@@ -54,13 +54,18 @@ if config.SENTRY_DSN:
         send_default_pii=False,
     )
 
+_log_renderer: Any = (
+    structlog.processors.JSONRenderer()
+    if config.NODE_ENV == "production"
+    else structlog.dev.ConsoleRenderer()
+)
+
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer() if config.NODE_ENV == "production"
-        else structlog.dev.ConsoleRenderer(),
+        _log_renderer,
     ],
     wrapper_class=structlog.make_filtering_bound_logger(
         logging.getLevelName(config.LOG_LEVEL)
@@ -662,7 +667,15 @@ def _get_redis() -> aioredis.Redis | None:  # type: ignore[type-arg]
     global _redis_client
     if _redis_client is None:
         try:
-            _redis_client = aioredis.from_url(config.REDIS_URL, decode_responses=True)
+            # aioredis.from_url() es perezoso — sin estos timeouts, la primera
+            # operación real (get/set) se bloquea indefinidamente si Redis no
+            # es alcanzable, en lugar de degradar al fallback en memoria.
+            _redis_client = aioredis.from_url(
+                config.REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
         except Exception as exc:
             logger.warning("[rag] Redis no disponible, usando memoria: %s", exc)
     return _redis_client

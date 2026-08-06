@@ -465,7 +465,12 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) 
             if last_newline > start + size // 2:
                 end = last_newline
         chunks.append(text[start:end].strip())
-        start = end - overlap
+        # Cuando `end` llega al final del texto, `end - overlap` puede quedar
+        # en la misma posición (o detrás) de `start`, dejando el cursor
+        # congelado y produciendo un bucle infinito que repite el último
+        # chunk para siempre. Forzamos avance mínimo de 1 carácter.
+        next_start = end - overlap
+        start = next_start if next_start > start else start + 1
 
     return [c for c in chunks if len(c) > 50]
 

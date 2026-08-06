@@ -16,29 +16,79 @@ interface ApiOptions extends Omit<RequestInit, 'headers'> {
   public?: boolean
 }
 
+/**
+ * Canjea la cookie httpOnly de refresco por un nuevo access token.
+ *
+ * Las peticiones concurrentes que reciban 401 comparten la misma promesa para
+ * no disparar N refrescos en paralelo (y no invalidarse entre sí si el backend
+ * rota el refresh token).
+ */
+let refreshInFlight: Promise<string | null> | null = null
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight
+
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) return null
+
+      const data = (await res.json()) as { access_token?: string }
+      if (!data.access_token) return null
+
+      localStorage.setItem('access_token', data.access_token)
+      return data.access_token
+    } catch {
+      return null
+    } finally {
+      // Se libera en el microtask siguiente para que los 401 simultáneos
+      // alcancen a engancharse a esta misma promesa.
+      setTimeout(() => { refreshInFlight = null }, 0)
+    }
+  })()
+
+  return refreshInFlight
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: ApiOptions = {},
 ): Promise<T> {
   const { public: isPublic, headers: extraHeaders, ...rest } = options
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...extraHeaders,
+  function buildHeaders(token: string | null): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...extraHeaders,
+    }
+    if (!isPublic && token) headers['Authorization'] = `Bearer ${token}`
+    return headers
   }
 
-  if (!isPublic) {
-    const token = getToken()
-    if (token) headers['Authorization'] = `Bearer ${token}`
-  }
-
-  const res = await fetch(`${BASE_URL}${path}`, {
+  let res = await fetch(`${BASE_URL}${path}`, {
     credentials: 'include',
     ...rest,
-    headers,
+    headers: buildHeaders(isPublic ? null : getToken()),
   })
 
+  // El access token caducó: se intenta refrescar una vez y se reintenta.
+  if (res.status === 401 && !isPublic) {
+    const newToken = await refreshAccessToken()
+    if (newToken) {
+      res = await fetch(`${BASE_URL}${path}`, {
+        credentials: 'include',
+        ...rest,
+        headers: buildHeaders(newToken),
+      })
+    }
+  }
+
   if (res.status === 401) {
+    localStorage.removeItem('access_token')
     redirectToLogin()
     // Return a never-resolving promise so caller code doesn't continue
     return new Promise(() => undefined)
