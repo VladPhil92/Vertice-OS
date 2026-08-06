@@ -50,6 +50,7 @@
     "blockchain",
     "participation"
   ],
+  "packageManager": "pnpm@10.0.0",
   "author": "CTG One Corporation",
   "license": "UNLICENSED"
 }
