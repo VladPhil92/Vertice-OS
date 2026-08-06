@@ -10,7 +10,7 @@ import {
   mintCitizenBadge,
   buildCitizenBadgeURI,
 } from '../../lib/blockchain'
-import type { DIDDocument, VerificationStatus } from './identity.types'
+import type { DIDDocument, VerificationStatus, VerificationLevel } from './identity.types'
 import type { UpdateProfileInput, ConnectWalletInput } from './identity.schema'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ function buildDIDDocument(citizen: {
     ],
     created: citizen.createdAt.toISOString(),
     updated: (citizen.lastActiveAt ?? citizen.createdAt).toISOString(),
-    verificationLevel: citizen.verificationLevel,
+    verificationLevel: Math.min(citizen.verificationLevel, 2) as VerificationLevel,
   }
 }
 

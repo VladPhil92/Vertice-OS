@@ -80,7 +80,7 @@ describe('resolveDID', () => {
   })
 
   it('returns cached document without hitting DB', async () => {
-    const cachedDoc = { id: CITIZEN_BASE.did, verificationLevel: 1 } as any
+    const cachedDoc = { id: CITIZEN_BASE.did, verificationLevel: 1 }
     mockGetCache.mockResolvedValueOnce(cachedDoc)
 
     const doc = await resolveDID(CITIZEN_BASE.did)

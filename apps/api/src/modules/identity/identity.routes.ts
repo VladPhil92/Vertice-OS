@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireVerified } from '../../middleware/auth'
 import { ConfirmCedulaSchema, ConfirmEmailTokenSchema, UpdateProfileSchema, ConnectWalletSchema } from './identity.schema'
 import {

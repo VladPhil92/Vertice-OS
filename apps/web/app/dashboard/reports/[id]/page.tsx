@@ -7,6 +7,7 @@ import {
   ArrowLeft, Loader2, AlertTriangle, MapPin, Calendar,
   Clock, CheckCircle, XCircle, AlertCircle, Activity,
 } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 import { CategoryTag } from '@/components/ui/CategoryTag'
 import { CATEGORY_COLOR, CATEGORY_LABEL, type MapReport } from '@/components/ui/TerritorialMap'
@@ -318,20 +319,20 @@ export default function ReportDetailPage() {
 
       {/* ── Actions ────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 border-t border-border pt-6">
-        <a
+        <Link
           href={`/dashboard/reports/map`}
           className="flex items-center gap-2 border border-border px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-secondary transition-colors hover:border-gold/40 hover:text-gold"
         >
           <MapPin size={12} />
           Ver en mapa
-        </a>
-        <a
+        </Link>
+        <Link
           href="/dashboard/reports"
           className="flex items-center gap-2 border border-border px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-tertiary transition-colors hover:text-secondary"
         >
           <ArrowLeft size={12} />
           Volver a la lista
-        </a>
+        </Link>
       </div>
 
     </div>

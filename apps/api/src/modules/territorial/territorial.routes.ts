@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { requireVerified, requireModerator } from '../../middleware/auth'
 import { CreateReportSchema, ListReportsSchema, NearbySchema, UpdateStatusSchema } from './territorial.schema'
 import {

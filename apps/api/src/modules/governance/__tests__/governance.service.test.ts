@@ -121,7 +121,7 @@ describe('listProposals', () => {
 
     expect(proposals).toHaveLength(2)
     expect(proposals[0].id).toBe('proposal-uuid')
-    expect((proposals[0] as any).description).toBeUndefined()
+    expect((proposals[0] as unknown as Record<string, unknown>).description).toBeUndefined()
   })
 
   it('returns empty array when no proposals found', async () => {

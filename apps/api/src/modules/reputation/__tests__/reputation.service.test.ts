@@ -26,6 +26,7 @@ import {
   getLeaderboard,
   getCitizenGraph,
 } from '../reputation.service'
+import type { ReputationEvent } from '../reputation.types'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ describe('recordReputationEvent', () => {
   it('assigns correct points for each event type', async () => {
     mockQueryRaw.mockResolvedValue([{ id: 'x', created_at: new Date() }])
 
-    const cases: Array<[string, number]> = [
+    const cases: Array<[ReputationEvent, number]> = [
       ['vote_cast', 5],
       ['proposal_created', 10],
       ['proposal_approved', 30],
@@ -85,7 +86,7 @@ describe('recordReputationEvent', () => {
     for (const [event, points] of cases) {
       const result = await recordReputationEvent({
         citizen_id: CITIZEN_ID,
-        event_type: event as any,
+        event_type: event,
       })
       expect(result.points).toBe(points)
     }

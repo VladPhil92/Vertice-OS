@@ -7,6 +7,7 @@ import {
   FileText, Copy, Mail, MapPin, User, Phone, Building2,
   Shield, Scale, Check,
 } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -263,10 +264,10 @@ export default function LegalDocumentDetailPage() {
             El documento legal que buscas no existe o no tienes acceso a él.
           </p>
         </div>
-        <a href="/dashboard/legal" className="btn-ghost flex items-center gap-2">
+        <Link href="/dashboard/legal" className="btn-ghost flex items-center gap-2">
           <ArrowLeft size={14} />
           Volver a mis documentos
-        </a>
+        </Link>
       </div>
     )
   }
@@ -284,10 +285,10 @@ export default function LegalDocumentDetailPage() {
       {/* ── Sub-header: acciones del documento ─────────────────────────────── */}
       <div className="border-b border-border bg-surface/60 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a href="/dashboard/legal" className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-tertiary hover:text-secondary transition-colors">
+          <Link href="/dashboard/legal" className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-tertiary hover:text-secondary transition-colors">
             <ArrowLeft size={11} />
             Doc. Legales
-          </a>
+          </Link>
           <span className="text-tertiary">/</span>
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-gold truncate max-w-[160px]">
             {typeLabel}
@@ -669,9 +670,9 @@ export default function LegalDocumentDetailPage() {
                   )}
 
                   <div className="flex items-center justify-end gap-3 pt-2">
-                    <a href="/dashboard/legal" className="btn-ghost text-[11px] py-2 px-4">
+                    <Link href="/dashboard/legal" className="btn-ghost text-[11px] py-2 px-4">
                       Cancelar
-                    </a>
+                    </Link>
                     <button
                       onClick={handleSubmit}
                       disabled={submitting}

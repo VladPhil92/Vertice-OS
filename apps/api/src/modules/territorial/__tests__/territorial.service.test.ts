@@ -125,7 +125,7 @@ describe('listReports', () => {
     expect(reports).toHaveLength(2)
     expect(reports[0].id).toBe('report-uuid')
     // Summary no incluye description
-    expect((reports[0] as any).description).toBeUndefined()
+    expect((reports[0] as unknown as Record<string, unknown>).description).toBeUndefined()
   })
 
   it('returns empty array when no reports', async () => {

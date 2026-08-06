@@ -207,8 +207,8 @@ class RAGPipeline:
             if len(embeddings) != len(batch):
                 embeddings = [_hash_embedding(t) for t in texts]
 
-            vectors = []
-            for (doc_id, text, metadata), embedding in zip(batch, embeddings):
+            vectors: list[dict[str, Any]] = []
+            for (doc_id, text, metadata), embedding in zip(batch, embeddings, strict=True):
                 vectors.append({
                     "id": doc_id,
                     "values": embedding,

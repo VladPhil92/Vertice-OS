@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { headers } from 'next/headers';
 import { Syne, DM_Mono, Fraunces } from 'next/font/google';
 import './globals.css';
 
@@ -15,12 +14,13 @@ const dmMono = DM_Mono({
   weight: ['300', '400', '500'],
 });
 
+// `axes` no puede combinarse con `weight` en next/font — se fija el peso 300
+// del sistema de diseño y se omite el eje de optical sizing.
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-fraunces',
   weight: ['300'],
   style: ['normal', 'italic'],
-  axes: ['opsz'],
 });
 
 export const metadata: Metadata = {
@@ -41,6 +41,9 @@ export const metadata: Metadata = {
   authors: [{ name: 'CTG One Corporation' }],
   robots: 'index, follow',
   manifest: '/manifest.json',
+  icons: {
+    apple: '/icon-192.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -59,25 +62,20 @@ export const viewport: Viewport = {
   themeColor: '#C8A84B',
 };
 
+// El nonce CSP lo genera middleware.ts por request y lo expone en la cabecera
+// `x-nonce`; Next.js la lee automáticamente para firmar sus propios <script>.
+// No debe leerse aquí con headers(): eso vuelve dinámico todo el árbol y rompe
+// la generación estática de las páginas.
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Nonce generated per-request by middleware.ts — Next.js uses html[nonce] to
-  // stamp all its own generated <script> tags, enabling the nonce-based CSP
-  const nonce = headers().get('x-nonce') ?? ''
-
   return (
     <html
       lang="es"
-      nonce={nonce}
       className={`${syne.variable} ${dmMono.variable} ${fraunces.variable}`}
     >
-      <head>
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-        <meta name="mobile-web-app-capable" content="yes" />
-      </head>
       <body className="bg-bg text-primary antialiased">{children}</body>
     </html>
   );

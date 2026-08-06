@@ -6,6 +6,7 @@ import {
   FileText, Upload, MapPin, ArrowRight, ArrowLeft,
   AlertCircle, CheckCircle, Clock, Shield, Scale,
 } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 // ── Tipos locales ─────────────────────────────────────────────────────────────
@@ -304,8 +305,8 @@ export default function NewLegalDocumentPage() {
                     el acuse de recibo cuando lo presentes ante la entidad.
                   </p>
                   <div className="flex gap-3">
-                    <a href="/dashboard/legal" className="btn-ghost">Ver mis documentos</a>
-                    <a href="/dashboard" className="btn-primary">Volver al dashboard</a>
+                    <Link href="/dashboard/legal" className="btn-ghost">Ver mis documentos</Link>
+                    <Link href="/dashboard" className="btn-primary">Volver al dashboard</Link>
                   </div>
                 </div>
               ) : (

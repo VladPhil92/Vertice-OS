@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { ZodError } from 'zod'
 import { RegisterSchema, LoginSchema } from './auth.schema'
 import { requireAuth } from '../../middleware/auth'

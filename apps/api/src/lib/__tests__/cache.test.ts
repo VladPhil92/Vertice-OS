@@ -2,7 +2,7 @@ const mockGet = jest.fn()
 const mockSet = jest.fn()
 const mockDel = jest.fn()
 
-jest.mock('../../redis', () => ({
+jest.mock('../redis', () => ({
   redis: {
     get: mockGet,
     set: mockSet,

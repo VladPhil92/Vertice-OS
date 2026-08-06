@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ThumbsUp } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -238,9 +239,9 @@ export default function ProposalsPage() {
               Iniciativas presentadas por la comunidad de Cartagena.
             </p>
           </div>
-          <a href="/dashboard/proposals/new" className="btn-primary shrink-0">
+          <Link href="/dashboard/proposals/new" className="btn-primary shrink-0">
             Nueva propuesta
-          </a>
+          </Link>
         </div>
 
         {/* Filters */}
@@ -330,12 +331,12 @@ export default function ProposalsPage() {
               {proposals.length === 0 && (
                 <>
                   Sé el primero —{' '}
-                  <a
+                  <Link
                     href="/dashboard/proposals/new"
                     className="text-gold hover:underline"
                   >
                     crea una propuesta
-                  </a>
+                  </Link>
                   .
                 </>
               )}
@@ -346,13 +347,13 @@ export default function ProposalsPage() {
         {!loading && !error && filtered.length > 0 && (
           <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map(proposal => (
-              <a key={proposal.id} href={`/dashboard/proposals/${proposal.id}`} className="block">
+              <Link key={proposal.id} href={`/dashboard/proposals/${proposal.id}`} className="block">
                 <ProposalCard
                   proposal={proposal}
                   onEndorse={handleEndorse}
                   endorsing={endorsingId === proposal.id}
                 />
-              </a>
+              </Link>
             ))}
           </div>
         )}

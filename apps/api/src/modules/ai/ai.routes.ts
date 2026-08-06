@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { requireVerified } from '../../middleware/auth'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import {

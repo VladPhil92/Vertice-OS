@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from orchestrator import (
+    _TERRITORY_CODES,
+    RAG_INTENTS,
     AgentIntent,
     QueryRequest,
     QueryResponse,
-    RAG_INTENTS,
-    _TERRITORY_CODES,
     process_civic_query,
     rag_retrieval_node,
 )

@@ -4,8 +4,8 @@ Tests de integración para los routers FastAPI del servicio AI.
 conftest.py ya mockea anthropic y langgraph, por lo que orchestrator.ainvoke
 devuelve _default_invoke_result en todos los tests.
 """
-import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
+
 from starlette.testclient import TestClient
 
 # Import must happen after conftest mocks are applied

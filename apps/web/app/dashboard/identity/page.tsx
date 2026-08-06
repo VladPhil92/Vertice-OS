@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, CheckCircle, ChevronDown, ChevronUp, Loader2, ShieldCheck } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
@@ -688,23 +689,23 @@ export default function IdentityPage() {
       <header className="border-b border-border bg-surface/60 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <nav className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em]">
-            <a href="/" className="flex items-center gap-2 text-secondary hover:text-primary transition-colors">
+            <Link href="/" className="flex items-center gap-2 text-secondary hover:text-primary transition-colors">
               <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none">
                 <polygon points="12,2 22,21 2,21" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
               </svg>
               <span className="font-display text-xs font-bold tracking-widest text-primary">VÉRTICE OS</span>
-            </a>
+            </Link>
             <span className="text-tertiary">/</span>
-            <a href="/dashboard" className="text-secondary hover:text-primary transition-colors">Dashboard</a>
+            <Link href="/dashboard" className="text-secondary hover:text-primary transition-colors">Dashboard</Link>
             <span className="text-tertiary">/</span>
             <span className="text-gold">Identidad</span>
           </nav>
 
           <div className="flex items-center gap-3">
             <span className="status-dot" />
-            <a href="/auth/login" className="btn-ghost py-2 px-4 text-[10px]">
+            <Link href="/auth/login" className="btn-ghost py-2 px-4 text-[10px]">
               Salir
-            </a>
+            </Link>
           </div>
         </div>
       </header>

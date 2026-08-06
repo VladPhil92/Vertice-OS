@@ -1,8 +1,9 @@
 import crypto from 'crypto'
 import bcrypt from 'bcrypt'
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { prisma } from '../../lib/prisma'
-import { generateRefreshToken, hashToken, refreshTokenExpiresAt, AccessTokenPayload, CitizenRole } from '../../lib/jwt'
+import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt';
+import { generateRefreshToken, hashToken, refreshTokenExpiresAt } from '../../lib/jwt'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
 import { sendPasswordReset } from '../../lib/email'
@@ -127,7 +128,7 @@ export async function refreshAccessToken(
 
   const session = await prisma.session.findUnique({
     where: { refreshTokenHash: tokenHash },
-    include: { citizen: { select: { id: true, did: true, verificationLevel: true } } },
+    include: { citizen: { select: { id: true, did: true, verificationLevel: true, role: true } } },
   })
 
   if (!session || session.revokedAt || session.expiresAt < new Date()) {
@@ -138,6 +139,7 @@ export async function refreshAccessToken(
     sub: session.citizen.id,
     did: session.citizen.did,
     lvl: session.citizen.verificationLevel,
+    role: (session.citizen.role as CitizenRole) ?? 'citizen',
   }
 
   const accessToken = app.jwt.sign(payload, { expiresIn: config.JWT_ACCESS_EXPIRY_SECONDS })

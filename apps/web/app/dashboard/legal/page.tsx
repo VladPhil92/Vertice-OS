@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { FileText, Plus, Clock, CheckCircle, AlertTriangle, XCircle, ArrowUpRight } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 interface LegalDocumentSummary {
@@ -95,10 +96,10 @@ export default function LegalListPage() {
             <p className="font-mono text-xs text-tertiary">
               Describe una situación y la IA generará el recurso legal apropiado.
             </p>
-            <a href="/dashboard/legal/new" className="btn-primary mt-4 flex items-center gap-2 text-xs py-2.5 px-6">
+            <Link href="/dashboard/legal/new" className="btn-primary mt-4 flex items-center gap-2 text-xs py-2.5 px-6">
               <Plus className="h-3.5 w-3.5" />
               Crear primer documento
-            </a>
+            </Link>
           </div>
         )}
 
@@ -108,7 +109,7 @@ export default function LegalListPage() {
               const statusCfg = STATUS_CONFIG[doc.status] ?? STATUS_CONFIG['draft']!
               const StatusIcon = statusCfg.icon
               return (
-                <a
+                <Link
                   key={doc.id}
                   href={`/dashboard/legal/${doc.id}`}
                   className="flex items-start justify-between gap-4 bg-surface p-5 transition-colors hover:bg-surface/80 group"
@@ -150,7 +151,7 @@ export default function LegalListPage() {
                   </div>
 
                   <ArrowUpRight className="h-4 w-4 flex-shrink-0 text-tertiary group-hover:text-gold transition-colors mt-1" />
-                </a>
+                </Link>
               )
             })}
           </div>

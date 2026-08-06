@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { List, Loader2, AlertTriangle, Plus, SlidersHorizontal, X } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 import {
   type MapReport,
@@ -114,20 +115,20 @@ export default function ReportsMapPage() {
             Filtros
           </button>
 
-          <a
+          <Link
             href="/dashboard/reports"
             className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary transition-colors hover:border-gold/40 hover:text-gold"
           >
             <List size={11} />
             Ver lista
-          </a>
-          <a
+          </Link>
+          <Link
             href="/dashboard/reports/new"
             className="flex items-center gap-1.5 rounded border border-gold/40 bg-gold/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gold transition-colors hover:bg-gold/20"
           >
             <Plus size={11} />
             Nuevo
-          </a>
+          </Link>
         </div>
       </div>
 

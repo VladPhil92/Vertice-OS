@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { redis } from '../../lib/redis'
 import { config } from '../../config'
 

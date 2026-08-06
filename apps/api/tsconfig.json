@@ -6,9 +6,10 @@
     "noUncheckedIndexedAccess": false,
     "exactOptionalPropertyTypes": false,
     "paths": {
-      "@vertice/types": ["../../packages/types/src/index.ts"]
+      "@vertice/types": ["../../packages/types/dist/index.d.ts"]
     }
   },
+  "references": [{ "path": "../../packages/types" }],
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

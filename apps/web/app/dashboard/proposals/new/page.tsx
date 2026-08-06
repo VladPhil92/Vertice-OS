@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 const CATEGORIES = [
@@ -230,7 +231,7 @@ export default function NewProposalPage() {
               <span className="text-gold font-medium">¿Cómo funciona el proceso?</span>
               <br />
               Tu propuesta entrará primero en fase{' '}
-              <span className="text-gold">'idea'</span>, luego pasará a debate y
+              <span className="text-gold">&apos;idea&apos;</span>, luego pasará a debate y
               finalmente a votación cuando reúna suficientes avales.
             </p>
           </div>
@@ -251,9 +252,9 @@ export default function NewProposalPage() {
             >
               {loading ? 'Enviando…' : 'Publicar propuesta'}
             </button>
-            <a href="/dashboard" className="btn-ghost">
+            <Link href="/dashboard" className="btn-ghost">
               Cancelar
-            </a>
+            </Link>
           </div>
 
         </form>

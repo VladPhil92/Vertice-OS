@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { FileText, Vote } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 interface Proposal {
@@ -139,10 +140,10 @@ export default function GovernancePage() {
             <p className="font-mono text-xs text-tertiary">
               Las propuestas pasan por debate antes de llegar a votación.
             </p>
-            <a href="/dashboard/proposals" className="btn-ghost mt-4 text-xs py-2.5 px-6 flex items-center gap-2">
+            <Link href="/dashboard/proposals" className="btn-ghost mt-4 text-xs py-2.5 px-6 flex items-center gap-2">
               <FileText className="h-3.5 w-3.5" />
               Ver todas las propuestas
-            </a>
+            </Link>
           </div>
         )}
 

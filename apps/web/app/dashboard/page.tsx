@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import {
   Bell, Flag, Map, Sparkles, MessageCircle, Vote, ShieldCheck,
 } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -327,19 +328,19 @@ export default function DashboardPage() {
             <p className="font-mono text-[11px] text-[rgba(240,237,232,0.45)] mt-1">
               Reporta. Decide. Vigila. Transforma tu ciudad.
             </p>
-            <a
+            <Link
               href="/dashboard/proposals"
               className="mt-3 self-start inline-flex items-center px-3 py-1.5 bg-[#C8A84B] text-[#050508] font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-opacity hover:opacity-90"
             >
               Ir al poder ciudadano
-            </a>
+            </Link>
           </div>
         </div>
 
         {/* ── 3. Quick actions — 3×2 grid ──────────────────────────────────── */}
         <div className="px-4 mt-4 grid grid-cols-3 gap-3">
           {QUICK_ACTIONS.map(({ icon: Icon, label, href, color }) => (
-            <a
+            <Link
               key={href + label}
               href={href}
               className="border border-[rgba(255,255,255,0.08)] bg-[#0c0c14] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.04)] transition-colors p-4 flex flex-col items-start gap-3"
@@ -356,7 +357,7 @@ export default function DashboardPage() {
               <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(240,237,232,0.45)] leading-tight">
                 {label}
               </span>
-            </a>
+            </Link>
           ))}
         </div>
 
@@ -366,12 +367,12 @@ export default function DashboardPage() {
             <h3 className="font-display text-sm font-semibold text-[#F0EDE8]">
               Panorama de Cartagena
             </h3>
-            <a
+            <Link
               href="/dashboard/reports"
               className="font-mono text-[10px] text-[#C8A84B] hover:opacity-80 transition-opacity"
             >
               Ver indicadores →
-            </a>
+            </Link>
           </div>
 
           {/* Horizontally scrollable stats row */}
@@ -400,12 +401,12 @@ export default function DashboardPage() {
             <h3 className="font-display text-sm font-semibold text-[#F0EDE8]">
               Reportes destacados
             </h3>
-            <a
+            <Link
               href="/dashboard/reports"
               className="font-mono text-[10px] text-[#C8A84B] hover:opacity-80 transition-opacity"
             >
               Ver todos →
-            </a>
+            </Link>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -438,7 +439,7 @@ export default function DashboardPage() {
 
             {/* Activity cards — first 3 */}
             {!loading && activity.slice(0, 3).map((item) => (
-              <a
+              <Link
                 key={item.id}
                 href={
                   item.kind === 'report'
@@ -475,7 +476,7 @@ export default function DashboardPage() {
                     {CATEGORY_LABEL[item.category] ?? item.category}
                   </span>
                 </div>
-              </a>
+              </Link>
             ))}
           </div>
         </div>
@@ -501,12 +502,12 @@ export default function DashboardPage() {
               <p className="font-mono text-[11px] text-[rgba(240,237,232,0.45)] mt-1">
                 Tu voto tiene peso en las decisiones del distrito
               </p>
-              <a
+              <Link
                 href="/dashboard/governance"
                 className="inline-block mt-3 font-mono text-[11px] text-[#C8A84B] hover:opacity-80 transition-opacity"
               >
                 Ver propuestas activas →
-              </a>
+              </Link>
             </div>
           </div>
         )}

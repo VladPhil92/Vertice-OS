@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
+import Link from 'next/link'
 
 const NAV_LINKS = [
   { label: 'Plataforma', href: '#modulos' },
@@ -29,7 +30,7 @@ export function Navbar() {
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         {/* Logo */}
-        <a href="/" className="flex items-center gap-3 group">
+        <Link href="/" className="flex items-center gap-3 group">
           <div className="relative h-8 w-8">
             <svg viewBox="0 0 32 32" fill="none" className="h-full w-full">
               <polygon
@@ -51,7 +52,7 @@ export function Navbar() {
           <span className="font-display text-sm font-700 tracking-widest text-primary uppercase">
             VÉRTICE OS
           </span>
-        </a>
+        </Link>
 
         {/* Desktop links */}
         <ul className="hidden md:flex items-center gap-8">
@@ -69,12 +70,12 @@ export function Navbar() {
 
         {/* CTA */}
         <div className="hidden md:flex items-center gap-3">
-          <a href="/auth/login" className="btn-ghost text-[11px]">
+          <Link href="/auth/login" className="btn-ghost text-[11px]">
             Ingresar
-          </a>
-          <a href="/auth/register" className="btn-primary text-[11px]">
+          </Link>
+          <Link href="/auth/register" className="btn-primary text-[11px]">
             Registrarme
-          </a>
+          </Link>
         </div>
 
         {/* Mobile menu button */}
@@ -108,12 +109,12 @@ export function Navbar() {
                 </a>
               ))}
               <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                <a href="/auth/login" className="btn-ghost text-center">
+                <Link href="/auth/login" className="btn-ghost text-center">
                   Ingresar
-                </a>
-                <a href="/auth/register" className="btn-primary text-center">
+                </Link>
+                <Link href="/auth/register" className="btn-primary text-center">
                   Registrarme
-                </a>
+                </Link>
               </div>
             </div>
           </motion.div>

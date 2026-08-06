@@ -18,6 +18,7 @@ import {
   Plus,
   User,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
 import { LiveToast, useToasts } from '@/components/ui/LiveToast'
 import { NotificationBell } from '@/components/ui/NotificationBell'
@@ -132,7 +133,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {NAV_ITEMS.filter(item => !item.adminOnly || ['moderator', 'admin'].includes(role)).map(({ href, label, icon: Icon, exact }) => {
           const active = isActive(href, exact)
           return (
-            <a
+            <Link
               key={href}
               href={href}
               onClick={() => setSidebarOpen(false)}
@@ -145,7 +146,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <Icon size={14} className="flex-shrink-0" />
               {label}
-            </a>
+            </Link>
           )
         })}
       </nav>
@@ -197,14 +198,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Menu size={20} />
           </button>
-          <a href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
               <polygon points="12,2 22,21 2,21" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
             </svg>
             <span className="font-display text-[10px] font-700 uppercase tracking-widest text-gold">
               VÉRTICE OS
             </span>
-          </a>
+          </Link>
           <div className="flex items-center gap-2">
             <NotificationBell />
             <button
@@ -232,7 +233,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             if (isFab) {
               return (
-                <a
+                <Link
                   key={href}
                   href={href}
                   className="flex flex-col items-center pb-1"
@@ -245,12 +246,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-gold -mt-3">
                     {label}
                   </span>
-                </a>
+                </Link>
               )
             }
 
             return (
-              <a
+              <Link
                 key={href}
                 href={href}
                 className="flex flex-col items-center gap-1 px-3 pb-2 pt-1"
@@ -269,7 +270,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 >
                   {label}
                 </span>
-              </a>
+              </Link>
             )
           })}
         </div>

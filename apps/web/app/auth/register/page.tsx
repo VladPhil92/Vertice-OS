@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react'
+import Link from 'next/link'
 
 const LOCALITIES = [
   { id: 1, name: 'Histórica y del Caribe Norte' },
@@ -75,9 +76,9 @@ export default function RegisterPage() {
             Tu cuenta fue registrada. Ingresa con tu correo y contraseña,
             luego verifica tu identidad cívica para participar en propuestas y votaciones.
           </p>
-          <a href="/auth/login" className="btn-primary">
+          <Link href="/auth/login" className="btn-primary">
             Ingresar ahora
-          </a>
+          </Link>
         </motion.div>
       </div>
     )
@@ -93,7 +94,7 @@ export default function RegisterPage() {
       >
         {/* Logo */}
         <div className="mb-10 text-center">
-          <a href="/" className="inline-flex flex-col items-center gap-3">
+          <Link href="/" className="inline-flex flex-col items-center gap-3">
             <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none">
               <polygon points="20,3 37,35 3,35" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
               <polygon points="20,11 31,33 9,33" stroke="#C8A84B" strokeWidth="0.75" fill="none" opacity="0.4" />
@@ -101,7 +102,7 @@ export default function RegisterPage() {
             <span className="font-display text-xs font-700 uppercase tracking-widest text-gold">
               VÉRTICE OS
             </span>
-          </a>
+          </Link>
         </div>
 
         <div className="border border-border bg-surface p-8">
@@ -237,9 +238,9 @@ export default function RegisterPage() {
           <div className="mt-6 border-t border-border pt-6 text-center">
             <p className="font-mono text-xs text-tertiary">
               ¿Ya tienes cuenta?{' '}
-              <a href="/auth/login" className="text-gold hover:underline">
+              <Link href="/auth/login" className="text-gold hover:underline">
                 Ingresar
-              </a>
+              </Link>
             </p>
           </div>
         </div>

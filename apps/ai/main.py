@@ -25,16 +25,14 @@ import uuid
 from typing import Annotated, Any
 
 import redis.asyncio as aioredis
-
 import sentry_sdk
 import structlog
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
-
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 import config
 from orchestrator import (
@@ -636,19 +634,11 @@ async def rag_status(
     Retorna el estado del pipeline RAG (Pinecone + Voyage AI).
     Requiere X-Service-Key.
     """
+    import importlib.util
     import os
 
-    try:
-        import voyageai  # type: ignore[import]
-        voyage_available = True
-    except ImportError:
-        voyage_available = False
-
-    try:
-        from pinecone import Pinecone as _PC  # type: ignore[import]
-        pinecone_available = True
-    except ImportError:
-        pinecone_available = False
+    voyage_available = importlib.util.find_spec("voyageai") is not None
+    pinecone_available = importlib.util.find_spec("pinecone") is not None
 
     rag_ok = rag_pipeline.status == "ok"
     return {

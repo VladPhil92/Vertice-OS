@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -55,7 +56,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="mb-10 text-center">
-          <a href="/" className="inline-flex flex-col items-center gap-3">
+          <Link href="/" className="inline-flex flex-col items-center gap-3">
             <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none">
               <polygon points="20,3 37,35 3,35" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
               <polygon points="20,11 31,33 9,33" stroke="#C8A84B" strokeWidth="0.75" fill="none" opacity="0.4" />
@@ -63,7 +64,7 @@ export default function LoginPage() {
             <span className="font-display text-xs font-700 uppercase tracking-widest text-gold">
               VÉRTICE OS
             </span>
-          </a>
+          </Link>
         </div>
 
         <div className="border border-border bg-surface p-8">
@@ -146,14 +147,14 @@ export default function LoginPage() {
           <div className="mt-6 border-t border-border pt-6 text-center">
             <p className="font-mono text-xs text-tertiary">
               ¿No tienes cuenta?{' '}
-              <a href="/auth/register" className="text-gold hover:underline">
+              <Link href="/auth/register" className="text-gold hover:underline">
                 Regístrate aquí
-              </a>
+              </Link>
             </p>
             <p className="mt-3 font-mono text-xs text-tertiary">
-              <a href="/auth/forgot-password" className="text-secondary hover:text-primary">
+              <Link href="/auth/forgot-password" className="text-secondary hover:text-primary">
                 ¿Olvidaste tu contraseña?
-              </a>
+              </Link>
             </p>
           </div>
         </div>

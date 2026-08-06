@@ -25,6 +25,25 @@ jest.mock('../../governance/governance.service', () => ({
   getProposalById: mockGetProposalById,
 }))
 
+// Cache (Redis-backed) — evita abrir una conexión real durante los tests
+const mockGetCache = jest.fn()
+const mockSetCache = jest.fn()
+const mockDelCache = jest.fn()
+
+jest.mock('../../../lib/cache', () => ({
+  getCache: mockGetCache,
+  setCache: mockSetCache,
+  delCache: mockDelCache,
+  TTL: {
+    PROFILE: 300,
+    SESSION: 60,
+    REPORT: 120,
+    STATS: 600,
+    CONVERSATION: 14_400,
+    NOTIFICATION: 604_800,
+  },
+}))
+
 // Auth middleware — always pass in tests
 jest.mock('../../../middleware/auth', () => ({
   requireVerified: jest.fn((_req: unknown, _rep: unknown, done: () => void) => done()),
@@ -51,7 +70,7 @@ let app: Awaited<ReturnType<typeof buildApp>>
 
 beforeAll(async () => { app = await buildApp() })
 afterAll(async () => { await app.close() })
-beforeEach(() => jest.resetAllMocks())
+beforeEach(() => jest.clearAllMocks())
 
 // ── POST /ai/query ─────────────────────────────────────────────────────────────
 
@@ -67,7 +86,11 @@ describe('POST /ai/query', () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(JSON.parse(res.body)).toEqual(aiResult)
+    // La respuesta incluye además un session_id generado por el servidor
+    expect(JSON.parse(res.body)).toEqual({
+      ...aiResult,
+      session_id: expect.any(String),
+    })
     expect(mockCivicQuery).toHaveBeenCalledWith(expect.objectContaining({
       message: 'hola Vértice',
       citizen_id: CITIZEN_ID,

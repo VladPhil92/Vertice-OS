@@ -17,8 +17,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from enum import Enum
-from typing import Annotated, Any, Literal
+from enum import StrEnum
+from typing import Annotated, Literal, cast
 
 import anthropic
 from langgraph.graph import END, START, StateGraph
@@ -36,7 +36,7 @@ ORCHESTRATOR_TIMEOUT_SECONDS = 30
 # State
 # ──────────────────────────────────────────────────────────────────────────────
 
-class AgentIntent(str, Enum):
+class AgentIntent(StrEnum):
     CITIZEN = "citizen"
     GOVERNANCE = "governance"
     POLICY = "policy"
@@ -157,10 +157,10 @@ class CitizenAgent(BaseAgent):
     Responde preguntas sobre la plataforma, procesos y derechos.
     """
 
-    SYSTEM_PROMPT = """Eres el Agente Ciudadano de VÉRTICE OS, el Sistema Operativo Cívico 
+    SYSTEM_PROMPT = """Eres el Agente Ciudadano de VÉRTICE OS, el Sistema Operativo Cívico
 de Cartagena de Indias, Colombia.
 
-Tu rol es guiar a los ciudadanos en su participación cívica de manera clara, 
+Tu rol es guiar a los ciudadanos en su participación cívica de manera clara,
 empática y precisa. Tienes conocimiento profundo de:
 - Los mecanismos de participación ciudadana en Colombia (Ley 134/1994, Ley 1757/2015)
 - El funcionamiento de VÉRTICE OS: módulos, procesos, votaciones
@@ -249,7 +249,7 @@ class PolicyAgent(BaseAgent):
 
     SYSTEM_PROMPT = """Eres el Agente de Políticas Públicas de VÉRTICE OS.
 
-Tu función es transformar demandas y necesidades ciudadanas en propuestas 
+Tu función es transformar demandas y necesidades ciudadanas en propuestas
 estructuradas de política pública, usando metodologías de diseño de políticas.
 
 Para cada propuesta que generes, incluye:
@@ -294,7 +294,7 @@ class TerritorialAgent(BaseAgent):
 
     SYSTEM_PROMPT = """Eres el Agente de Inteligencia Territorial de VÉRTICE OS.
 
-Analizas datos del territorio de Cartagena de Indias y produces 
+Analizas datos del territorio de Cartagena de Indias y produces
 inteligencia accionable para ciudadanos y tomadores de decisiones.
 
 Tus capacidades:
@@ -739,13 +739,20 @@ Responde SOLO con una de estas palabras (sin explicación):
 def route_to_agent(
     state: AgentState,
 ) -> Literal[
-    "citizen", "governance", "policy", "territorial", "integrity", "comms", "legal", END
+    "citizen", "governance", "policy", "territorial", "integrity", "comms", "legal"
 ]:
-    """Función de routing condicional para LangGraph."""
+    """Función de routing condicional para LangGraph.
+
+    Nunca devuelve ``END``: los intents desconocidos caen al agente ciudadano
+    y el resto mapea 1:1 con un agente especializado.
+    """
     intent = state.get("intent") or AgentIntent.UNKNOWN
     if intent == AgentIntent.UNKNOWN:
         return "citizen"  # Default al agente ciudadano
-    return intent.value
+    return cast(
+        Literal["citizen", "governance", "policy", "territorial", "integrity", "comms", "legal"],
+        intent.value,
+    )
 
 
 def _entry_point(
@@ -909,7 +916,7 @@ async def process_civic_query(request: QueryRequest) -> QueryResponse:
             orchestrator.ainvoke(initial_state),
             timeout=ORCHESTRATOR_TIMEOUT_SECONDS,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error(
             "[orchestrator] timeout audit_id=%s citizen_id=%s",
             audit_id,
@@ -972,7 +979,7 @@ async def process_with_intent(
             orchestrator.ainvoke(initial_state),
             timeout=ORCHESTRATOR_TIMEOUT_SECONDS,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("[process_with_intent] timeout audit_id=%s intent=%s", audit_id, intent.value)
         return QueryResponse(
             response="La consulta tardó demasiado. Por favor intenta de nuevo.",

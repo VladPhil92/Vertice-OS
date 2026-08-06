@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { requireAuth } from '../../middleware/auth'
 import { publish } from '../../lib/pubsub'
 import {

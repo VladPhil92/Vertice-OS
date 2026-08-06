@@ -27,7 +27,7 @@ export async function legalRoutes(app: FastifyInstance): Promise<void> {
     '/',
     { preHandler: requireVerified },
     async (request, reply) => {
-      const citizenId = (request as any).citizen.sub as string
+      const citizenId = request.citizen.sub
       const parsed = ListLegalDocumentsSchema.safeParse(request.query)
       if (!parsed.success) {
         return reply.status(400).send({ error: 'Parámetros inválidos', code: 'INVALID_QUERY' })
@@ -44,7 +44,7 @@ export async function legalRoutes(app: FastifyInstance): Promise<void> {
     '/',
     { preHandler: requireVerified },
     async (request, reply) => {
-      const citizenId = (request as any).citizen.sub as string
+      const citizenId = request.citizen.sub
       const parsed = CreateLegalDocumentSchema.safeParse(request.body)
       if (!parsed.success) {
         return reply.status(400).send({
@@ -74,7 +74,7 @@ export async function legalRoutes(app: FastifyInstance): Promise<void> {
     '/:id',
     { preHandler: requireVerified },
     async (request, reply) => {
-      const citizenId = (request as any).citizen.sub as string
+      const citizenId = request.citizen.sub
       const doc = await getLegalDocument(request.params.id, citizenId)
       if (!doc) {
         return reply.status(404).send({ error: 'Documento no encontrado', code: 'NOT_FOUND' })
@@ -90,7 +90,7 @@ export async function legalRoutes(app: FastifyInstance): Promise<void> {
     '/:id',
     { preHandler: requireVerified },
     async (request, reply) => {
-      const citizenId = (request as any).citizen.sub as string
+      const citizenId = request.citizen.sub
       const parsed = UpdateLegalDocumentSchema.safeParse(request.body)
       if (!parsed.success) {
         return reply.status(400).send({
@@ -114,7 +114,7 @@ export async function legalRoutes(app: FastifyInstance): Promise<void> {
     '/:id/submit',
     { preHandler: requireVerified },
     async (request, reply) => {
-      const citizenId = (request as any).citizen.sub as string
+      const citizenId = request.citizen.sub
       const parsed = SubmitLegalDocumentSchema.safeParse(request.body)
       if (!parsed.success) {
         return reply.status(400).send({ error: 'Datos inválidos', code: 'INVALID_INPUT' })
@@ -137,7 +137,7 @@ export async function legalRoutes(app: FastifyInstance): Promise<void> {
     '/:id',
     { preHandler: requireVerified },
     async (request, reply) => {
-      const citizenId = (request as any).citizen.sub as string
+      const citizenId = request.citizen.sub
       const deleted = await deleteLegalDocument(request.params.id, citizenId)
       if (!deleted) {
         return reply.status(400).send({

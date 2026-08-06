@@ -6,7 +6,7 @@ import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
 import { config } from '../../config'
 import { recordReputationEvent } from '../reputation/reputation.service'
-import {
+import type {
   Proposal,
   ProposalSummary,
   ProposalRow,

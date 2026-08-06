@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { config } from '../../config'
-import {
+import type {
   LegalDocument,
   LegalDocumentSummary,
   LegalDocumentRow,

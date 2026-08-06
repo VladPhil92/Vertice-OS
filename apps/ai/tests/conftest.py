@@ -5,7 +5,6 @@ importen orchestrator.py. Esto evita instalar dependencias pesadas en CI ligero.
 import sys
 from unittest.mock import AsyncMock, MagicMock
 
-
 # ── Anthropic mock ────────────────────────────────────────────────────────────
 
 class _APIStatusError(Exception):

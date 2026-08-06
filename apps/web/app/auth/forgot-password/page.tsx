@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 export default function ForgotPasswordPage() {
@@ -39,7 +40,7 @@ export default function ForgotPasswordPage() {
       >
         {/* Logo */}
         <div className="mb-10 text-center">
-          <a href="/" className="inline-flex flex-col items-center gap-3">
+          <Link href="/" className="inline-flex flex-col items-center gap-3">
             <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none">
               <polygon points="20,3 37,35 3,35" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
               <polygon points="20,11 31,33 9,33" stroke="#C8A84B" strokeWidth="0.75" fill="none" opacity="0.4" />
@@ -47,7 +48,7 @@ export default function ForgotPasswordPage() {
             <span className="font-display text-xs font-700 uppercase tracking-widest text-gold">
               VÉRTICE OS
             </span>
-          </a>
+          </Link>
         </div>
 
         <div className="border border-border bg-surface p-8">
@@ -61,9 +62,9 @@ export default function ForgotPasswordPage() {
                 Si el email está registrado, recibirás un enlace para restablecer tu contraseña.
                 El enlace expira en 30 minutos.
               </p>
-              <a href="/auth/login" className="mt-4 font-mono text-xs text-gold hover:underline">
+              <Link href="/auth/login" className="mt-4 font-mono text-xs text-gold hover:underline">
                 ← Volver al inicio de sesión
-              </a>
+              </Link>
             </div>
           ) : (
             <>
@@ -117,10 +118,10 @@ export default function ForgotPasswordPage() {
               </form>
 
               <div className="mt-6 border-t border-border pt-6 text-center">
-                <a href="/auth/login" className="inline-flex items-center gap-2 font-mono text-xs text-secondary hover:text-primary">
+                <Link href="/auth/login" className="inline-flex items-center gap-2 font-mono text-xs text-secondary hover:text-primary">
                   <ArrowLeft size={12} />
                   Volver al inicio de sesión
-                </a>
+                </Link>
               </div>
             </>
           )}

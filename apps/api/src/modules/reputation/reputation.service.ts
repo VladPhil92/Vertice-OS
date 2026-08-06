@@ -3,13 +3,14 @@ import { runCypher } from '../../lib/neo4j'
 import { prisma } from '../../lib/prisma'
 import { logger } from '../../lib/logger'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
-import {
+import type {
   ReputationProfile,
   ReputationEventRecord,
   LeaderboardEntry,
   CitizenGraph,
+  ReputationEvent} from './reputation.types';
+import {
   Neo4jEventCount,
-  ReputationEvent,
   EVENT_POINTS,
   scoreToLevel,
 } from './reputation.types'

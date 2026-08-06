@@ -33,10 +33,12 @@ const DID = 'did:vertice:550e8400-e29b-41d4-a716-446655440000'
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
 
 let verifiedToken: string
+let moderatorToken: string
 
 beforeAll(async () => {
   await app.ready()
-  verifiedToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 1 })
+  verifiedToken  = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 1, role: 'citizen' })
+  moderatorToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'moderator' })
 })
 afterAll(() => app.close())
 beforeEach(() => jest.resetAllMocks())
@@ -265,7 +267,7 @@ describe('PATCH /territorial/reports/:id/status', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/territorial/reports/rep-uuid/status',
-      headers: { authorization: `Bearer ${verifiedToken}` },
+      headers: { authorization: `Bearer ${moderatorToken}` },
       payload: { status: 'resolved' },
     })
 
@@ -277,7 +279,7 @@ describe('PATCH /territorial/reports/:id/status', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/territorial/reports/rep-uuid/status',
-      headers: { authorization: `Bearer ${verifiedToken}` },
+      headers: { authorization: `Bearer ${moderatorToken}` },
       payload: { status: 'invalid_status' },
     })
     expect(res.statusCode).toBe(400)

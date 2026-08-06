@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Loader2, Info, MapPin, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
 import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -144,13 +145,13 @@ export default function NewReportPage() {
       <main className="mx-auto max-w-2xl px-6 py-10">
 
         {/* Back */}
-        <a
+        <Link
           href="/dashboard"
           className="mb-8 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-secondary transition-colors hover:text-primary"
         >
           <ArrowLeft size={12} strokeWidth={1.5} />
           Volver al dashboard
-        </a>
+        </Link>
 
         {/* Header */}
         <div className="mb-8">
@@ -349,9 +350,9 @@ export default function NewReportPage() {
 
           {/* Submit */}
           <div className="flex items-center justify-between pt-2">
-            <a href="/dashboard" className="btn-ghost py-3 px-6 text-[11px]">
+            <Link href="/dashboard" className="btn-ghost py-3 px-6 text-[11px]">
               Cancelar
-            </a>
+            </Link>
             <button
               type="submit"
               disabled={loading || geoStatus === 'detecting'}

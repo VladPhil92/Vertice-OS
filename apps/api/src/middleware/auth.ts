@@ -1,5 +1,5 @@
-import { FastifyRequest, FastifyReply } from 'fastify'
-import { AccessTokenPayload } from '../lib/jwt'
+import type { FastifyRequest, FastifyReply } from 'fastify'
+import type { AccessTokenPayload } from '../lib/jwt'
 
 declare module 'fastify' {
   interface FastifyRequest {

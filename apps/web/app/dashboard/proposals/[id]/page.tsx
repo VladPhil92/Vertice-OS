@@ -7,6 +7,7 @@ import {
   Calendar, Clock, CheckCircle, XCircle, Minus,
   Users, BarChart2, Vote,
 } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 import { CategoryTag } from '@/components/ui/CategoryTag'
 
@@ -462,13 +463,13 @@ export default function ProposalDetailPage() {
             {endorsing ? 'Avalando…' : `Avalar (${proposal.endorsement_count})`}
           </button>
         )}
-        <a
+        <Link
           href="/dashboard/proposals"
           className="flex items-center gap-2 border border-border px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-tertiary transition-colors hover:text-secondary"
         >
           <ArrowLeft size={12} />
           Volver a la lista
-        </a>
+        </Link>
       </div>
 
     </div>

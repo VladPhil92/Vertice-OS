@@ -3,6 +3,7 @@
 import { useState, type FormEvent, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 export default function ResetPasswordPage() {
@@ -61,7 +62,7 @@ export default function ResetPasswordPage() {
       >
         {/* Logo */}
         <div className="mb-10 text-center">
-          <a href="/" className="inline-flex flex-col items-center gap-3">
+          <Link href="/" className="inline-flex flex-col items-center gap-3">
             <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none">
               <polygon points="20,3 37,35 3,35" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
               <polygon points="20,11 31,33 9,33" stroke="#C8A84B" strokeWidth="0.75" fill="none" opacity="0.4" />
@@ -69,7 +70,7 @@ export default function ResetPasswordPage() {
             <span className="font-display text-xs font-700 uppercase tracking-widest text-gold">
               VÉRTICE OS
             </span>
-          </a>
+          </Link>
         </div>
 
         <div className="border border-border bg-surface p-8">
@@ -82,10 +83,10 @@ export default function ResetPasswordPage() {
               <p className="font-mono text-xs text-secondary">
                 Tu contraseña ha sido restablecida. Todas tus sesiones activas fueron cerradas por seguridad.
               </p>
-              <a href="/auth/login" className="btn-primary mt-4 inline-flex items-center gap-2">
+              <Link href="/auth/login" className="btn-primary mt-4 inline-flex items-center gap-2">
                 <span>Iniciar sesión</span>
                 <ArrowRight size={14} />
-              </a>
+              </Link>
             </div>
           ) : (
             <>

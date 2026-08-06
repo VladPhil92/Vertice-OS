@@ -2,6 +2,7 @@
 
 import { FileText, Loader2, Plus, AlertTriangle, Map } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
@@ -147,20 +148,20 @@ export default function ReportsPage() {
                 {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
               </span>
             )}
-            <a
+            <Link
               href="/dashboard/reports/map"
               className="flex items-center gap-1.5 border border-border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary transition-colors hover:border-gold/40 hover:text-gold"
             >
               <Map size={11} />
               Ver mapa
-            </a>
-            <a
+            </Link>
+            <Link
               href="/dashboard/reports/new"
               className="flex items-center gap-1.5 border border-gold/40 bg-gold/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-gold transition-colors hover:bg-gold/20"
             >
               <Plus size={11} />
               Nuevo
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -229,13 +230,13 @@ export default function ReportsPage() {
             <div className="text-center">
               <p className="font-mono text-sm text-tertiary">No hay reportes todavía.</p>
               {filterCategory === 'all' && filterStatus === 'all' && (
-                <a
+                <Link
                   href="/dashboard/reports/new"
                   className="mt-3 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-gold hover:opacity-75 transition-opacity"
                 >
                   <Plus size={11} strokeWidth={2} />
                   Crea el primero
-                </a>
+                </Link>
               )}
               {(filterCategory !== 'all' || filterStatus !== 'all') && (
                 <button
@@ -252,9 +253,9 @@ export default function ReportsPage() {
         {!loading && !error && filtered.length > 0 && (
           <div className="flex flex-col gap-px bg-border">
             {filtered.map((report) => (
-              <a key={report.id} href={`/dashboard/reports/${report.id}`} className="block">
+              <Link key={report.id} href={`/dashboard/reports/${report.id}`} className="block">
                 <ReportCard report={report} />
-              </a>
+              </Link>
             ))}
           </div>
         )}
