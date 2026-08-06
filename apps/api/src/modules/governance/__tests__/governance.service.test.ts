@@ -3,7 +3,6 @@ const mockGetCache = jest.fn()
 const mockSetCache = jest.fn()
 const mockDelCache = jest.fn()
 const mockRedisSadd = jest.fn()
-const mockRedisSismember = jest.fn()
 
 jest.mock('../../../lib/prisma', () => ({
   prisma: { $queryRaw: mockQueryRaw },
@@ -17,7 +16,7 @@ jest.mock('../../../lib/cache', () => ({
 }))
 
 jest.mock('../../../lib/redis', () => ({
-  redis: { sadd: mockRedisSadd, sismember: mockRedisSismember },
+  redis: { sadd: mockRedisSadd },
 }))
 
 import {
@@ -86,7 +85,6 @@ beforeEach(() => {
   mockSetCache.mockResolvedValue(undefined)
   mockDelCache.mockResolvedValue(undefined)
   mockRedisSadd.mockResolvedValue(1)
-  mockRedisSismember.mockResolvedValue(0)
 })
 
 // ── createProposal ─────────────────────────────────────────────────────────────
@@ -189,18 +187,42 @@ describe('endorseProposal', () => {
     expect(result.endorsement_count).toBe(6)
     expect(result.status).toBe('idea')
     expect(result.advanced).toBe(false)
-    expect(mockRedisSismember).toHaveBeenCalledWith('vertice:endorsed:proposal-uuid', 'citizen-uuid')
     expect(mockRedisSadd).toHaveBeenCalledWith('vertice:endorsed:proposal-uuid', 'citizen-uuid')
   })
 
   it('throws 409 when citizen already endorsed', async () => {
     mockQueryRaw.mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }])
-    mockRedisSismember.mockResolvedValueOnce(1) // already endorsed
+    // sadd devuelve 0 cuando el miembro ya estaba en el set
+    mockRedisSadd.mockResolvedValueOnce(0)
 
     await expect(endorseProposal('proposal-uuid', 'citizen-uuid')).rejects.toMatchObject({
       statusCode: 409,
       code: 'ALREADY_ENDORSED',
     })
+  })
+
+  it('prevents double endorsement from concurrent requests (atomic sadd guard)', async () => {
+    // Dos requests concurrentes: ambas leen la propuesta antes de que
+    // cualquiera escriba en Redis. Solo la primera debe pasar la guarda.
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }])
+      .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }])
+    mockRedisSadd
+      .mockResolvedValueOnce(1) // primera request: miembro nuevo
+      .mockResolvedValueOnce(0) // segunda request: ya existía
+
+    mockQueryRaw.mockResolvedValueOnce([{ endorsement_count: 4n, status: 'idea' }])
+
+    const [first, second] = await Promise.allSettled([
+      endorseProposal('proposal-uuid', 'citizen-uuid'),
+      endorseProposal('proposal-uuid', 'citizen-uuid'),
+    ])
+
+    expect(first.status).toBe('fulfilled')
+    expect(second.status).toBe('rejected')
+    if (second.status === 'rejected') {
+      expect(second.reason).toMatchObject({ statusCode: 409, code: 'ALREADY_ENDORSED' })
+    }
   })
 
   it('auto-advances to draft when endorsement_count reaches 10', async () => {

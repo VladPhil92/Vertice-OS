@@ -198,13 +198,15 @@ export async function endorseProposal(
     throw makeError('Solo se pueden avalar propuestas en fase idea o borrador', 400, 'WRONG_STATUS')
   }
 
+  // sadd es atómico y devuelve cuántos miembros nuevos agregó (0 si ya
+  // estaba). Usar su resultado como guarda evita la carrera de "leer con
+  // sismember, luego escribir con sadd" entre dos requests concurrentes del
+  // mismo ciudadano, que podía duplicar el aval.
   const endorseKey = `vertice:endorsed:${proposalId}`
-  const alreadyEndorsed = await redis.sismember(endorseKey, citizenId)
-  if (alreadyEndorsed) {
+  const wasAdded = await redis.sadd(endorseKey, citizenId)
+  if (wasAdded === 0) {
     throw makeError('Ya avalaste esta propuesta', 409, 'ALREADY_ENDORSED')
   }
-
-  await redis.sadd(endorseKey, citizenId)
 
   const updated = await prisma.$queryRaw<Pick<ProposalRow, 'endorsement_count' | 'status'>[]>(Prisma.sql`
     UPDATE proposals
