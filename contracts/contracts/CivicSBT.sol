@@ -23,6 +23,17 @@ import "./interfaces/IERC5192.sol";
  *   - Solo el propietario o un BURNER_ROLE puede quemarlo.
  *   - Un ciudadano puede tener como máximo un badge de cada tipo.
  *
+ * Privacidad — el DID NUNCA se escribe en claro:
+ *   El contrato solo maneja `didCommitment = keccak256(pepper ‖ did)`, donde el
+ *   pepper es un secreto del backend. Guardar el DID en claro habría creado un
+ *   vínculo público y permanente entre wallet, identidad cívica y actividad
+ *   política, correlacionable con los registros off-chain de votos, propuestas
+ *   y reportes territoriales. Con el compromiso, quien observa la cadena no
+ *   puede vincular un token a un ciudadano ni comprobar si un DID concreto
+ *   posee badges, porque sin el pepper no puede reconstruir el compromiso.
+ *   El backend sí puede hacerlo, de forma determinista, para prevenir
+ *   duplicados y para probar selectivamente la titularidad cuando proceda.
+ *
  * Control de acceso:
  *   - DEFAULT_ADMIN_ROLE → administración de la plataforma (multisig en Fase II)
  *   - MINTER_ROLE        → servicio de identidad (backend de VÉRTICE OS)
@@ -30,7 +41,9 @@ import "./interfaces/IERC5192.sol";
  *
  * Metadata:
  *   - tokenURI apunta a un JSON ERC-721 almacenado en IPFS.
- *   - Los atributos incluyen: badge_type, citizen_did, locality, issued_at.
+ *   - Los atributos incluyen: badge_type, did_commitment, locality, issued_at.
+ *     El JSON es público igual que la cadena: nunca debe incluir el DID en
+ *     claro ni datos que permitan reidentificar al ciudadano.
  */
 contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
 
@@ -52,7 +65,9 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
     // ── Datos por token ───────────────────────────────────────────────────────
 
     struct SBTData {
-        string   citizenDID; // did:vertice:<uuid> del ciudadano
+        /// @dev Compromiso del DID: keccak256(pepper ‖ did) calculado off-chain.
+        ///      Nunca el DID en claro — ver nota de privacidad en el encabezado.
+        bytes32  didCommitment;
         BadgeType badgeType;
         uint256  issuedAt;   // Unix timestamp de emisión
         bool     burned;
@@ -66,13 +81,13 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
     mapping(uint256 => SBTData) private _sbtData;
 
     /// @notice Previene que un mismo DID obtenga el mismo badge dos veces.
-    ///         did → badgeType (uint256) → emitido
-    mapping(string => mapping(uint256 => bool)) private _didHasBadge;
+    ///         didCommitment → badgeType (uint256) → emitido
+    mapping(bytes32 => mapping(uint256 => bool)) private _didHasBadge;
 
     // ── Errores ───────────────────────────────────────────────────────────────
 
     error TransferDisabled();
-    error DIDAlreadyHasBadge(string did, uint256 badgeType);
+    error DIDAlreadyHasBadge(bytes32 didCommitment, uint256 badgeType);
     error NotTokenOwnerOrAdmin();
     error InvalidInput(string reason);
 
@@ -81,14 +96,14 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
     event BadgeMinted(
         address   indexed recipient,
         uint256   indexed tokenId,
-        string    citizenDID,
+        bytes32   indexed didCommitment,
         BadgeType badgeType,
         uint256   timestamp
     );
 
     event BadgeBurned(
         uint256   indexed tokenId,
-        string    citizenDID,
+        bytes32   indexed didCommitment,
         BadgeType badgeType
     );
 
@@ -125,18 +140,18 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
     /**
      * @notice Emite un nuevo Soulbound Badge al ciudadano.
      *
-     * @param recipient  Dirección del wallet del ciudadano en Polygon
-     * @param citizenDID DID del ciudadano (did:vertice:<uuid>)
-     * @param badgeType  Tipo de logro cívico
-     * @param uri        URI de IPFS con metadata JSON (ERC-721 metadata standard)
-     * @return tokenId   ID del token recién emitido
+     * @param recipient      Dirección del wallet del ciudadano en Polygon
+     * @param didCommitment  keccak256(pepper ‖ did) calculado por el backend
+     * @param badgeType      Tipo de logro cívico
+     * @param uri            URI de IPFS con metadata JSON (ERC-721 metadata standard)
+     * @return tokenId       ID del token recién emitido
      *
      * @dev Reverts si el DID ya tiene un badge del mismo tipo.
      *      Solo MINTER_ROLE puede llamar esta función.
      */
     function mintBadge(
         address   recipient,
-        string    calldata citizenDID,
+        bytes32   didCommitment,
         BadgeType badgeType,
         string    calldata uri
     )
@@ -145,11 +160,11 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
         returns (uint256 tokenId)
     {
         if (recipient == address(0))  revert InvalidInput("recipient is zero address");
-        if (bytes(citizenDID).length == 0) revert InvalidInput("citizenDID is empty");
+        if (didCommitment == bytes32(0)) revert InvalidInput("didCommitment is empty");
 
         uint256 badgeIndex = uint256(badgeType);
-        if (_didHasBadge[citizenDID][badgeIndex]) {
-            revert DIDAlreadyHasBadge(citizenDID, badgeIndex);
+        if (_didHasBadge[didCommitment][badgeIndex]) {
+            revert DIDAlreadyHasBadge(didCommitment, badgeIndex);
         }
 
         tokenId = _nextTokenId;
@@ -159,16 +174,16 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
         _setTokenURI(tokenId, uri);
 
         _sbtData[tokenId] = SBTData({
-            citizenDID: citizenDID,
-            badgeType:  badgeType,
-            issuedAt:   block.timestamp,
-            burned:     false
+            didCommitment: didCommitment,
+            badgeType:     badgeType,
+            issuedAt:      block.timestamp,
+            burned:        false
         });
 
-        _didHasBadge[citizenDID][badgeIndex] = true;
+        _didHasBadge[didCommitment][badgeIndex] = true;
 
         emit Locked(tokenId);
-        emit BadgeMinted(recipient, tokenId, citizenDID, badgeType, block.timestamp);
+        emit BadgeMinted(recipient, tokenId, didCommitment, badgeType, block.timestamp);
     }
 
     // ── Burn ──────────────────────────────────────────────────────────────────
@@ -189,14 +204,14 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
         }
 
         SBTData storage data = _sbtData[tokenId];
-        string memory did = data.citizenDID;
+        bytes32 commitment = data.didCommitment;
         BadgeType badgeType = data.badgeType;
 
         // Liberar el slot para posible re-emisión
-        _didHasBadge[did][uint256(badgeType)] = false;
+        _didHasBadge[commitment][uint256(badgeType)] = false;
         data.burned = true;
 
-        emit BadgeBurned(tokenId, did, badgeType);
+        emit BadgeBurned(tokenId, commitment, badgeType);
         _burn(tokenId);
     }
 
@@ -238,9 +253,11 @@ contract CivicSBT is ERC721, ERC721URIStorage, AccessControl, IERC5192 {
 
     /**
      * @notice Verifica si un DID ya posee un badge de cierto tipo.
+     * @param didCommitment keccak256(pepper ‖ did). Sin el pepper (secreto del
+     *        backend) esta función no permite comprobar DIDs arbitrarios.
      */
-    function hasBadge(string calldata did, BadgeType badgeType) external view returns (bool) {
-        return _didHasBadge[did][uint256(badgeType)];
+    function hasBadge(bytes32 didCommitment, BadgeType badgeType) external view returns (bool) {
+        return _didHasBadge[didCommitment][uint256(badgeType)];
     }
 
     /**

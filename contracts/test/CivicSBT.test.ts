@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { ZeroAddress } from "ethers";
+import { ZeroAddress, ZeroHash } from "ethers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import type { CivicSBT } from "../typechain-types";
 import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
@@ -20,6 +20,10 @@ describe("CivicSBT", function () {
   const IERC721_ID   = "0x80ac58cd";
 
   const DID      = "did:vertice:550e8400-e29b-41d4-a716-446655440000";
+  // El contrato solo ve el compromiso, nunca el DID. Se deriva igual que en
+  // el backend: keccak256(pepper ‖ ":" ‖ did).
+  const PEPPER   = "test-pepper";
+  const DID_COMMITMENT = ethers.keccak256(ethers.toUtf8Bytes(`${PEPPER}:${DID}`));
   const TOKEN_URI = "ipfs://QmSBTMetadata";
 
   enum BadgeType {
@@ -82,73 +86,73 @@ describe("CivicSBT", function () {
 
   describe("mintBadge", function () {
     it("mints a badge and assigns it to recipient", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
       expect(await sbt.ownerOf(0n)).to.equal(citizen.address);
     });
 
     it("emits Locked event on mint", async function () {
       await expect(
-        sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
+        sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       ).to.emit(sbt, "Locked").withArgs(0n);
     });
 
     it("emits BadgeMinted event with correct data", async function () {
       await expect(
-        sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
+        sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       )
         .to.emit(sbt, "BadgeMinted")
-        .withArgs(citizen.address, 0n, DID, BadgeType.CITIZEN_VERIFIED, anyValue);
+        .withArgs(citizen.address, 0n, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, anyValue);
     });
 
     it("sets tokenURI correctly", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
       expect(await sbt.tokenURI(0n)).to.equal(TOKEN_URI);
     });
 
     it("increments totalSupplyMinted after each mint", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
       expect(await sbt.totalSupplyMinted()).to.equal(1n);
 
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.PROPOSAL_APPROVED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.PROPOSAL_APPROVED, TOKEN_URI);
       expect(await sbt.totalSupplyMinted()).to.equal(2n);
     });
 
-    it("allows same DID to hold multiple different badge types", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+    it("allows same DID_COMMITMENT to hold multiple different badge types", async function () {
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
       await expect(
-        sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.DELEGATE, TOKEN_URI)
+        sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.DELEGATE, TOKEN_URI)
       ).not.to.be.reverted;
     });
 
     it("reverts on duplicate badge type for same DID", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
       await expect(
-        sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
+        sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       )
         .to.be.revertedWithCustomError(sbt, "DIDAlreadyHasBadge")
-        .withArgs(DID, BadgeType.CITIZEN_VERIFIED);
+        .withArgs(DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED);
     });
 
     it("reverts when called by non-MINTER_ROLE", async function () {
       await expect(
-        sbt.connect(stranger).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
+        sbt.connect(stranger).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       ).to.be.reverted;
     });
 
     it("reverts if recipient is zero address", async function () {
       await expect(
-        sbt.connect(minter).mintBadge(ZeroAddress, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
+        sbt.connect(minter).mintBadge(ZeroAddress, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       )
         .to.be.revertedWithCustomError(sbt, "InvalidInput")
         .withArgs("recipient is zero address");
     });
 
-    it("reverts if citizenDID is empty", async function () {
+    it("reverts if didCommitment is empty", async function () {
       await expect(
-        sbt.connect(minter).mintBadge(citizen.address, "", BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
+        sbt.connect(minter).mintBadge(citizen.address, ZeroHash, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       )
         .to.be.revertedWithCustomError(sbt, "InvalidInput")
-        .withArgs("citizenDID is empty");
+        .withArgs("didCommitment is empty");
     });
   });
 
@@ -156,17 +160,17 @@ describe("CivicSBT", function () {
 
   describe("hasBadge", function () {
     it("returns false before minting", async function () {
-      expect(await sbt.hasBadge(DID, BadgeType.CITIZEN_VERIFIED)).to.be.false;
+      expect(await sbt.hasBadge(DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED)).to.be.false;
     });
 
     it("returns true after minting", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
-      expect(await sbt.hasBadge(DID, BadgeType.CITIZEN_VERIFIED)).to.be.true;
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      expect(await sbt.hasBadge(DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED)).to.be.true;
     });
 
     it("returns false for a different badge type not yet minted", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
-      expect(await sbt.hasBadge(DID, BadgeType.DELEGATE)).to.be.false;
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      expect(await sbt.hasBadge(DID_COMMITMENT, BadgeType.DELEGATE)).to.be.false;
     });
   });
 
@@ -174,9 +178,9 @@ describe("CivicSBT", function () {
 
   describe("getSBTData", function () {
     it("returns correct on-chain metadata", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.TERRITORY_CHAMPION, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.TERRITORY_CHAMPION, TOKEN_URI);
       const data = await sbt.getSBTData(0n);
-      expect(data.citizenDID).to.equal(DID);
+      expect(data.didCommitment).to.equal(DID_COMMITMENT);
       expect(data.badgeType).to.equal(BadgeType.TERRITORY_CHAMPION);
       expect(data.burned).to.be.false;
       expect(data.issuedAt).to.be.gt(0n);
@@ -191,7 +195,7 @@ describe("CivicSBT", function () {
 
   describe("transfer disabled", function () {
     beforeEach(async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
     });
 
     it("reverts transferFrom", async function () {
@@ -213,7 +217,7 @@ describe("CivicSBT", function () {
 
   describe("locked (ERC-5192)", function () {
     it("returns true for a minted token", async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
       expect(await sbt.locked(0n)).to.be.true;
     });
 
@@ -226,13 +230,13 @@ describe("CivicSBT", function () {
 
   describe("burn", function () {
     beforeEach(async function () {
-      await sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
+      await sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI);
     });
 
     it("allows owner to burn their token", async function () {
       await expect(sbt.connect(citizen).burn(0n))
         .to.emit(sbt, "BadgeBurned")
-        .withArgs(0n, DID, BadgeType.CITIZEN_VERIFIED);
+        .withArgs(0n, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED);
     });
 
     it("allows BURNER_ROLE (admin) to burn any token", async function () {
@@ -247,11 +251,11 @@ describe("CivicSBT", function () {
 
     it("clears hasBadge after burn, allowing re-mint", async function () {
       await sbt.connect(citizen).burn(0n);
-      expect(await sbt.hasBadge(DID, BadgeType.CITIZEN_VERIFIED)).to.be.false;
+      expect(await sbt.hasBadge(DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED)).to.be.false;
 
       // Re-mint should succeed
       await expect(
-        sbt.connect(minter).mintBadge(citizen.address, DID, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
+        sbt.connect(minter).mintBadge(citizen.address, DID_COMMITMENT, BadgeType.CITIZEN_VERIFIED, TOKEN_URI)
       ).not.to.be.reverted;
     });
 
