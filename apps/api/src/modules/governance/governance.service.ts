@@ -23,8 +23,9 @@ import type {
 } from './governance.types'
 import type { CreateProposalInput, ListProposalsInput, AdvanceStageInput, CreateDelegationInput } from './governance.schema'
 import { publish } from '../../lib/pubsub'
-import { recordProposalVoting, buildProposalContentHash } from '../../lib/blockchain'
+import { enqueueJob } from '../../lib/jobs'
 import { createNotification } from '../notifications/notifications.service'
+import { recordAuditEvent } from '../../lib/audit'
 
 function fireReputation(params: Parameters<typeof recordReputationEvent>[0]): void {
   recordReputationEvent(params).catch((err: unknown) =>
@@ -131,30 +132,37 @@ function computeVoteWeight(_reputationScore: number): number {
 }
 
 /**
- * Universo de votantes elegibles según el ámbito (scope) de la propuesta.
+ * Congela el padrón de votantes elegibles para una propuesta en el instante
+ * debate→voting, dentro de la transacción `tx` que también la mueve a
+ * 'voting'. Reemplaza el antiguo computeEligibleVoters(), que solo devolvía
+ * un COUNT(*): el número no dejaba rastro de QUIÉNES eran esos ciudadanos, ni
+ * permitía responder después "¿quién podía votar?" o auditar si el cálculo
+ * fue correcto — y ese conteo vivía separado del propio cálculo de quórum
+ * (proposals.eligible_voters), pudiendo desincronizarse si algo fallaba entre
+ * medias.
  *
- * Antes se contaba SIEMPRE a todos los ciudadanos verificados de la ciudad,
- * sin importar el scope: una propuesta de barrio calculaba su quórum contra
- * el total de ciudadanos registrados en TODO el sistema, en vez de contra el
- * electorado real de ese barrio. Eso podía volver el quórum imposible de
- * alcanzar, artificialmente bajo, o habilitar a ciudadanos ajenos al
- * territorio afectado.
+ * Ahora el conteo ES el número de filas insertadas en proposal_voter_roll —
+ * misma consulta, mismo resultado, sin forma de que diverjan. Antes se conta-
+ * ba SIEMPRE a todos los ciudadanos verificados de la ciudad sin importar el
+ * scope; para neighborhood/locality el electorado ya se filtra al territorio
+ * real de la propuesta.
  */
-async function computeEligibleVoters(proposal: Proposal): Promise<number> {
-  let countRows: Array<{ count: bigint }>
+async function freezeVoterRoll(
+  tx: Prisma.TransactionClient,
+  proposalId: string,
+  proposal: Proposal,
+): Promise<number> {
+  let whereClause: Prisma.Sql
+  let reason: string
 
   switch (proposal.scope) {
     case 'neighborhood':
-      countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-        SELECT COUNT(*) as count FROM citizens
-        WHERE verification_level >= 1 AND neighborhood = ${proposal.neighborhood}
-      `)
+      whereClause = Prisma.sql`WHERE verification_level >= 1 AND neighborhood = ${proposal.neighborhood}`
+      reason = 'neighborhood_match'
       break
     case 'locality':
-      countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-        SELECT COUNT(*) as count FROM citizens
-        WHERE verification_level >= 1 AND locality_id = ${proposal.locality_id}
-      `)
+      whereClause = Prisma.sql`WHERE verification_level >= 1 AND locality_id = ${proposal.locality_id}`
+      reason = 'locality_match'
       break
     // city/regional/national: no hay modelo de multi-ciudad todavía, así que
     // el universo citywide sigue siendo correcto para estos ámbitos.
@@ -162,12 +170,21 @@ async function computeEligibleVoters(proposal: Proposal): Promise<number> {
     case 'regional':
     case 'national':
     default:
-      countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-        SELECT COUNT(*) as count FROM citizens WHERE verification_level >= 1
-      `)
+      whereClause = Prisma.sql`WHERE verification_level >= 1`
+      reason = 'citywide'
   }
 
-  return Number(countRows[0].count)
+  const inserted = await tx.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
+    INSERT INTO proposal_voter_roll
+      (proposal_id, citizen_id, neighborhood, locality_id, verification_level, eligibility_reason)
+    SELECT ${proposalId}::uuid, id, neighborhood, locality_id, verification_level, ${reason}
+    FROM citizens
+    ${whereClause}
+    ON CONFLICT (proposal_id, citizen_id) DO NOTHING
+    RETURNING citizen_id
+  `)
+
+  return inserted.length
 }
 
 // ── createProposal ─────────────────────────────────────────────────────────────
@@ -287,58 +304,68 @@ export async function endorseProposal(
     throw makeError('Solo se pueden avalar propuestas en fase idea o borrador', 400, 'WRONG_STATUS')
   }
 
-  // Postgres es la fuente de verdad de "quién avaló", no Redis. Antes la
-  // deduplicación vivía solo en un SET de Redis mientras Postgres únicamente
-  // guardaba un contador: si Redis perdía datos (expiración, restauración
-  // incompleta, cambio de cluster), un ciudadano podía volver a avalar y el
-  // contador seguía creciendo sin relación con la realidad. La restricción
-  // UNIQUE de proposal_endorsements es lo único que realmente impide el
-  // doble aval; el INSERT ... ON CONFLICT es tan atómico como el SADD que
-  // reemplaza, así que la protección contra condiciones de carrera se
-  // mantiene.
-  const inserted = await prisma.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
-    INSERT INTO proposal_endorsements (proposal_id, citizen_id)
-    VALUES (${proposalId}::uuid, ${citizenId}::uuid)
-    ON CONFLICT (proposal_id, citizen_id) DO NOTHING
-    RETURNING citizen_id
-  `)
-  if (inserted.length === 0) {
-    throw makeError('Ya avalaste esta propuesta', 409, 'ALREADY_ENDORSED')
-  }
+  // Guardar el aval + actualizar el contador + (si corresponde) avanzar de
+  // etapa son una sola transacción indivisible. Antes eran tres sentencias
+  // sueltas: si el proceso caía entre el INSERT y el UPDATE del contador, el
+  // aval quedaba registrado en proposal_endorsements pero endorsement_count
+  // no lo reflejaba — el número mostrado se desincronizaba del real.
+  //
+  // Postgres es la fuente de verdad de "quién avaló", no Redis. La
+  // restricción UNIQUE de proposal_endorsements es lo único que realmente
+  // impide el doble aval; el INSERT ... ON CONFLICT es atómico igual que el
+  // SADD de Redis que reemplaza, así que la protección contra condiciones de
+  // carrera se mantiene.
+  const result = await prisma.$transaction(async (tx) => {
+    const inserted = await tx.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
+      INSERT INTO proposal_endorsements (proposal_id, citizen_id)
+      VALUES (${proposalId}::uuid, ${citizenId}::uuid)
+      ON CONFLICT (proposal_id, citizen_id) DO NOTHING
+      RETURNING citizen_id
+    `)
+    if (inserted.length === 0) {
+      throw makeError('Ya avalaste esta propuesta', 409, 'ALREADY_ENDORSED')
+    }
+
+    const updated = await tx.$queryRaw<Pick<ProposalRow, 'endorsement_count' | 'status'>[]>(Prisma.sql`
+      UPDATE proposals
+      SET endorsement_count = endorsement_count + 1
+      WHERE id = ${proposalId}::uuid
+      RETURNING endorsement_count, status
+    `)
+
+    let currentStatus = updated[0].status as ProposalStatus
+    let advanced = false
+    const newCount = Number(updated[0].endorsement_count)
+
+    if (newCount >= ENDORSEMENTS_REQUIRED && currentStatus === 'idea') {
+      const advancedRows = await tx.$queryRaw<Pick<ProposalRow, 'status'>[]>(Prisma.sql`
+        UPDATE proposals
+        SET status = 'draft', draft_started_at = NOW()
+        WHERE id = ${proposalId}::uuid AND status = 'idea'
+        RETURNING status
+      `)
+      if (advancedRows.length > 0) {
+        currentStatus = 'draft'
+        advanced = true
+      }
+    }
+
+    return { endorsement_count: newCount, status: currentStatus, advanced }
+  })
 
   // Best-effort: acelera lecturas del set (p.ej. "¿ya avalé?" en el frontend)
   // pero ya no es la guarda de duplicados.
   redis.sadd(`vertice:endorsed:${proposalId}`, citizenId).catch(() => null)
 
-  const updated = await prisma.$queryRaw<Pick<ProposalRow, 'endorsement_count' | 'status'>[]>(Prisma.sql`
-    UPDATE proposals
-    SET endorsement_count = endorsement_count + 1
-    WHERE id = ${proposalId}::uuid
-    RETURNING endorsement_count, status
-  `)
-
-  let currentStatus = updated[0].status as ProposalStatus
-  let advanced = false
-  const newCount = Number(updated[0].endorsement_count)
-
-  if (newCount >= ENDORSEMENTS_REQUIRED && currentStatus === 'idea') {
-    const advanced_rows = await prisma.$queryRaw<Pick<ProposalRow, 'status'>[]>(Prisma.sql`
-      UPDATE proposals
-      SET status = 'draft', draft_started_at = NOW()
-      WHERE id = ${proposalId}::uuid AND status = 'idea'
-      RETURNING status
-    `)
-    if (advanced_rows.length > 0) {
-      currentStatus = 'draft'
-      advanced = true
-    }
-  }
-
   await delCache('proposal', proposalId)
   fireReputation({ citizen_id: citizenId, event_type: 'endorsement_given', reference_id: proposalId })
-  publish('governance', 'proposal:endorsed', { proposal_id: proposalId, endorsement_count: newCount, status: currentStatus }).catch(() => null)
+  publish('governance', 'proposal:endorsed', {
+    proposal_id: proposalId,
+    endorsement_count: result.endorsement_count,
+    status: result.status,
+  }).catch(() => null)
 
-  return { proposal_id: proposalId, endorsement_count: newCount, status: currentStatus, advanced }
+  return { proposal_id: proposalId, ...result }
 }
 
 // ── advanceProposalStage ───────────────────────────────────────────────────────
@@ -398,18 +425,22 @@ export async function advanceProposalStage(
       const clampedHours = Math.max(cfg.minHours, Math.min(cfg.maxHours, durationHours))
       const votingEndsAt = new Date(Date.now() + clampedHours * 3600 * 1000)
 
-      const eligibleVoters = await computeEligibleVoters(proposal)
-
-      updatedRows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
-        UPDATE proposals
-        SET status = 'voting',
-            voting_starts_at = NOW(),
-            voting_ends_at = ${votingEndsAt},
-            quorum_required = ${cfg.quorum},
-            approval_threshold = ${cfg.approval},
-            eligible_voters = ${eligibleVoters}
-        WHERE id = ${proposalId}::uuid RETURNING *
-      `)
+      // El padrón se congela y la propuesta pasa a 'voting' en la misma
+      // transacción: eligible_voters es literalmente cuántas filas quedaron
+      // en proposal_voter_roll, así que no pueden desincronizarse.
+      updatedRows = await prisma.$transaction(async (tx) => {
+        const eligibleVoters = await freezeVoterRoll(tx, proposalId, proposal)
+        return tx.$queryRaw<ProposalRow[]>(Prisma.sql`
+          UPDATE proposals
+          SET status = 'voting',
+              voting_starts_at = NOW(),
+              voting_ends_at = ${votingEndsAt},
+              quorum_required = ${cfg.quorum},
+              approval_threshold = ${cfg.approval},
+              eligible_voters = ${eligibleVoters}
+          WHERE id = ${proposalId}::uuid RETURNING *
+        `)
+      })
       break
     }
 
@@ -419,14 +450,50 @@ export async function advanceProposalStage(
       }
 
       const result = computeVotingResult(proposal)
-      updatedRows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
-        UPDATE proposals
-        SET status = ${result}, decided_at = NOW()
-        WHERE id = ${proposalId}::uuid RETURNING *
-      `)
 
-      // Registrar resultado on-chain (fire-and-forget — no bloquea la respuesta HTTP)
-      triggerVotingRegistry(proposal, result).catch(() => null)
+      // Cierre idempotente: el UPDATE solo afecta la fila si SIGUE en
+      // 'voting', y el job que registra el resultado on-chain se encola en
+      // la MISMA transacción que ese cambio de estado. Antes el UPDATE no
+      // filtraba por status, así que dos finalizaciones concurrentes (dos
+      // clientes disparando el cierre automático a la vez, por ejemplo)
+      // podían "cerrar" la misma votación dos veces y disparar el registro
+      // blockchain y la notificación por duplicado. Ahora solo la solicitud
+      // que gana la carrera hace el cambio; las demás ven 0 filas afectadas
+      // y no repiten ningún efecto secundario.
+      const closed = await prisma.$transaction(async (tx) => {
+        const closedRows = await tx.$queryRaw<ProposalRow[]>(Prisma.sql`
+          UPDATE proposals
+          SET status = ${result}, decided_at = NOW()
+          WHERE id = ${proposalId}::uuid AND status = 'voting'
+          RETURNING *
+        `)
+        if (closedRows.length === 0) return null
+
+        await enqueueJob('record_voting_result', {
+          proposalId: proposal.id,
+          title: proposal.title,
+          description: proposal.description,
+          totalVotes: proposal.total_votes,
+          approveWeighted: proposal.approve_votes_weighted,
+          rejectWeighted: proposal.reject_votes_weighted,
+          abstainWeighted: proposal.abstain_votes_weighted,
+          result,
+          ipfsResultUri: proposal.ipfs_result_uri,
+        }, tx)
+
+        return closedRows
+      })
+
+      if (closed === null) {
+        // Otra solicitud ya cerró esta votación primero — no hay nada nuevo
+        // que hacer; devolvemos el estado actual sin re-notificar.
+        const current = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+          SELECT * FROM proposals WHERE id = ${proposalId}::uuid
+        `)
+        return normalizeProposal(current[0])
+      }
+
+      updatedRows = closed
       break
     }
 
@@ -480,42 +547,6 @@ function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quo
     : 0
 
   return approvalRate >= cfg.approval ? 'approved' : 'rejected'
-}
-
-/**
- * Registra el resultado on-chain en VotingRegistry. Fire-and-forget.
- * Si el contrato no está configurado, se omite silenciosamente.
- */
-async function triggerVotingRegistry(
-  proposal: Proposal,
-  result: 'approved' | 'rejected' | 'quorum_failed',
-): Promise<void> {
-  const contentHash = buildProposalContentHash(proposal.title, proposal.description)
-  const approved     = result === 'approved'
-  const quorumReached = result !== 'quorum_failed'
-
-  // Placeholder IPFS URI para Fase I — en Fase II se sube el JSON real
-  const ipfsURI = proposal.ipfs_result_uri
-    ?? `${config.IPFS_GATEWAY}/QmVerticeResult?proposal=${encodeURIComponent(proposal.id)}`
-
-  const txHash = await recordProposalVoting(
-    proposal.id,
-    contentHash,
-    proposal.total_votes,
-    proposal.approve_votes_weighted,
-    proposal.reject_votes_weighted,
-    proposal.abstain_votes_weighted,
-    approved,
-    quorumReached,
-    ipfsURI,
-  )
-
-  if (txHash) {
-    await prisma.proposal.update({
-      where: { id: proposal.id },
-      data: { blockchainTxHash: txHash },
-    }).catch((err: unknown) => logger.error('[governance] failed to persist blockchainTxHash', err))
-  }
 }
 
 // ── castVote ──────────────────────────────────────────────────────────────────
@@ -824,7 +855,7 @@ export async function getGovernanceStats(): Promise<GovernanceStats> {
 
 // ── Admin: force-advance any proposal ────────────────────────────────────────
 
-export async function adminAdvanceProposal(proposalId: string): Promise<Proposal> {
+export async function adminAdvanceProposal(proposalId: string, actorId: string): Promise<Proposal> {
   const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
     SELECT * FROM proposals WHERE id = ${proposalId}::uuid
   `)
@@ -838,27 +869,47 @@ export async function adminAdvanceProposal(proposalId: string): Promise<Proposal
     voting:  'approved',
   }
   const next = TRANSITIONS[proposal.status]
-  if (!next) throw makeError('No se puede avanzar desde el estado actual', 400, 'INVALID_TRANSITION')
+  if (!next) {
+    await recordAuditEvent({
+      actorId, action: 'admin_advance_proposal', targetType: 'proposal', targetId: proposalId,
+      result: 'rejected', reason: `estado actual '${proposal.status}' no admite avance forzado`,
+    })
+    throw makeError('No se puede avanzar desde el estado actual', 400, 'INVALID_TRANSITION')
+  }
 
   const updated = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
     UPDATE proposals SET status = ${next}::text, updated_at = NOW()
     WHERE id = ${proposalId}::uuid RETURNING *
   `)
   await delCache('proposal', proposalId)
+  await recordAuditEvent({
+    actorId, action: 'admin_advance_proposal', targetType: 'proposal', targetId: proposalId,
+    result: 'success', metadata: { from: proposal.status, to: next },
+  })
   return normalizeProposal(updated[0])
 }
 
 // ── Admin: archive / reject any proposal ─────────────────────────────────────
 
-export async function adminArchiveProposal(proposalId: string, reason: string): Promise<Proposal> {
+export async function adminArchiveProposal(proposalId: string, actorId: string, reason: string): Promise<Proposal> {
   const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
     UPDATE proposals
     SET status = 'archived', rejection_reason = ${reason}, updated_at = NOW()
     WHERE id = ${proposalId}::uuid
     RETURNING *
   `)
-  if (rows.length === 0) throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
+  if (rows.length === 0) {
+    await recordAuditEvent({
+      actorId, action: 'admin_archive_proposal', targetType: 'proposal', targetId: proposalId,
+      result: 'not_found', reason,
+    })
+    throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
+  }
   await delCache('proposal', proposalId)
+  await recordAuditEvent({
+    actorId, action: 'admin_archive_proposal', targetType: 'proposal', targetId: proposalId,
+    result: 'success', reason,
+  })
   return normalizeProposal(rows[0])
 }
 

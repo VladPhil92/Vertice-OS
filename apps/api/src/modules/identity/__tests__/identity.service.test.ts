@@ -26,6 +26,12 @@ jest.mock('../../../lib/cache', () => ({
   TTL: { PROFILE: 300, SESSION: 60 },
 }))
 
+const mockEnqueueJob = jest.fn()
+
+jest.mock('../../../lib/jobs', () => ({
+  enqueueJob: mockEnqueueJob,
+}))
+
 import { Wallet } from 'ethers'
 import {
   resolveDID,
@@ -272,6 +278,32 @@ describe('confirmEmail', () => {
       code: 'INVALID_TOKEN',
     })
   })
+
+  it('encola el mint del badge de identidad cuando el ciudadano ya tiene wallet conectada', async () => {
+    mockRedisGet.mockResolvedValueOnce(token)
+    mockCitizen.update.mockResolvedValueOnce({
+      ...CITIZEN_BASE, verificationLevel: 2, walletAddress: '0x' + 'a'.repeat(40),
+    })
+    mockRedisDel.mockResolvedValueOnce(1)
+
+    await confirmEmail(CITIZEN_BASE.id, token)
+
+    expect(mockEnqueueJob).toHaveBeenCalledWith('mint_identity_badge', {
+      citizenId: CITIZEN_BASE.id,
+      did: CITIZEN_BASE.did,
+      walletAddress: '0x' + 'a'.repeat(40),
+    })
+  })
+
+  it('no encola ningún mint cuando el ciudadano todavía no tiene wallet conectada', async () => {
+    mockRedisGet.mockResolvedValueOnce(token)
+    mockCitizen.update.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2, walletAddress: null })
+    mockRedisDel.mockResolvedValueOnce(1)
+
+    await confirmEmail(CITIZEN_BASE.id, token)
+
+    expect(mockEnqueueJob).not.toHaveBeenCalled()
+  })
 })
 
 // ── updateCitizenProfile ──────────────────────────────────────────────────────
@@ -355,6 +387,37 @@ describe('connectWallet', () => {
 
     expect(result.wallet_address).toBe(wallet.address)
     expect(mockRedisDel).toHaveBeenCalled() // nonce consumido de un solo uso
+    expect(result.sbt_pending).toBe(false)
+    expect(mockEnqueueJob).not.toHaveBeenCalled() // nivel 0 — todavía no elegible para el badge
+  })
+
+  it('encola el mint del badge cuando el ciudadano ya tiene nivel 2 y aún no tiene SBT', async () => {
+    const wallet = Wallet.createRandom()
+    const nonce = 'test-nonce-sbt'
+    mockRedisGet.mockResolvedValueOnce(nonce)
+
+    const message = [
+      'localhost:3000 quiere que conectes tu wallet a VÉRTICE OS.',
+      '',
+      `Ciudadano: ${CITIZEN_BASE.id}`,
+      `Wallet: ${wallet.address}`,
+      `Nonce: ${nonce}`,
+    ].join('\n')
+    const signature = await wallet.signMessage(message)
+
+    mockCitizen.findUnique.mockResolvedValueOnce(null)
+    mockCitizen.update.mockResolvedValueOnce({
+      id: CITIZEN_BASE.id, did: CITIZEN_BASE.did, verificationLevel: 2, sbtTokenId: null,
+    })
+
+    const result = await connectWallet(CITIZEN_BASE.id, { wallet_address: wallet.address, signature })
+
+    expect(result.sbt_pending).toBe(true)
+    expect(mockEnqueueJob).toHaveBeenCalledWith('mint_identity_badge', {
+      citizenId: CITIZEN_BASE.id,
+      did: CITIZEN_BASE.did,
+      walletAddress: wallet.address,
+    })
   })
 
   it('rechaza cuando no hay nonce pendiente (expirado o nunca solicitado)', async () => {

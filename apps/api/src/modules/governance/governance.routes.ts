@@ -156,7 +156,7 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     preHandler: requireModerator,
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const proposal = await adminAdvanceProposal(id)
+    const proposal = await adminAdvanceProposal(id, request.citizen.sub)
     return reply.send(proposal)
   })
 
@@ -166,7 +166,7 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const { reason } = (request.body ?? {}) as { reason?: string }
-    const proposal = await adminArchiveProposal(id, reason ?? 'Archivada por moderador')
+    const proposal = await adminArchiveProposal(id, request.citizen.sub, reason ?? 'Archivada por moderador')
     return reply.send(proposal)
   })
 }

@@ -3,6 +3,7 @@ import { config } from './config'
 import { prisma } from './lib/prisma'
 import { redis } from './lib/redis'
 import { closeNeo4j } from './lib/neo4j'
+import { startJobWorker } from './lib/jobs'
 
 async function main() {
   const app = buildApp()
@@ -10,10 +11,14 @@ async function main() {
   await redis.connect()
   app.log.info('[redis] connected')
 
+  const stopJobWorker = startJobWorker()
+  app.log.info('[jobs] worker started')
+
   await app.listen({ port: config.PORT, host: config.HOST })
 
   const shutdown = async (signal: string) => {
     app.log.info(`[shutdown] ${signal} received`)
+    stopJobWorker()
     await app.close()
     await prisma.$disconnect()
     await redis.quit()

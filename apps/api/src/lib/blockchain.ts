@@ -162,8 +162,12 @@ export async function checkHasBadge(did: string, badgeType: BadgeTypeValue): Pro
 
 /**
  * Emite un CivicSBT CITIZEN_VERIFIED a la wallet del ciudadano.
- * Fire-and-forget: no lanza excepciones — registra errores en consola.
- * Devuelve el tokenId como string, o null si el minting falló/no está configurado.
+ * Llamado exclusivamente por el worker de jobs (ver lib/jobs.ts), que necesita
+ * distinguir un fallo real (reintentar) de un no-op legítimo (badge ya
+ * emitido). Por eso solo la comprobación de idempotencia devuelve null — un
+ * error real de red/contrato se propaga para que el job se reintente en vez
+ * de desaparecer en silencio.
+ * Devuelve el tokenId como string, o null si el badge ya existía/no está configurado.
  */
 export async function mintCitizenBadge(
   recipientAddress: string,
@@ -173,33 +177,28 @@ export async function mintCitizenBadge(
   const contract = getContract()
   if (!contract) return null
 
-  try {
-    const commitment = deriveDIDCommitment(citizenDID)
+  const commitment = deriveDIDCommitment(citizenDID)
 
-    // Verificar idempotencia on-chain antes de gastar gas
-    const alreadyHas = await contract.hasBadge(commitment, BadgeType.CITIZEN_VERIFIED)
-    if (alreadyHas) {
-      // Se registra el compromiso, no el DID: los logs no deben reintroducir
-      // el vínculo que el contrato evita.
-      logger.info(`[blockchain] ${commitment} ya tiene CITIZEN_VERIFIED badge — omitiendo mint`)
-      return null
-    }
-
-    const tx = await contract.mintBadge(
-      recipientAddress,
-      commitment,
-      BadgeType.CITIZEN_VERIFIED,
-      tokenURI,
-    )
-    const receipt = await tx.wait()
-
-    const tokenId = receipt?.logs?.[0] ? String((receipt.logs[0] as { args?: bigint[] }).args?.[0] ?? 0n) : '0'
-    logger.info(`[blockchain] CITIZEN_VERIFIED minted → tokenId=${tokenId} tx=${receipt?.hash ?? 'unknown'}`)
-    return tokenId
-  } catch (err) {
-    logger.error('[blockchain] mintBadge error', err)
+  // Verificar idempotencia on-chain antes de gastar gas
+  const alreadyHas = await contract.hasBadge(commitment, BadgeType.CITIZEN_VERIFIED)
+  if (alreadyHas) {
+    // Se registra el compromiso, no el DID: los logs no deben reintroducir
+    // el vínculo que el contrato evita.
+    logger.info(`[blockchain] ${commitment} ya tiene CITIZEN_VERIFIED badge — omitiendo mint`)
     return null
   }
+
+  const tx = await contract.mintBadge(
+    recipientAddress,
+    commitment,
+    BadgeType.CITIZEN_VERIFIED,
+    tokenURI,
+  )
+  const receipt = await tx.wait()
+
+  const tokenId = receipt?.logs?.[0] ? String((receipt.logs[0] as { args?: bigint[] }).args?.[0] ?? 0n) : '0'
+  logger.info(`[blockchain] CITIZEN_VERIFIED minted → tokenId=${tokenId} tx=${receipt?.hash ?? 'unknown'}`)
+  return tokenId
 }
 
 /**
@@ -223,8 +222,10 @@ export function buildCitizenBadgeURI(citizenDID: string, level: number): string 
 
 /**
  * Registra el resultado de una votación on-chain en VotingRegistry.
- * Fire-and-forget: no lanza excepciones — registra errores en consola.
- * Devuelve el tx hash, o null si el registro falló/no está configurado.
+ * Llamado exclusivamente por el worker de jobs (ver lib/jobs.ts) — igual que
+ * mintCitizenBadge, solo el caso de idempotencia legítima devuelve null; un
+ * error real se propaga para que el job se reintente en vez de perderse.
+ * Devuelve el tx hash, o null si ya estaba registrado/no está configurado.
  *
  * @param proposalUUID  UUID de la propuesta (se convierte a bytes32 via keccak256)
  * @param contentHash   keccak256 de title+description para integridad
@@ -253,34 +254,29 @@ export async function recordProposalVoting(
   const proposalId   = keccak256(toUtf8Bytes(proposalUUID))
   const proposalHash = contentHash as `0x${string}`
 
-  try {
-    // Idempotencia: no re-registrar si ya está grabado
-    const alreadyRecorded = await contract.isRecorded(proposalId) as boolean
-    if (alreadyRecorded) {
-      logger.info(`[blockchain] proposal ${proposalUUID} ya está registrado en VotingRegistry`)
-      return null
-    }
-
-    // Weighted votes son floats (e.g. 3.5) — escalar ×1_000_000 para uint256
-    const tx = await contract.recordVoting(
-      proposalId,
-      proposalHash,
-      BigInt(totalVotes),
-      BigInt(Math.round(approveW * 1_000_000)),
-      BigInt(Math.round(rejectW  * 1_000_000)),
-      BigInt(Math.round(abstainW * 1_000_000)),
-      approved,
-      quorumReached,
-      ipfsURI,
-    )
-    const receipt = await tx.wait()
-    const hash = receipt?.hash ?? 'unknown'
-    logger.info(`[blockchain] VotingRegistry recorded → proposal=${proposalUUID} tx=${hash}`)
-    return hash
-  } catch (err) {
-    logger.error('[blockchain] recordVoting error', err)
+  // Idempotencia: no re-registrar si ya está grabado
+  const alreadyRecorded = await contract.isRecorded(proposalId) as boolean
+  if (alreadyRecorded) {
+    logger.info(`[blockchain] proposal ${proposalUUID} ya está registrado en VotingRegistry`)
     return null
   }
+
+  // Weighted votes son floats (e.g. 3.5) — escalar ×1_000_000 para uint256
+  const tx = await contract.recordVoting(
+    proposalId,
+    proposalHash,
+    BigInt(totalVotes),
+    BigInt(Math.round(approveW * 1_000_000)),
+    BigInt(Math.round(rejectW  * 1_000_000)),
+    BigInt(Math.round(abstainW * 1_000_000)),
+    approved,
+    quorumReached,
+    ipfsURI,
+  )
+  const receipt = await tx.wait()
+  const hash = receipt?.hash ?? 'unknown'
+  logger.info(`[blockchain] VotingRegistry recorded → proposal=${proposalUUID} tx=${hash}`)
+  return hash
 }
 
 /**

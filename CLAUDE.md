@@ -258,6 +258,24 @@ docs/XXX      → documentación
   - **Nulificador de voto con clave propia** (`VOTE_NULLIFIER_SECRET`,
     distinta de `JWT_SECRET`) — rotar el secreto de sesión ya no invalida
     silenciosamente el historial de nulificadores.
+  - **Aval + contador + avance de etapa son una sola transacción.**
+    `endorseProposal()` usa `prisma.$transaction()` — antes eran 3 sentencias
+    sueltas y una caída del proceso entre el INSERT y el UPDATE del contador
+    desincronizaba el número mostrado del real.
+  - **Cierre de votación idempotente.** El `UPDATE` que cierra una votación
+    filtra por `WHERE status = 'voting'`; solo la solicitud que gana esa
+    condición encola el registro on-chain y notifica — dos finalizaciones
+    concurrentes ya no disparan el job ni la notificación por duplicado.
+  - **Padrón congelado por consulta.** `proposal_voter_roll` guarda, en la
+    misma transacción que el paso debate→voting, la lista nominal de
+    ciudadanos elegibles (territorio, nivel de verificación, motivo). El
+    `eligible_voters` de la propuesta es literalmente el número de filas
+    insertadas ahí — no puede desincronizarse del padrón, y ahora se puede
+    responder "¿quién podía votar?" después de los hechos.
+  - **Auditoría de acciones de moderador.** `admin_audit_log` (solo INSERT)
+    registra quién, qué acción, sobre qué propuesta, cuándo y con qué
+    resultado para `adminAdvanceProposal`/`adminArchiveProposal` — ver
+    `lib/audit.ts`.
 
 ### Módulo 04 — Capa IA Multi-Agente
 - **Estado:** 🟢 Implementado
@@ -274,6 +292,16 @@ docs/XXX      → documentación
   los badges emitidos). Aplica también al `tokenURI`, que es público on-chain.
 - **Pendiente:** Deploy en Polygon Amoy testnet, configurar secrets DEPLOYER_PRIVATE_KEY
   y DID_COMMITMENT_PEPPER. Antes de mainnet: multisig para `DEFAULT_ADMIN_ROLE`.
+- **Mint y registro on-chain vía cola durable, no fire-and-forget.** El mint
+  del badge de identidad y el registro de resultados de votación en
+  `VotingRegistry` se encolan en la tabla `jobs` (Postgres) y los procesa un
+  worker en el propio proceso de la API con reintentos y backoff exponencial
+  (`apps/api/src/lib/jobs.ts`). Antes eran `.catch(() => null)`: si el proceso
+  caía a mitad de camino, el mint o el registro se perdían en silencio, sin
+  reintento ni rastro. `mintCitizenBadge()`/`recordProposalVoting()` ahora
+  lanzan en error real (antes lo devoraban) — el job necesita distinguir un
+  fallo real de un no-op legítimo (badge/registro ya existente) para saber
+  cuándo reintentar.
 
 ### Módulo 06 — Reputación
 - **Estado:** 🟢 Implementado (API + frontend completos)
