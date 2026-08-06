@@ -18,3 +18,13 @@ CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "http://localhost:4000")
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "info").upper()
 NODE_ENV: str = os.getenv("NODE_ENV", "development")
 SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
+
+# ── Validación de arranque ────────────────────────────────────────────────────
+# En producción no se admite arrancar sin la clave de servicio: los endpoints
+# internos (/territorial/analyze, /governance/*, /legal/analyze) consumen la API
+# de Anthropic, así que dejarlos sin autenticar expone tanto datos como gasto.
+if NODE_ENV == "production" and not AI_SERVICE_SECRET:
+    raise RuntimeError(
+        "AI_SERVICE_SECRET es obligatorio en producción: sin él los endpoints "
+        "internos quedarían accesibles sin autenticación."
+    )

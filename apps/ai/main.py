@@ -19,6 +19,7 @@ Infraestructura:
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import uuid
@@ -105,9 +106,26 @@ async def generic_exception_handler(_request: Request, exc: Exception) -> JSONRe
 # ── Auth dependency ────────────────────────────────────────────────────────────
 
 async def verify_service_key(x_service_key: Annotated[str, Header()] = "") -> None:
-    """Valida la clave interna de servicio. Requerida para endpoints internos."""
+    """Valida la clave interna de servicio. Requerida para endpoints internos.
+
+    Falla cerrado: si no hay secreto configurado se rechaza la petición en vez
+    de dejar pasar a todo el mundo. Antes la condición era `if secret and ...`,
+    de modo que con AI_SERVICE_SECRET vacío —su valor por defecto— la guarda no
+    comprobaba nada y los endpoints internos quedaban abiertos.
+    """
     secret = config.AI_SERVICE_SECRET
-    if secret and x_service_key != secret:
+
+    if not secret:
+        logger.error(
+            "[auth] AI_SERVICE_SECRET no configurado; se rechaza la llamada interna"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio mal configurado",
+        )
+
+    # compare_digest evita filtrar el secreto por diferencias de tiempo
+    if not hmac.compare_digest(x_service_key, secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Clave de servicio inválida",

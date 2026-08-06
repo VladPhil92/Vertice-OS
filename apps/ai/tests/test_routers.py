@@ -11,7 +11,13 @@ from starlette.testclient import TestClient
 # Import must happen after conftest mocks are applied
 from main import app  # noqa: E402
 
-client = TestClient(app)
+# Debe coincidir con el AI_SERVICE_SECRET que conftest.py fija en el entorno
+# antes de que config.py se importe.
+TEST_SERVICE_KEY = "test-service-key"
+
+# Los endpoints internos exigen X-Service-Key; se envía por defecto en todas
+# las peticiones del cliente de pruebas.
+client = TestClient(app, headers={"X-Service-Key": TEST_SERVICE_KEY})
 
 # ── /health ────────────────────────────────────────────────────────────────────
 
@@ -408,3 +414,48 @@ def test_rag_index_status_returns_task_for_known_id():
     body = status_resp.json()
     assert body["task_id"] == task_id
     assert body["status"] in ("pending", "running", "completed", "error")
+
+
+# ── Autenticación de servicio ─────────────────────────────────────────────────
+# Regresión: `verify_service_key` usaba `if secret and x_service_key != secret`,
+# de modo que con AI_SERVICE_SECRET vacío la guarda no comprobaba nada y los
+# endpoints internos quedaban abiertos a cualquiera.
+
+INTERNAL_ENDPOINTS = [
+    ("/territorial/analyze", {"reports": [], "locality": "Manga"}),
+    ("/governance/synthesize", {
+        "proposal_title": "Parque",
+        "proposal_description": "x" * 60,
+        "category": "infraestructura",
+        "scope": "locality",
+    }),
+    ("/governance/draft-policy", {
+        "citizen_demand": "x" * 60,
+        "category": "infraestructura",
+        "scope": "locality",
+    }),
+    ("/legal/analyze", {"description": "x" * 60}),
+]
+
+
+def test_internal_endpoints_reject_missing_service_key():
+    """Sin cabecera X-Service-Key ningún endpoint interno debe responder 2xx."""
+    bare = TestClient(app)
+    for path, payload in INTERNAL_ENDPOINTS:
+        response = bare.post(path, json=payload)
+        assert response.status_code == 401, f"{path} aceptó una petición sin clave"
+
+
+def test_internal_endpoints_reject_wrong_service_key():
+    """Una clave incorrecta debe rechazarse con 401."""
+    wrong = TestClient(app, headers={"X-Service-Key": "clave-incorrecta"})
+    for path, payload in INTERNAL_ENDPOINTS:
+        response = wrong.post(path, json=payload)
+        assert response.status_code == 401, f"{path} aceptó una clave inválida"
+
+
+def test_civic_query_stays_public():
+    """/civic/query es el endpoint ciudadano y no exige clave de servicio."""
+    bare = TestClient(app)
+    response = bare.post("/civic/query", json={"message": "¿Cómo participo?"})
+    assert response.status_code == 200

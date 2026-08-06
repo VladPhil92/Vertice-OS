@@ -40,4 +40,15 @@ if (!parsed.success) {
   process.exit(1)
 }
 
+// El servicio de IA rechaza llamadas internas sin X-Service-Key. Sin este
+// secreto la API arrancaría "bien" y solo fallaría al primer uso de IA, así
+// que se comprueba aquí para que el error salga en el despliegue.
+if (parsed.data.NODE_ENV === 'production' && !parsed.data.AI_SERVICE_SECRET) {
+  console.error(
+    'AI_SERVICE_SECRET es obligatorio en producción: sin él las llamadas al ' +
+    'servicio de IA serán rechazadas.',
+  )
+  process.exit(1)
+}
+
 export const config = parsed.data

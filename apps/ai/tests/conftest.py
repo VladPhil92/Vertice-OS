@@ -2,8 +2,15 @@
 Configura mocks de sys.modules para anthropic y langgraph ANTES de que los test files
 importen orchestrator.py. Esto evita instalar dependencias pesadas en CI ligero.
 """
+import os
 import sys
 from unittest.mock import AsyncMock, MagicMock
+
+# config.py lee el entorno al importarse y los endpoints internos ahora fallan
+# cerrado si no hay clave de servicio, así que debe fijarse antes de que
+# cualquier test importe main/config.
+TEST_SERVICE_KEY = "test-service-key"
+os.environ.setdefault("AI_SERVICE_SECRET", TEST_SERVICE_KEY)
 
 # ── Anthropic mock ────────────────────────────────────────────────────────────
 
