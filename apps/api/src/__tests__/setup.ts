@@ -10,3 +10,5 @@ process.env.NEO4J_PASSWORD = 'vertice'
 // Claves separadas de JWT_SECRET — ver config.ts
 process.env.VOTE_NULLIFIER_SECRET = 'test-nullifier-secret-32-chars-min!!'
 process.env.IDENTITY_PEPPER = 'test-identity-pepper-32-chars-min!!'
+// Pepper del compromiso del DID — el contrato nunca recibe el DID en claro
+process.env.DID_COMMITMENT_PEPPER = 'test-pepper-with-at-least-32-characters!!'

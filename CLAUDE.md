@@ -268,7 +268,12 @@ docs/XXX      → documentación
 - **Estado:** 🟡 Contratos escritos y testeados, pendiente deploy
 - **Contratos:** `contracts/contracts/CivicSBT.sol`, `contracts/contracts/VotingRegistry.sol`
 - **Implementado:** 53 tests en Hardhat (26 CivicSBT + 27 VotingRegistry), todos pasan
+- **Privacidad:** el DID **nunca** se escribe on-chain. El contrato guarda
+  `didCommitment = keccak256(DID_COMMITMENT_PEPPER : did)`; el pepper es un
+  secreto del backend y permanente por despliegue (rotarlo rompe el vínculo con
+  los badges emitidos). Aplica también al `tokenURI`, que es público on-chain.
 - **Pendiente:** Deploy en Polygon Amoy testnet, configurar secrets DEPLOYER_PRIVATE_KEY
+  y DID_COMMITMENT_PEPPER. Antes de mainnet: multisig para `DEFAULT_ADMIN_ROLE`.
 
 ### Módulo 06 — Reputación
 - **Estado:** 🟢 Implementado (API + frontend completos)

@@ -36,6 +36,10 @@ const schema = z.object({
   POLYGON_PRIVATE_KEY:    z.string().optional(),
   CIVIC_SBT_ADDRESS:      z.string().optional(),
   VOTING_REGISTRY_ADDRESS: z.string().optional(),
+  // Secreto usado para derivar el compromiso del DID que se escribe on-chain.
+  // Es permanente por despliegue: rotarlo rompe la correspondencia con los
+  // badges ya emitidos.
+  DID_COMMITMENT_PEPPER:  z.string().min(32).optional(),
   IPFS_GATEWAY:           z.string().url().default('https://ipfs.io/ipfs'),
 })
 
@@ -74,6 +78,17 @@ if (parsed.data.NODE_ENV === 'production') {
     )
     process.exit(1)
   }
+}
+
+// El compromiso del DID es lo único que se escribe on-chain en lugar del DID
+// en claro. Si hay blockchain configurada pero falta el pepper, el minting
+// fallaría en caliente; mejor detectarlo al arrancar.
+if (parsed.data.CIVIC_SBT_ADDRESS && !parsed.data.DID_COMMITMENT_PEPPER) {
+  console.error(
+    'DID_COMMITMENT_PEPPER es obligatorio cuando CIVIC_SBT_ADDRESS está ' +
+    'configurado: sin él no puede derivarse el compromiso del DID.',
+  )
+  process.exit(1)
 }
 
 export const config = parsed.data
