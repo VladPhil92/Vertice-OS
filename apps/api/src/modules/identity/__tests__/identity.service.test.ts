@@ -26,6 +26,7 @@ jest.mock('../../../lib/cache', () => ({
   TTL: { PROFILE: 300, SESSION: 60 },
 }))
 
+import { Wallet } from 'ethers'
 import {
   resolveDID,
   getOwnDIDDocument,
@@ -34,6 +35,8 @@ import {
   requestEmailVerification,
   confirmEmail,
   updateCitizenProfile,
+  connectWallet,
+  requestWalletNonce,
 } from '../identity.service'
 
 const CITIZEN_BASE = {
@@ -72,9 +75,10 @@ describe('resolveDID', () => {
     expect(doc['@context']).toContain('https://www.w3.org/ns/did/v1')
     expect(doc.id).toBe(CITIZEN_BASE.did)
     expect(doc.controller).toBe(CITIZEN_BASE.did)
-    expect(doc.verificationMethod).toHaveLength(1)
-    expect(doc.verificationMethod[0].id).toBe(`${CITIZEN_BASE.did}#keys-1`)
-    expect(doc.authentication).toContain(`${CITIZEN_BASE.did}#keys-1`)
+    // No debe publicarse ninguna clave criptográfica: no existe un método
+    // real todavía (ver nota de privacidad en buildDIDDocument).
+    expect(doc.verificationMethod).toBeUndefined()
+    expect(doc.authentication).toBeUndefined()
     expect(doc.service[0].type).toBe('CivicProfile')
     expect(doc.verificationLevel).toBe(0)
   })
@@ -110,7 +114,7 @@ describe('getVerificationStatus', () => {
     const status = await getVerificationStatus(CITIZEN_BASE.id)
 
     expect(status.level).toBe(1)
-    expect(status.level_name).toBe('cedula_confirmada')
+    expect(status.level_name).toBe('documento_declarado')
     expect(status.can_vote).toBe(true)
     expect(status.can_propose).toBe(false)
   })
@@ -121,7 +125,7 @@ describe('getVerificationStatus', () => {
     const status = await getVerificationStatus(CITIZEN_BASE.id)
 
     expect(status.level).toBe(2)
-    expect(status.level_name).toBe('identidad_completa')
+    expect(status.level_name).toBe('contacto_verificado')
     expect(status.can_vote).toBe(true)
     expect(status.can_propose).toBe(true)
   })
@@ -131,9 +135,9 @@ describe('getVerificationStatus', () => {
 
 describe('confirmCedula', () => {
   it('upgrades citizen to level 1 when cedula matches', async () => {
-    const crypto = await import('crypto')
+    const { hashCedula } = await import('../../../lib/identity-hash')
     const cedula = '1234567890'
-    const cedulaHash = crypto.createHash('sha256').update(cedula).digest('hex')
+    const cedulaHash = hashCedula(cedula)
 
     mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({
       ...CITIZEN_BASE,
@@ -150,8 +154,8 @@ describe('confirmCedula', () => {
   })
 
   it('throws 400 when cedula does not match hash', async () => {
-    const crypto = await import('crypto')
-    const wrongCedulaHash = crypto.createHash('sha256').update('9999999999').digest('hex')
+    const { hashCedula } = await import('../../../lib/identity-hash')
+    const wrongCedulaHash = hashCedula('9999999999')
 
     mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({
       ...CITIZEN_BASE,
@@ -293,5 +297,116 @@ describe('updateCitizenProfile', () => {
     const callArg = mockCitizen.update.mock.calls[0][0]
     expect(callArg.data.neighborhood).toBe('Bocagrande')
     expect(callArg.data.localityId).toBeUndefined()
+  })
+})
+
+// ── requestWalletNonce / connectWallet (firma real, sin mockear ethers) ────────
+// Regresión: antes conectar una wallet solo comprobaba formato + unicidad, sin
+// exigir prueba de control real. Estos tests firman de verdad con una wallet
+// efímera de ethers para ejercitar la verificación criptográfica completa, no
+// solo el camino feliz con mocks.
+
+describe('requestWalletNonce', () => {
+  it('genera un mensaje que incluye la dirección y guarda el nonce en Redis con TTL', async () => {
+    const wallet = Wallet.createRandom()
+    mockRedisSet.mockResolvedValueOnce('OK')
+
+    const { message } = await requestWalletNonce(CITIZEN_BASE.id, wallet.address)
+
+    expect(message).toContain(wallet.address)
+    expect(message).toContain(CITIZEN_BASE.id)
+    expect(mockRedisSet).toHaveBeenCalledWith(
+      expect.stringContaining(CITIZEN_BASE.id),
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    )
+  })
+
+  it('rechaza una dirección con formato inválido', async () => {
+    await expect(requestWalletNonce(CITIZEN_BASE.id, 'not-an-address')).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'INVALID_WALLET_ADDRESS',
+    })
+  })
+})
+
+describe('connectWallet', () => {
+  it('conecta la wallet cuando la firma es válida y corresponde a la dirección', async () => {
+    const wallet = Wallet.createRandom()
+    const nonce = 'test-nonce-abc123'
+    mockRedisGet.mockResolvedValueOnce(nonce)
+
+    const message = [
+      'localhost:3000 quiere que conectes tu wallet a VÉRTICE OS.',
+      '',
+      `Ciudadano: ${CITIZEN_BASE.id}`,
+      `Wallet: ${wallet.address}`,
+      `Nonce: ${nonce}`,
+    ].join('\n')
+    const signature = await wallet.signMessage(message)
+
+    mockCitizen.findUnique.mockResolvedValueOnce(null) // sin conflicto
+    mockCitizen.update.mockResolvedValueOnce({
+      id: CITIZEN_BASE.id, did: CITIZEN_BASE.did, verificationLevel: 0, sbtTokenId: null,
+    })
+
+    const result = await connectWallet(CITIZEN_BASE.id, { wallet_address: wallet.address, signature })
+
+    expect(result.wallet_address).toBe(wallet.address)
+    expect(mockRedisDel).toHaveBeenCalled() // nonce consumido de un solo uso
+  })
+
+  it('rechaza cuando no hay nonce pendiente (expirado o nunca solicitado)', async () => {
+    mockRedisGet.mockResolvedValueOnce(null)
+
+    await expect(connectWallet(CITIZEN_BASE.id, {
+      wallet_address: '0x' + 'a'.repeat(40),
+      signature: '0x' + '0'.repeat(130),
+    })).rejects.toMatchObject({ statusCode: 400, code: 'NONCE_EXPIRED' })
+  })
+
+  it('rechaza una firma que no corresponde a la dirección declarada', async () => {
+    // El ciudadano firma con SU wallet real, pero afirma una dirección AJENA
+    // — exactamente el ataque que este fix cierra: copiar la dirección
+    // pública de otra persona y reclamarla sin controlarla.
+    const attacker = Wallet.createRandom()
+    const victimAddress = Wallet.createRandom().address
+    const nonce = 'test-nonce-xyz789'
+    mockRedisGet.mockResolvedValueOnce(nonce)
+
+    const message = [
+      'localhost:3000 quiere que conectes tu wallet a VÉRTICE OS.',
+      '',
+      `Ciudadano: ${CITIZEN_BASE.id}`,
+      `Wallet: ${victimAddress}`, // la dirección que el atacante DECLARA
+      `Nonce: ${nonce}`,
+    ].join('\n')
+    const signature = await attacker.signMessage(message) // pero firma con SU propia clave
+
+    await expect(connectWallet(CITIZEN_BASE.id, {
+      wallet_address: victimAddress,
+      signature,
+    })).rejects.toMatchObject({ statusCode: 400, code: 'SIGNATURE_ADDRESS_MISMATCH' })
+  })
+
+  it('rechaza una firma sintácticamente inválida sin reventar', async () => {
+    mockRedisGet.mockResolvedValueOnce('some-nonce')
+
+    await expect(connectWallet(CITIZEN_BASE.id, {
+      wallet_address: '0x' + 'a'.repeat(40),
+      signature: '0xnotasignature',
+    })).rejects.toMatchObject({ statusCode: 400, code: 'INVALID_SIGNATURE' })
+  })
+
+  it('consume el nonce incluso cuando la firma es inválida (previene reintentos)', async () => {
+    mockRedisGet.mockResolvedValueOnce('some-nonce')
+
+    await connectWallet(CITIZEN_BASE.id, {
+      wallet_address: '0x' + 'a'.repeat(40),
+      signature: '0xnotasignature',
+    }).catch(() => null)
+
+    expect(mockRedisDel).toHaveBeenCalled()
   })
 })

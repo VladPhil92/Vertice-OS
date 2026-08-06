@@ -7,3 +7,6 @@ process.env.CORS_ORIGIN = 'http://localhost:3000'
 process.env.NEO4J_URI = 'bolt://localhost:7687'
 process.env.NEO4J_USER = 'neo4j'
 process.env.NEO4J_PASSWORD = 'vertice'
+// Claves separadas de JWT_SECRET — ver config.ts
+process.env.VOTE_NULLIFIER_SECRET = 'test-nullifier-secret-32-chars-min!!'
+process.env.IDENTITY_PEPPER = 'test-identity-pepper-32-chars-min!!'

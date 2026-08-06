@@ -12,6 +12,13 @@ const schema = z.object({
   JWT_ACCESS_EXPIRY_SECONDS: z.coerce.number().int().positive().default(900),       // 15 min
   JWT_REFRESH_EXPIRY_SECONDS: z.coerce.number().int().positive().default(604800),   // 7 días
 
+  // Claves separadas de JWT_SECRET a propósito — un dominio criptográfico por
+  // uso, para que rotar JWT_SECRET (p.ej. tras un incidente de sesión) no
+  // invalide silenciosamente el historial de nulificadores de voto ni la
+  // protección de las cédulas ya almacenadas.
+  VOTE_NULLIFIER_SECRET: z.string().min(32).optional(),
+  IDENTITY_PEPPER:       z.string().min(32).optional(),
+
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14).default(12),
 
   NEO4J_URI:      z.string().default('bolt://localhost:7687'),
@@ -49,6 +56,24 @@ if (parsed.data.NODE_ENV === 'production' && !parsed.data.AI_SERVICE_SECRET) {
     'servicio de IA serán rechazadas.',
   )
   process.exit(1)
+}
+
+// Sin estas dos, el código cae a derivar la clave desde JWT_SECRET — aceptable
+// para desarrollo local, pero en producción reutilizar JWT_SECRET colapsa
+// dominios criptográficos distintos (sesiones, nulificadores de voto,
+// protección de cédulas) en un único secreto.
+if (parsed.data.NODE_ENV === 'production') {
+  const missing: string[] = []
+  if (!parsed.data.VOTE_NULLIFIER_SECRET) missing.push('VOTE_NULLIFIER_SECRET')
+  if (!parsed.data.IDENTITY_PEPPER)       missing.push('IDENTITY_PEPPER')
+  if (missing.length > 0) {
+    console.error(
+      `${missing.join(', ')} ${missing.length > 1 ? 'son' : 'es'} obligatorio(s) en ` +
+      'producción: sin ellos se reutilizaría JWT_SECRET para fines que deben ' +
+      'tener su propio dominio criptográfico.',
+    )
+    process.exit(1)
+  }
 }
 
 export const config = parsed.data

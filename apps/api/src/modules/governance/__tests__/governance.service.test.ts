@@ -19,6 +19,7 @@ jest.mock('../../../lib/redis', () => ({
   redis: { sadd: mockRedisSadd },
 }))
 
+import { createHmac } from 'crypto'
 import {
   createProposal,
   listProposals,
@@ -32,6 +33,15 @@ import {
   getGovernanceStats,
 } from '../governance.service'
 
+// Replica voteNullifier() (privada en governance.service.ts) usando la misma
+// VOTE_NULLIFIER_SECRET fijada en __tests__/setup.ts, para poder construir un
+// nullifier "ya votado" válido sin exportar la función interna.
+function voteNullifierForTest(citizenId: string, proposalId: string): string {
+  return createHmac('sha256', process.env.VOTE_NULLIFIER_SECRET as string)
+    .update(`${citizenId}:${proposalId}`)
+    .digest('hex')
+}
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const PROPOSAL_ROW = {
@@ -42,6 +52,8 @@ const PROPOSAL_ROW = {
   executive_summary: 'Renovación del parque central',
   category: 'infraestructura',
   scope: 'neighborhood',
+  locality_id: 1,
+  neighborhood: 'Manga',
   status: 'idea',
   endorsement_count: 0n,
   comment_count: 0n,
@@ -91,7 +103,9 @@ beforeEach(() => {
 
 describe('createProposal', () => {
   it('creates proposal and returns normalized data', async () => {
-    mockQueryRaw.mockResolvedValueOnce([PROPOSAL_ROW])
+    mockQueryRaw
+      .mockResolvedValueOnce([{ locality_id: 1, neighborhood: 'Manga' }]) // snapshot del autor
+      .mockResolvedValueOnce([PROPOSAL_ROW])
 
     const proposal = await createProposal('author-uuid', {
       title: 'Mejorar el parque central del barrio',
@@ -106,6 +120,43 @@ describe('createProposal', () => {
     expect(typeof proposal.endorsement_count).toBe('number')
     expect(proposal.total_votes).toBe(0)
     expect(typeof proposal.approve_votes_weighted).toBe('number')
+  })
+
+  it('rejects a neighborhood-scope proposal when the author has no neighborhood set', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ locality_id: null, neighborhood: null }])
+
+    await expect(createProposal('author-uuid', {
+      title: 'Propuesta sin barrio de autor',
+      description: 'El parque necesita iluminación y zonas de recreación adecuadas para todos.',
+      category: 'infraestructura',
+      scope: 'neighborhood',
+    })).rejects.toMatchObject({ statusCode: 400, code: 'MISSING_NEIGHBORHOOD' })
+  })
+
+  it('rejects a locality-scope proposal when the author has no locality set', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ locality_id: null, neighborhood: null }])
+
+    await expect(createProposal('author-uuid', {
+      title: 'Propuesta sin localidad de autor',
+      description: 'La localidad necesita mejoras en infraestructura vial para todos los vecinos.',
+      category: 'infraestructura',
+      scope: 'locality',
+    })).rejects.toMatchObject({ statusCode: 400, code: 'MISSING_LOCALITY' })
+  })
+
+  it('allows a city-scope proposal even when the author has no territory set', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ locality_id: null, neighborhood: null }])
+      .mockResolvedValueOnce([{ ...PROPOSAL_ROW, scope: 'city', locality_id: null, neighborhood: null }])
+
+    const proposal = await createProposal('author-uuid', {
+      title: 'Propuesta de ciudad sin restricción territorial',
+      description: 'Esta propuesta aplica a toda la ciudad, no requiere barrio ni localidad del autor.',
+      category: 'infraestructura',
+      scope: 'city',
+    })
+
+    expect(proposal.scope).toBe('city')
   })
 })
 
@@ -177,9 +228,19 @@ describe('getProposalById', () => {
 // ── endorseProposal ────────────────────────────────────────────────────────────
 
 describe('endorseProposal', () => {
+  // Postgres (proposal_endorsements, PK compuesta) es ahora la fuente de
+  // verdad de "quién avaló", no Redis. La secuencia es: SELECT propuesta →
+  // INSERT ... ON CONFLICT DO NOTHING (guarda real de duplicados) → UPDATE
+  // contador → posible avance de etapa. Redis sadd es fire-and-forget y no
+  // determina el resultado.
+  beforeEach(() => {
+    mockRedisSadd.mockResolvedValue(1)
+  })
+
   it('endorses proposal and returns updated count', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([{ id: 'proposal-uuid', status: 'idea', endorsement_count: 5n }]) // get proposal
+      .mockResolvedValueOnce([{ citizen_id: 'citizen-uuid' }])                                 // insert ok
       .mockResolvedValueOnce([{ endorsement_count: 6n, status: 'idea' }])                       // update count
 
     const result = await endorseProposal('proposal-uuid', 'citizen-uuid')
@@ -187,13 +248,12 @@ describe('endorseProposal', () => {
     expect(result.endorsement_count).toBe(6)
     expect(result.status).toBe('idea')
     expect(result.advanced).toBe(false)
-    expect(mockRedisSadd).toHaveBeenCalledWith('vertice:endorsed:proposal-uuid', 'citizen-uuid')
   })
 
-  it('throws 409 when citizen already endorsed', async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }])
-    // sadd devuelve 0 cuando el miembro ya estaba en el set
-    mockRedisSadd.mockResolvedValueOnce(0)
+  it('throws 409 when citizen already endorsed (INSERT ... ON CONFLICT devuelve 0 filas)', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }]) // get proposal
+      .mockResolvedValueOnce([])                                                   // insert: conflicto, sin filas
 
     await expect(endorseProposal('proposal-uuid', 'citizen-uuid')).rejects.toMatchObject({
       statusCode: 409,
@@ -201,17 +261,17 @@ describe('endorseProposal', () => {
     })
   })
 
-  it('prevents double endorsement from concurrent requests (atomic sadd guard)', async () => {
+  it('prevents double endorsement from concurrent requests (atomic INSERT ... ON CONFLICT guard)', async () => {
     // Dos requests concurrentes: ambas leen la propuesta antes de que
-    // cualquiera escriba en Redis. Solo la primera debe pasar la guarda.
+    // cualquiera inserte en proposal_endorsements. Solo la primera INSERT
+    // gana la restricción UNIQUE; la restricción, no una lectura previa, es
+    // la guarda real.
     mockQueryRaw
-      .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }])
-      .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }])
-    mockRedisSadd
-      .mockResolvedValueOnce(1) // primera request: miembro nuevo
-      .mockResolvedValueOnce(0) // segunda request: ya existía
-
-    mockQueryRaw.mockResolvedValueOnce([{ endorsement_count: 4n, status: 'idea' }])
+      .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }]) // get proposal (1ª)
+      .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 3n }]) // get proposal (2ª)
+      .mockResolvedValueOnce([{ citizen_id: 'citizen-uuid' }])                    // insert (1ª): nueva fila
+      .mockResolvedValueOnce([])                                                   // insert (2ª): conflicto
+      .mockResolvedValueOnce([{ endorsement_count: 4n, status: 'idea' }])          // update count (1ª)
 
     const [first, second] = await Promise.allSettled([
       endorseProposal('proposal-uuid', 'citizen-uuid'),
@@ -228,8 +288,9 @@ describe('endorseProposal', () => {
   it('auto-advances to draft when endorsement_count reaches 10', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([{ id: 'p', status: 'idea', endorsement_count: 9n }]) // get proposal
-      .mockResolvedValueOnce([{ endorsement_count: 10n, status: 'idea' }])           // update count
-      .mockResolvedValueOnce([{ status: 'draft' }])                                  // advance to draft
+      .mockResolvedValueOnce([{ citizen_id: 'citizen-uuid' }])                     // insert ok
+      .mockResolvedValueOnce([{ endorsement_count: 10n, status: 'idea' }])          // update count
+      .mockResolvedValueOnce([{ status: 'draft' }])                                 // advance to draft
 
     const result = await endorseProposal('proposal-uuid', 'citizen-uuid')
 
@@ -356,6 +417,64 @@ describe('castVote', () => {
     expect(receipt.vote_value).toBe(1)
     expect(typeof receipt.vote_weight).toBe('number')
     expect(receipt.proposal_id).toBe('proposal-uuid')
+  })
+
+  it('un ciudadano = un voto: la reputación alta no aumenta el peso del voto', async () => {
+    // Regresión: computeVoteWeight escalaba 1.0-1.5 según reputation_score.
+    // Con reputación muy alta, el peso debe seguir siendo exactamente 1.0.
+    const voteRow = { id: 'vote-uuid', vote_weight: '1.0000', vote_value: 1, created_at: new Date() }
+    mockQueryRaw
+      .mockResolvedValueOnce([votingProposal])
+      .mockResolvedValueOnce([{ already_voted: 0, reputation_score: '999.0000' }]) // reputación altísima
+      .mockResolvedValueOnce([voteRow])
+      .mockResolvedValueOnce([]) // sin delegadores
+
+    const receipt = await castVote('proposal-uuid', 'citizen-uuid', 1)
+
+    expect(receipt.vote_weight).toBe(1.0)
+  })
+
+  it('agrega el voto de delegados que no han votado directamente, con peso 1.0 cada uno', async () => {
+    const voteRow = { id: 'vote-uuid', vote_weight: '1.0000', vote_value: 1, created_at: new Date() }
+    mockQueryRaw
+      .mockResolvedValueOnce([votingProposal])
+      .mockResolvedValueOnce([{ already_voted: 0, reputation_score: '0.0000' }])
+      .mockResolvedValueOnce([voteRow])
+      // dos delegadores confían en este ciudadano
+      .mockResolvedValueOnce([
+        { delegator_id: 'delegator-1', reputation_score: '500.0000' }, // reputación alta: no debe importar
+        { delegator_id: 'delegator-2', reputation_score: '0.0000' },
+      ])
+      // ninguno de los dos ha votado directamente todavía
+      .mockResolvedValueOnce([])
+
+    const receipt = await castVote('proposal-uuid', 'citizen-uuid', 1)
+
+    // 1 (propio) + 1 (delegator-1) + 1 (delegator-2) = 3, nunca 1 + 1.5 + 1.5
+    expect(receipt.vote_weight).toBe(3.0)
+  })
+
+  it('excluye delegados que ya votaron directamente, comparando por el mismo nullifier', async () => {
+    const voteRow = { id: 'vote-uuid', vote_weight: '1.0000', vote_value: 1, created_at: new Date() }
+    mockQueryRaw
+      .mockResolvedValueOnce([votingProposal])
+      .mockResolvedValueOnce([{ already_voted: 0, reputation_score: '0.0000' }])
+      .mockResolvedValueOnce([voteRow])
+      .mockResolvedValueOnce([
+        { delegator_id: 'delegator-1', reputation_score: '0.0000' },
+        { delegator_id: 'delegator-2', reputation_score: '0.0000' },
+      ])
+      // La consulta de nullifiers ya votados devuelve el de delegator-1 —
+      // debe calcularse con voteNullifier(), la misma función que el resto
+      // del módulo, para que esta comparación sea correcta.
+      .mockImplementationOnce(async () => [
+        { nullifier_hash: voteNullifierForTest('delegator-1', 'proposal-uuid') },
+      ])
+
+    const receipt = await castVote('proposal-uuid', 'citizen-uuid', 1)
+
+    // 1 (propio) + 1 (delegator-2, no votó aún) = 2. delegator-1 se excluye.
+    expect(receipt.vote_weight).toBe(2.0)
   })
 
   it('throws 409 on double vote', async () => {

@@ -2,10 +2,22 @@
 
 export type VerificationLevel = 0 | 1 | 2
 
+// Nombres deliberadamente honestos sobre lo que cada nivel prueba realmente:
+//   registrado           — cuenta creada, correo sin confirmar
+//   documento_declarado  — el ciudadano reintrodujo el mismo número de cédula
+//                          que dio al registrarse. NO valida contra ninguna
+//                          fuente externa: no prueba que el documento exista,
+//                          pertenezca a esa persona, ni que no esté duplicado
+//                          por otro usuario con datos ajenos.
+//   contacto_verificado  — correo y/o teléfono confirmados por enlace/OTP.
+//                          Prueba control de un canal de contacto, no identidad.
+// "cedula_confirmada" e "identidad_completa" (nombres previos) se retiraron
+// porque prometían una garantía de identidad que el sistema no ofrece — ver
+// auditoría de privacidad e integridad electoral.
 export type VerificationLevelName =
   | 'registrado'
-  | 'cedula_confirmada'
-  | 'identidad_completa'
+  | 'documento_declarado'
+  | 'contacto_verificado'
 
 export interface CitizenProfile {
   id: string
@@ -41,8 +53,14 @@ export interface DIDDocument {
   '@context': string[]
   id: string
   controller: string
-  verificationMethod: VerificationMethod[]
-  authentication: string[]
+  // `verificationMethod`/`authentication` se omiten (no se publican vacíos ni
+  // falsos) hasta implementar un método criptográfico real: el ciudadano
+  // genera su propio par de claves y el backend solo recibe la pública tras
+  // verificar una firma de desafío. Un UUID no es una clave pública y no debe
+  // presentarse como tal bajo un tipo como Ed25519VerificationKey2020 — eso
+  // sugiere garantías de firma/rotación/revocación que el sistema no ofrece.
+  verificationMethod?: VerificationMethod[]
+  authentication?: string[]
   service: ServiceEndpoint[]
   created: string
   updated: string

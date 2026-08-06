@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireVerified } from '../../middleware/auth'
 import { ConfirmCedulaSchema, ConfirmEmailTokenSchema, UpdateProfileSchema, ConnectWalletSchema } from './identity.schema'
+import { z } from 'zod'
 import {
   resolveDID,
   getOwnDIDDocument,
@@ -10,7 +11,14 @@ import {
   confirmEmail,
   updateCitizenProfile,
   connectWallet,
+  requestWalletNonce,
 } from './identity.service'
+
+const WalletNonceSchema = z.object({
+  wallet_address: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/, 'Dirección de wallet inválida'),
+})
 
 const DID_CONTENT_TYPE = 'application/did+ld+json'
 
@@ -107,7 +115,22 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Wallet Polygon ────────────────────────────────────────────────────────
 
-  // POST /identity/wallet — conectar billetera Polygon para recibir SBT
+  // POST /identity/wallet/nonce — obtiene el mensaje a firmar antes de conectar
+  app.post('/wallet/nonce', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = WalletNonceSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
+    }
+
+    const result = await requestWalletNonce(request.citizen.sub, parsed.data.wallet_address)
+    return reply.send(result)
+  })
+
+  // POST /identity/wallet — conectar billetera Polygon para recibir SBT.
+  // Requiere `signature` del mensaje devuelto por POST /identity/wallet/nonce.
   app.post('/wallet', {
     preHandler: requireAuth,
     config: { rateLimit: { max: 5, timeWindow: '1 hour' } },

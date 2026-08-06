@@ -44,11 +44,11 @@ afterAll(() => app.close())
 beforeEach(() => jest.resetAllMocks())
 
 const mockDoc = {
+  // Sin verificationMethod/authentication: no se publica una clave
+  // criptográfica que no existe (ver identity.service.ts buildDIDDocument).
   '@context': ['https://www.w3.org/ns/did/v1'],
   id: DID,
   controller: DID,
-  verificationMethod: [{ id: `${DID}#keys-1`, type: 'Ed25519VerificationKey2020', controller: DID, publicKeyMultibase: 'z...' }],
-  authentication: [`${DID}#keys-1`],
   service: [{ id: `${DID}#civic-profile`, type: 'CivicProfile', serviceEndpoint: `http://localhost:4000/identity/did/${DID}` }],
   created: '2024-01-01T00:00:00.000Z',
   updated: '2024-01-01T00:00:00.000Z',
@@ -117,7 +117,7 @@ describe('GET /identity/status', () => {
       citizen_id: CITIZEN_ID,
       did: DID,
       level: 1,
-      level_name: 'cedula_confirmada',
+      level_name: 'documento_declarado',
       can_vote: true,
       can_propose: false,
     })
@@ -156,7 +156,7 @@ describe('POST /identity/verify/cedula', () => {
       citizen_id: CITIZEN_ID,
       did: DID,
       level: 1,
-      level_name: 'cedula_confirmada',
+      level_name: 'documento_declarado',
       can_vote: true,
       can_propose: false,
     })
@@ -246,7 +246,7 @@ describe('POST /identity/verify/email/confirm', () => {
       citizen_id: CITIZEN_ID,
       did: DID,
       level: 2,
-      level_name: 'identidad_completa',
+      level_name: 'contacto_verificado',
       can_vote: true,
       can_propose: true,
     })

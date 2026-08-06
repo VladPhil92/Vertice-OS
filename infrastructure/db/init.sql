@@ -118,7 +118,12 @@ CREATE TABLE proposals (
     category TEXT NOT NULL,
     scope TEXT NOT NULL
         CHECK (scope IN ('neighborhood', 'locality', 'city', 'regional', 'national')),
-    
+
+    -- Territorio de la propuesta — snapshot del autor tomado en creación.
+    -- Determina el electorado elegible cuando scope = neighborhood/locality.
+    locality_id INTEGER REFERENCES localities(id),
+    neighborhood TEXT,
+
     -- Estado del ciclo de vida
     status TEXT DEFAULT 'idea'
         CHECK (status IN ('idea', 'draft', 'debate', 'voting', 'approved',
@@ -170,6 +175,18 @@ CREATE INDEX idx_proposals_voting_ends ON proposals(voting_ends_at)
 -- Ideas trending: ordenar por endorsements en fase de idea/draft
 CREATE INDEX idx_proposals_endorsements ON proposals(endorsement_count DESC)
     WHERE status IN ('idea', 'draft');
+CREATE INDEX idx_proposals_locality ON proposals(locality_id);
+
+-- ── Avales de propuestas ─────────────────────────────────────────────────────
+-- Fuente de verdad durable de "quién avaló qué". El UNIQUE (via PRIMARY KEY
+-- compuesta) es lo que impide el doble aval; proposals.endorsement_count es
+-- solo un contador derivado para lectura rápida.
+CREATE TABLE proposal_endorsements (
+    proposal_id UUID NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+    citizen_id UUID NOT NULL REFERENCES citizens(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (proposal_id, citizen_id)
+);
 
 -- ── Votos ─────────────────────────────────────────────────────────────────────
 -- Diseñado para privacidad: el voto individual es opaco

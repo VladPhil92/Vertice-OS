@@ -19,6 +19,7 @@ model Locality {
 
   citizens  Citizen[]
   reports   TerritorialReport[]
+  proposals Proposal[]
 
   @@map("localities")
 }
@@ -52,6 +53,7 @@ model Citizen {
   delegationsRecv   Delegation[]        @relation("Delegate")
   reputationEvents  ReputationEvent[]
   legalDocuments    LegalDocument[]
+  endorsements      ProposalEndorsement[]
 
   @@index([localityId], map: "idx_citizens_locality")
   @@index([reputationScore(sort: Desc)], map: "idx_citizens_reputation")
@@ -123,6 +125,11 @@ model Proposal {
   executiveSummary      String?   @map("executive_summary")
   category              String
   scope                 String
+  // Territorio de la propuesta — snapshot del autor tomado en creación.
+  // Determina el electorado elegible cuando scope = neighborhood/locality;
+  // ver computeEligibleVoters() en governance.service.ts.
+  localityId            Int?      @map("locality_id")
+  neighborhood          String?
   status                String    @default("idea")
   endorsementCount      Int       @default(0) @map("endorsement_count")
   commentCount          Int       @default(0) @map("comment_count")
@@ -146,14 +153,33 @@ model Proposal {
   votingEndsAt          DateTime? @map("voting_ends_at") @db.Timestamptz(6)
   decidedAt             DateTime? @map("decided_at") @db.Timestamptz(6)
 
-  author      Citizen?     @relation(fields: [authorId], references: [id])
+  author      Citizen?              @relation(fields: [authorId], references: [id])
+  locality    Locality?             @relation(fields: [localityId], references: [id])
   votes       Vote[]
   delegations Delegation[]
+  endorsements ProposalEndorsement[]
 
   @@index([authorId], map: "idx_proposals_author")
   @@index([category, scope], map: "idx_proposals_category")
   @@index([status, createdAt(sort: Desc)], map: "idx_proposals_status")
+  @@index([localityId], map: "idx_proposals_locality")
   @@map("proposals")
+}
+
+// ── Avales de propuestas ──────────────────────────────────────────────────────
+// Fuente de verdad durable para "quién avaló qué propuesta". Reemplaza el SET
+// de Redis como único registro: Redis puede seguir usándose como caché, pero
+// esta restricción UNIQUE es lo que realmente impide el doble aval.
+model ProposalEndorsement {
+  proposalId String   @map("proposal_id") @db.Uuid
+  citizenId  String   @map("citizen_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  citizen  Citizen  @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+
+  @@id([proposalId, citizenId])
+  @@map("proposal_endorsements")
 }
 
 // ── Votos ──────────────────────────────────────────────────────────────────────
