@@ -1,11 +1,19 @@
 const mockQueryRaw = jest.fn()
+// prisma.$transaction(cb) simplemente ejecuta cb con un `tx` cuyo $queryRaw es
+// el mismo mock — así las secuencias de mockResolvedValueOnce se leen en el
+// mismo orden que las llamadas reales dentro y fuera de la transacción.
+const mockTransaction = jest.fn((cb: (tx: { $queryRaw: typeof mockQueryRaw }) => unknown) =>
+  cb({ $queryRaw: mockQueryRaw }),
+)
 const mockGetCache = jest.fn()
 const mockSetCache = jest.fn()
 const mockDelCache = jest.fn()
 const mockRedisSadd = jest.fn()
+const mockEnqueueJob = jest.fn()
+const mockRecordAuditEvent = jest.fn()
 
 jest.mock('../../../lib/prisma', () => ({
-  prisma: { $queryRaw: mockQueryRaw },
+  prisma: { $queryRaw: mockQueryRaw, $transaction: mockTransaction },
 }))
 
 jest.mock('../../../lib/cache', () => ({
@@ -17,6 +25,14 @@ jest.mock('../../../lib/cache', () => ({
 
 jest.mock('../../../lib/redis', () => ({
   redis: { sadd: mockRedisSadd },
+}))
+
+jest.mock('../../../lib/jobs', () => ({
+  enqueueJob: mockEnqueueJob,
+}))
+
+jest.mock('../../../lib/audit', () => ({
+  recordAuditEvent: mockRecordAuditEvent,
 }))
 
 import { createHmac } from 'crypto'
@@ -31,6 +47,8 @@ import {
   createDelegation,
   revokeDelegation,
   getGovernanceStats,
+  adminAdvanceProposal,
+  adminArchiveProposal,
 } from '../governance.service'
 
 // Replica voteNullifier() (privada en governance.service.ts) usando la misma
@@ -97,6 +115,11 @@ beforeEach(() => {
   mockSetCache.mockResolvedValue(undefined)
   mockDelCache.mockResolvedValue(undefined)
   mockRedisSadd.mockResolvedValue(1)
+  // jest.resetAllMocks() borra también la implementación pasada a jest.fn(),
+  // no solo las llamadas — hay que reinstalarla en cada test.
+  mockTransaction.mockImplementation((cb: (tx: { $queryRaw: typeof mockQueryRaw }) => unknown) =>
+    cb({ $queryRaw: mockQueryRaw }),
+  )
 })
 
 // ── createProposal ─────────────────────────────────────────────────────────────
@@ -335,29 +358,34 @@ describe('advanceProposalStage', () => {
     expect(proposal.status).toBe('debate')
   })
 
-  it('advances debate → voting with quorum parameters', async () => {
+  it('advances debate → voting with quorum parameters, congelando el padrón', async () => {
     const debateProposal = { ...PROPOSAL_ROW, status: 'debate', endorsement_count: 10n }
+    // freezeVoterRoll ahora es un INSERT ... SELECT ... RETURNING citizen_id:
+    // el número de elegibles ES el número de filas devueltas, no un COUNT(*)
+    // aparte que pudiera desincronizarse.
+    const rosterRows = [{ citizen_id: 'c1' }, { citizen_id: 'c2' }, { citizen_id: 'c3' }]
     const votingProposal = {
       ...PROPOSAL_ROW,
       status: 'voting',
       endorsement_count: 10n,
       quorum_required: '0.150',
       approval_threshold: '0.400',
-      eligible_voters: 500n,
+      eligible_voters: 3n,
       voting_starts_at: new Date(),
       voting_ends_at: new Date(Date.now() + 48 * 3600 * 1000),
     }
     mockQueryRaw
-      .mockResolvedValueOnce([debateProposal])              // get proposal
-      .mockResolvedValueOnce([{ count: 500n }])             // eligible voters count
-      .mockResolvedValueOnce([votingProposal])              // update proposal
+      .mockResolvedValueOnce([debateProposal])   // get proposal
+      .mockResolvedValueOnce(rosterRows)         // freezeVoterRoll: padrón congelado (dentro de la tx)
+      .mockResolvedValueOnce([votingProposal])   // update proposal (dentro de la tx)
 
     const proposal = await advanceProposalStage('proposal-uuid', 'author-uuid')
 
     expect(proposal.status).toBe('voting')
     expect(proposal.quorum_required).toBe(0.15)
     expect(proposal.approval_threshold).toBe(0.4)
-    expect(proposal.eligible_voters).toBe(500)
+    expect(proposal.eligible_voters).toBe(3)
+    expect(mockTransaction).toHaveBeenCalledTimes(1)
   })
 
   it('throws 403 when caller is not the author', async () => {
@@ -390,6 +418,44 @@ describe('advanceProposalStage', () => {
     const proposal = await advanceProposalStage('proposal-uuid', 'wrong-author', {})
 
     expect(proposal.status).toBe('approved')
+    // El job de registro on-chain se encola en la misma transacción que el
+    // cierre — nunca fuera de ella.
+    expect(mockEnqueueJob).toHaveBeenCalledTimes(1)
+    expect(mockEnqueueJob).toHaveBeenCalledWith(
+      'record_voting_result',
+      expect.objectContaining({ proposalId: closedVoting.id, result: 'approved' }),
+      expect.objectContaining({ $queryRaw: mockQueryRaw }),
+    )
+  })
+
+  it('cierre idempotente: una votación ya cerrada por otra solicitud no repite el job ni la notificación', async () => {
+    // Dos finalizaciones concurrentes de la misma votación expirada: solo la
+    // primera debe encontrar status='voting' y ganar el UPDATE guardado; la
+    // segunda debe ver 0 filas afectadas y devolver el estado actual sin
+    // volver a encolar el registro on-chain.
+    const closedVoting = {
+      ...PROPOSAL_ROW,
+      status: 'voting',
+      quorum_required: '0.100',
+      approval_threshold: '0.400',
+      eligible_voters: 100n,
+      total_votes: 20n,
+      approve_votes_weighted: '16.0000',
+      reject_votes_weighted: '4.0000',
+      abstain_votes_weighted: '0.0000',
+      voting_ends_at: new Date(Date.now() - 1000),
+    }
+    const alreadyClosed = { ...closedVoting, status: 'approved', decided_at: new Date() }
+
+    mockQueryRaw
+      .mockResolvedValueOnce([closedVoting])   // get proposal
+      .mockResolvedValueOnce([])               // UPDATE ... WHERE status='voting' → 0 filas, ya cerrada
+      .mockResolvedValueOnce([alreadyClosed])  // SELECT de reconsulta tras perder la carrera
+
+    const proposal = await advanceProposalStage('proposal-uuid', 'wrong-author', {})
+
+    expect(proposal.status).toBe('approved')
+    expect(mockEnqueueJob).not.toHaveBeenCalled()
   })
 })
 
@@ -635,5 +701,71 @@ describe('getGovernanceStats', () => {
     expect(stats.by_category[0].count).toBe(7)
     expect(typeof stats.by_category[0].count).toBe('number')
     expect(mockSetCache).toHaveBeenCalledWith('stats', 'global', expect.any(Object), 600)
+  })
+})
+
+// ── admin: auditoría de acciones de moderador ──────────────────────────────────
+
+describe('adminAdvanceProposal', () => {
+  it('avanza la propuesta y registra el evento de auditoría con actor, origen y destino', async () => {
+    const debateProposal = { ...PROPOSAL_ROW, status: 'debate' }
+    mockQueryRaw
+      .mockResolvedValueOnce([debateProposal])
+      .mockResolvedValueOnce([{ ...debateProposal, status: 'voting' }])
+
+    const proposal = await adminAdvanceProposal('proposal-uuid', 'moderator-uuid')
+
+    expect(proposal.status).toBe('voting')
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actorId: 'moderator-uuid',
+      action: 'admin_advance_proposal',
+      targetType: 'proposal',
+      targetId: 'proposal-uuid',
+      result: 'success',
+      metadata: { from: 'debate', to: 'voting' },
+    }))
+  })
+
+  it('registra un evento "rejected" en la auditoría cuando el estado no admite avance', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ ...PROPOSAL_ROW, status: 'approved' }])
+
+    await expect(adminAdvanceProposal('proposal-uuid', 'moderator-uuid')).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'INVALID_TRANSITION',
+    })
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actorId: 'moderator-uuid',
+      action: 'admin_advance_proposal',
+      result: 'rejected',
+    }))
+  })
+})
+
+describe('adminArchiveProposal', () => {
+  it('archiva la propuesta y registra el evento de auditoría con el motivo', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ ...PROPOSAL_ROW, status: 'archived', rejection_reason: 'spam' }])
+
+    const proposal = await adminArchiveProposal('proposal-uuid', 'moderator-uuid', 'spam')
+
+    expect(proposal.status).toBe('archived')
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actorId: 'moderator-uuid',
+      action: 'admin_archive_proposal',
+      targetId: 'proposal-uuid',
+      result: 'success',
+      reason: 'spam',
+    }))
+  })
+
+  it('registra "not_found" en la auditoría cuando la propuesta no existe', async () => {
+    mockQueryRaw.mockResolvedValueOnce([])
+
+    await expect(adminArchiveProposal('missing-uuid', 'moderator-uuid', 'spam')).rejects.toMatchObject({
+      statusCode: 404,
+    })
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actorId: 'moderator-uuid',
+      result: 'not_found',
+    }))
   })
 })

@@ -4,14 +4,10 @@ import { prisma } from '../../lib/prisma'
 import { redis } from '../../lib/redis'
 import { getCache, delCache, TTL } from '../../lib/cache'
 import { config } from '../../config'
-import { logger } from '../../lib/logger'
 import { sendEmailVerification } from '../../lib/email'
 import { hashCedula } from '../../lib/identity-hash'
-import {
-  isValidWalletAddress,
-  mintCitizenBadge,
-  buildCitizenBadgeURI,
-} from '../../lib/blockchain'
+import { isValidWalletAddress } from '../../lib/blockchain'
+import { enqueueJob } from '../../lib/jobs'
 import type { DIDDocument, VerificationStatus, VerificationLevel } from './identity.types'
 import type { UpdateProfileInput, ConnectWalletInput } from './identity.schema'
 
@@ -239,9 +235,16 @@ export async function confirmEmail(citizenId: string, token: string): Promise<Ve
   await redis.del(emailVerifyKey(citizenId))
   await delCache('profile', citizenId)
 
-  // Si el ciudadano ya tiene wallet conectada, disparar mint del SBT de identidad
+  // Si el ciudadano ya tiene wallet conectada, encolar el mint del SBT de
+  // identidad — un worker durable lo procesa con reintentos (ver lib/jobs.ts)
+  // en vez del antiguo fire-and-forget que perdía el mint en silencio si el
+  // proceso caía a mitad de camino.
   if (updated.walletAddress) {
-    triggerIdentityBadgeMint(citizenId, updated.did, updated.walletAddress).catch(() => null)
+    await enqueueJob('mint_identity_badge', {
+      citizenId,
+      did: updated.did,
+      walletAddress: updated.walletAddress,
+    })
   }
 
   return buildVerificationStatus(updated)
@@ -343,33 +346,18 @@ export async function connectWallet(
 
   await delCache('profile', citizenId)
 
-  // Mint si el ciudadano tiene nivel 2 y aún no tiene SBT
+  // Mint si el ciudadano tiene nivel 2 y aún no tiene SBT — encolado, no
+  // fire-and-forget (ver lib/jobs.ts).
   const sbtPending = citizen.verificationLevel >= 2 && !citizen.sbtTokenId
   if (sbtPending) {
-    triggerIdentityBadgeMint(citizenId, citizen.did, address).catch(() => null)
+    await enqueueJob('mint_identity_badge', {
+      citizenId,
+      did: citizen.did,
+      walletAddress: address,
+    })
   }
 
   return { wallet_address: address, sbt_pending: sbtPending }
-}
-
-/**
- * Dispara el mint on-chain del CITIZEN_VERIFIED badge en fire-and-forget.
- * Si el mint tiene éxito, persiste el tokenId en la DB.
- */
-async function triggerIdentityBadgeMint(
-  citizenId: string,
-  did: string,
-  walletAddress: string,
-): Promise<void> {
-  const tokenURI = buildCitizenBadgeURI(did, 2)
-  const tokenId  = await mintCitizenBadge(walletAddress, did, tokenURI)
-
-  if (tokenId !== null) {
-    await prisma.citizen.update({
-      where: { id: citizenId },
-      data: { sbtTokenId: tokenId },
-    }).catch((err: unknown) => logger.error('[identity] failed to persist sbtTokenId', err))
-  }
 }
 
 // ── Perfil territorial ────────────────────────────────────────────────────────
