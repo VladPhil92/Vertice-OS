@@ -24,6 +24,11 @@ export const ConnectWalletSchema = z.object({
   wallet_address: z
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/, 'Dirección de wallet inválida — debe ser una dirección Ethereum válida'),
+  // Firma del mensaje devuelto por POST /identity/wallet/nonce. Sin esto,
+  // conectar una wallet solo comprobaba formato + unicidad: cualquiera podía
+  // copiar la dirección pública de otra persona y registrarla como propia,
+  // sin controlarla. La firma prueba control real de la clave privada.
+  signature: z.string().regex(/^0x[0-9a-fA-F]+$/, 'Firma inválida'),
 })
 
 export type ConfirmCedulaInput      = z.infer<typeof ConfirmCedulaSchema>

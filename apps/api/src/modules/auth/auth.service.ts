@@ -10,16 +10,12 @@ import { sendPasswordReset } from '../../lib/email'
 import { runCypher } from '../../lib/neo4j'
 import { config } from '../../config'
 import { logger } from '../../lib/logger'
+import { hashCedula } from '../../lib/identity-hash'
 import type { RegisterInput, LoginInput } from './auth.schema'
 import type { AuthTokenResponse, CitizenPublicProfile } from './auth.types'
 
 const PWD_RESET_PREFIX = 'vertice:pwd_reset'
 const PWD_RESET_TTL    = 30 * 60 // 30 minutos
-
-// Cédulas se almacenan como SHA-256 — nunca en texto plano
-function hashCedula(cedula: string): string {
-  return crypto.createHash('sha256').update(cedula).digest('hex')
-}
 
 function generateDid(uuid: string): string {
   return `did:vertice:${uuid}`

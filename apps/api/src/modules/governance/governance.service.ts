@@ -96,14 +96,78 @@ function makeError(message: string, statusCode: number, code: string): Error {
 }
 
 function voteNullifier(citizenId: string, proposalId: string): string {
-  return createHmac('sha256', config.JWT_SECRET)
+  // Clave dedicada, distinta de JWT_SECRET: rotar el secreto de sesión no debe
+  // volver irreconocible el historial de nulificadores ya emitidos. En
+  // producción VOTE_NULLIFIER_SECRET es obligatorio (ver config.ts); el
+  // fallback a JWT_SECRET solo cubre desarrollo local.
+  const key = config.VOTE_NULLIFIER_SECRET ?? config.JWT_SECRET
+  return createHmac('sha256', key)
     .update(`${citizenId}:${proposalId}`)
     .digest('hex')
 }
 
-function computeVoteWeight(reputationScore: number): number {
-  const normalized = Math.min(reputationScore / 100, 1.0)
-  return Math.min(1.0 + normalized * 0.5, 1.5)
+/**
+ * Un ciudadano verificado = un voto. Siempre 1.0, sin importar la reputación.
+ *
+ * Antes escalaba de 1.0 a 1.5 según reputation_score — hasta 50% más poder de
+ * voto para algunas cuentas que otras. La reputación la calcula la propia
+ * plataforma (avales, participación, moderadores), así que ponderar el voto
+ * con ella crea un circuito autorreferencial: el sistema decide quién se
+ * comporta "bien" y luego le da más poder político a quien se comporta así.
+ * Eso favorece a usuarios antiguos, penaliza a disidentes y desincentiva la
+ * disidencia legítima — inaceptable para una plataforma de participación
+ * política sin un marco jurídico y comunitario explícito que lo respalde.
+ *
+ * La reputación sigue existiendo para moderación, insignias y prioridad de
+ * respuestas — nunca para multiplicar el valor de un voto. Reintroducir voto
+ * ponderado debe ser una decisión deliberada y visible, no un flag que
+ * alguien reactiva sin darse cuenta.
+ *
+ * El parámetro se conserva (sin usarse) para no romper las llamadas
+ * existentes; ver los dos call-sites en castVote.
+ */
+function computeVoteWeight(_reputationScore: number): number {
+  return 1.0
+}
+
+/**
+ * Universo de votantes elegibles según el ámbito (scope) de la propuesta.
+ *
+ * Antes se contaba SIEMPRE a todos los ciudadanos verificados de la ciudad,
+ * sin importar el scope: una propuesta de barrio calculaba su quórum contra
+ * el total de ciudadanos registrados en TODO el sistema, en vez de contra el
+ * electorado real de ese barrio. Eso podía volver el quórum imposible de
+ * alcanzar, artificialmente bajo, o habilitar a ciudadanos ajenos al
+ * territorio afectado.
+ */
+async function computeEligibleVoters(proposal: Proposal): Promise<number> {
+  let countRows: Array<{ count: bigint }>
+
+  switch (proposal.scope) {
+    case 'neighborhood':
+      countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+        SELECT COUNT(*) as count FROM citizens
+        WHERE verification_level >= 1 AND neighborhood = ${proposal.neighborhood}
+      `)
+      break
+    case 'locality':
+      countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+        SELECT COUNT(*) as count FROM citizens
+        WHERE verification_level >= 1 AND locality_id = ${proposal.locality_id}
+      `)
+      break
+    // city/regional/national: no hay modelo de multi-ciudad todavía, así que
+    // el universo citywide sigue siendo correcto para estos ámbitos.
+    case 'city':
+    case 'regional':
+    case 'national':
+    default:
+      countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+        SELECT COUNT(*) as count FROM citizens WHERE verification_level >= 1
+      `)
+  }
+
+  return Number(countRows[0].count)
 }
 
 // ── createProposal ─────────────────────────────────────────────────────────────
@@ -112,15 +176,40 @@ export async function createProposal(
   authorId: string,
   data: CreateProposalInput,
 ): Promise<Proposal> {
+  // Snapshot del territorio del autor. Sin esto el cálculo de quórum contaba
+  // a TODOS los ciudadanos verificados de la ciudad para una propuesta de
+  // barrio, inflando o desvirtuando su electorado real — ver
+  // computeEligibleVoters().
+  const authorRows = await prisma.$queryRaw<Array<{ locality_id: number | null; neighborhood: string | null }>>(Prisma.sql`
+    SELECT locality_id, neighborhood FROM citizens WHERE id = ${authorId}::uuid
+  `)
+  const localityId = authorRows[0]?.locality_id ?? null
+  const neighborhood = authorRows[0]?.neighborhood ?? null
+
+  if (data.scope === 'neighborhood' && !neighborhood) {
+    throw makeError(
+      'Tu perfil no tiene barrio registrado — no se puede fijar el electorado de una propuesta de barrio',
+      400, 'MISSING_NEIGHBORHOOD',
+    )
+  }
+  if (data.scope === 'locality' && !localityId) {
+    throw makeError(
+      'Tu perfil no tiene localidad registrada — no se puede fijar el electorado de una propuesta de localidad',
+      400, 'MISSING_LOCALITY',
+    )
+  }
+
   const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
-    INSERT INTO proposals (author_id, title, description, executive_summary, category, scope)
+    INSERT INTO proposals (author_id, title, description, executive_summary, category, scope, locality_id, neighborhood)
     VALUES (
       ${authorId}::uuid,
       ${data.title},
       ${data.description},
       ${data.executive_summary ?? null},
       ${data.category},
-      ${data.scope}
+      ${data.scope},
+      ${localityId},
+      ${neighborhood}
     )
     RETURNING *
   `)
@@ -198,15 +287,28 @@ export async function endorseProposal(
     throw makeError('Solo se pueden avalar propuestas en fase idea o borrador', 400, 'WRONG_STATUS')
   }
 
-  // sadd es atómico y devuelve cuántos miembros nuevos agregó (0 si ya
-  // estaba). Usar su resultado como guarda evita la carrera de "leer con
-  // sismember, luego escribir con sadd" entre dos requests concurrentes del
-  // mismo ciudadano, que podía duplicar el aval.
-  const endorseKey = `vertice:endorsed:${proposalId}`
-  const wasAdded = await redis.sadd(endorseKey, citizenId)
-  if (wasAdded === 0) {
+  // Postgres es la fuente de verdad de "quién avaló", no Redis. Antes la
+  // deduplicación vivía solo en un SET de Redis mientras Postgres únicamente
+  // guardaba un contador: si Redis perdía datos (expiración, restauración
+  // incompleta, cambio de cluster), un ciudadano podía volver a avalar y el
+  // contador seguía creciendo sin relación con la realidad. La restricción
+  // UNIQUE de proposal_endorsements es lo único que realmente impide el
+  // doble aval; el INSERT ... ON CONFLICT es tan atómico como el SADD que
+  // reemplaza, así que la protección contra condiciones de carrera se
+  // mantiene.
+  const inserted = await prisma.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
+    INSERT INTO proposal_endorsements (proposal_id, citizen_id)
+    VALUES (${proposalId}::uuid, ${citizenId}::uuid)
+    ON CONFLICT (proposal_id, citizen_id) DO NOTHING
+    RETURNING citizen_id
+  `)
+  if (inserted.length === 0) {
     throw makeError('Ya avalaste esta propuesta', 409, 'ALREADY_ENDORSED')
   }
+
+  // Best-effort: acelera lecturas del set (p.ej. "¿ya avalé?" en el frontend)
+  // pero ya no es la guarda de duplicados.
+  redis.sadd(`vertice:endorsed:${proposalId}`, citizenId).catch(() => null)
 
   const updated = await prisma.$queryRaw<Pick<ProposalRow, 'endorsement_count' | 'status'>[]>(Prisma.sql`
     UPDATE proposals
@@ -296,10 +398,7 @@ export async function advanceProposalStage(
       const clampedHours = Math.max(cfg.minHours, Math.min(cfg.maxHours, durationHours))
       const votingEndsAt = new Date(Date.now() + clampedHours * 3600 * 1000)
 
-      const countRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-        SELECT COUNT(*) as count FROM citizens WHERE verification_level >= 1
-      `)
-      const eligibleVoters = Number(countRows[0].count)
+      const eligibleVoters = await computeEligibleVoters(proposal)
 
       updatedRows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
         UPDATE proposals
@@ -477,9 +576,15 @@ export async function castVote(
   }
 
   // ── Liquid democracy: aggregate delegated weight ───────────────────────────
-  // Find delegators who trust this citizen (general or domain delegation)
-  // and have NOT already voted directly — their weight is added to this vote.
-  const delegators = await prisma.$queryRaw<Array<{
+  // Find delegators who trust this citizen (general or domain delegation).
+  // El nullifier de cada delegador se calcula con voteNullifier() (la misma
+  // función usada en todo el módulo) y NO se recalcula en SQL crudo: antes
+  // este bloque tenía su propia expresión `hmac(..., JWT_SECRET, 'sha256')`
+  // duplicada e inconsistente con voteNullifier(), que además seguía
+  // apuntando a JWT_SECRET incluso después de introducir
+  // VOTE_NULLIFIER_SECRET como clave dedicada — habría quedado
+  // silenciosamente desincronizada.
+  const delegatorRows = await prisma.$queryRaw<Array<{
     delegator_id: string
     reputation_score: string
   }>>(Prisma.sql`
@@ -489,17 +594,18 @@ export async function castVote(
     WHERE d.delegate_id   = ${citizenId}::uuid
       AND d.is_active     = true
       AND d.delegation_type IN ('general', 'domain')
-      AND NOT EXISTS (
-        SELECT 1 FROM votes v
-        WHERE v.nullifier_hash = encode(
-          hmac(
-            concat(d.delegator_id::text, ':', ${proposalId}),
-            ${config.JWT_SECRET},
-            'sha256'
-          ), 'hex'
-        )
-      )
   `)
+
+  const delegatorNullifiers = delegatorRows.map(d => voteNullifier(d.delegator_id, proposalId))
+  const alreadyVotedRows = delegatorNullifiers.length > 0
+    ? await prisma.$queryRaw<Array<{ nullifier_hash: string }>>(Prisma.sql`
+        SELECT nullifier_hash FROM votes WHERE nullifier_hash IN (${Prisma.join(delegatorNullifiers)})
+      `)
+    : []
+  const alreadyVoted = new Set(alreadyVotedRows.map(r => r.nullifier_hash))
+  const delegators = delegatorRows.filter(
+    (d, i) => !alreadyVoted.has(delegatorNullifiers[i]),
+  )
 
   const delegatedWeight = delegators.reduce(
     (sum, d) => sum + computeVoteWeight(Number(d.reputation_score)),

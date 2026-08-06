@@ -218,8 +218,19 @@ docs/XXX      → documentación
 ### Módulo 01 — Identidad Cívica Digital
 - **Estado:** 🟢 Implementado (API completa — rutas, servicio, schema, tests)
 - **Archivos clave:** `apps/api/src/modules/identity/`
-- **Implementado:** DID generation, verificación de cédula (SHA-256), verificación de email, niveles de verificación 0–3, integración con reputación
-- **Pendiente:** Deploy contratos en Polygon Amoy testnet
+- **Implementado:** DID generation (sin clave criptográfica falsa — `verificationMethod`
+  se omite hasta tener un método real), cédula protegida con HMAC-SHA256 +
+  `IDENTITY_PEPPER` (no SHA-256 sin sal), verificación de email, conexión de
+  wallet con firma (Sign-In-with-Ethereum simplificado, `POST
+  /identity/wallet/nonce` + verificación de firma), integración con reputación
+- **Niveles de verificación (nombres honestos, no prometen más de lo que prueban):**
+  `registrado` → `documento_declarado` (el ciudadano reintrodujo su propia
+  cédula; NO valida contra ninguna fuente externa) → `contacto_verificado`
+  (correo confirmado). `documento_declarado` habilita voto consultivo —
+  ver nota de integridad electoral en Módulo 03.
+- **Pendiente:** Verificación real de identidad (proveedor externo o revisión
+  manual) antes de habilitar votación vinculante; deploy contratos en Polygon
+  Amoy testnet
 
 ### Módulo 02 — Motor Territorial
 - **Estado:** 🟢 Implementado (API + frontend completos)
@@ -229,7 +240,24 @@ docs/XXX      → documentación
 ### Módulo 03 — Gobernanza y Decisión
 - **Estado:** 🟢 Implementado (API + frontend completos)
 - **Archivos clave:** `apps/api/src/modules/governance/`, `apps/web/app/dashboard/governance/`
-- **Implementado:** Propuestas, 5 etapas (idea→draft→debate→voting→resultado), democracia líquida, delegaciones, quórum configurable por alcance, avales
+- **Implementado:** Propuestas, 5 etapas (idea→draft→debate→voting→resultado), democracia líquida, delegaciones
+- **Integridad electoral:**
+  - **Un ciudadano = un voto.** `computeVoteWeight()` siempre devuelve 1.0 —
+    ya no escala 1.0–1.5 según reputación. La reputación sigue existiendo
+    para moderación/insignias, nunca para multiplicar el valor de un voto.
+  - **Quórum territorial real.** Cada propuesta guarda un snapshot del
+    barrio/localidad de su autor al crearse (`proposals.locality_id`,
+    `proposals.neighborhood`). El universo de votantes elegibles se filtra
+    por ese territorio cuando `scope = neighborhood/locality`; antes se
+    contaba siempre a toda la ciudad sin importar el scope.
+  - **Avales con fuente de verdad en Postgres.** `proposal_endorsements`
+    (PK compuesta `proposal_id, citizen_id`) es la restricción real que
+    impide el doble aval. Redis sigue usándose como caché, pero ya no es la
+    guarda de duplicados — antes, si Redis perdía datos, un ciudadano podía
+    volver a avalar sin límite.
+  - **Nulificador de voto con clave propia** (`VOTE_NULLIFIER_SECRET`,
+    distinta de `JWT_SECRET`) — rotar el secreto de sesión ya no invalida
+    silenciosamente el historial de nulificadores.
 
 ### Módulo 04 — Capa IA Multi-Agente
 - **Estado:** 🟢 Implementado
@@ -271,7 +299,9 @@ docs/XXX      → documentación
 ## REGLAS DE SEGURIDAD — NUNCA VIOLAR
 
 1. **NUNCA** commitear archivos `.env` — solo `.env.example`
-2. **NUNCA** almacenar cédulas en texto plano — solo SHA-256 hash
+2. **NUNCA** almacenar cédulas en texto plano — solo HMAC-SHA256 con `IDENTITY_PEPPER`
+   (SHA-256 sin sal es enumerable por fuerza bruta dado el espacio pequeño de
+   cédulas colombianas; ver `apps/api/src/lib/identity-hash.ts`)
 3. **NUNCA** exponer `ANTHROPIC_API_KEY` en el frontend (solo backend/AI service)
 4. **NUNCA** usar `eval()` o inputs sin sanitizar en SQL
 5. **NUNCA** hardcodear private keys de blockchain

@@ -76,8 +76,8 @@ describe('registerCitizen', () => {
   })
 
   it('throws 409 when cedula already registered', async () => {
-    const crypto = await import('crypto')
-    const hash = crypto.createHash('sha256').update('1234567890').digest('hex')
+    const { hashCedula } = await import('../../../lib/identity-hash')
+    const hash = hashCedula('1234567890')
     // findFirst devuelve un ciudadano cuyo cedulaHash coincide con el input
     mockCitizen.findFirst.mockResolvedValueOnce({ id: 'x', cedulaHash: hash, email: null })
 
@@ -87,9 +87,9 @@ describe('registerCitizen', () => {
   })
 
   it('throws 409 when email already registered', async () => {
-    const crypto = await import('crypto')
+    const { hashCedula } = await import('../../../lib/identity-hash')
     // Hash de una cédula DIFERENTE para que el chequeo de cédula no salte primero
-    const differentHash = crypto.createHash('sha256').update('0000000000').digest('hex')
+    const differentHash = hashCedula('0000000000')
     mockCitizen.findFirst.mockResolvedValueOnce({
       id: 'x',
       cedulaHash: differentHash,

@@ -52,6 +52,10 @@ export interface Proposal {
   executive_summary: string | null
   category: string
   scope: ProposalScope
+  // Territorio — snapshot del autor tomado en creación; determina el
+  // electorado elegible cuando scope = neighborhood/locality.
+  locality_id: number | null
+  neighborhood: string | null
   status: ProposalStatus
   endorsement_count: number
   comment_count: number
@@ -155,6 +159,8 @@ export interface ProposalRow {
   executive_summary: string | null
   category: string
   scope: string
+  locality_id: number | null
+  neighborhood: string | null
   status: string
   endorsement_count: bigint | number
   comment_count: bigint | number

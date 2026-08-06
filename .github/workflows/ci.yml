@@ -153,13 +153,19 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
+      # Sin continue-on-error: una vulnerabilidad alta/crítica real debe
+      # bloquear el pipeline. Antes este step podía "pasar" en verde aunque
+      # pnpm audit encontrara hallazgos serios — el nombre del job mentía.
       - name: Escaneo de dependencias (npm audit)
         run: |
           pnpm install --frozen-lockfile
           pnpm audit --audit-level=high
-        continue-on-error: true
 
+      # Solo corre si el secreto está configurado — así una instalación sin
+      # cuenta de Semgrep no bloquea el pipeline por un secreto ausente, pero
+      # cuando SÍ corre, un hallazgo real bloquea (sin continue-on-error).
       - name: Semgrep SAST
+        if: ${{ secrets.SEMGREP_APP_TOKEN != '' }}
         uses: semgrep/semgrep-action@v1
         with:
           config: >-
@@ -169,7 +175,6 @@ jobs:
             p/sql-injection
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-        continue-on-error: true
 
       - name: Verificar que .env no fue commiteado
         run: |
@@ -211,48 +216,22 @@ jobs:
         if: github.ref == 'refs/heads/develop'
 
   # ── Deploy Staging ──────────────────────────────────────────────────────────[...]
-  deploy-staging:
-    name: Deploy → Staging
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/develop'
-    environment: staging
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy a staging
-        run: |
-          echo "🚀 Deploying to staging..."
-          # Aquí irá el comando de deploy real (Vercel, Railway, ECS, etc.)
-          echo "✅ Staged at https://staging.vertice.co"
-
-      - name: Notificar en GitHub
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: 'success',
-              target_url: 'https://staging.vertice.co',
-              description: 'Deployed to staging',
-              context: 'deploy/staging'
-            })
-
-  # ── Deploy Production ───────────────────────────────────────────────────────
-  deploy-production:
-    name: Deploy → Producción
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    environment: production  # Requiere aprobación manual en GitHub
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy a producción
-        run: |
-          echo "🚀 Deploying to production..."
-          echo "✅ Live at https://vertice.co"
+  # ── Deploy ────────────────────────────────────────────────────────────────
+  #
+  # No hay jobs de deploy-staging/deploy-production todavía. Los que existían
+  # aquí eran un `echo "Deploying..."` seguido de un `createCommitStatus`
+  # marcando 'success' en GitHub — sin ejecutar ningún despliegue real. Eso
+  # es peor que no tener el check: un checkmark verde de "deploy/staging"
+  # sugiere que hay algo corriendo en https://staging.vertice.co cuando no
+  # existe nada ahí, y cualquiera que confíe en ese estado se lleva una
+  # sorpresa (o, peor, asume que un incidente en producción no puede venir de
+  # un "deploy" que nunca ocurrió).
+  #
+  # Cuando exista un target real de despliegue, el job debe verificar, como
+  # mínimo, antes de reportar éxito:
+  #   1. imagen construida y su digest publicado
+  #   2. manifiesto/comando de despliegue aplicado
+  #   3. rollout completado (o servicio recibiendo el nuevo release)
+  #   4. health check post-deploy respondiendo 200
+  #   5. smoke test de al menos un flujo crítico
+  # Solo entonces debe marcarse el commit status como success — nunca antes.

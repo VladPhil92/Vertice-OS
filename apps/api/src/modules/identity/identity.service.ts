@@ -1,10 +1,12 @@
 import crypto from 'crypto'
+import { verifyMessage } from 'ethers'
 import { prisma } from '../../lib/prisma'
 import { redis } from '../../lib/redis'
 import { getCache, delCache, TTL } from '../../lib/cache'
 import { config } from '../../config'
 import { logger } from '../../lib/logger'
 import { sendEmailVerification } from '../../lib/email'
+import { hashCedula } from '../../lib/identity-hash'
 import {
   isValidWalletAddress,
   mintCitizenBadge,
@@ -18,10 +20,13 @@ import type { UpdateProfileInput, ConnectWalletInput } from './identity.schema'
 const EMAIL_VERIFY_PREFIX = 'vertice:email_verify'
 const EMAIL_VERIFY_TTL = 15 * 60 // 15 minutos
 
+const WALLET_NONCE_PREFIX = 'vertice:wallet_nonce'
+const WALLET_NONCE_TTL = 10 * 60 // 10 minutos — ventana corta, de un solo uso
+
 const LEVEL_NAMES: VerificationStatus['level_name'][] = [
   'registrado',
-  'cedula_confirmada',
-  'identidad_completa',
+  'documento_declarado',
+  'contacto_verificado',
 ]
 
 // ── Helpers privados ──────────────────────────────────────────────────────────
@@ -30,8 +35,31 @@ function emailVerifyKey(citizenId: string): string {
   return `${EMAIL_VERIFY_PREFIX}:${citizenId}`
 }
 
-function hashCedula(cedula: string): string {
-  return crypto.createHash('sha256').update(cedula).digest('hex')
+function walletNonceKey(citizenId: string): string {
+  return `${WALLET_NONCE_PREFIX}:${citizenId}`
+}
+
+/**
+ * Mensaje de "Sign-In with Ethereum" simplificado: dominio, ciudadano,
+ * dirección a vincular, nonce de un solo uso y fecha de emisión. El
+ * ciudadano lo firma desde su wallet para probar que la controla; sin esto,
+ * conectar una wallet solo validaba formato y unicidad, así que cualquiera
+ * podía copiar la dirección pública de otra persona y reclamarla como propia
+ * sin controlarla.
+ */
+function buildWalletSignInMessage(params: {
+  citizenId: string
+  walletAddress: string
+  nonce: string
+}): string {
+  const domain = new URL(config.CORS_ORIGIN).host
+  return [
+    `${domain} quiere que conectes tu wallet a VÉRTICE OS.`,
+    '',
+    `Ciudadano: ${params.citizenId}`,
+    `Wallet: ${params.walletAddress}`,
+    `Nonce: ${params.nonce}`,
+  ].join('\n')
 }
 
 function buildDIDDocument(citizen: {
@@ -43,25 +71,13 @@ function buildDIDDocument(citizen: {
   lastActiveAt: Date | null
 }): DIDDocument {
   const base = process.env.API_URL ?? 'http://localhost:4000'
-  // Clave pública derivada del UUID — placeholder hasta integración Polygon
-  const publicKeyMultibase = `z${Buffer.from(citizen.id.replace(/-/g, ''), 'hex').toString('base64url')}`
 
   return {
-    '@context': [
-      'https://www.w3.org/ns/did/v1',
-      'https://w3id.org/security/suites/ed25519-2020/v1',
-    ],
+    // Sin el contexto de ed25519-2020, coherente con no publicar
+    // verificationMethod: no hay método criptográfico real que declarar todavía.
+    '@context': ['https://www.w3.org/ns/did/v1'],
     id: citizen.did,
     controller: citizen.did,
-    verificationMethod: [
-      {
-        id: `${citizen.did}#keys-1`,
-        type: 'Ed25519VerificationKey2020',
-        controller: citizen.did,
-        publicKeyMultibase,
-      },
-    ],
-    authentication: [`${citizen.did}#keys-1`],
     service: [
       {
         id: `${citizen.did}#civic-profile`,
@@ -234,8 +250,36 @@ export async function confirmEmail(citizenId: string, token: string): Promise<Ve
 // ── Wallet Polygon ────────────────────────────────────────────────────────────
 
 /**
+ * Genera un nonce de un solo uso para que el ciudadano firme un mensaje de
+ * conexión de wallet. Debe llamarse antes de POST /identity/wallet.
+ */
+export async function requestWalletNonce(
+  citizenId: string,
+  walletAddress: string,
+): Promise<{ message: string }> {
+  if (!isValidWalletAddress(walletAddress)) {
+    throw Object.assign(new Error('Dirección de wallet inválida'), {
+      statusCode: 400,
+      code: 'INVALID_WALLET_ADDRESS',
+    })
+  }
+
+  const nonce = crypto.randomBytes(16).toString('hex')
+  await redis.set(walletNonceKey(citizenId), nonce, 'EX', WALLET_NONCE_TTL)
+
+  const message = buildWalletSignInMessage({ citizenId, walletAddress, nonce })
+  return { message }
+}
+
+/**
  * Conecta una wallet Polygon al perfil del ciudadano.
  * Si el ciudadano ya tiene nivel 2 (identidad completa), dispara el mint del SBT.
+ *
+ * Requiere una firma del mensaje devuelto por requestWalletNonce() para
+ * probar control real de la dirección. Antes solo se comprobaba formato y
+ * unicidad: cualquiera podía copiar la dirección pública de otra persona,
+ * registrarla primero y bloquear la asociación legítima (o recibir
+ * erróneamente un SBT dirigido a esa dirección).
  */
 export async function connectWallet(
   citizenId: string,
@@ -248,6 +292,35 @@ export async function connectWallet(
       statusCode: 400,
       code: 'INVALID_WALLET_ADDRESS',
     })
+  }
+
+  const nonceKey = walletNonceKey(citizenId)
+  const storedNonce = await redis.get(nonceKey)
+  if (!storedNonce) {
+    throw Object.assign(
+      new Error('Solicita un nuevo mensaje para firmar (el anterior expiró o no existe)'),
+      { statusCode: 400, code: 'NONCE_EXPIRED' },
+    )
+  }
+
+  // Nonce de un solo uso: se consume ANTES de intentar verificar la firma,
+  // para que un intento fallido (firma inválida, dirección equivocada) no
+  // deje el mismo nonce reutilizable en reintentos.
+  await redis.del(nonceKey)
+
+  const expectedMessage = buildWalletSignInMessage({ citizenId, walletAddress: address, nonce: storedNonce })
+  let recovered: string
+  try {
+    recovered = verifyMessage(expectedMessage, input.signature)
+  } catch {
+    throw Object.assign(new Error('Firma inválida'), { statusCode: 400, code: 'INVALID_SIGNATURE' })
+  }
+
+  if (recovered.toLowerCase() !== address.toLowerCase()) {
+    throw Object.assign(
+      new Error('La firma no corresponde a la dirección indicada'),
+      { statusCode: 400, code: 'SIGNATURE_ADDRESS_MISMATCH' },
+    )
   }
 
   // Verificar que no esté registrada por otro ciudadano
