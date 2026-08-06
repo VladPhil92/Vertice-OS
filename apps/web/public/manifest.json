@@ -1,0 +1,44 @@
+{
+  "name": "VÉRTICE OS — Sistema Operativo Cívico",
+  "short_name": "VÉRTICE OS",
+  "description": "Infraestructura cívica de próxima generación para Cartagena de Indias",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#050508",
+  "theme_color": "#C8A84B",
+  "orientation": "portrait-primary",
+  "lang": "es-CO",
+  "scope": "/",
+  "categories": ["government", "social", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Nuevo reporte",
+      "short_name": "Reporte",
+      "description": "Reportar un problema territorial",
+      "url": "/dashboard/reports/new",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ver propuestas",
+      "short_name": "Propuestas",
+      "description": "Explorar propuestas ciudadanas",
+      "url": "/dashboard/governance",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

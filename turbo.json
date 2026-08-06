@@ -1,0 +1,43 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "ANTHROPIC_API_KEY",
+    "POLYGON_RPC_URL",
+    "IPFS_GATEWAY",
+    "MAPBOX_TOKEN",
+    "VOYAGE_API_KEY",
+    "PINECONE_API_KEY"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "artifacts/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "env": ["CI"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "compile": {
+      "outputs": ["artifacts/**", "typechain-types/**"]
+    },
+    "coverage": {
+      "dependsOn": ["compile"],
+      "outputs": ["coverage/**"]
+    }
+  }
+}

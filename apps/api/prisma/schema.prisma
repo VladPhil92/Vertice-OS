@@ -1,0 +1,253 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Localidades ────────────────────────────────────────────────────────────────
+
+model Locality {
+  id                  Int       @id @default(autoincrement())
+  name                String
+  code                String    @unique
+  populationEstimate  Int?      @map("population_estimate")
+  areaKm2             Decimal?  @map("area_km2") @db.Decimal(8, 2)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  citizens  Citizen[]
+  reports   TerritorialReport[]
+
+  @@map("localities")
+}
+
+// ── Ciudadanos ─────────────────────────────────────────────────────────────────
+
+model Citizen {
+  id                 String    @id @default(uuid()) @db.Uuid
+  did                String    @unique
+  cedulaHash         String    @unique @map("cedula_hash")
+  email              String?   @unique
+  passwordHash       String?   @map("password_hash")
+  localityId         Int?      @map("locality_id")
+  neighborhood       String?
+  displayName        String?   @map("display_name")
+  verificationLevel  Int       @default(0) @map("verification_level") @db.SmallInt
+  reputationScore    Decimal   @default(0) @map("reputation_score") @db.Decimal(10, 4)
+  participationCount Int       @default(0) @map("participation_count")
+  isActive           Boolean   @default(true) @map("is_active")
+  role               String    @default("citizen") @map("role")
+  walletAddress      String?   @unique @map("wallet_address")
+  sbtTokenId         String?   @map("sbt_token_id")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastActiveAt       DateTime? @map("last_active_at") @db.Timestamptz(6)
+
+  locality          Locality?           @relation(fields: [localityId], references: [id])
+  sessions          Session[]
+  reports           TerritorialReport[]
+  proposals         Proposal[]
+  delegationsGiven  Delegation[]        @relation("Delegator")
+  delegationsRecv   Delegation[]        @relation("Delegate")
+  reputationEvents  ReputationEvent[]
+  legalDocuments    LegalDocument[]
+
+  @@index([localityId], map: "idx_citizens_locality")
+  @@index([reputationScore(sort: Desc)], map: "idx_citizens_reputation")
+  @@index([isActive, lastActiveAt(sort: Desc)], map: "idx_citizens_active")
+  @@map("citizens")
+}
+
+// ── Sesiones ───────────────────────────────────────────────────────────────────
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  citizenId        String    @map("citizen_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address")
+
+  citizen Citizen @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+
+  @@index([citizenId], map: "idx_sessions_citizen_id")
+  @@index([expiresAt], map: "idx_sessions_expires_at")
+  @@map("sessions")
+}
+
+// ── Reportes territoriales ─────────────────────────────────────────────────────
+
+model TerritorialReport {
+  id               String                   @id @default(uuid()) @db.Uuid
+  citizenId        String?                  @map("citizen_id") @db.Uuid
+  category         String
+  subcategory      String?
+  title            String
+  description      String
+  // PostGIS geography — no soportado nativamente, se usa $queryRaw para escritura
+  location         Unsupported("geography(Point,4326)")
+  neighborhood     String?
+  localityId       Int?                     @map("locality_id")
+  addressReference String?                  @map("address_reference")
+  urgencyScore     Decimal?                 @map("urgency_score") @db.Decimal(4, 3)
+  sentimentScore   Decimal?                 @map("sentiment_score") @db.Decimal(4, 3)
+  clusterId        String?                  @map("cluster_id")
+  status           String                   @default("open")
+  assignedTo       String?                  @map("assigned_to")
+  mediaUrls        String[]                 @map("media_urls")
+  ipfsHash         String?                  @map("ipfs_hash")
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                 @default(now()) @map("updated_at") @db.Timestamptz(6)
+  resolvedAt       DateTime?                @map("resolved_at") @db.Timestamptz(6)
+
+  citizen  Citizen?  @relation(fields: [citizenId], references: [id])
+  locality Locality? @relation(fields: [localityId], references: [id])
+
+  @@index([category, status], map: "idx_reports_category")
+  @@index([citizenId], map: "idx_reports_citizen_id")
+  @@index([localityId, status], map: "idx_reports_locality")
+  @@index([status, createdAt(sort: Desc)], map: "idx_reports_status")
+  @@map("territorial_reports")
+}
+
+// ── Propuestas de gobernanza ────────────────────────────────────────────────────
+
+model Proposal {
+  id                    String    @id @default(uuid()) @db.Uuid
+  authorId              String?   @map("author_id") @db.Uuid
+  title                 String
+  description           String
+  executiveSummary      String?   @map("executive_summary")
+  category              String
+  scope                 String
+  status                String    @default("idea")
+  endorsementCount      Int       @default(0) @map("endorsement_count")
+  commentCount          Int       @default(0) @map("comment_count")
+  viewCount             Int       @default(0) @map("view_count")
+  quorumRequired        Decimal?  @map("quorum_required") @db.Decimal(4, 3)
+  approvalThreshold     Decimal?  @map("approval_threshold") @db.Decimal(4, 3)
+  eligibleVoters        Int?      @map("eligible_voters")
+  totalVotes            Int       @default(0) @map("total_votes")
+  approveVotesWeighted  Decimal   @default(0) @map("approve_votes_weighted") @db.Decimal(12, 4)
+  rejectVotesWeighted   Decimal   @default(0) @map("reject_votes_weighted") @db.Decimal(12, 4)
+  abstainVotesWeighted  Decimal   @default(0) @map("abstain_votes_weighted") @db.Decimal(12, 4)
+  assignedExecutor      String?   @map("assigned_executor")
+  executionDeadline     DateTime? @map("execution_deadline") @db.Date
+  blockchainTxHash      String?   @map("blockchain_tx_hash")
+  ipfsProposalUri       String?   @map("ipfs_proposal_uri")
+  ipfsResultUri         String?   @map("ipfs_result_uri")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  draftStartedAt        DateTime? @map("draft_started_at") @db.Timestamptz(6)
+  debateStartedAt       DateTime? @map("debate_started_at") @db.Timestamptz(6)
+  votingStartsAt        DateTime? @map("voting_starts_at") @db.Timestamptz(6)
+  votingEndsAt          DateTime? @map("voting_ends_at") @db.Timestamptz(6)
+  decidedAt             DateTime? @map("decided_at") @db.Timestamptz(6)
+
+  author      Citizen?     @relation(fields: [authorId], references: [id])
+  votes       Vote[]
+  delegations Delegation[]
+
+  @@index([authorId], map: "idx_proposals_author")
+  @@index([category, scope], map: "idx_proposals_category")
+  @@index([status, createdAt(sort: Desc)], map: "idx_proposals_status")
+  @@map("proposals")
+}
+
+// ── Votos ──────────────────────────────────────────────────────────────────────
+
+model Vote {
+  id              String   @id @default(uuid()) @db.Uuid
+  proposalId      String   @map("proposal_id") @db.Uuid
+  nullifierHash   String   @unique @map("nullifier_hash")
+  voteWeight      Decimal  @map("vote_weight") @db.Decimal(6, 4)
+  voteValue       Int      @map("vote_value") @db.SmallInt
+  isDelegated     Boolean  @default(false) @map("is_delegated")
+  delegationDepth Int      @default(0) @map("delegation_depth") @db.SmallInt
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  proposal Proposal @relation(fields: [proposalId], references: [id])
+
+  @@index([proposalId, voteValue, voteWeight], map: "idx_votes_tally")
+  @@map("votes")
+}
+
+// ── Delegaciones ───────────────────────────────────────────────────────────────
+
+model Delegation {
+  id             String    @id @default(uuid()) @db.Uuid
+  delegatorId    String    @map("delegator_id") @db.Uuid
+  delegateId     String    @map("delegate_id") @db.Uuid
+  delegationType String    @map("delegation_type")
+  domain         String?
+  proposalId     String?   @map("proposal_id") @db.Uuid
+  isActive       Boolean   @default(true) @map("is_active")
+  validFrom      DateTime  @default(now()) @map("valid_from") @db.Timestamptz(6)
+  validUntil     DateTime? @map("valid_until") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  delegator Citizen   @relation("Delegator", fields: [delegatorId], references: [id])
+  delegate  Citizen   @relation("Delegate", fields: [delegateId], references: [id])
+  proposal  Proposal? @relation(fields: [proposalId], references: [id])
+
+  @@index([delegatorId, isActive], map: "idx_delegations_delegator")
+  @@index([delegateId, isActive], map: "idx_delegations_delegate")
+  @@map("delegations")
+}
+
+// ── Eventos de reputación ──────────────────────────────────────────────────────
+
+model ReputationEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  citizenId   String   @map("citizen_id") @db.Uuid
+  eventType   String   @map("event_type") @db.VarChar(50)
+  points      Int
+  referenceId String?  @map("reference_id") @db.VarChar(36)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  citizen Citizen @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+
+  @@index([citizenId, createdAt(sort: Desc)], map: "idx_reputation_citizen")
+  @@index([citizenId, eventType], map: "idx_reputation_event_type")
+  @@map("reputation_events")
+}
+
+// ── Documentos legales ─────────────────────────────────────────────────────────
+
+model LegalDocument {
+  id                    String    @id @default(uuid()) @db.Uuid
+  citizenId             String    @map("citizen_id") @db.Uuid
+  legalType             String    @map("legal_type") @db.VarChar(40)
+  status                String    @default("draft") @db.VarChar(20)
+  urgency               String    @default("media") @db.VarChar(10)
+  situationDescription  String    @map("situation_description")
+  evidenceDescription   String?   @map("evidence_description")
+  location              String?   @db.VarChar(300)
+  evidenceUrls          Json      @default("[]") @map("evidence_urls")
+  rightsAffected        Json      @default("[]") @map("rights_affected")
+  targetEntity          Json?     @map("target_entity")
+  responseDeadlineDays  Int       @default(15) @map("response_deadline_days")
+  legalBasis            Json      @default("[]") @map("legal_basis")
+  alternativeRemedies   Json      @default("[]") @map("alternative_remedies")
+  nextSteps             Json      @default("[]") @map("next_steps")
+  legalOrientation      String    @default("") @map("legal_orientation")
+  aiAuditId             String?   @map("ai_audit_id") @db.VarChar(36)
+  documentDraft         String    @default("") @map("document_draft")
+  submittedAt           DateTime? @map("submitted_at") @db.Timestamptz(6)
+  submittedVia          String?   @map("submitted_via") @db.VarChar(10)
+  entityResponse        String?   @map("entity_response")
+  entityRespondedAt     DateTime? @map("entity_responded_at") @db.Timestamptz(6)
+  responseDeadlineAt    DateTime? @map("response_deadline_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  citizen Citizen @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+
+  @@index([citizenId, createdAt(sort: Desc)], map: "idx_legal_citizen")
+  @@index([citizenId, status], map: "idx_legal_status")
+  @@index([legalType, status], map: "idx_legal_type")
+  @@map("legal_documents")
+}

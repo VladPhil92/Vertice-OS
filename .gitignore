@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Build outputs
+.next/
+dist/
+build/
+*.egg-info/
+.turbo/
+*.tsbuildinfo
+
+# Environment variables — NUNCA commitear
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+
+# Infrastructure secrets
+*.pem
+*.key
+*.crt
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# Database
+*.sqlite
+*.sqlite3
+
+# Blockchain
+artifacts/
+cache/
+typechain-types/
+
+# Misc
+*.tgz
+.vercel
+.cache/

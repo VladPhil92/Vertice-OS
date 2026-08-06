@@ -1,0 +1,9 @@
+{
+  "name": "@vertice/config",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./tsconfig": "./tsconfig.base.json",
+    "./eslint": "./eslint-base.js"
+  }
+}

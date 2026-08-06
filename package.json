@@ -21,11 +21,31 @@
     "typescript": "^5.5.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "@eslint/js": "^9.0.0",
+    "@eslint/eslintrc": "^3.0.0",
     "eslint": "^9.0.0"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "eslint-plugin-react-hooks": "^5.1.0",
+      "@next/eslint-plugin-next": "^15.0.0",
+      "@typescript-eslint/parser": "^8.0.0"
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "@sentry/cli",
+      "bcrypt",
+      "esbuild",
+      "keccak",
+      "prisma",
+      "secp256k1",
+      "unrs-resolver"
+    ]
   },
   "keywords": [
     "civic-tech",
@@ -37,6 +57,7 @@
     "blockchain",
     "participation"
   ],
+  "packageManager": "pnpm@10.34.5",
   "author": "CTG One Corporation",
   "license": "UNLICENSED"
 }

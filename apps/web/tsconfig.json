@@ -1,0 +1,31 @@
+{
+  "extends": "../../packages/config/tsconfig.nextjs.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "noEmit": true,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@vertice/types": [
+        "../../packages/types/src/index.ts"
+      ],
+      "@vertice/ui": [
+        "../../packages/ui/src/index.ts"
+      ]
+    },
+    "esModuleInterop": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "types/**/*.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

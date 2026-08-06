@@ -1,0 +1,147 @@
+version: '3.9'
+
+# ═══════════════════════════════════════════════════════════════════
+# VÉRTICE OS — Docker Compose (Desarrollo Local)
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Frontend ──────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages:/app/packages
+      - /app/apps/web/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:4000
+    depends_on:
+      - api
+    networks:
+      - vertice-network
+
+  # ── API Gateway ────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: development
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://vertice:${POSTGRES_PASSWORD}@postgres:5432/vertice_os
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - AI_SERVICE_URL=http://ai:8001
+      - AI_SERVICE_SECRET=${AI_SERVICE_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - BCRYPT_ROUNDS=12
+    command: sh -c "npx prisma migrate deploy && pnpm --filter @vertice/api dev"
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages:/app/packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - vertice-network
+
+  # ── AI Orchestrator ───────────────────────────────────────────────
+  ai:
+    build:
+      context: ./apps/ai
+    ports:
+      - "8001:8001"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+    volumes:
+      - ./apps/ai:/home/vertice/app
+    depends_on:
+      - redis
+    networks:
+      - vertice-network
+
+  # ── PostgreSQL + PostGIS ──────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: vertice_os
+      POSTGRES_USER: vertice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/db/init_extensions.sql:/docker-entrypoint-initdb.d/01_extensions.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vertice -d vertice_os"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vertice-network
+
+  # ── Redis ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 512mb --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - vertice-network
+
+  # ── Neo4j ─────────────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.21
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+    ports:
+      - "7474:7474"  # Browser UI
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474/ > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - vertice-network
+
+# ── Volumes ────────────────────────────────────────────────────────
+volumes:
+  postgres-data:
+  redis-data:
+  neo4j-data:
+
+# ── Networks ───────────────────────────────────────────────────────
+networks:
+  vertice-network:
+    driver: bridge

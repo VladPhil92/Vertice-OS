@@ -49,7 +49,7 @@ VÉRTICE OS es infraestructura cívica de nueva generación — no una aplicaci�
 └──────┬────────────────────┬───────────────────┬──────────────┘
        │                    │                   │
    Redis 7            Neo4j 5.21         apps/ai (FastAPI — :8001)
-  (caché/sessions)    (reputación)       LangGraph · 7 agentes
+  (caché/sessions)    (reputación)       LangGraph · 6 agentes
                                          RAG Pinecone + Voyage AI
 ┌──────────────────────────────────────────────────────────────┐
 │              contracts/  (Polygon PoS — Amoy testnet)        │
@@ -129,23 +129,23 @@ vertice-os/
 ├── apps/
 │   ├── web/                    # Next.js 14 — App Router
 │   │   └── app/dashboard/      # 9 páginas del panel ciudadano
-│   ├── api/                    # Fastify — 8 módulos con tests
-│   │   ├── src/modules/        # auth · identity · territorial · governance · reputation · legal · events
+│   ├── api/                    # Fastify — 6 módulos con tests
+│   │   ├── src/modules/        # auth · identity · territorial · governance · reputation · legal
 │   │   └── prisma/             # Schema + migración inicial
 │   └── ai/                     # FastAPI — orquestador LangGraph
-│       ├── orchestrator.py     # 7 agentes IA
-│       ├── rag/                # Pipeline RAG Pinecone + Voyage AI
+│       ├── orchestrator.py     # 6 agentes IA
+│       ├── rag.py              # Pipeline RAG Pinecone + Voyage AI
 │       └── scripts/            # index_documents.py para Cartagena
 ├── packages/
 │   ├── types/                  # @vertice/types — interfaces TypeScript compartidas
-│   ├── ui/                     # @vertice/ui — componentes design system
+│   ├── ui/                     # @vertice/ui — 8 componentes design system
 │   └── config/                 # @vertice/config — TSConfig + ESLint bases
 ├── contracts/                  # Solidity ^0.8.24 — Polygon PoS
 │   ├── contracts/              # CivicSBT.sol · VotingRegistry.sol
-│   ├── test/                   # 53 tests Hardhat/Chai
+│   ├── test/                   # Tests Hardhat/Chai
 │   └── scripts/deploy.ts       # Deploy + verificación Polygonscan
 ├── infrastructure/
-│   ├── db/                     # init.sql (PostgreSQL + PostGIS)
+│   ├── db/                     # init_extensions.sql (PostGIS)
 │   ├── kubernetes/             # Manifiestos K8s por servicio
 │   └── terraform/              # IaC AWS: EKS · RDS · ElastiCache · VPC
 ├── docs/
@@ -178,7 +178,7 @@ pnpm --filter @vertice/api test             # Solo API (Jest, ~231 tests)
 
 # Smart contracts
 pnpm --filter @vertice/contracts compile    # Compilar + typechain
-pnpm --filter @vertice/contracts test       # Tests Hardhat (53 tests)
+pnpm --filter @vertice/contracts test       # Tests Hardhat
 pnpm --filter @vertice/contracts deploy:amoy  # Deploy a Polygon Amoy
 
 # Indexar documentos cívicos (RAG)

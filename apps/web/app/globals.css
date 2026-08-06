@@ -1,0 +1,331 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core palette */
+    --color-bg: #050508;
+    --color-surface: #0c0c14;
+    --color-surface-2: #121220;
+
+    /* Borders */
+    --color-border: rgba(255, 255, 255, 0.06);
+    --color-border-active: rgba(255, 255, 255, 0.15);
+
+    /* ── Sistema Cromático Institucional (Sistema 1) ─────────────────────── */
+    --color-gold: #c8a84b;          /* Oro institucional VÉRTICE */
+    --color-gold-dim: rgba(200, 168, 75, 0.15);
+    --color-citizen: #ffb522;       /* Amarillo Ciudadano — ACTIVA */
+    --color-citizen-dim: rgba(255, 181, 34, 0.12);
+    --color-azure: #1a7fbf;         /* Azul Claro institucional */
+    --color-azure-dim: rgba(26, 127, 191, 0.12);
+    --color-red: #c0392b;           /* Rojo Acción — MOVILIZA */
+    --color-red-dim: rgba(192, 57, 43, 0.12);
+    --color-navy: #1a2744;          /* Azul Institucional oscuro */
+    --color-navy-light: #253565;
+    --color-emerald: #27ae60;       /* Tendencia positiva */
+    --color-emerald-dim: rgba(39, 174, 96, 0.12);
+
+    /* Text */
+    --color-text-primary: #f0ede8;
+    --color-text-secondary: rgba(240, 237, 232, 0.45);
+    --color-text-tertiary: rgba(240, 237, 232, 0.22);
+
+    /* Accent */
+    --color-cyan: #4ecdc4;          /* Agua / Transparencia */
+    --color-cyan-dim: rgba(78, 205, 196, 0.12);
+
+    /* ── Colores de módulos (Sistema 2) ────────────────────────────────── */
+    --mod-mobility:  #1a7fbf;
+    --mod-water:     #4ecdc4;
+    --mod-security:  #c0392b;
+    --mod-health:    #27ae60;
+    --mod-education: #ffb522;
+    --mod-services:  #8e44ad;
+    --mod-culture:   #e67e22;
+    --mod-economy:   #1a2744;
+
+    /* Typography */
+    --font-display: var(--font-syne), sans-serif;
+    --font-mono: var(--font-dm-mono), monospace;
+    --font-serif: var(--font-fraunces), serif;
+
+    /* Grid */
+    --grid-color: rgba(255, 255, 255, 0.025);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(var(--grid-color) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Typography */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-active);
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-gold);
+  }
+
+  /* Selection */
+  ::selection {
+    background: var(--color-gold-dim);
+    color: var(--color-gold);
+  }
+}
+
+@layer components {
+  /* Button variants */
+  .btn-primary {
+    @apply inline-flex items-center justify-center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 14px 32px;
+    background: var(--color-gold);
+    color: var(--color-bg);
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 14px 32px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border-active);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-ghost:hover {
+    color: var(--color-text-primary);
+    border-color: var(--color-text-secondary);
+  }
+
+  /* Section tag */
+  .section-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--color-gold);
+    display: block;
+    margin-bottom: 16px;
+  }
+
+  /* Status indicator */
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-cyan);
+    box-shadow: 0 0 8px var(--color-cyan);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  .status-dot-warn {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-gold);
+    box-shadow: 0 0 8px var(--color-gold);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+
+  .text-gold {
+    color: var(--color-gold);
+  }
+
+  .text-primary {
+    color: var(--color-text-primary);
+  }
+
+  .text-secondary {
+    color: var(--color-text-secondary);
+  }
+
+  .text-tertiary {
+    color: var(--color-text-tertiary);
+  }
+
+  .bg-surface {
+    background-color: var(--color-surface);
+  }
+
+  .border-subtle {
+    border-color: var(--color-border);
+  }
+
+  .border-active {
+    border-color: var(--color-border-active);
+  }
+}
+
+/* Animations */
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slowPulse {
+  0%,
+  100% {
+    opacity: 0.08;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scale(1.03);
+  }
+}
+
+/* ── Mapbox GL — overrides para el tema oscuro VÉRTICE OS ─────────────────── */
+
+.mapboxgl-popup-content {
+  background: #0c0c14 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7) !important;
+  min-width: 220px;
+}
+.mapboxgl-popup-close-button {
+  color: rgba(240, 237, 232, 0.35) !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  padding: 6px 8px !important;
+  right: 0 !important;
+  top: 0 !important;
+}
+.mapboxgl-popup-close-button:hover {
+  color: #f0ede8 !important;
+  background: transparent !important;
+}
+.mapboxgl-popup-tip {
+  display: none !important;
+}
+.mapboxgl-ctrl-group {
+  background: #0c0c14 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0 !important;
+}
+.mapboxgl-ctrl-group button {
+  background: transparent !important;
+}
+.mapboxgl-ctrl button .mapboxgl-ctrl-icon {
+  filter: invert(0.8) !important;
+}
+.mapboxgl-ctrl button:hover .mapboxgl-ctrl-icon {
+  filter: invert(1) !important;
+}
+.mapboxgl-ctrl-attrib {
+  background: rgba(5, 5, 8, 0.7) !important;
+}
+.mapboxgl-ctrl-attrib a {
+  color: rgba(240, 237, 232, 0.35) !important;
+}
+
+@keyframes scanLine {
+  0% {
+    top: 0;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.8s ease forwards;
+}
+
+.animate-slow-pulse {
+  animation: slowPulse 8s ease-in-out infinite;
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 48" fill="none">
+  <!-- Triangle mark -->
+  <polygon points="24,4 44,44 4,44" stroke="#C8A84B" stroke-width="1.5" fill="none"/>
+  <polygon points="24,14 37,42 11,42" stroke="#C8A84B" stroke-width="0.75" fill="none" opacity="0.4"/>
+  <!-- Wordmark -->
+  <text x="52" y="22" font-family="system-ui, sans-serif" font-size="11" font-weight="700"
+        letter-spacing="3" fill="#C8A84B" text-anchor="start">VÉRTICE</text>
+  <text x="52" y="36" font-family="monospace" font-size="7.5" font-weight="400"
+        letter-spacing="2" fill="rgba(240,237,232,0.45)" text-anchor="start">SISTEMA OPERATIVO CÍVICO</text>
+</svg>

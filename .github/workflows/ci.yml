@@ -7,7 +7,7 @@ on:
     branches: [main, develop]
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   PYTHON_VERSION: '3.12'
 
 jobs:
@@ -19,8 +19,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
 
       - uses: actions/setup-node@v4
         with:
@@ -30,12 +28,9 @@ jobs:
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
 
-      - name: Lint TypeScript/JavaScript
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
+      # Python debe instalarse ANTES de `pnpm lint`/`pnpm typecheck`: turbo
+      # ejecuta también las tareas del workspace @vertice/ai, que invocan
+      # ruff y mypy.
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -45,15 +40,11 @@ jobs:
           cd apps/ai
           pip install -r requirements.txt
 
-      - name: Lint Python (ruff)
-        run: |
-          cd apps/ai
-          ruff check .
+      - name: Lint (TypeScript + Python)
+        run: pnpm lint
 
-      - name: Typecheck Python (mypy)
-        run: |
-          cd apps/ai
-          mypy . --ignore-missing-imports
+      - name: Typecheck (TypeScript + Python)
+        run: pnpm typecheck
 
   # ── Tests ─────────────────────────────────────────────────────────────[...]
   test:
@@ -104,8 +95,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
 
       - uses: actions/setup-node@v4
         with:
@@ -121,7 +110,18 @@ jobs:
         run: |
           psql $DATABASE_URL -f infrastructure/db/init.sql
 
-      - name: Tests unitarios e integración
+      # Igual que en el job de calidad: `pnpm test` incluye la tarea de
+      # @vertice/ai, que ejecuta pytest.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Instalar dependencias Python
+        run: |
+          cd apps/ai
+          pip install -r requirements.txt
+
+      - name: Tests (TypeScript + Python)
         env:
           DATABASE_URL: postgresql://vertice:vertice_test@localhost:5432/vertice_test
           REDIS_URL: redis://localhost:6379
@@ -129,23 +129,20 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: vertice_test
           NODE_ENV: test
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
         run: pnpm test
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Tests Python (pytest)
+      - name: Cobertura (API)
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
-        run: |
-          cd apps/ai
-          pip install -r requirements.txt
-          pytest --tb=short -q
+          NODE_ENV: test
+        run: pnpm --filter @vertice/api test:ci
 
       - name: Reporte de cobertura
         uses: codecov/codecov-action@v4
         if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./apps/api/coverage/lcov.info
 
   # ── Security Scan ──────────────────────────────────────────────────────────[...]
   security:
@@ -155,8 +152,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
 
       - name: Escaneo de dependencias (npm audit)
         run: |
@@ -195,8 +190,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
 
       - uses: actions/setup-node@v4
         with:

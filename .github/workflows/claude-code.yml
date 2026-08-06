@@ -1,0 +1,84 @@
+name: Claude Code — Agente de Desarrollo
+
+# Claude Code trabaja automáticamente cuando:
+# 1. Alguien comenta @claude en un Issue o PR
+# 2. Se crea un Issue con el label "claude-code"
+# 3. Un PR falla en CI y tiene el label "auto-fix"
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [labeled]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  claude-code-agent:
+    name: Claude Code — Agente Autónomo
+    runs-on: ubuntu-latest
+
+    # Solo activar si el comentario menciona @claude
+    # o si el issue tiene el label "claude-code"
+    if: |
+      (github.event_name == 'issue_comment' && 
+       contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && 
+       github.event.label.name == 'claude-code') ||
+      (github.event_name == 'pull_request_review_comment' && 
+       contains(github.event.comment.body, '@claude'))
+
+    permissions:
+      contents: write        # Crear/editar archivos y hacer commits
+      pull-requests: write   # Crear y comentar PRs
+      issues: write          # Comentar en issues
+      actions: read          # Leer logs de CI para debugging
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # Historial completo para contexto
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # Claude Code lee CLAUDE.md automáticamente —
+          # toda la arquitectura y convenciones están ahí
+
+          claude_args: |
+            --mcp-config .mcp.json
+
+          # Contexto adicional para Claude Code
+          additional_permissions: ""
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+
+  # ── Auto-fix cuando CI falla ─────────────────────────────────────────────
+  claude-fix-ci:
+    name: Claude Code — Auto-fix CI failures
+    runs-on: ubuntu-latest
+
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '@claude fix')
+
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read     # Para leer los logs del CI fallido
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: "actions: read"
+          claude_args: |
+            --mcp-config .mcp.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}

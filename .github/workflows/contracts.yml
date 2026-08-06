@@ -1,0 +1,80 @@
+name: VÉRTICE OS — Deploy Contracts (Polygon)
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Red de despliegue'
+        required: true
+        default: 'amoy'
+        type: choice
+        options:
+          - amoy
+          - polygon
+      contract:
+        description: 'Contrato a desplegar'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - CivicSBT
+          - VotingRegistry
+
+jobs:
+  deploy-contracts:
+    name: Deploy → Polygon ${{ github.event.inputs.network }}
+    runs-on: ubuntu-latest
+    environment:
+      name: blockchain-${{ github.event.inputs.network }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias de contratos
+        working-directory: contracts
+        run: npm ci
+
+      - name: Compilar contratos
+        working-directory: contracts
+        run: npx hardhat compile
+
+      - name: Ejecutar tests antes del deploy
+        working-directory: contracts
+        run: npx hardhat test
+
+      - name: Verificar balance del deployer
+        working-directory: contracts
+        env:
+          POLYGON_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          POLYGON_RPC_URL: ${{ github.event.inputs.network == 'amoy' && 'https://rpc-amoy.polygon.technology' || 'https://polygon-rpc.com' }}
+        run: |
+          npx hardhat run scripts/check-balance.ts --network ${{ github.event.inputs.network }}
+
+      - name: Deploy ${{ github.event.inputs.contract }}
+        working-directory: contracts
+        env:
+          POLYGON_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          POLYGONSCAN_API_KEY: ${{ secrets.POLYGONSCAN_API_KEY }}
+        run: |
+          npx hardhat run scripts/deploy.ts --network ${{ github.event.inputs.network }}
+
+      - name: Subir artefactos del deploy
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-${{ github.event.inputs.network }}-${{ github.sha }}
+          path: contracts/deployments/
+          retention-days: 90
+
+      - name: Actualizar secrets de la API con direcciones de contratos
+        run: |
+          echo "⚠️  Acción manual requerida:"
+          echo "   Actualiza los siguientes GitHub Secrets con las direcciones del deploy:"
+          echo "   - CIVIC_SBT_ADDRESS"
+          echo "   - VOTING_REGISTRY_ADDRESS"
+          echo "   Los encontrarás en el artefacto deployment-${{ github.event.inputs.network }}-${{ github.sha }}"
