@@ -7,3 +7,5 @@ process.env.CORS_ORIGIN = 'http://localhost:3000'
 process.env.NEO4J_URI = 'bolt://localhost:7687'
 process.env.NEO4J_USER = 'neo4j'
 process.env.NEO4J_PASSWORD = 'vertice'
+// Pepper del compromiso del DID — el contrato nunca recibe el DID en claro
+process.env.DID_COMMITMENT_PEPPER = 'test-pepper-with-at-least-32-characters!!'

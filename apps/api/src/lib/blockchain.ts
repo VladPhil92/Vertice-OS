@@ -10,10 +10,10 @@ const CIVIC_SBT_ABI = [
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'recipient',  type: 'address' },
-      { name: 'citizenDID', type: 'string'  },
-      { name: 'badgeType',  type: 'uint8'   },
-      { name: 'uri',        type: 'string'  },
+      { name: 'recipient',     type: 'address' },
+      { name: 'didCommitment', type: 'bytes32' },
+      { name: 'badgeType',     type: 'uint8'   },
+      { name: 'uri',           type: 'string'  },
     ],
     outputs: [{ name: 'tokenId', type: 'uint256' }],
   },
@@ -22,12 +22,40 @@ const CIVIC_SBT_ABI = [
     type: 'function',
     stateMutability: 'view',
     inputs: [
-      { name: 'did',       type: 'string' },
-      { name: 'badgeType', type: 'uint8'  },
+      { name: 'didCommitment', type: 'bytes32' },
+      { name: 'badgeType',     type: 'uint8'   },
     ],
     outputs: [{ name: '', type: 'bool' }],
   },
 ] as const
+
+// ── Compromiso del DID ────────────────────────────────────────────────────────
+
+/**
+ * Deriva el valor que se escribe on-chain a partir del DID del ciudadano.
+ *
+ * El contrato nunca recibe el DID en claro: guardarlo crearía un vínculo
+ * público y permanente entre wallet, identidad cívica y actividad política,
+ * correlacionable con los registros off-chain de votos, propuestas y reportes.
+ *
+ * El pepper es un secreto del backend, así que un observador de la cadena no
+ * puede recalcular el compromiso de un DID que ya conozca para averiguar si
+ * tiene badges. La derivación es determinista, de modo que la prevención de
+ * duplicados on-chain sigue funcionando.
+ *
+ * Rotar el pepper invalida la correspondencia con los tokens ya emitidos: debe
+ * tratarse como un valor permanente por despliegue.
+ */
+export function deriveDIDCommitment(citizenDID: string): string {
+  const pepper = config.DID_COMMITMENT_PEPPER
+  if (!pepper) {
+    throw Object.assign(
+      new Error('DID_COMMITMENT_PEPPER no configurado: no se puede emitir on-chain'),
+      { code: 'MISSING_DID_PEPPER' },
+    )
+  }
+  return keccak256(toUtf8Bytes(`${pepper}:${citizenDID}`))
+}
 
 // BadgeType enum — debe coincidir con CivicSBT.sol
 export const BadgeType = {
@@ -125,7 +153,7 @@ export async function checkHasBadge(did: string, badgeType: BadgeTypeValue): Pro
   const contract = getContract()
   if (!contract) return false
   try {
-    return await contract.hasBadge(did, badgeType) as boolean
+    return await contract.hasBadge(deriveDIDCommitment(did), badgeType) as boolean
   } catch (err) {
     logger.error('[blockchain] hasBadge error', err)
     return false
@@ -146,16 +174,20 @@ export async function mintCitizenBadge(
   if (!contract) return null
 
   try {
+    const commitment = deriveDIDCommitment(citizenDID)
+
     // Verificar idempotencia on-chain antes de gastar gas
-    const alreadyHas = await contract.hasBadge(citizenDID, BadgeType.CITIZEN_VERIFIED)
+    const alreadyHas = await contract.hasBadge(commitment, BadgeType.CITIZEN_VERIFIED)
     if (alreadyHas) {
-      logger.info(`[blockchain] ${citizenDID} ya tiene CITIZEN_VERIFIED badge — omitiendo mint`)
+      // Se registra el compromiso, no el DID: los logs no deben reintroducir
+      // el vínculo que el contrato evita.
+      logger.info(`[blockchain] ${commitment} ya tiene CITIZEN_VERIFIED badge — omitiendo mint`)
       return null
     }
 
     const tx = await contract.mintBadge(
       recipientAddress,
-      citizenDID,
+      commitment,
       BadgeType.CITIZEN_VERIFIED,
       tokenURI,
     )
@@ -178,9 +210,13 @@ export function buildCitizenBadgeURI(citizenDID: string, level: number): string 
   if (!isBlockchainConfigured()) {
     return `did:vertice:badge:citizen_verified:${encodeURIComponent(citizenDID)}`
   }
+  // El tokenURI se almacena on-chain y es públicamente legible, así que lleva
+  // el compromiso y no el DID: incrustarlo aquí habría anulado la protección
+  // que aporta didCommitment en el resto del contrato.
+  const commitment = deriveDIDCommitment(citizenDID)
   // En Fase I usamos el gateway IPFS configurado con un hash placeholder.
   // En Fase II se genera el JSON real y se sube a Pinecone/IPFS antes del mint.
-  return `${config.IPFS_GATEWAY}/QmVerticeCitizenBadge?did=${encodeURIComponent(citizenDID)}&level=${level}`
+  return `${config.IPFS_GATEWAY}/QmVerticeCitizenBadge?c=${commitment}&level=${level}`
 }
 
 // ── VotingRegistry ────────────────────────────────────────────────────────────
