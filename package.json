@@ -27,6 +27,19 @@
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "@sentry/cli",
+      "bcrypt",
+      "esbuild",
+      "keccak",
+      "prisma",
+      "secp256k1",
+      "unrs-resolver"
+    ]
+  },
   "keywords": [
     "civic-tech",
     "democracy",
