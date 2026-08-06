@@ -112,6 +112,9 @@ importers:
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
+      jest:
+        specifier: ^30.0.0
+        version: 30.4.2(@types/node@20.19.41)(ts-node@10.9.2(@types/node@20.19.41)(typescript@5.9.3))
       prisma:
         specifier: ^5.14.0
         version: 5.22.0
