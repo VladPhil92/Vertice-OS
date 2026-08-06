@@ -16,6 +16,7 @@ export const CivicQuerySchema = z.object({
   locality: z.string().max(120).optional(),
   neighborhood: z.string().max(120).optional(),
   topic: z.string().max(200).optional(),
+  session_id: z.string().uuid().optional(),
   conversation_history: z
     .array(
       z.object({

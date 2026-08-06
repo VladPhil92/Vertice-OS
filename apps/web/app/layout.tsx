@@ -40,6 +40,12 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'CTG One Corporation' }],
   robots: 'index, follow',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'VÉRTICE OS',
+  },
   openGraph: {
     type: 'website',
     locale: 'es_CO',
@@ -50,7 +56,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#050508',
+  themeColor: '#C8A84B',
 };
 
 export default function RootLayout({
@@ -68,6 +74,10 @@ export default function RootLayout({
       nonce={nonce}
       className={`${syne.variable} ${dmMono.variable} ${fraunces.variable}`}
     >
+      <head>
+        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body className="bg-bg text-primary antialiased">{children}</body>
     </html>
   );

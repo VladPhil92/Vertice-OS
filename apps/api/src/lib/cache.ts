@@ -31,8 +31,10 @@ export async function delCache(namespace: string, id: string): Promise<void> {
 
 // TTLs centralizados — cambiar aquí afecta todos los usos
 export const TTL = {
-  PROFILE: 300,      // 5 min — perfil del ciudadano (datos estables)
-  SESSION: 60,       // 1 min — validación de sesión activa
-  REPORT: 120,       // 2 min — reporte territorial individual
-  STATS: 600,        // 10 min — estadísticas agregadas
+  PROFILE: 300,         // 5 min — perfil del ciudadano (datos estables)
+  SESSION: 60,          // 1 min — validación de sesión activa
+  REPORT: 120,          // 2 min — reporte territorial individual
+  STATS: 600,           // 10 min — estadísticas agregadas
+  CONVERSATION: 14_400, // 4 h — historial conversación IA
+  NOTIFICATION: 604_800, // 7 días — notificaciones ciudadano
 } as const

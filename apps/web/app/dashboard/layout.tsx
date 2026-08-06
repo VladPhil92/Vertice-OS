@@ -20,6 +20,8 @@ import {
 } from 'lucide-react'
 import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
 import { LiveToast, useToasts } from '@/components/ui/LiveToast'
+import { NotificationBell } from '@/components/ui/NotificationBell'
+import { PwaRegister } from '@/components/pwa/PwaRegister'
 
 // ─── Nav items (sidebar) ──────────────────────────────────────────────────────
 
@@ -114,7 +116,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <polygon points="16,2 30,30 2,30" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
           <polygon points="16,9 26,29 6,29" stroke="#C8A84B" strokeWidth="0.75" fill="none" opacity="0.4" />
         </svg>
-        <div>
+        <div className="flex-1">
           <span className="block font-display text-[11px] font-700 uppercase tracking-widest text-gold">
             VÉRTICE OS
           </span>
@@ -122,6 +124,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             Cartagena · v0.1
           </span>
         </div>
+        <NotificationBell />
       </div>
 
       {/* Navigation */}
@@ -162,6 +165,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
+      <PwaRegister />
       <LiveToast messages={toasts} onDismiss={dismiss} />
 
       {/* Desktop sidebar — always visible on lg+ */}
@@ -201,13 +205,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               VÉRTICE OS
             </span>
           </a>
-          <button
-            onClick={handleSignOut}
-            className="text-tertiary hover:text-red"
-            aria-label="Salir"
-          >
-            <LogOut size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <button
+              onClick={handleSignOut}
+              className="text-tertiary hover:text-red"
+              aria-label="Salir"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Page content */}

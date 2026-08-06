@@ -4,6 +4,7 @@ import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { logger } from '../../lib/logger'
 import { recordReputationEvent } from '../reputation/reputation.service'
 import { publish } from '../../lib/pubsub'
+import { createNotification } from '../notifications/notifications.service'
 import type {
   TerritorialReport,
   ReportSummary,
@@ -273,12 +274,28 @@ export async function updateReportStatus(
   }
 
   const report = rowToReport(rows[0])
-  // Invalidar caché — el estado cambió
   await delCache('report', id)
   await delCache('stats', 'global')
   publish('territorial', 'report:status_changed', {
     id: report.id, status: report.status, category: report.category,
   }).catch(() => null)
+
+  // Notify the citizen who filed the report
+  const STATUS_LABEL: Record<string, string> = {
+    in_progress: 'En proceso',
+    resolved: 'Resuelto',
+    rejected: 'Rechazado',
+  }
+  if (report.citizen_id && STATUS_LABEL[report.status]) {
+    createNotification(
+      report.citizen_id,
+      'report_status',
+      `Reporte actualizado: ${STATUS_LABEL[report.status]}`,
+      `Tu reporte "${report.title}" cambió a estado ${STATUS_LABEL[report.status]}.`,
+      `/dashboard/reports/${report.id}`,
+    ).catch(() => null)
+  }
+
   return report
 }
 

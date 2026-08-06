@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, User, Loader, AlertCircle, Sparkles } from 'lucide-react'
+import { Send, Bot, User, Loader, AlertCircle, Sparkles, RotateCcw } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,7 +21,10 @@ interface AIQueryResponse {
   agent_used: string
   confidence: number
   audit_id: string
+  session_id: string
 }
+
+const SESSION_STORAGE_KEY = 'vertice:ai:session_id'
 
 // ─── Suggested prompts ───────────────────────────────────────────────────────
 
@@ -92,12 +95,30 @@ export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
+
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY)
+    if (stored) setSessionId(stored)
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const newConversation = useCallback(async () => {
+    if (sessionId) {
+      apiFetch('/ai/session', { method: 'DELETE', body: JSON.stringify({ session_id: sessionId }) }).catch(() => null)
+      localStorage.removeItem(SESSION_STORAGE_KEY)
+    }
+    setSessionId(null)
+    setMessages([])
+    setInput('')
+    inputRef.current?.focus()
+  }, [sessionId])
 
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim()
@@ -109,11 +130,6 @@ export default function AIAssistantPage() {
       content: trimmed,
     }
 
-    const history = messages
-      .filter(m => !m.error)
-      .slice(-10)
-      .map(m => ({ role: m.role, content: m.content }))
-
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setLoading(true)
@@ -123,9 +139,15 @@ export default function AIAssistantPage() {
         method: 'POST',
         body: JSON.stringify({
           message: trimmed,
-          conversation_history: history,
+          ...(sessionId ? { session_id: sessionId } : {}),
         }),
       })
+
+      // Persist new session_id from server
+      if (res.session_id && res.session_id !== sessionId) {
+        setSessionId(res.session_id)
+        localStorage.setItem(SESSION_STORAGE_KEY, res.session_id)
+      }
 
       setMessages(prev => [
         ...prev,
@@ -153,7 +175,7 @@ export default function AIAssistantPage() {
       setLoading(false)
       inputRef.current?.focus()
     }
-  }, [messages, loading])
+  }, [sessionId, loading])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -169,14 +191,25 @@ export default function AIAssistantPage() {
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-6 py-4">
         <Sparkles size={16} className="text-gold" />
-        <div>
+        <div className="flex-1">
           <h1 className="font-display text-[15px] font-semibold uppercase tracking-wide text-primary">
             Asistente Cívico
           </h1>
           <p className="font-mono text-[10px] uppercase tracking-widest text-tertiary">
-            Multi-agente · Cartagena
+            Multi-agente · Cartagena{sessionId ? ' · Sesión activa' : ''}
           </p>
         </div>
+        {messages.length > 0 && (
+          <button
+            onClick={newConversation}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 font-mono text-[10px] text-secondary transition hover:border-gold/30 hover:text-primary disabled:opacity-40"
+            title="Nueva conversación"
+          >
+            <RotateCcw size={11} />
+            Nueva
+          </button>
+        )}
       </div>
 
       {/* Messages */}

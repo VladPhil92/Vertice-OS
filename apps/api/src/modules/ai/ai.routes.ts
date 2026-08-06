@@ -1,5 +1,7 @@
+import { randomUUID } from 'crypto'
 import { FastifyInstance } from 'fastify'
 import { requireVerified } from '../../middleware/auth'
+import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import {
   CivicQuerySchema,
   TerritorialAnalysisSchema,
@@ -17,9 +19,24 @@ import {
 import { getReportById } from '../territorial/territorial.service'
 import { getProposalById } from '../governance/governance.service'
 
+type ConvTurn = { role: 'user' | 'assistant'; content: string }
+const CONV_NS = 'ai:conv'
+const MAX_HISTORY = 20
+
+async function loadHistory(sessionId: string, citizenId: string): Promise<ConvTurn[]> {
+  const stored = await getCache<{ citizenId: string; turns: ConvTurn[] }>(CONV_NS, sessionId)
+  if (!stored || stored.citizenId !== citizenId) return []
+  return stored.turns
+}
+
+async function saveHistory(sessionId: string, citizenId: string, turns: ConvTurn[]): Promise<void> {
+  const trimmed = turns.slice(-MAX_HISTORY)
+  await setCache(CONV_NS, sessionId, { citizenId, turns: trimmed }, TTL.CONVERSATION)
+}
+
 export async function aiRoutes(app: FastifyInstance): Promise<void> {
 
-  // ── POST /ai/query — consulta ciudadana libre ─────────────────────────────
+  // ── POST /ai/query — consulta ciudadana libre con memoria de sesión ────────
 
   app.post('/query', {
     preHandler: requireVerified,
@@ -30,11 +47,47 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
 
+    const citizenId = request.citizen.sub
+    const sessionId = parsed.data.session_id ?? randomUUID()
+
+    // Load persisted history; merge with any client-provided fallback
+    const persisted = await loadHistory(sessionId, citizenId)
+    const history = persisted.length > 0
+      ? persisted
+      : (parsed.data.conversation_history ?? [])
+
     const result = await civicQuery({
-      ...parsed.data,
-      citizen_id: request.citizen.sub,
+      message: parsed.data.message,
+      locality: parsed.data.locality,
+      neighborhood: parsed.data.neighborhood,
+      topic: parsed.data.topic,
+      conversation_history: history,
+      citizen_id: citizenId,
     })
-    return reply.send(result)
+
+    // Persist updated history
+    const newHistory: ConvTurn[] = [
+      ...history,
+      { role: 'user', content: parsed.data.message },
+      { role: 'assistant', content: result.response },
+    ]
+    await saveHistory(sessionId, citizenId, newHistory)
+
+    return reply.send({ ...result, session_id: sessionId })
+  })
+
+  // ── DELETE /ai/session — borrar sesión de conversación ────────────────────
+
+  app.delete('/session', {
+    preHandler: requireVerified,
+    config: { rateLimit: { max: 60, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const body = request.body as { session_id?: string }
+    if (!body.session_id) {
+      return reply.status(400).send({ error: 'session_id requerido' })
+    }
+    await delCache(CONV_NS, body.session_id)
+    return reply.status(204).send()
   })
 
   // ── POST /ai/territorial/analyze — análisis de patrones territoriales ──────
@@ -48,7 +101,6 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
 
-    // Fetch report details from the DB to pass to the AI service
     const reportResults = await Promise.allSettled(
       parsed.data.report_ids.map(id => getReportById(id)),
     )

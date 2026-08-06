@@ -18,6 +18,7 @@ import { reputationRoutes } from './modules/reputation/reputation.routes'
 import { legalRoutes } from './modules/legal/legal.routes'
 import { aiRoutes } from './modules/ai/ai.routes'
 import { eventsRoutes } from './modules/events/events.routes'
+import { notificationsRoutes } from './modules/notifications/notifications.routes'
 
 initSentry()
 
@@ -142,6 +143,7 @@ export function buildApp() {
   app.register(reputationRoutes, { prefix: '/reputation' })
   app.register(legalRoutes, { prefix: '/legal' })
   app.register(aiRoutes, { prefix: '/ai' })
+  app.register(notificationsRoutes, { prefix: '/notifications' })
   app.register(eventsRoutes)
 
   return app

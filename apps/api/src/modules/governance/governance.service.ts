@@ -24,6 +24,7 @@ import {
 import type { CreateProposalInput, ListProposalsInput, AdvanceStageInput, CreateDelegationInput } from './governance.schema'
 import { publish } from '../../lib/pubsub'
 import { recordProposalVoting, buildProposalContentHash } from '../../lib/blockchain'
+import { createNotification } from '../notifications/notifications.service'
 
 function fireReputation(params: Parameters<typeof recordReputationEvent>[0]): void {
   recordReputationEvent(params).catch((err: unknown) =>
@@ -335,7 +336,28 @@ export async function advanceProposalStage(
   await delCache('proposal', proposalId)
   await delCache('stats', 'global')
 
-  return normalizeProposal(updatedRows[0])
+  const advanced = normalizeProposal(updatedRows[0])
+
+  // Notify the author about stage change
+  const STAGE_LABEL: Record<string, string> = {
+    draft: 'Borrador',
+    debate: 'En debate',
+    voting: 'En votación',
+    approved: 'Aprobada',
+    rejected: 'Rechazada',
+    quorum_failed: 'Sin quórum',
+  }
+  if (advanced.author_id && STAGE_LABEL[advanced.status]) {
+    createNotification(
+      advanced.author_id,
+      'proposal_stage',
+      `Propuesta avanzó a: ${STAGE_LABEL[advanced.status]}`,
+      `"${advanced.title}" cambió de etapa a ${STAGE_LABEL[advanced.status]}.`,
+      `/dashboard/governance/${advanced.id}`,
+    ).catch(() => null)
+  }
+
+  return advanced
 }
 
 function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quorum_failed' {
