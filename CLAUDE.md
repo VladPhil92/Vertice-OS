@@ -322,6 +322,26 @@ docs/XXX      → documentación
 - **Archivos:** `apps/web/app/dashboard/` (layout, panel, reputation, reports, governance, legal, admin, ai)
 - **Implementado:** Sidebar desktop, bottom nav mobile con FAB dorado, datos reales de API, diseño dark gold
 
+### Despliegue — Railway + Vercel
+- **Estado:** 🟡 Configuración lista, sin desplegar todavía
+- **Guía completa:** `docs/deployment/railway-vercel.md`
+- **Servicios:** Railway para `apps/api` (Fastify + worker de jobs embebido),
+  `apps/ai` (FastAPI) y Postgres+PostGIS/Redis; Vercel para `apps/web`.
+  `railway.json` (raíz, para `api`) y `apps/ai/railway.json` apuntan cada uno
+  a su Dockerfile y healthcheck (`/health/ready`).
+- **`apps/api/Dockerfile` tenía 3 bugs reales, corregidos y verificados de
+  punta a punta** (sin Docker daemon disponible en el entorno de desarrollo,
+  pero replicando cada stage a mano): el stage `deps` fallaba siempre
+  (`postinstall` de Prisma sin `schema.prisma` copiado), `@vertice/types` no
+  se compilaba antes de `@vertice/api`, y la imagen final aplanaba
+  `dist`+`node_modules` rompiendo los symlinks relativos de pnpm hacia
+  `apps/api/node_modules` y `packages/types` — el contenedor habría muerto en
+  el primer `require()`. `apps/ai/Dockerfile` también fijaba el puerto 8001
+  en el `CMD`, incompatible con el `$PORT` que inyecta Railway.
+- **Postgres necesita PostGIS explícito** — el plugin "PostgreSQL" por
+  defecto de Railway no lo trae; usar la plantilla de extensiones o la
+  dedicada de PostGIS (enlaces en la guía).
+
 ---
 
 ## REGLAS DE SEGURIDAD — NUNCA VIOLAR
