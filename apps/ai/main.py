@@ -19,6 +19,7 @@ Infraestructura:
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
@@ -680,9 +681,35 @@ _TASK_PREFIX = "vertice:rag:task"
 _TASK_TTL    = 86_400  # 24 h — las tareas se auto-eliminan al día siguiente
 
 _redis_client: aioredis.Redis | None = None  # type: ignore[type-arg]
+_redis_loop: asyncio.AbstractEventLoop | None = None
+
+# Si Redis nunca ha funcionado en este proceso (p.ej. desarrollo local sin
+# Redis), la memoria es el almacén legítimo y "no está" significa que no
+# existe. Solo cuando Redis SÍ llegó a funcionar un fallo posterior vuelve
+# ambigua la respuesta.
+_redis_ever_ok: bool = False
+
+
+class TaskStoreUnavailable(Exception):
+    """El almacén de tareas no pudo consultarse, así que no se puede afirmar
+    que la tarea no exista."""
+
 
 def _get_redis() -> aioredis.Redis | None:  # type: ignore[type-arg]
-    global _redis_client
+    global _redis_client, _redis_loop
+
+    # El cliente asyncio abre sus conexiones sobre el event loop vigente en el
+    # momento de crearse. Si luego se usa desde otro loop —o desde uno ya
+    # cerrado— toda operación falla con "Event loop is closed". Se reconstruye
+    # cuando cambia el loop en lugar de arrastrar un cliente inservible.
+    try:
+        current_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if _redis_client is not None and current_loop is not _redis_loop:
+        _redis_client = None
+
     if _redis_client is None:
         try:
             # aioredis.from_url() es perezoso — sin estos timeouts, la primera
@@ -694,31 +721,75 @@ def _get_redis() -> aioredis.Redis | None:  # type: ignore[type-arg]
                 socket_connect_timeout=2,
                 socket_timeout=2,
             )
+            _redis_loop = current_loop
         except Exception as exc:
             logger.warning("[rag] Redis no disponible, usando memoria: %s", exc)
     return _redis_client
 
+
+def _reset_redis() -> None:
+    """Descarta el cliente cacheado tras un fallo.
+
+    El cliente asyncio queda ligado al event loop que lo creó; si ese loop se
+    cierra (o la conexión se rompe), todas las operaciones siguientes fallan
+    con el mismo error hasta que se reconstruye el cliente.
+    """
+    global _redis_client
+    _redis_client = None
+
+
 async def _save_task(task_id: str, data: dict[str, Any]) -> None:
     key = f"{_TASK_PREFIX}:{task_id}"
+
+    # Se escribe SIEMPRE en memoria además de en Redis. Antes la escritura en
+    # memoria era solo un fallback del `except`, así que una escritura correcta
+    # en Redis seguida de una lectura fallida caía a un fallback vacío y la
+    # tarea se reportaba como inexistente (404).
+    _memory_tasks[task_id] = data
+
+    global _redis_ever_ok
     r = _get_redis()
     if r is not None:
         try:
             await r.set(key, json.dumps(data), ex=_TASK_TTL)
-            return
+            _redis_ever_ok = True
         except Exception as exc:
             logger.warning("[rag] Redis write error, falling back to memory: %s", exc)
-    _memory_tasks[task_id] = data
+            _reset_redis()
 
 async def _load_task(task_id: str) -> dict[str, Any] | None:
+    """Devuelve la tarea, o None si con certeza no existe.
+
+    Lanza TaskStoreUnavailable cuando Redis falla y la memoria local tampoco
+    tiene la tarea: en ese caso no se puede distinguir "no existe" de "no se
+    pudo consultar", y responder 404 sería engañoso.
+    """
+    global _redis_ever_ok
     key = f"{_TASK_PREFIX}:{task_id}"
+    redis_failed = False
+
     r = _get_redis()
     if r is not None:
         try:
             raw = await r.get(key)
-            return json.loads(raw) if raw else None
+            _redis_ever_ok = True
+            if raw:
+                return json.loads(raw)  # type: ignore[no-any-return]
         except Exception as exc:
             logger.warning("[rag] Redis read error, falling back to memory: %s", exc)
-    return _memory_tasks.get(task_id)
+            _reset_redis()
+            redis_failed = True
+
+    # Redis no la tiene (o no respondió): la memoria del proceso puede tenerla,
+    # p.ej. si se escribió durante una caída de Redis.
+    task = _memory_tasks.get(task_id)
+    if task is not None:
+        return task
+
+    # Solo es ambiguo si Redis era el almacén activo y ha dejado de responder.
+    if redis_failed and _redis_ever_ok:
+        raise TaskStoreUnavailable(task_id)
+    return None
 
 _memory_tasks: dict[str, dict[str, Any]] = {}  # fallback si Redis no está disponible
 
@@ -844,7 +915,16 @@ async def rag_index_status(
     Consulta el estado de una tarea de indexación iniciada con POST /rag/index.
     Requiere X-Service-Key.
     """
-    task = await _load_task(task_id)
+    try:
+        task = await _load_task(task_id)
+    except TaskStoreUnavailable:
+        # No se pudo consultar el almacén: devolver 404 afirmaría falsamente
+        # que la tarea no existe.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="TASK_STORE_UNAVAILABLE",
+        ) from None
+
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

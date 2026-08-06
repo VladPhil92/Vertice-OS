@@ -459,3 +459,61 @@ def test_civic_query_stays_public():
     bare = TestClient(app)
     response = bare.post("/civic/query", json={"message": "¿Cómo participo?"})
     assert response.status_code == 200
+
+
+# ── Almacén de tareas RAG ─────────────────────────────────────────────────────
+# Regresión del fallo de CI: con Redis disponible la escritura iba solo a Redis
+# y, si la lectura posterior fallaba (event loop cerrado entre peticiones del
+# TestClient), el fallback en memoria estaba vacío y una tarea existente se
+# reportaba como 404.
+
+def test_task_survives_redis_read_failure_after_successful_write():
+    """Escritura correcta en Redis + lectura fallida ⇒ la tarea sigue siendo visible."""
+    import main
+
+    create = client.post("/rag/index", json={"dry_run": True})
+    assert create.status_code == 202
+    task_id = create.json()["task_id"]
+
+    class _ReadFailsRedis:
+        async def set(self, *a, **k):
+            return True
+
+        async def get(self, *a, **k):
+            raise RuntimeError("Event loop is closed")
+
+    with patch.object(main, "_get_redis", lambda: _ReadFailsRedis()):
+        response = client.get(f"/rag/index/{task_id}")
+
+    assert response.status_code == 200
+    assert response.json()["task_id"] == task_id
+
+
+def test_unknown_task_returns_503_when_healthy_store_starts_failing():
+    """Redis funcionaba y deja de responder ⇒ 404 sería una afirmación falsa."""
+    import main
+
+    class _AllFailsRedis:
+        async def set(self, *a, **k):
+            raise RuntimeError("Event loop is closed")
+
+        async def get(self, *a, **k):
+            raise RuntimeError("Event loop is closed")
+
+    unknown_id = "00000000-0000-0000-0000-0000000000ff"
+    original = main._redis_ever_ok
+    main._redis_ever_ok = True  # Redis llegó a funcionar en este proceso
+    try:
+        with patch.object(main, "_get_redis", lambda: _AllFailsRedis()):
+            response = client.get(f"/rag/index/{unknown_id}")
+    finally:
+        main._redis_ever_ok = original
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "TASK_STORE_UNAVAILABLE"
+
+
+def test_unknown_task_returns_404_when_store_healthy():
+    """Con el almacén sano, una tarea inexistente sí debe ser 404."""
+    response = client.get("/rag/index/00000000-0000-0000-0000-0000000000aa")
+    assert response.status_code == 404
