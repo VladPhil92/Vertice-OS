@@ -128,7 +128,14 @@ export async function recordReputationEvent(input: RecordEventInput): Promise<Re
   const { citizen_id, event_type, reference_id } = input
   const points = EVENT_POINTS[event_type]
 
-  await ensureCitizenNode(citizen_id)
+  // Neo4j es un índice secundario del grafo, no la fuente de verdad. Antes
+  // esto era `await ensureCitizenNode(...)` sin capturar: con Neo4j caído
+  // lanzaba ANTES del INSERT, así que el evento de reputación no llegaba
+  // tampoco a Postgres — se perdía entero por una dependencia opcional. Ahora
+  // el fallo se registra y el evento se persiste igual.
+  ensureCitizenNode(citizen_id).catch((err: unknown) => {
+    logger.error('[reputation] neo4j ensureCitizenNode failed', err)
+  })
 
   // Persist event to PostgreSQL
   const row = await prisma.$queryRaw<{ id: string; created_at: Date }[]>(

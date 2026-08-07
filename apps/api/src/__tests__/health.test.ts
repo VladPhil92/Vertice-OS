@@ -56,33 +56,37 @@ describe('GET /health/ready', () => {
     expect(body.checks.neo4j).toBe('ok')
   })
 
-  it('returns 503 and marks degraded when Redis fails', async () => {
+  it('returns 503 when Redis fails — dependencia requerida', async () => {
     mockRedisPing.mockRejectedValueOnce(new Error('ECONNREFUSED'))
 
     const res = await app.inject({ method: 'GET', url: '/health/ready' })
     expect(res.statusCode).toBe(503)
     const body = JSON.parse(res.payload)
-    expect(body.status).toBe('degraded')
+    expect(body.status).toBe('unavailable')
     expect(body.checks.redis).toBe('fail')
     expect(body.checks.database).toBe('ok')
   })
 
-  it('returns 503 and marks degraded when DB fails', async () => {
+  it('returns 503 when DB fails — dependencia requerida', async () => {
     mockPrismaQueryRaw.mockRejectedValueOnce(new Error('connection refused'))
 
     const res = await app.inject({ method: 'GET', url: '/health/ready' })
     expect(res.statusCode).toBe(503)
     const body = JSON.parse(res.payload)
-    expect(body.status).toBe('degraded')
+    expect(body.status).toBe('unavailable')
     expect(body.checks.redis).toBe('ok')
     expect(body.checks.database).toBe('fail')
   })
 
-  it('returns 503 and marks degraded when Neo4j fails', async () => {
+  // Regresión: Neo4j contaba como dependencia requerida, así que el
+  // healthcheck del despliegue devolvía 503 permanentemente cuando no se
+  // desplegaba Neo4j — y la plataforma mataba el contenedor por "never became
+  // healthy", haciendo imposible el piloto que explícitamente lo excluye.
+  it('sigue LISTO (200) cuando solo Neo4j falla — es dependencia opcional', async () => {
     mockVerifyConnectivity.mockRejectedValueOnce(new Error('ServiceUnavailable'))
 
     const res = await app.inject({ method: 'GET', url: '/health/ready' })
-    expect(res.statusCode).toBe(503)
+    expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.payload)
     expect(body.status).toBe('degraded')
     expect(body.checks.neo4j).toBe('fail')

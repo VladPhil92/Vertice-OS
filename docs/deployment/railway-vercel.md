@@ -31,7 +31,11 @@ extra que desplegar para eso.
 
 Neo4j se deja fuera del piloto: la reputación funciona sin él (los eventos
 simplemente no alimentan el grafo), y no vale el costo/complejidad extra
-todavía.
+todavía. El healthcheck `/health/ready` lo trata explícitamente como
+dependencia **opcional**: reporta su estado (`"neo4j": "fail"` y
+`status: "degraded"`) pero devuelve **200**, así que el servicio arranca
+normalmente sin él. Solo Postgres y Redis lo pueden dejar en 503
+(`status: "unavailable"`).
 
 ## 0. Antes de empezar — bugs de Dockerfile ya corregidos aquí
 
@@ -67,6 +71,12 @@ anterior funciona).
 **No uses el plugin "PostgreSQL" por defecto de Railway** — es un
 `postgres` vanilla sin PostGIS, y el schema de VÉRTICE OS depende de tipos
 `geography(Point,4326)` en `territorial_reports`.
+
+Esto está verificado, no supuesto: contra un Postgres 16 sin PostGIS la
+**primera** migración falla en seco con
+`ERROR: extension "postgis" is not available` (código `0A000`) y
+`prisma migrate deploy` aborta sin aplicar nada. Con PostGIS instalado, las
+5 migraciones aplican limpias.
 
 Usa en su lugar la plantilla de extensiones de Railway (PostgreSQL 18,
 PostGIS incluido junto con pgvector/pg_cron entre otras, se activan por
@@ -173,7 +183,7 @@ Plugin "Redis" estándar de Railway, sin configuración especial. Copia el
 Con los tres servicios arriba:
 
 - [ ] `GET https://<api>/health` → `200`
-- [ ] `GET https://<api>/health/ready` → `200` (confirma que Postgres/Redis responden)
+- [ ] `GET https://<api>/health/ready` → `200` (confirma que Postgres/Redis responden; sin Neo4j desplegado devuelve 200 con `status: "degraded"`, que es lo esperado en el piloto)
 - [ ] `GET https://<ai>/health` → `200`
 - [ ] Logs de `api` muestran `[jobs] worker started` y `[redis] connected`
 - [ ] Crear un ciudadano de prueba vía `POST /auth/register` desde la web desplegada

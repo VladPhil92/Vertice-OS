@@ -4,9 +4,12 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  // Moved from experimental.serverComponentsExternalPackages (deprecated in Next.js 14.1)
-  serverExternalPackages: ['mapbox-gl'],
   experimental: {
+    // `serverExternalPackages` (sin prefijo experimental) solo existe desde
+    // Next.js 15. En 14.x la clave correcta es esta: usar la otra hacía que
+    // Next la ignorara con "Unrecognized key(s) in object" y mapbox-gl NO
+    // quedara externalizado — justo lo contrario de lo que se pretendía.
+    serverComponentsExternalPackages: ['mapbox-gl'],
     outputFileTracingRoot: path.join(__dirname, '../../'),
   },
   images: {

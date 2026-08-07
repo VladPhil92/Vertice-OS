@@ -61,6 +61,24 @@ describe('recordReputationEvent', () => {
     expect(result.reference_id).toBe(PROPOSAL_ID)
   })
 
+  // Regresión: ensureCitizenNode() se esperaba sin capturar el error, así que
+  // un Neo4j caído lanzaba ANTES del INSERT y el evento no llegaba tampoco a
+  // Postgres — se perdía entero por una dependencia que es opcional.
+  it('persiste el evento en Postgres aunque Neo4j esté caído', async () => {
+    mockRunCypher.mockRejectedValue(new Error('ServiceUnavailable'))
+    mockQueryRaw.mockResolvedValueOnce([{ id: 'event-id', created_at: new Date() }])
+
+    const result = await recordReputationEvent({
+      citizen_id: CITIZEN_ID,
+      event_type: 'vote_cast',
+      reference_id: PROPOSAL_ID,
+    })
+
+    expect(result.citizen_id).toBe(CITIZEN_ID)
+    expect(result.event_type).toBe('vote_cast')
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1) // el INSERT sí ocurrió
+  })
+
   it('invalidates profile and leaderboard cache after recording', async () => {
     mockQueryRaw.mockResolvedValueOnce([{ id: 'event-id', created_at: new Date() }])
 
