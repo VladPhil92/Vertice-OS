@@ -38,9 +38,30 @@ jest.mock('../../../lib/cache', () => ({
   TTL: { PROFILE: 300, SESSION: 60 },
 }))
 
+const mockRedisGetdel = jest.fn()
+const mockRedisSet = jest.fn()
+
+jest.mock('../../../lib/redis', () => ({
+  redis: { getdel: mockRedisGetdel, set: mockRedisSet },
+}))
+
+const mockSendPasswordReset = jest.fn()
+
+jest.mock('../../../lib/email', () => ({
+  sendPasswordReset: mockSendPasswordReset,
+}))
+
 import bcrypt from 'bcrypt'
 import { prisma } from '../../../lib/prisma'
-import { registerCitizen, loginCitizen, getCitizenProfile, revokeSession } from '../auth.service'
+import {
+  registerCitizen,
+  loginCitizen,
+  getCitizenProfile,
+  revokeSession,
+  requestPasswordReset,
+  resetPassword,
+  changePassword,
+} from '../auth.service'
 
 const mockApp = {
   jwt: { sign: jest.fn().mockReturnValue('mock.access.token') },
@@ -107,12 +128,31 @@ describe('registerCitizen', () => {
 describe('loginCitizen', () => {
   it('throws 401 when citizen does not exist', async () => {
     mockCitizen.findUnique.mockResolvedValueOnce(null)
-    // bcrypt.compare NO se llama cuando el ciudadano no existe
     ;(bcrypt.compare as jest.Mock).mockResolvedValue(false)
 
     await expect(
       loginCitizen(mockApp, { email: 'ghost@example.com', password: 'Password1' }, {})
     ).rejects.toMatchObject({ statusCode: 401, code: 'INVALID_CREDENTIALS' })
+  })
+
+  // Regresión: antes bcrypt.compare() se saltaba por completo cuando el
+  // ciudadano no existía — el cuerpo de la respuesta era idéntico al de
+  // password incorrecta, pero el TIEMPO no (una consulta a Postgres vs.
+  // bcrypt.compare a 12 rondas), lo que permite enumerar emails registrados
+  // midiendo latencia aunque el mensaje de error sea igual.
+  it('siempre llama a bcrypt.compare, incluso cuando el ciudadano no existe (evita enumeración por temporización)', async () => {
+    mockCitizen.findUnique.mockResolvedValueOnce(null)
+    ;(bcrypt.compare as jest.Mock).mockResolvedValue(false)
+
+    await expect(
+      loginCitizen(mockApp, { email: 'ghost@example.com', password: 'Password1' }, {})
+    ).rejects.toMatchObject({ statusCode: 401 })
+
+    expect(bcrypt.compare).toHaveBeenCalledTimes(1)
+    // Compara contra un hash de relleno, nunca contra undefined/null
+    const [, hashArg] = (bcrypt.compare as jest.Mock).mock.calls[0]
+    expect(typeof hashArg).toBe('string')
+    expect(hashArg.length).toBeGreaterThan(0)
   })
 
   it('throws 401 when password does not match', async () => {
@@ -231,5 +271,127 @@ describe('revokeSession', () => {
     await revokeSession('unknown-token')
 
     expect(mockDelCache).not.toHaveBeenCalled()
+  })
+})
+
+// ── requestPasswordReset / resetPassword ────────────────────────────────────
+
+describe('requestPasswordReset', () => {
+  it('genera un token, lo guarda en Redis con TTL y envía el correo', async () => {
+    mockCitizen.findUnique.mockResolvedValueOnce({ id: 'citizen-uuid', email: 'user@example.com' })
+    mockRedisSet.mockResolvedValueOnce('OK')
+
+    await requestPasswordReset('user@example.com')
+
+    expect(mockRedisSet).toHaveBeenCalledWith(
+      expect.stringContaining('vertice:pwd_reset:'),
+      'citizen-uuid',
+      'EX',
+      30 * 60,
+    )
+    expect(mockSendPasswordReset).toHaveBeenCalledWith('user@example.com', expect.any(String))
+  })
+
+  it('no hace nada (ni Redis ni email) cuando el email no existe — previene enumeración', async () => {
+    mockCitizen.findUnique.mockResolvedValueOnce(null)
+
+    await requestPasswordReset('ghost@example.com')
+
+    expect(mockRedisSet).not.toHaveBeenCalled()
+    expect(mockSendPasswordReset).not.toHaveBeenCalled()
+  })
+})
+
+describe('resetPassword', () => {
+  it('actualiza la contraseña y revoca todas las sesiones activas', async () => {
+    mockRedisGetdel.mockResolvedValueOnce('citizen-uuid')
+    ;(prisma.$transaction as jest.Mock).mockResolvedValueOnce([{}, {}])
+
+    await resetPassword('valid-token', 'NuevaClave123')
+
+    expect(mockRedisGetdel).toHaveBeenCalledWith('vertice:pwd_reset:valid-token')
+    expect(bcrypt.hash).toHaveBeenCalledWith('NuevaClave123', expect.any(Number))
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect((prisma.$transaction as jest.Mock).mock.calls[0][0]).toHaveLength(2) // update + revoke sessions
+    expect(mockDelCache).toHaveBeenCalledWith('profile', 'citizen-uuid')
+  })
+
+  it('throws 400 cuando el token no existe o ya expiró', async () => {
+    mockRedisGetdel.mockResolvedValueOnce(null)
+
+    await expect(resetPassword('bad-token', 'NuevaClave123')).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'INVALID_RESET_TOKEN',
+    })
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  // Regresión: antes era GET + DEL (después de la transacción), dejando el
+  // token vigente durante toda la ventana de la transacción — y de forma
+  // PERMANENTE si esta fallaba. GETDEL consume el token de un solo golpe, así
+  // que una segunda solicitud con el mismo token (reintento, carrera, o
+  // reutilización de un token filtrado) siempre lo ve como inexistente.
+  it('un segundo intento con el mismo token, tras uno exitoso, falla — token de un solo uso', async () => {
+    mockRedisGetdel.mockResolvedValueOnce('citizen-uuid').mockResolvedValueOnce(null)
+    ;(prisma.$transaction as jest.Mock).mockResolvedValueOnce([{}, {}])
+
+    await resetPassword('one-time-token', 'PrimeraClave1')
+    await expect(resetPassword('one-time-token', 'SegundaClave2')).rejects.toMatchObject({
+      code: 'INVALID_RESET_TOKEN',
+    })
+
+    expect(mockRedisGetdel).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ── changePassword ──────────────────────────────────────────────────────────
+
+describe('changePassword', () => {
+  it('actualiza la contraseña cuando la actual es correcta', async () => {
+    mockCitizen.findUnique.mockResolvedValueOnce({ passwordHash: '$2b$12$current' })
+    ;(bcrypt.compare as jest.Mock).mockResolvedValueOnce(true)
+    ;(prisma.$transaction as jest.Mock).mockResolvedValueOnce([{}, {}])
+
+    await changePassword('citizen-uuid', 'ClaveActual1', 'ClaveNueva2')
+
+    expect(bcrypt.compare).toHaveBeenCalledWith('ClaveActual1', '$2b$12$current')
+    expect(bcrypt.hash).toHaveBeenCalledWith('ClaveNueva2', expect.any(Number))
+    expect(mockDelCache).toHaveBeenCalledWith('profile', 'citizen-uuid')
+  })
+
+  it('throws 401 cuando la contraseña actual es incorrecta, sin tocar la DB', async () => {
+    mockCitizen.findUnique.mockResolvedValueOnce({ passwordHash: '$2b$12$current' })
+    ;(bcrypt.compare as jest.Mock).mockResolvedValueOnce(false)
+
+    await expect(
+      changePassword('citizen-uuid', 'ClaveIncorrecta', 'ClaveNueva2')
+    ).rejects.toMatchObject({ statusCode: 401, code: 'INVALID_CURRENT_PASSWORD' })
+
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  // Misma protección de temporización que en login: comparar siempre, incluso
+  // contra un ciudadano inexistente (no debería pasar vía requireAuth, pero
+  // el servicio no debe confiar en eso ciegamente).
+  it('llama a bcrypt.compare incluso si el ciudadano no aparece en la consulta', async () => {
+    mockCitizen.findUnique.mockResolvedValueOnce(null)
+    ;(bcrypt.compare as jest.Mock).mockResolvedValueOnce(false)
+
+    await expect(
+      changePassword('missing-uuid', 'cualquiera', 'ClaveNueva2')
+    ).rejects.toMatchObject({ statusCode: 401 })
+
+    expect(bcrypt.compare).toHaveBeenCalledTimes(1)
+  })
+
+  it('mantiene viva la sesión actual y cierra las demás, cuando se pasa el refresh token', async () => {
+    mockCitizen.findUnique.mockResolvedValueOnce({ passwordHash: '$2b$12$current' })
+    ;(bcrypt.compare as jest.Mock).mockResolvedValueOnce(true)
+    ;(prisma.$transaction as jest.Mock).mockResolvedValueOnce([{}, {}])
+
+    await changePassword('citizen-uuid', 'ClaveActual1', 'ClaveNueva2', 'current-refresh-token')
+
+    const call = (prisma.$transaction as jest.Mock).mock.calls[0][0]
+    expect(call).toHaveLength(2)
   })
 })

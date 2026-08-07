@@ -237,6 +237,27 @@ docs/XXX      → documentación
 - **Pendiente:** Verificación real de identidad (proveedor externo o revisión
   manual) antes de habilitar votación vinculante; deploy contratos en Polygon
   Amoy testnet
+- **Autenticación (`apps/api/src/modules/auth/`) — auditada:**
+  - **Sin canal de temporización en login.** `bcrypt.compare()` siempre
+    corre, incluso contra un hash de relleno cuando el email no existe —
+    antes se saltaba por completo en ese caso, y aunque el cuerpo de la
+    respuesta era idéntico, el tiempo no: permitía enumerar cuentas
+    registradas midiendo latencia. Misma protección en `changePassword()`.
+  - **Token de reset de contraseña, de un solo uso real.** `resetPassword()`
+    usa `redis.getdel()` (atómico) para consumir el token ANTES de tocar la
+    base de datos — antes era `GET` seguido de `DEL` después de la
+    transacción, dejando el token vigente durante toda esa ventana, y de
+    forma permanente si la transacción fallaba a mitad de camino.
+  - **Una sola política de contraseña**, compartida por registro, reset y
+    cambio (`PasswordSchema` en `auth.schema.ts`: 8-128 caracteres, mínimo
+    una mayúscula y un número). Antes `POST /auth/reset-password` validaba
+    a mano solo la longitud, sin las demás reglas — una contraseña más
+    débil que la exigida al registrarse podía colarse por ese camino.
+  - **`POST /auth/change-password`** (nuevo, requiere sesión activa +
+    contraseña actual): antes no existía ninguna forma de cambiar la
+    contraseña sin pasar por el flujo de correo de "olvidé mi contraseña".
+    Revoca todas las demás sesiones activas al cambiarla; conserva la
+    sesión actual si se le pasa el refresh token vigente.
 
 ### Módulo 02 — Motor Territorial
 - **Estado:** 🟢 Implementado (API + frontend completos)

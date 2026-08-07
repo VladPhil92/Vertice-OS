@@ -17,6 +17,16 @@ import type { AuthTokenResponse, CitizenPublicProfile } from './auth.types'
 const PWD_RESET_PREFIX = 'vertice:pwd_reset'
 const PWD_RESET_TTL    = 30 * 60 // 30 minutos
 
+// Hash bcrypt fijo (de una contraseña que nadie tiene) usado únicamente para
+// que loginCitizen() tarde lo mismo exista o no el ciudadano. Sin esto, el
+// cuerpo de la respuesta es idéntico para "no existe" y "password
+// incorrecta" pero el TIEMPO no: sin este hash, bcrypt.compare() se saltaba
+// por completo cuando el ciudadano no existía, y esa diferencia (una
+// consulta a Postgres vs. bcrypt.compare, que a 12 rondas toma decenas de
+// milisegundos) es un canal de temporización — permite enumerar emails
+// registrados igual que si el mensaje de error los distinguiera.
+const DUMMY_PASSWORD_HASH = '$2b$12$N7QHfr8J/YmthQWHbgBcnO3Nz6gMEjEYV6xl5VAe9TeTAOQOpIjoy'
+
 function generateDid(uuid: string): string {
   return `did:vertice:${uuid}`
 }
@@ -71,10 +81,13 @@ export async function loginCitizen(
     select: { id: true, did: true, passwordHash: true, verificationLevel: true, role: true },
   })
 
-  // Respuesta idéntica para email inexistente y password incorrecta — previene user enumeration
-  const passwordMatch = citizen?.passwordHash
-    ? await bcrypt.compare(input.password, citizen.passwordHash)
-    : false
+  // Cuerpo Y tiempo de respuesta idénticos para email inexistente y password
+  // incorrecta — previene user enumeration. bcrypt.compare() SIEMPRE corre,
+  // incluso contra un hash de relleno cuando el ciudadano no existe.
+  const passwordMatch = await bcrypt.compare(
+    input.password,
+    citizen?.passwordHash ?? DUMMY_PASSWORD_HASH,
+  )
 
   if (!citizen || !passwordMatch) {
     throw Object.assign(new Error('Credenciales inválidas'), { statusCode: 401, code: 'INVALID_CREDENTIALS' })
@@ -200,6 +213,60 @@ export async function getCitizenProfile(citizenId: string): Promise<CitizenPubli
   return profile
 }
 
+// ── Change password (autenticado) ─────────────────────────────────────────────
+
+/**
+ * Cambio de contraseña para un ciudadano ya autenticado — no existía ningún
+ * camino para esto salvo el flujo de "olvidé mi contraseña" por correo.
+ * Exige la contraseña actual (mismo motivo que en login: sin esto, robar un
+ * access token de corta vida bastaría para secuestrar la cuenta de forma
+ * permanente). Revoca todas las DEMÁS sesiones — la que hizo el cambio sigue
+ * viva porque ya demostró conocer tanto la contraseña vieja como la nueva.
+ */
+export async function changePassword(
+  citizenId: string,
+  currentPassword: string,
+  newPassword: string,
+  currentRefreshToken?: string,
+): Promise<void> {
+  const citizen = await prisma.citizen.findUnique({
+    where: { id: citizenId },
+    select: { passwordHash: true },
+  })
+
+  const currentMatch = await bcrypt.compare(
+    currentPassword,
+    citizen?.passwordHash ?? DUMMY_PASSWORD_HASH,
+  )
+
+  if (!citizen || !currentMatch) {
+    throw Object.assign(new Error('Contraseña actual incorrecta'), {
+      statusCode: 401,
+      code: 'INVALID_CURRENT_PASSWORD',
+    })
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS)
+  const keepSessionHash = currentRefreshToken ? hashToken(currentRefreshToken) : null
+
+  await prisma.$transaction([
+    prisma.citizen.update({
+      where: { id: citizenId },
+      data: { passwordHash },
+    }),
+    prisma.session.updateMany({
+      where: {
+        citizenId,
+        revokedAt: null,
+        ...(keepSessionHash ? { refreshTokenHash: { not: keepSessionHash } } : {}),
+      },
+      data: { revokedAt: new Date() },
+    }),
+  ])
+
+  await delCache('profile', citizenId)
+}
+
 // ── Forgot / reset password ───────────────────────────────────────────────────
 
 export async function requestPasswordReset(email: string): Promise<void> {
@@ -217,7 +284,14 @@ export async function requestPasswordReset(email: string): Promise<void> {
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
-  const citizenId = await redis.get(`${PWD_RESET_PREFIX}:${token}`)
+  // GETDEL consume el token atómicamente en una sola ida a Redis — antes era
+  // GET seguido de DEL después de la transacción de Postgres, dejando el
+  // token vigente (reutilizable dentro de su TTL de 30 min) durante toda esa
+  // ventana, e incluso de forma permanente si la transacción fallaba a mitad
+  // de camino (el DEL nunca llegaba a ejecutarse). Con GETDEL, dos
+  // solicitudes concurrentes con el mismo token — o un reintento tras un
+  // error real — nunca pueden consumirlo dos veces.
+  const citizenId = await redis.getdel(`${PWD_RESET_PREFIX}:${token}`)
   if (!citizenId) {
     throw Object.assign(new Error('Token inválido o expirado'), {
       statusCode: 400,
@@ -239,6 +313,5 @@ export async function resetPassword(token: string, newPassword: string): Promise
     }),
   ])
 
-  await redis.del(`${PWD_RESET_PREFIX}:${token}`)
   await delCache('profile', citizenId)
 }
