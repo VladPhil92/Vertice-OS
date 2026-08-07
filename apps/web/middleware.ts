@@ -4,14 +4,27 @@ import type { NextRequest } from 'next/server'
 const AUTH_COOKIE = 'vertice_auth'
 
 export function middleware(request: NextRequest) {
-  // Fresh nonce per request — eliminates unsafe-inline from script-src
-  const nonce = btoa(crypto.randomUUID())
-
   const csp = [
     "default-src 'self'",
-    // nonce trusts Next.js bootstrap scripts; strict-dynamic propagates trust
-    // to scripts they load, covering hydration and dynamically injected chunks
-    `script-src 'nonce-${nonce}' 'strict-dynamic' https://*.sentry.io`,
+    // Antes: `script-src 'nonce-${n}' 'strict-dynamic'`. Se veía más estricto,
+    // pero dejaba el sitio SIN EJECUTAR NADA de JavaScript: un nonce se genera
+    // por request, y 22 de las 25 páginas son prerenderizadas en build
+    // (`○ Static`), así que su HTML no puede llevarlo. Next renderizaba sus
+    // <script> sin nonce (`"nonce":"$undefined"` en el payload RSC) y
+    // 'strict-dynamic' — que anula los allowlists por host — hacía que el
+    // navegador los rechazara todos.
+    //
+    // Verificado en Chromium real, con los assets estáticos servidos
+    // correctamente en ambos casos: con nonce+strict-dynamic React NO hidrata
+    // y hay 18 violaciones de CSP; con esta política hidrata y hay 0. El fallo
+    // era idéntico en Next 14, así que no lo introdujo la migración a 15.
+    //
+    // Volver a nonce exige renderizado dinámico en todas las páginas (perder
+    // la generación estática, y con ella el hosting gratuito). Compensación
+    // aceptada a conciencia: el riesgo real de 'unsafe-inline' aquí es bajo
+    // — no existe ni un `dangerouslySetInnerHTML` en el código y React escapa
+    // todo por defecto. `'self'` mantiene fuera cualquier script de terceros.
+    "script-src 'self' 'unsafe-inline' https://*.sentry.io",
     // Styles: unsafe-inline kept — inline styles carry no code-execution risk
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
@@ -29,12 +42,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Forward nonce to Server Components so layout.tsx can attach it to <html>
-  // Next.js reads html[nonce] and stamps it on all its generated <script> tags
-  const requestHeaders = new Headers(request.headers)
-  requestHeaders.set('x-nonce', nonce)
-
-  const response = NextResponse.next({ request: { headers: requestHeaders } })
+  // Ya no se reenvía ningún `x-nonce`: sin nonce en la política, no hay nada
+  // que Next tenga que estampar en sus <script>.
+  const response = NextResponse.next()
 
   response.headers.set('Content-Security-Policy', csp)
   response.headers.set('X-Frame-Options', 'DENY')
