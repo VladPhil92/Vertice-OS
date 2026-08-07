@@ -16,7 +16,7 @@ overrides:
   form-data: '>=4.0.6'
   postcss: '>=8.5.18'
   axios: '>=1.18.0'
-  undici: '>=6.28.0'
+  undici: '>=6.28.0 <7.0.0'
   serialize-javascript: '>=7.0.3'
   tmp: '>=0.2.6'
   lodash: '>=4.18.0'
@@ -6584,9 +6584,9 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici@8.10.0:
-    resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
-    engines: {node: '>=22.19.0'}
+  undici@6.28.0:
+    resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
+    engines: {node: '>=18.17'}
 
   union-value@1.0.1:
     resolution: {integrity: sha512-tJfXmxMeWYnczCVs7XAEvIV7ieppALdyepWMkHkwciRpZraG/xwT+s2JN8+pr1+8jCRf80FFzvr+MpQeeoF4Xg==}
@@ -8088,7 +8088,7 @@ snapshots:
       picocolors: 1.1.1
       semver: 6.3.1
       table: 6.9.0
-      undici: 8.10.0
+      undici: 6.28.0
     transitivePeerDependencies:
       - supports-color
 
@@ -11441,7 +11441,7 @@ snapshots:
       stacktrace-parser: 0.1.11
       tinyglobby: 0.2.16
       tsort: 0.0.1
-      undici: 8.10.0
+      undici: 6.28.0
       uuid: 8.3.2
       ws: 8.21.2
     optionalDependencies:
@@ -14075,7 +14075,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici@8.10.0: {}
+  undici@6.28.0: {}
 
   union-value@1.0.1:
     dependencies:
