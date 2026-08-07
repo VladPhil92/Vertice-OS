@@ -376,6 +376,33 @@ docs/XXX      → documentación
   excluye Neo4j a propósito) y la plataforma mataba el contenedor por
   "1/1 replicas never became healthy" — era imposible desplegar.
 
+### CI/CD (`.github/workflows/ci.yml`)
+- **Estado:** 🟢 Corriendo de verdad por primera vez desde que existe el repo
+- **El workflow llevaba semanas sin ejecutar ni un solo job — no era un
+  problema de GitHub, era el propio YAML.** `if: ${{ secrets.SEMGREP_APP_TOKEN != '' }}`
+  a nivel de step: el contexto `secrets` no puede leerse dentro de una
+  expresión `if:` de step, y esa validación es de todo el archivo — invalidaba
+  el workflow completo, así que ningún job (ni `quality` ni `test`) llegaba a
+  crearse en ninguna corrida. Confirmado contra la API real: las 10 corridas
+  por push a `main` desde el merge del PR #4 terminaban con `conclusion:
+  failure` y 0 jobs, todas instantáneas. Corregido pasando el secreto por
+  `env:` a nivel de job y condicionando contra `env.SEMGREP_APP_TOKEN`.
+  Validar workflows con `actionlint` (no solo YAML sintáctico) antes de asumir
+  que un `if:` con `secrets.*` es válido.
+- **El override de `undici` de la auditoría de seguridad rompía la descarga
+  del compilador de Hardhat.** `"undici": ">=6.28.0"` sin techo resolvía 8.x
+  para la cadena de Hardhat, que usa una opción (`maxRedirections`) que
+  undici 8 eliminó. Invisible en local porque el compilador ya estaba en
+  caché (`~/.cache/hardhat-nodejs`); en un runner de CI limpio, sin caché, el
+  download se ejecuta de verdad y falla. Acotado a `>=6.28.0 <7.0.0` — sigue
+  parchando el CVE sin saltar de major. Para reproducir localmente lo que ve
+  CI: `rm -rf ~/.cache/hardhat-nodejs` antes de correr `pnpm test`.
+- **Pendiente:** Playwright (E2E) no corre en CI todavía — solo existe el
+  script `apps/web` `"e2e": "playwright test"`, sin job dedicado. Tampoco hay
+  smoke test de las imágenes Docker de `api`/`ai` en cada merge a `main` — el
+  job `build` solo compila Next.js y solo construye la imagen de `ai` en
+  `develop`.
+
 ---
 
 ## REGLAS DE SEGURIDAD — NUNCA VIOLAR

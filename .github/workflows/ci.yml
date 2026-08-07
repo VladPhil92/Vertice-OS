@@ -148,6 +148,14 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    # El contexto `secrets` NO puede leerse dentro de una expresión `if:` de
+    # step — GitHub lo rechaza al validar el workflow, y esa validación es
+    # de TODO el archivo: no solo fallaba este step, ninguna corrida de CI
+    # llegaba a crear un solo job (quality/test/build incluidos) desde que
+    # esto se introdujo. Pasarlo primero por env: sí es una expresión válida
+    # para if:.
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -165,7 +173,7 @@ jobs:
       # cuenta de Semgrep no bloquea el pipeline por un secreto ausente, pero
       # cuando SÍ corre, un hallazgo real bloquea (sin continue-on-error).
       - name: Semgrep SAST
-        if: ${{ secrets.SEMGREP_APP_TOKEN != '' }}
+        if: ${{ env.SEMGREP_APP_TOKEN != '' }}
         uses: semgrep/semgrep-action@v1
         with:
           config: >-
@@ -173,8 +181,6 @@ jobs:
             p/python
             p/secrets
             p/sql-injection
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
       - name: Verificar que .env no fue commiteado
         run: |
