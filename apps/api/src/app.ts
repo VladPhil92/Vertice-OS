@@ -70,9 +70,13 @@ export function buildApp() {
 
   // ── Error handler global ─────────────────────────────────────────
 
+  // Fastify 5 tipa el `error` del handler como `unknown` (en 4 era
+  // FastifyError), así que se normaliza una vez en lugar de castear campo a
+  // campo. El comportamiento es idéntico: mismos códigos, mismo mensaje.
   app.setErrorHandler((error, request, reply) => {
-    const statusCode = (error as { statusCode?: number }).statusCode ?? 500
-    const code = (error as { code?: string }).code ?? 'INTERNAL_ERROR'
+    const err = error as { statusCode?: number; code?: string; message?: string }
+    const statusCode = err.statusCode ?? 500
+    const code = err.code ?? 'INTERNAL_ERROR'
 
     if (statusCode >= 500) {
       app.log.error(error)
@@ -85,7 +89,7 @@ export function buildApp() {
     }
 
     reply.status(statusCode).send({
-      error: statusCode < 500 ? error.message : 'Error interno del servidor',
+      error: statusCode < 500 ? (err.message ?? 'Solicitud inválida') : 'Error interno del servidor',
       code,
     })
   })
@@ -98,6 +102,19 @@ export function buildApp() {
     timestamp: new Date().toISOString(),
   }))
 
+  // Readiness. Distingue dependencias REQUERIDAS de OPCIONALES a propósito:
+  // este endpoint es el healthcheck del despliegue, así que marcar el
+  // servicio como no-listo equivale a impedir que arranque.
+  //
+  // Postgres y Redis son requeridos: sin ellos no hay autenticación, sesiones,
+  // ni datos — el servicio no puede atender nada útil.
+  //
+  // Neo4j es opcional: solo alimenta el grafo de reputación, y todos sus
+  // usos degradan (ver recordReputationEvent). Antes contaba como requerido,
+  // lo que hacía imposible desplegar sin Neo4j aunque el piloto lo excluya
+  // explícitamente: el healthcheck devolvía 503 para siempre y la plataforma
+  // mataba el contenedor por "never became healthy". Su estado se sigue
+  // reportando para poder vigilarlo, pero ya no bloquea el arranque.
   app.get('/health/ready', async (_request, reply) => {
     const checks: Record<string, 'ok' | 'fail'> = {}
     let healthy = true
@@ -123,11 +140,10 @@ export function buildApp() {
       checks.neo4j = 'ok'
     } catch {
       checks.neo4j = 'fail'
-      healthy = false
     }
 
     return reply.status(healthy ? 200 : 503).send({
-      status: healthy ? 'ok' : 'degraded',
+      status: healthy ? (checks.neo4j === 'ok' ? 'ok' : 'degraded') : 'unavailable',
       checks,
       version: '0.1.0',
       timestamp: new Date().toISOString(),

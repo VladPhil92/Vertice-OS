@@ -91,7 +91,13 @@ vertice-os/
 
 ### Backend (`apps/api/`)
 - **Runtime:** Node.js 20+ con TypeScript
-- **Framework:** Fastify (NO Express)
+- **Framework:** Fastify 5 (NO Express) — migrado desde 4.x para poder usar
+  `@fastify/jwt@10`, único que trae `fast-jwt >= 6.2.4` con los dos CVE
+  críticos parchados (confusión de algoritmo JWT y colisión de caché que podía
+  devolver claims de otro token). Los tests corren con
+  `NODE_OPTIONS=--experimental-vm-modules` porque `@fastify/cookie@11` carga
+  el paquete `cookie` con `import()` dinámico, que Jest en modo CJS no resuelve
+  sin esa bandera.
 - **API:** GraphQL con Apollo Federation
 - **ORM:** Prisma para PostgreSQL
 - **Auth:** JWT + PKCE, bcrypt para hashing
@@ -340,7 +346,14 @@ docs/XXX      → documentación
   en el `CMD`, incompatible con el `$PORT` que inyecta Railway.
 - **Postgres necesita PostGIS explícito** — el plugin "PostgreSQL" por
   defecto de Railway no lo trae; usar la plantilla de extensiones o la
-  dedicada de PostGIS (enlaces en la guía).
+  dedicada de PostGIS (enlaces en la guía). Verificado contra un Postgres 16
+  real: sin PostGIS la primera migración aborta con `0A000`.
+- **`/health/ready` distingue dependencias requeridas de opcionales.**
+  Postgres y Redis caídos → 503 (`status: "unavailable"`). Neo4j caído → 200
+  con `status: "degraded"`. Antes Neo4j contaba como requerido, así que el
+  healthcheck del despliegue devolvía 503 para siempre en el piloto (que
+  excluye Neo4j a propósito) y la plataforma mataba el contenedor por
+  "1/1 replicas never became healthy" — era imposible desplegar.
 
 ---
 
