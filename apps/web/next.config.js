@@ -4,14 +4,14 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  experimental: {
-    // `serverExternalPackages` (sin prefijo experimental) solo existe desde
-    // Next.js 15. En 14.x la clave correcta es esta: usar la otra hacía que
-    // Next la ignorara con "Unrecognized key(s) in object" y mapbox-gl NO
-    // quedara externalizado — justo lo contrario de lo que se pretendía.
-    serverComponentsExternalPackages: ['mapbox-gl'],
-    outputFileTracingRoot: path.join(__dirname, '../../'),
-  },
+  // En Next 15 esta clave salió de `experimental` y perdió el prefijo
+  // `serverComponents`. Bajo Next 14 el nombre correcto era
+  // `experimental.serverComponentsExternalPackages`; usar el de 15 allí hacía
+  // que Next la ignorara con "Unrecognized key(s) in object" y mapbox-gl NO
+  // quedara externalizado. Ambos nombres son correctos — cada uno en su major.
+  serverExternalPackages: ['mapbox-gl'],
+  // outputFileTracingRoot también salió de `experimental` en Next 15.
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   images: {
     // remotePatterns replaces deprecated images.domains
     remotePatterns: [

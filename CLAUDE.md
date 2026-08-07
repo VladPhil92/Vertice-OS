@@ -79,7 +79,30 @@ vertice-os/
 ## STACK TECNOLÓGICO DEFINITIVO
 
 ### Frontend (`apps/web/`)
-- **Framework:** Next.js 14 con App Router (NO Pages Router)
+- **Framework:** Next.js 15 con App Router (NO Pages Router) — migrado desde
+  14.2.35 para cerrar 8 vulnerabilidades HIGH que solo se parchan en 15.5.21+.
+  Migración de superficie mínima: no hay uso de `next/headers` ni de
+  `params`/`searchParams` como props de Server Components (los 5 archivos que
+  los usan son componentes cliente con `useParams`/`URLSearchParams`), que son
+  los dos breaking changes grandes de Next 15. React sigue en 18 (Next 15 lo
+  acepta: `^18.2.0 || ^19.0.0`).
+- **`instrumentation.ts` es obligatorio para Sentry en Next 15.** Bajo 14,
+  `withSentryConfig` inyectaba `experimental.instrumentationHook` y cargaba
+  `sentry.server.config.ts` solo; en 15 ese hook desapareció y sin el archivo
+  el SDK **nunca se inicializa en el servidor** — el build pasa igual y los
+  errores de servidor dejan de reportarse en silencio.
+- **CSP: sin nonce, a propósito.** `script-src` usa `'self' 'unsafe-inline'`,
+  no `nonce`+`strict-dynamic`. Un nonce es por-request y 21 de las 25 páginas
+  son prerenderizadas en build, así que su HTML no puede llevarlo: Next
+  emitía sus `<script>` sin nonce y `'strict-dynamic'` hacía que el navegador
+  los bloqueara TODOS — el sitio renderizaba pero no ejecutaba nada de
+  JavaScript (sin hidratación, sin login, sin dashboard). Verificado en
+  Chromium real: con nonce, 18 violaciones de CSP y React sin hidratar; con
+  la política actual, 0 violaciones y las páginas hidratan. Era idéntico en
+  Next 14 — no lo causó la migración. Volver a nonce exige renderizado
+  dinámico en todas las páginas (perder la generación estática). El riesgo de
+  `'unsafe-inline'` aquí es bajo: no existe ningún `dangerouslySetInnerHTML`
+  y React escapa por defecto.
 - **Lenguaje:** TypeScript strict mode
 - **Estilos:** Tailwind CSS — usar SOLO clases de `tailwind.config.ts` existente
 - **Animaciones:** Framer Motion — cinematic, institucional

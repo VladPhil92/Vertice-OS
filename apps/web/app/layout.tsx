@@ -62,10 +62,11 @@ export const viewport: Viewport = {
   themeColor: '#C8A84B',
 };
 
-// El nonce CSP lo genera middleware.ts por request y lo expone en la cabecera
-// `x-nonce`; Next.js la lee automáticamente para firmar sus propios <script>.
-// No debe leerse aquí con headers(): eso vuelve dinámico todo el árbol y rompe
-// la generación estática de las páginas.
+// La CSP la fija middleware.ts. Ya no usa nonce: era incompatible con la
+// generación estática de estas páginas (un nonce es por-request; el HTML
+// estático se genera en build) y dejaba el sitio sin ejecutar JavaScript.
+// Ver el comentario extenso en middleware.ts. Aquí no debe leerse headers():
+// eso vuelve dinámico todo el árbol y rompe la generación estática.
 export default function RootLayout({
   children,
 }: {
