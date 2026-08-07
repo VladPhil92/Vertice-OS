@@ -24,6 +24,9 @@ const mockLogin = jest.fn()
 const mockRefresh = jest.fn()
 const mockRevoke = jest.fn()
 const mockGetProfile = jest.fn()
+const mockRequestPasswordReset = jest.fn()
+const mockResetPassword = jest.fn()
+const mockChangePassword = jest.fn()
 
 jest.mock('../auth.service', () => ({
   registerCitizen: mockRegister,
@@ -31,6 +34,9 @@ jest.mock('../auth.service', () => ({
   refreshAccessToken: mockRefresh,
   revokeSession: mockRevoke,
   getCitizenProfile: mockGetProfile,
+  requestPasswordReset: mockRequestPasswordReset,
+  resetPassword: mockResetPassword,
+  changePassword: mockChangePassword,
 }))
 
 import { buildApp } from '../../../app'
@@ -213,5 +219,156 @@ describe('GET /auth/me', () => {
     const body = JSON.parse(res.payload)
     expect(body.id).toBe('citizen-uuid')
     expect(mockGetProfile).toHaveBeenCalledWith('citizen-uuid')
+  })
+})
+
+// ── POST /auth/forgot-password ──────────────────────────────────────────────
+
+describe('POST /auth/forgot-password', () => {
+  it('returns 200 and never leaks whether the email exists', async () => {
+    mockRequestPasswordReset.mockResolvedValueOnce(undefined)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/forgot-password',
+      payload: { email: 'user@example.com' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockRequestPasswordReset).toHaveBeenCalledWith('user@example.com')
+  })
+
+  it('returns 400 on invalid email — validated by schema, not ad-hoc checks', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/forgot-password',
+      payload: { email: 'not-an-email' },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(mockRequestPasswordReset).not.toHaveBeenCalled()
+  })
+})
+
+// ── POST /auth/reset-password ───────────────────────────────────────────────
+
+describe('POST /auth/reset-password', () => {
+  it('returns 200 on valid token and strong password', async () => {
+    mockResetPassword.mockResolvedValueOnce(undefined)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/reset-password',
+      payload: { token: 'valid-token', new_password: 'NuevaClave123' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockResetPassword).toHaveBeenCalledWith('valid-token', 'NuevaClave123')
+  })
+
+  // Regresión: antes esta ruta validaba a mano (solo longitud >= 8), sin las
+  // reglas de mayúscula/número que sí exige el registro — una contraseña más
+  // débil que la permitida al registrarse podía colarse por esta vía.
+  it('returns 400 when the new password fails the same policy as registration', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/reset-password',
+      payload: { token: 'valid-token', new_password: 'alllowercase1' }, // sin mayúscula
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(mockResetPassword).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when token is missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/reset-password',
+      payload: { new_password: 'NuevaClave123' },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(mockResetPassword).not.toHaveBeenCalled()
+  })
+
+  it('propagates 400 INVALID_RESET_TOKEN from the service', async () => {
+    mockResetPassword.mockRejectedValueOnce(
+      Object.assign(new Error('Token inválido o expirado'), { statusCode: 400, code: 'INVALID_RESET_TOKEN' })
+    )
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/reset-password',
+      payload: { token: 'expired-token', new_password: 'NuevaClave123' },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body = JSON.parse(res.payload)
+    expect(body.code).toBe('INVALID_RESET_TOKEN')
+  })
+})
+
+// ── POST /auth/change-password ──────────────────────────────────────────────
+
+describe('POST /auth/change-password', () => {
+  it('returns 401 without Authorization header', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      payload: { current_password: 'ClaveActual1', new_password: 'ClaveNueva2' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(mockChangePassword).not.toHaveBeenCalled()
+  })
+
+  it('changes the password with a valid session and correct current password', async () => {
+    await app.ready()
+    const token = app.jwt.sign({ sub: 'citizen-uuid', did: 'did:vertice:citizen-uuid', lvl: 0 })
+    mockChangePassword.mockResolvedValueOnce(undefined)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { current_password: 'ClaveActual1', new_password: 'ClaveNueva2' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockChangePassword).toHaveBeenCalledWith('citizen-uuid', 'ClaveActual1', 'ClaveNueva2', undefined)
+  })
+
+  it('propagates 401 INVALID_CURRENT_PASSWORD from the service', async () => {
+    await app.ready()
+    const token = app.jwt.sign({ sub: 'citizen-uuid', did: 'did:vertice:citizen-uuid', lvl: 0 })
+    mockChangePassword.mockRejectedValueOnce(
+      Object.assign(new Error('Contraseña actual incorrecta'), { statusCode: 401, code: 'INVALID_CURRENT_PASSWORD' })
+    )
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { current_password: 'Incorrecta1', new_password: 'ClaveNueva2' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    const body = JSON.parse(res.payload)
+    expect(body.code).toBe('INVALID_CURRENT_PASSWORD')
+  })
+
+  it('returns 400 when new_password fails the policy', async () => {
+    await app.ready()
+    const token = app.jwt.sign({ sub: 'citizen-uuid', did: 'did:vertice:citizen-uuid', lvl: 0 })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { current_password: 'ClaveActual1', new_password: 'short' },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(mockChangePassword).not.toHaveBeenCalled()
   })
 })

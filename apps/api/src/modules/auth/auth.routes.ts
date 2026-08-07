@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { ZodError } from 'zod'
-import { RegisterSchema, LoginSchema } from './auth.schema'
+import { RegisterSchema, LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, ChangePasswordSchema } from './auth.schema'
 import { requireAuth } from '../../middleware/auth'
 import {
   registerCitizen,
@@ -10,6 +10,7 @@ import {
   getCitizenProfile,
   requestPasswordReset,
   resetPassword,
+  changePassword,
 } from './auth.service'
 import { config } from '../../config'
 
@@ -80,25 +81,40 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /auth/forgot-password — 3/hora para frenar enumeración de emails
   app.post('/forgot-password', { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const body = request.body as { email?: unknown }
-    if (typeof body.email !== 'string' || !body.email.includes('@')) {
+    const parsed = ForgotPasswordSchema.safeParse(request.body)
+    if (!parsed.success) {
       return reply.status(400).send({ error: 'Email inválido' })
     }
     // Always returns 200 — prevents email enumeration
-    await requestPasswordReset(body.email.toLowerCase().trim())
+    await requestPasswordReset(parsed.data.email)
     return reply.send({ message: 'Si el email existe, recibirás instrucciones en breve' })
   })
 
   // POST /auth/reset-password — 5/hora
   app.post('/reset-password', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
-    const body = request.body as { token?: unknown; new_password?: unknown }
-    if (typeof body.token !== 'string' || !body.token) {
-      return reply.status(400).send({ error: 'Token requerido' })
+    const parsed = ResetPasswordSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    if (typeof body.new_password !== 'string' || body.new_password.length < 8) {
-      return reply.status(400).send({ error: 'La contraseña debe tener al menos 8 caracteres' })
-    }
-    await resetPassword(body.token, body.new_password)
+    await resetPassword(parsed.data.token, parsed.data.new_password)
     return reply.send({ message: 'Contraseña actualizada. Inicia sesión con tus nuevas credenciales.' })
+  })
+
+  // POST /auth/change-password — requiere sesión activa + contraseña actual
+  app.post('/change-password', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = ChangePasswordSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
+    }
+    await changePassword(
+      request.citizen.sub,
+      parsed.data.current_password,
+      parsed.data.new_password,
+      request.cookies[REFRESH_COOKIE],
+    )
+    return reply.send({ message: 'Contraseña actualizada. Tus otras sesiones fueron cerradas.' })
   })
 }
