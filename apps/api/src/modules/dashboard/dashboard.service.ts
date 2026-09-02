@@ -48,6 +48,11 @@ interface VotingCandidateRow {
   created_at: Date
 }
 
+interface WorkflowMetricsRow {
+  total: bigint
+  active: bigint
+}
+
 function voteNullifier(citizenId: string, proposalId: string): string {
   const key = config.VOTE_NULLIFIER_SECRET ?? config.JWT_SECRET
   return createHmac('sha256', key)
@@ -73,6 +78,7 @@ export async function getCitizenCommandCenter(citizenId: string) {
     recentLegal,
     eligibleVotingRows,
     endorsementRows,
+    workflowMetricsRows,
     civicCases,
   ] = await Promise.all([
     getCitizenProfile(citizenId),
@@ -134,6 +140,21 @@ export async function getCitizenCommandCenter(citizenId: string) {
       FROM proposal_endorsements
       WHERE citizen_id = ${citizenId}::uuid
     `),
+    prisma.$queryRaw<WorkflowMetricsRow[]>(Prisma.sql`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (
+          WHERE NOT (
+            (c.proposal_id IS NOT NULL OR c.legal_document_id IS NOT NULL)
+            AND (c.proposal_id IS NULL OR p.status IN ('approved', 'rejected', 'quorum_failed', 'executed', 'failed_execution'))
+            AND (c.legal_document_id IS NULL OR l.status IN ('responded', 'closed'))
+          )
+        ) AS active
+      FROM civic_cases c
+      LEFT JOIN proposals p ON p.id = c.proposal_id
+      LEFT JOIN legal_documents l ON l.id = c.legal_document_id
+      WHERE c.citizen_id = ${citizenId}::uuid
+    `),
     listCivicCases(citizenId, 5),
   ])
 
@@ -171,7 +192,8 @@ export async function getCitizenCommandCenter(citizenId: string) {
 
   const legalNeedsAction = (legalByStatus.draft ?? 0) + (legalByStatus.ready ?? 0)
   const reportInProgress = reportByStatus.in_progress ?? 0
-  const activeCivicCases = civicCases.filter((item) => item.stage !== 'decision').length
+  const workflowTotal = Number(workflowMetricsRows[0]?.total ?? 0)
+  const workflowActive = Number(workflowMetricsRows[0]?.active ?? 0)
 
   return {
     profile: {
@@ -233,8 +255,8 @@ export async function getCitizenCommandCenter(citizenId: string) {
         })),
       },
       workflows: {
-        total: civicCases.length,
-        active: activeCivicCases,
+        total: workflowTotal,
+        active: workflowActive,
         recent: civicCases,
       },
     },
