@@ -1,5 +1,10 @@
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
+# Prisma 5 requires a detectable OpenSSL/libssl runtime. node:20-alpine does
+# not guarantee it, which makes the schema/query engine fail before migrations
+# or the HTTP server can start.
+RUN apk add --no-cache openssl \
+  && corepack enable \
+  && corepack prepare pnpm@10.11.0 --activate
 
 # ── Install dependencies ──────────────────────────────────────────────────────
 FROM base AS deps
@@ -53,7 +58,11 @@ CMD ["pnpm", "--filter", "@vertice/api", "dev"]
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodeapp
+# The production image also executes `prisma migrate deploy`; OpenSSL must be
+# present here, not only in the builder where Prisma Client is generated.
+RUN apk add --no-cache openssl \
+  && addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nodeapp
 
 # The monorepo's real directory layout has to survive the copy: pnpm's
 # workspace symlinks (apps/api/node_modules/* → root node_modules/.pnpm/...,
