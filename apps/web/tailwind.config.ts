@@ -10,101 +10,23 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg:             '#050508',
-        surface:        '#0c0c14',
-        'surface-2':    '#121220',
-        border:         'rgba(255,255,255,0.06)',
-        'border-active':'rgba(255,255,255,0.15)',
-        // ── Sistema Cromático Institucional (Sistema 1) ──────────────────────
-        gold:           '#C8A84B',           // Oro institucional VÉRTICE
-        'gold-dim':     'rgba(200,168,75,0.15)',
-        citizen:        '#FFB522',           // Amarillo Ciudadano — ACTIVA
-        'citizen-dim':  'rgba(255,181,34,0.12)',
-        azure:          '#1A7FBF',           // Azul Claro institucional
-        'azure-dim':    'rgba(26,127,191,0.12)',
-        red:            '#C0392B',           // Rojo Acción — MOVILIZA
-        'red-dim':      'rgba(192,57,43,0.12)',
-        navy:           '#1A2744',           // Azul Institucional oscuro
-        'navy-light':   '#253565',
-        emerald:        '#27AE60',           // Tendencia positiva / Salud
-        'emerald-dim':  'rgba(39,174,96,0.12)',
-        primary:        '#F0EDE8',
-        secondary:      'rgba(240,237,232,0.45)',
-        tertiary:       'rgba(240,237,232,0.22)',
-        cyan:           '#4ECDC4',           // Agua / Transparencia
-        'cyan-dim':     'rgba(78,205,196,0.12)',
-        // ── Colores de módulos territoriales (Sistema 2) ─────────────────────
-        module: {
-          mobility:     '#1A7FBF',
-          water:        '#4ECDC4',
-          security:     '#C0392B',
-          health:       '#27AE60',
-          education:    '#FFB522',
-          services:     '#8E44AD',
-          culture:      '#E67E22',
-          economy:      '#1A2744',
-        },
+        bg: '#FFFFFF', surface: '#FFFFFF', 'surface-2': '#F5F7FA', border: '#E9EDF3', 'border-active': '#C9D3E1',
+        gold: '#F5B700', 'gold-dim': 'rgba(245,183,0,0.12)', citizen: '#F5B700', 'citizen-dim': 'rgba(245,183,0,0.12)',
+        azure: '#4A90E2', 'azure-dim': 'rgba(74,144,226,0.10)', red: '#D72638', 'red-dim': 'rgba(215,38,56,0.10)',
+        navy: '#0A2A66', 'navy-light': '#16458D', emerald: '#2BA745', 'emerald-dim': 'rgba(43,167,69,0.10)',
+        primary: '#0A2A66', secondary: '#4B5B73', tertiary: '#7D899A', cyan: '#4A90E2', 'cyan-dim': 'rgba(74,144,226,0.10)',
+        module: { mobility: '#4A90E2', water: '#169C9C', security: '#D72638', health: '#2BA745', education: '#F5B700', services: '#6F4CC3', culture: '#D67B1D', economy: '#0A2A66' },
       },
-      fontFamily: {
-        display: ['var(--font-syne)', 'sans-serif'],
-        mono: ['var(--font-dm-mono)', 'monospace'],
-        serif: ['var(--font-fraunces)', 'serif'],
-      },
-      fontSize: {
-        tag:   ['10px', { letterSpacing: '0.3em'  }],
-        label: ['11px', { letterSpacing: '0.15em' }],
-        micro: ['9px',  { letterSpacing: '0.2em'  }],
-      },
-      animation: {
-        'fade-up':   'fadeUp 0.8s ease forwards',
-        'slow-pulse':'slowPulse 8s ease-in-out infinite',
-        blink:       'blink 2s ease-in-out infinite',
-        'scan-line': 'scanLine 3s linear infinite',
-        'gauge-fill':'gaugeFill 1.2s ease forwards',
-        'count-up':  'countUp 0.6s ease forwards',
-      },
+      fontFamily: { display: ['var(--font-syne)', 'sans-serif'], mono: ['var(--font-dm-mono)', 'monospace'], serif: ['var(--font-fraunces)', 'serif'] },
+      fontSize: { tag: ['10px', { letterSpacing: '0.3em' }], label: ['11px', { letterSpacing: '0.15em' }], micro: ['9px', { letterSpacing: '0.2em' }] },
+      boxShadow: { civic: '0 18px 50px rgba(10,42,102,0.08)', 'civic-sm': '0 8px 26px rgba(10,42,102,0.07)' },
+      animation: { 'fade-up': 'fadeUp 0.8s ease forwards', 'slow-pulse': 'slowPulse 8s ease-in-out infinite', blink: 'blink 2s ease-in-out infinite' },
       keyframes: {
-        fadeUp: {
-          from: { opacity: '0', transform: 'translateY(20px)' },
-          to:   { opacity: '1', transform: 'translateY(0)' },
-        },
-        slowPulse: {
-          '0%, 100%': { opacity: '0.08', transform: 'scale(1)' },
-          '50%':      { opacity: '0.15', transform: 'scale(1.03)' },
-        },
-        blink: {
-          '0%, 100%': { opacity: '1' },
-          '50%':      { opacity: '0.3' },
-        },
-        scanLine: {
-          '0%':   { top: '0' },
-          '100%': { top: '100%' },
-        },
-        gaugeFill: {
-          from: { strokeDashoffset: '251.2' },
-        },
-        countUp: {
-          from: { opacity: '0', transform: 'translateY(8px)' },
-          to:   { opacity: '1', transform: 'translateY(0)' },
-        },
+        fadeUp: { from: { opacity: '0', transform: 'translateY(20px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
+        slowPulse: { '0%, 100%': { opacity: '0.08', transform: 'scale(1)' }, '50%': { opacity: '0.15', transform: 'scale(1.03)' } },
+        blink: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.3' } },
       },
-      backgroundImage: {
-        'grid-pattern': `
-          linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
-        `,
-      },
-      backgroundSize: {
-        grid: '60px 60px',
-      },
-      fontWeight: {
-        '300': '300',
-        '400': '400',
-        '500': '500',
-        '600': '600',
-        '700': '700',
-        '800': '800',
-      },
+      fontWeight: { '300': '300', '400': '400', '500': '500', '600': '600', '700': '700', '800': '800' },
     },
   },
   plugins: [],
