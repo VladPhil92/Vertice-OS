@@ -34,7 +34,6 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
-  const [loading, setLoading] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
 
   const fetchNotifs = useCallback(async () => {
@@ -96,7 +95,6 @@ export function NotificationBell() {
 
       {open && (
         <div className="absolute right-0 top-10 z-50 w-80 rounded border border-border bg-surface shadow-xl">
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <span className="font-mono text-xs font-semibold uppercase tracking-widest text-secondary">
               Notificaciones
@@ -118,7 +116,6 @@ export function NotificationBell() {
             </div>
           </div>
 
-          {/* List */}
           <div className="max-h-80 overflow-y-auto">
             {notifs.length === 0 ? (
               <p className="px-4 py-8 text-center font-mono text-xs text-tertiary">
