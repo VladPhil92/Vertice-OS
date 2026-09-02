@@ -56,7 +56,11 @@ COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/dist ./packages/t
 
 USER nodeapp
 EXPOSE 4000
-CMD ["node", "apps/api/dist/index.js"]
+# Production boot is self-contained: apply only pending Prisma migrations using
+# the schema's real monorepo path, then replace the shell with the API process.
+# Keeping this in the image avoids a fragile Railway dashboard-only Start
+# Command and guarantees that every deployment uses the same lifecycle.
+CMD ["sh", "-c", "./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/index.js"]
 
 # ── Development (docker-compose local) ───────────────────────────────────────
 FROM base AS development
