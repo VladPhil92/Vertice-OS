@@ -13,6 +13,7 @@ import {
   connectWallet,
   requestWalletNonce,
 } from './identity.service'
+import { getCivicIdentityAssurance } from './identity-assurance.service'
 
 const WalletNonceSchema = z.object({
   wallet_address: z
@@ -47,10 +48,20 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(doc)
   })
 
-  // GET /identity/status — nivel de verificación y capacidades
+  // GET /identity/status — nivel de verificación y capacidades legacy.
+  // `verification_level` sigue describiendo controles internos (documento
+  // declarado/contacto), no prueba externa de identidad.
   app.get('/status', { preHandler: requireAuth }, async (request, reply) => {
     const status = await getVerificationStatus(request.citizen.sub)
     return reply.send(status)
+  })
+
+  // GET /identity/assurance — frontera explícita entre login/contacto e
+  // identidad cívica apta para acciones de gobernanza. Solo proveedores
+  // incluidos en CIVIC_IDENTITY_ASSURANCE_PROVIDERS pueden elevar este estado.
+  app.get('/assurance', { preHandler: requireAuth }, async (request, reply) => {
+    const assurance = await getCivicIdentityAssurance(request.citizen.sub)
+    return reply.send(assurance)
   })
 
   // ── Verificación de cédula (nivel 0 → 1) ─────────────────────────────────
