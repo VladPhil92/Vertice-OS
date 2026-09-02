@@ -1,11 +1,17 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Mono, Fraunces, Syne } from 'next/font/google'
+import { DM_Mono, Fraunces, Inter, Montserrat } from 'next/font/google'
 import './globals.css'
 
-const syne = Syne({
+const montserrat = Montserrat({
   subsets: ['latin'],
-  variable: '--font-syne',
-  weight: ['400', '600', '700', '800'],
+  variable: '--font-montserrat',
+  weight: ['500', '600', '700', '800'],
+})
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  weight: ['400', '500', '600', '700'],
 })
 
 const dmMono = DM_Mono({
@@ -23,21 +29,22 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: 'VÉRTICE OS — Sistema Operativo Cívico',
-    template: '%s | VÉRTICE OS',
+    default: 'VÉRTICE — Inteligencia Ciudadana',
+    template: '%s | VÉRTICE',
   },
   description:
-    'Plataforma cívica para reportar asuntos del territorio, crear propuestas, deliberar, participar en decisiones y seguir resultados desde una sola experiencia.',
+    'Plataforma ciudadana para informar, conectar, participar, vigilar y transformar el territorio con datos, deliberación y seguimiento.',
   keywords: [
     'participación ciudadana',
     'Cartagena',
     'Colombia',
-    'civic tech',
+    'inteligencia ciudadana',
+    'control público',
     'gobernanza',
     'reportes ciudadanos',
     'propuestas ciudadanas',
   ],
-  authors: [{ name: 'CTG One Corporation' }],
+  authors: [{ name: 'VÉRTICE' }],
   robots: 'index, follow',
   manifest: '/manifest.json',
   icons: {
@@ -45,23 +52,23 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'VÉRTICE OS',
+    statusBarStyle: 'default',
+    title: 'VÉRTICE',
   },
   openGraph: {
     type: 'website',
     locale: 'es_CO',
-    siteName: 'VÉRTICE OS',
-    title: 'VÉRTICE OS — Participación cívica con trazabilidad',
+    siteName: 'VÉRTICE',
+    title: 'VÉRTICE — Inteligencia Ciudadana',
     description:
-      'De una señal del barrio a una acción organizada: reporta, propone, entiende, decide y sigue resultados.',
+      'La ciudadanía es el vértice del cambio: reporta, propone, participa, vigila y sigue resultados.',
   },
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#C8A84B',
+  themeColor: '#0A2A66',
 }
 
 export default function RootLayout({
@@ -72,7 +79,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${syne.variable} ${dmMono.variable} ${fraunces.variable}`}
+      className={`${montserrat.variable} ${inter.variable} ${dmMono.variable} ${fraunces.variable}`}
     >
       <body className="bg-bg text-primary antialiased">{children}</body>
     </html>
