@@ -31,6 +31,11 @@ const schema = z.object({
 
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
+  // CTG One federation. The endpoint remains fail-closed when the shared
+  // service secret is absent, so deploying the code never enables SSO by accident.
+  CTG_ONE_FEDERATION_EXCHANGE_URL: z.string().url().default('https://ctgone.com/api/federation/vertice/exchange'),
+  CTG_ONE_FEDERATION_SECRET: z.string().min(32).optional(),
+
   // ── Blockchain (Polygon) — opcionales: si no están, el minting se omite ──
   POLYGON_RPC_URL:        z.string().url().optional(),
   POLYGON_PRIVATE_KEY:    z.string().optional(),
