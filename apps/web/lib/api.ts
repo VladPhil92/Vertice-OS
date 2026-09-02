@@ -1,4 +1,20 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
+
+/**
+ * Browser API target.
+ *
+ * Localhost is a development-only default. Production builds must never silently
+ * send citizen credentials or authenticated requests to the user's own machine.
+ */
+export const BASE_URL = configuredBaseUrl
+  ?? (process.env.NODE_ENV === 'development' ? 'http://localhost:4000' : '')
+
+export function requireApiBaseUrl(): string {
+  if (!BASE_URL) {
+    throw new Error('API_NOT_CONFIGURED')
+  }
+  return BASE_URL
+}
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null
@@ -30,7 +46,8 @@ async function refreshAccessToken(): Promise<string | null> {
 
   refreshInFlight = (async () => {
     try {
-      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      const baseUrl = requireApiBaseUrl()
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -58,6 +75,7 @@ export async function apiFetch<T = unknown>(
   path: string,
   options: ApiOptions = {},
 ): Promise<T> {
+  const baseUrl = requireApiBaseUrl()
   const { public: isPublic, headers: extraHeaders, ...rest } = options
 
   function buildHeaders(token: string | null): Record<string, string> {
@@ -69,7 +87,7 @@ export async function apiFetch<T = unknown>(
     return headers
   }
 
-  let res = await fetch(`${BASE_URL}${path}`, {
+  let res = await fetch(`${baseUrl}${path}`, {
     credentials: 'include',
     ...rest,
     headers: buildHeaders(isPublic ? null : getToken()),
@@ -79,7 +97,7 @@ export async function apiFetch<T = unknown>(
   if (res.status === 401 && !isPublic) {
     const newToken = await refreshAccessToken()
     if (newToken) {
-      res = await fetch(`${BASE_URL}${path}`, {
+      res = await fetch(`${baseUrl}${path}`, {
         credentials: 'include',
         ...rest,
         headers: buildHeaders(newToken),
