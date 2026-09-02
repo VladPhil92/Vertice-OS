@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { requireApiBaseUrl } from '@/lib/api'
@@ -86,6 +86,30 @@ export default function LoginPage() {
                 <span className="text-xs font-semibold leading-5 text-[#A11D2A]">{error}</span>
               </div>
             )}
+
+            <div className="mb-6">
+              <Link
+                href="/auth/ctgone/start"
+                aria-label="Registrarse o ingresar con CTG One"
+                className="group flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#0A2A66] bg-white px-5 py-3 text-xs font-extrabold text-[#0A2A66] transition hover:bg-[#F3F7FC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90E2] focus-visible:ring-offset-2"
+              >
+                <ShieldCheck size={17} aria-hidden="true" />
+                <span>Continuar con CTG One</span>
+                <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+              </Link>
+              <p className="mt-3 text-center text-[11px] font-semibold leading-5 text-[#7B8799]">
+                Si ya tienes una cuenta CTG One, úsala para ingresar. Si es tu primera vez,
+                VÉRTICE creará tu cuenta ciudadana vinculada de forma segura.
+              </p>
+            </div>
+
+            <div className="mb-6 flex items-center gap-3" aria-hidden="true">
+              <div className="h-px flex-1 bg-[#E1E7EF]" />
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#9AA6B5]">
+                o usa tu cuenta VÉRTICE
+              </span>
+              <div className="h-px flex-1 bg-[#E1E7EF]" />
+            </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">
