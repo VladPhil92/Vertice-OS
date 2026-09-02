@@ -3,36 +3,36 @@ import { Github, MapPin, ShieldCheck, Users } from 'lucide-react'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
 const FOOTER_LINKS = {
-  Explorar: [
+  Plataforma: [
     { label: 'Propósito', href: '#proposito' },
     { label: 'Cómo funciona', href: '#como-funciona' },
     { label: 'Qué puedes hacer', href: '#capacidades' },
     { label: 'IA cívica', href: '#ia' },
   ],
-  Participar: [
+  Participa: [
     { label: 'Crear cuenta', href: '/auth/register' },
     { label: 'Ingresar', href: '/auth/login' },
-    { label: 'Dirección de producto', href: '#roadmap' },
+    { label: 'Visión', href: '#vision' },
   ],
 } as const
 
 export function Footer() {
   return (
-    <footer className="mt-8 overflow-hidden bg-[#0A2A66] text-white">
+    <footer className="overflow-hidden bg-[#0A2A66] text-white">
       <div className="grid h-1.5 grid-cols-3">
         <span className="bg-[#F5B700]" />
         <span className="bg-[#4A90E2]" />
         <span className="bg-[#D72638]" />
       </div>
 
-      <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr]">
+      <div className="mx-auto max-w-7xl px-6 py-14">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr]">
           <div>
-            <div className="mb-6 inline-flex rounded-2xl bg-white px-4 py-3 shadow-sm">
+            <div className="mb-5 inline-flex rounded-2xl bg-white px-4 py-3 shadow-sm">
               <BrandLogo compact />
             </div>
 
-            <p className="mb-7 max-w-lg text-sm leading-7 text-white/74">
+            <p className="mb-6 max-w-lg text-sm leading-7 text-white/[.74]">
               VÉRTICE organiza información territorial, participación y seguimiento dentro de una experiencia
               digital común para ciudadanos y comunidades.
             </p>
@@ -62,7 +62,7 @@ export function Footer() {
                 <h4 className="mb-5 text-xs font-extrabold uppercase tracking-[0.16em] text-[#F5B700]">
                   {category}
                 </h4>
-                <ul className="flex flex-col gap-3">
+                <ul className="flex list-none flex-col gap-3 p-0">
                   {links.map((link) => (
                     <li key={link.label}>
                       {link.href.startsWith('/') ? (
