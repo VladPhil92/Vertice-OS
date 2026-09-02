@@ -1,5 +1,10 @@
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
+# Prisma 5 requires a detectable OpenSSL/libssl runtime. node:20-alpine does
+# not guarantee it, which makes the schema/query engine fail before migrations
+# or the HTTP server can start.
+RUN apk add --no-cache openssl \
+  && corepack enable \
+  && corepack prepare pnpm@10.11.0 --activate
 
 # ── Install dependencies ──────────────────────────────────────────────────────
 FROM base AS deps
@@ -33,20 +38,38 @@ COPY . .
 RUN pnpm --filter @vertice/types build
 RUN pnpm --filter @vertice/api db:generate && pnpm --filter @vertice/api build
 
-# ── Production runner ─────────────────────────────────────────────────────────
+# ── Development (docker-compose local) ───────────────────────────────────────
+# Keep this stage before `runner`: Docker/Railway use the LAST stage when no
+# explicit target is supplied. Having development last caused production to
+# deploy an image with no source tree and the dev CMD, which exited with
+# `No projects found in "/app"` and then exhausted Railway's healthcheck.
+FROM base AS development
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+# Same reason as the runner stage below: apps/api's actual deps (fastify,
+# @prisma/client, etc.) live in apps/api/node_modules, not the root one.
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+# Source is volume-mounted by docker-compose
+EXPOSE 4000
+ENV NODE_ENV=development
+CMD ["pnpm", "--filter", "@vertice/api", "dev"]
+
+# ── Production runner (MUST remain the final stage) ──────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodeapp
+# The production image also executes `prisma migrate deploy`; OpenSSL must be
+# present here, not only in the builder where Prisma Client is generated.
+RUN apk add --no-cache openssl \
+  && addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nodeapp
 
 # The monorepo's real directory layout has to survive the copy: pnpm's
 # workspace symlinks (apps/api/node_modules/* → root node_modules/.pnpm/...,
 # and apps/api/node_modules/@vertice/types → packages/types) are RELATIVE —
 # flattening dist+node_modules into a single top-level pair (as a normal
 # single-package Dockerfile would) leaves every one of those symlinks
-# dangling. Verified by hand: `node apps/api/dist/index.js` with exactly this
-# layout resolves fastify, the generated @prisma/client, and @vertice/types;
-# a flattened ./dist + ./node_modules layout does not.
+# dangling.
 COPY --from=builder --chown=nodeapp:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/dist ./apps/api/dist
@@ -56,16 +79,6 @@ COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/dist ./packages/t
 
 USER nodeapp
 EXPOSE 4000
-CMD ["node", "apps/api/dist/index.js"]
-
-# ── Development (docker-compose local) ───────────────────────────────────────
-FROM base AS development
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-# Same reason as the runner stage above: apps/api's actual deps (fastify,
-# @prisma/client, etc.) live in apps/api/node_modules, not the root one.
-COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-# Source is volume-mounted by docker-compose
-EXPOSE 4000
-ENV NODE_ENV=development
-CMD ["pnpm", "--filter", "@vertice/api", "dev"]
+# Production boot is self-contained: apply only pending Prisma migrations using
+# the schema's real monorepo path, then replace the shell with the API process.
+CMD ["sh", "-c", "./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/index.js"]

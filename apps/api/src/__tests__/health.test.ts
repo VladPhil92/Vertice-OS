@@ -37,6 +37,17 @@ describe('GET /health', () => {
     expect(body.version).toBe('0.1.0')
     expect(body.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
+
+  it('reports the Railway commit SHA when available', async () => {
+    process.env.RAILWAY_GIT_COMMIT_SHA = 'railway-test-revision'
+    try {
+      const res = await app.inject({ method: 'GET', url: '/health' })
+      expect(res.statusCode).toBe(200)
+      expect(JSON.parse(res.payload).revision).toBe('railway-test-revision')
+    } finally {
+      delete process.env.RAILWAY_GIT_COMMIT_SHA
+    }
+  })
 })
 
 describe('GET /health/ready', () => {

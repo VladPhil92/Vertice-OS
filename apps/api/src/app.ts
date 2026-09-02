@@ -22,6 +22,28 @@ import { notificationsRoutes } from './modules/notifications/notifications.route
 
 initSentry()
 
+const DEPENDENCY_PROBE_TIMEOUT_MS = 2500
+
+function deployedRevision(): string {
+  return process.env.RAILWAY_GIT_COMMIT_SHA
+    ?? process.env.GITHUB_SHA
+    ?? process.env.VERCEL_GIT_COMMIT_SHA
+    ?? 'unknown'
+}
+
+async function withTimeout<T>(label: string, work: Promise<T>, timeoutMs = DEPENDENCY_PROBE_TIMEOUT_MS): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} probe timed out after ${timeoutMs}ms`)), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([work, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export function buildApp() {
   const app = Fastify({
     logger: {
@@ -99,6 +121,7 @@ export function buildApp() {
   app.get('/health', async () => ({
     status: 'ok',
     version: '0.1.0',
+    revision: deployedRevision(),
     timestamp: new Date().toISOString(),
   }))
 
@@ -109,43 +132,41 @@ export function buildApp() {
   // Postgres y Redis son requeridos: sin ellos no hay autenticación, sesiones,
   // ni datos — el servicio no puede atender nada útil.
   //
-  // Neo4j es opcional: solo alimenta el grafo de reputación, y todos sus
-  // usos degradan (ver recordReputationEvent). Antes contaba como requerido,
-  // lo que hacía imposible desplegar sin Neo4j aunque el piloto lo excluya
-  // explícitamente: el healthcheck devolvía 503 para siempre y la plataforma
-  // mataba el contenedor por "never became healthy". Su estado se sigue
-  // reportando para poder vigilarlo, pero ya no bloquea el arranque.
+  // Neo4j es opcional: solo alimenta el grafo de reputación. Su conectividad
+  // nunca debe bloquear la respuesta de readiness. Las tres sondas se ejecutan
+  // en paralelo y con timeout explícito para que una dependencia inaccesible
+  // no pueda consumir por sí sola toda la ventana de healthcheck de Railway.
   app.get('/health/ready', async (_request, reply) => {
-    const checks: Record<string, 'ok' | 'fail'> = {}
-    let healthy = true
+    const [redisProbe, databaseProbe, neo4jProbe] = await Promise.allSettled([
+      withTimeout('redis', redis.ping()),
+      withTimeout('database', prisma.$queryRaw`SELECT 1`),
+      withTimeout('neo4j', getNeo4jDriver().verifyConnectivity()),
+    ])
 
-    try {
-      await redis.ping()
-      checks.redis = 'ok'
-    } catch {
-      checks.redis = 'fail'
-      healthy = false
+    const checks: Record<string, 'ok' | 'fail'> = {
+      redis: redisProbe.status === 'fulfilled' ? 'ok' : 'fail',
+      database: databaseProbe.status === 'fulfilled' ? 'ok' : 'fail',
+      neo4j: neo4jProbe.status === 'fulfilled' ? 'ok' : 'fail',
     }
 
-    try {
-      await prisma.$queryRaw`SELECT 1`
-      checks.database = 'ok'
-    } catch {
-      checks.database = 'fail'
-      healthy = false
+    for (const [dependency, probe] of [
+      ['redis', redisProbe],
+      ['database', databaseProbe],
+      ['neo4j', neo4jProbe],
+    ] as const) {
+      if (probe.status === 'rejected') {
+        const message = probe.reason instanceof Error ? probe.reason.message : String(probe.reason)
+        app.log.warn({ dependency, message }, '[health] dependency probe failed')
+      }
     }
 
-    try {
-      await getNeo4jDriver().verifyConnectivity()
-      checks.neo4j = 'ok'
-    } catch {
-      checks.neo4j = 'fail'
-    }
+    const healthy = checks.redis === 'ok' && checks.database === 'ok'
 
     return reply.status(healthy ? 200 : 503).send({
       status: healthy ? (checks.neo4j === 'ok' ? 'ok' : 'degraded') : 'unavailable',
       checks,
       version: '0.1.0',
+      revision: deployedRevision(),
       timestamp: new Date().toISOString(),
     })
   })

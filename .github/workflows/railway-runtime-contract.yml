@@ -1,0 +1,160 @@
+name: Railway Runtime Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/types/**'
+      - 'packages/config/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'railway.json'
+      - '.github/workflows/railway-runtime-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/types/**'
+      - 'packages/config/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'railway.json'
+      - '.github/workflows/railway-runtime-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  api-runtime-contract:
+    name: API production image + readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: vertice_runtime
+          POSTGRES_USER: vertice
+          POSTGRES_PASSWORD: vertice_runtime
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7.4-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Railway configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('railway.json', 'utf8'));
+          const expectedStart = './apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/index.js';
+          if (config.build?.builder !== 'DOCKERFILE') throw new Error('Railway must use the API Dockerfile');
+          if (config.build?.dockerfilePath !== 'apps/api/Dockerfile') throw new Error('Unexpected Railway Dockerfile path');
+          if (config.deploy?.healthcheckPath !== '/health/ready') throw new Error('Unexpected Railway readiness path');
+          if (config.deploy?.startCommand !== expectedStart) throw new Error('Railway startCommand drifted from the canonical runtime contract');
+          NODE
+
+      - name: Build canonical API production image
+        run: docker build -f apps/api/Dockerfile -t vertice-api-runtime:${{ github.sha }} .
+
+      - name: Verify default Docker stage and Prisma prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmd=$(docker image inspect vertice-api-runtime:${{ github.sha }} --format '{{json .Config.Cmd}}')
+          echo "Default image CMD: $cmd"
+          echo "$cmd" | grep -F 'prisma migrate deploy --schema apps/api/prisma/schema.prisma'
+          echo "$cmd" | grep -F 'node apps/api/dist/index.js'
+          docker run --rm --entrypoint openssl vertice-api-runtime:${{ github.sha }} version
+
+      - name: Start image with production-equivalent dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name vertice-api-runtime --network host \
+            -e NODE_ENV=production \
+            -e PORT=4000 \
+            -e HOST=0.0.0.0 \
+            -e DATABASE_URL=postgresql://vertice:vertice_runtime@127.0.0.1:5432/vertice_runtime \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
+            -e JWT_SECRET=ci-jwt-secret-ci-jwt-secret-ci-jwt-secret-ci-jwt-secret-12345678 \
+            -e VOTE_NULLIFIER_SECRET=ci-vote-secret-ci-vote-secret-ci-vote-secret-ci-vote-secret-1234 \
+            -e IDENTITY_PEPPER=ci-identity-pepper-ci-identity-pepper-ci-identity-pepper-123456 \
+            -e AI_SERVICE_SECRET=ci-ai-secret-ci-ai-secret-ci-ai-secret-ci-ai-secret-1234567890 \
+            -e AI_SERVICE_URL=http://127.0.0.1:8001 \
+            -e CORS_ORIGIN=http://127.0.0.1:3000 \
+            -e NEO4J_URI=bolt://127.0.0.1:17687 \
+            -e RAILWAY_GIT_COMMIT_SHA=${{ github.sha }} \
+            vertice-api-runtime:${{ github.sha }}
+
+      - name: Require bounded production readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=''
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o /tmp/ready.json -w '%{http_code}' http://127.0.0.1:4000/health/ready || true)
+            if [ "$code" = '200' ]; then
+              ready='yes'
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' vertice-api-runtime 2>/dev/null | grep -q true; then
+              echo '::error::Production API container exited before readiness.'
+              docker logs vertice-api-runtime || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ "$ready" != 'yes' ]; then
+            echo '::error::Production API image did not reach readiness within 60 seconds.'
+            cat /tmp/ready.json 2>/dev/null || true
+            docker logs vertice-api-runtime || true
+            exit 1
+          fi
+
+          cat /tmp/ready.json
+          node <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/ready.json', 'utf8'));
+          if (!['ok', 'degraded'].includes(body.status)) throw new Error(`Unexpected readiness status: ${body.status}`);
+          if (body.checks?.database !== 'ok') throw new Error('Postgres is not ready');
+          if (body.checks?.redis !== 'ok') throw new Error('Redis is not ready');
+          if (body.checks?.neo4j !== 'fail') throw new Error('Contract must prove optional Neo4j does not block readiness');
+          if (body.revision !== process.env.GITHUB_SHA) throw new Error(`Revision mismatch: ${body.revision}`);
+          NODE
+
+      - name: Verify liveness contract
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:4000/health | tee /tmp/health.json
+          node -e "const b=require('/tmp/health.json'); if(b.status!=='ok'||b.revision!==process.env.GITHUB_SHA) process.exit(1)"
+
+      - name: Publish runtime logs
+        if: always()
+        run: docker logs vertice-api-runtime || true
+
+      - name: Stop runtime container
+        if: always()
+        run: docker rm -f vertice-api-runtime >/dev/null 2>&1 || true
