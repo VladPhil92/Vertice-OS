@@ -1,7 +1,7 @@
-const mockQueryRaw  = jest.fn()
-const mockGetCache  = jest.fn()
-const mockSetCache  = jest.fn()
-const mockDelCache  = jest.fn()
+const mockQueryRaw = jest.fn()
+const mockGetCache = jest.fn()
+const mockSetCache = jest.fn()
+const mockDelCache = jest.fn()
 const mockRunCypher = jest.fn()
 
 jest.mock('../../../lib/prisma', () => ({
@@ -16,21 +16,20 @@ jest.mock('../../../lib/cache', () => ({
 }))
 
 jest.mock('../../../lib/neo4j', () => ({
-  runCypher:          mockRunCypher,
-  ensureCitizenNode:  jest.fn().mockResolvedValue(undefined),
+  runCypher: mockRunCypher,
+  ensureCitizenNode: jest.fn().mockResolvedValue(undefined),
 }))
 
 import {
   recordReputationEvent,
   getReputationProfile,
+  getReputationAnalytics,
   getLeaderboard,
   getCitizenGraph,
 } from '../reputation.service'
 import type { ReputationEvent } from '../reputation.types'
 
-// ── Fixtures ──────────────────────────────────────────────────────────────────
-
-const CITIZEN_ID  = '550e8400-e29b-41d4-a716-446655440001'
+const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440001'
 const PROPOSAL_ID = 'proposal-uuid-001'
 
 beforeEach(() => {
@@ -40,8 +39,6 @@ beforeEach(() => {
   mockDelCache.mockResolvedValue(undefined)
   mockRunCypher.mockResolvedValue([])
 })
-
-// ── recordReputationEvent ─────────────────────────────────────────────────────
 
 describe('recordReputationEvent', () => {
   it('inserts event row and returns the record', async () => {
@@ -61,9 +58,6 @@ describe('recordReputationEvent', () => {
     expect(result.reference_id).toBe(PROPOSAL_ID)
   })
 
-  // Regresión: ensureCitizenNode() se esperaba sin capturar el error, así que
-  // un Neo4j caído lanzaba ANTES del INSERT y el evento no llegaba tampoco a
-  // Postgres — se perdía entero por una dependencia que es opcional.
   it('persiste el evento en Postgres aunque Neo4j esté caído', async () => {
     mockRunCypher.mockRejectedValue(new Error('ServiceUnavailable'))
     mockQueryRaw.mockResolvedValueOnce([{ id: 'event-id', created_at: new Date() }])
@@ -76,15 +70,16 @@ describe('recordReputationEvent', () => {
 
     expect(result.citizen_id).toBe(CITIZEN_ID)
     expect(result.event_type).toBe('vote_cast')
-    expect(mockQueryRaw).toHaveBeenCalledTimes(1) // el INSERT sí ocurrió
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1)
   })
 
-  it('invalidates profile and leaderboard cache after recording', async () => {
+  it('invalidates profile, analytics and leaderboard cache after recording', async () => {
     mockQueryRaw.mockResolvedValueOnce([{ id: 'event-id', created_at: new Date() }])
 
     await recordReputationEvent({ citizen_id: CITIZEN_ID, event_type: 'badge_earned' })
 
     expect(mockDelCache).toHaveBeenCalledWith(expect.stringContaining('profile'), CITIZEN_ID)
+    expect(mockDelCache).toHaveBeenCalledWith(expect.stringContaining('analytics'), CITIZEN_ID)
     expect(mockDelCache).toHaveBeenCalledWith(expect.stringContaining('leaderboard'), 'global')
   })
 
@@ -119,13 +114,10 @@ describe('recordReputationEvent', () => {
       reference_id: PROPOSAL_ID,
     })
 
-    // runCypher called at least once for graph relation (fire-and-forget; may be async)
-    await new Promise((r) => setTimeout(r, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
     expect(mockRunCypher).toHaveBeenCalled()
   })
 })
-
-// ── getReputationProfile ──────────────────────────────────────────────────────
 
 describe('getReputationProfile', () => {
   it('returns cached profile when available', async () => {
@@ -140,22 +132,18 @@ describe('getReputationProfile', () => {
 
   it('computes profile from DB on cache miss', async () => {
     mockGetCache.mockResolvedValue(null)
-    // SUM query
     mockQueryRaw.mockResolvedValueOnce([{ total: 55n }])
-    // event counts
     mockQueryRaw.mockResolvedValueOnce([
-      { event_type: 'vote_cast',        cnt: 3n },
+      { event_type: 'vote_cast', cnt: 3n },
       { event_type: 'proposal_created', cnt: 1n },
     ])
-    // last_activity
     mockQueryRaw.mockResolvedValueOnce([{ last_activity: new Date('2025-01-01') }])
-    // badge count
     mockQueryRaw.mockResolvedValueOnce([{ badge_count: 1n }])
 
     const profile = await getReputationProfile(CITIZEN_ID)
 
     expect(profile.reputation_score).toBe(55)
-    expect(profile.level).toBe('activista')  // 50–99
+    expect(profile.level).toBe('activista')
     expect(profile.total_votes).toBe(3)
     expect(profile.total_proposals).toBe(1)
     expect(mockSetCache).toHaveBeenCalled()
@@ -163,12 +151,12 @@ describe('getReputationProfile', () => {
 
   it('maps level correctly at boundaries', async () => {
     const cases: Array<[number, string]> = [
-      [0,   'observador'],
-      [19,  'observador'],
-      [20,  'participante'],
-      [49,  'participante'],
-      [50,  'activista'],
-      [99,  'activista'],
+      [0, 'observador'],
+      [19, 'observador'],
+      [20, 'participante'],
+      [49, 'participante'],
+      [50, 'activista'],
+      [99, 'activista'],
       [100, 'lider'],
       [199, 'lider'],
       [200, 'embajador'],
@@ -200,7 +188,61 @@ describe('getReputationProfile', () => {
   })
 })
 
-// ── getLeaderboard ─────────────────────────────────────────────────────────────
+describe('getReputationAnalytics', () => {
+  it('derives history, community standing and event breakdown from PostgreSQL', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([
+        { period: '2026-06', total: 10n },
+        { period: '2026-07', total: 25n },
+        { period: '2026-08', total: -5n },
+      ])
+      .mockResolvedValueOnce([{ rank: 2n, participants: 20n }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { event_type: 'proposal_created', cnt: 2n, total: 20n },
+        { event_type: 'vote_cast', cnt: 3n, total: 15n },
+      ])
+
+    const analytics = await getReputationAnalytics(CITIZEN_ID)
+
+    expect(analytics.score_history).toEqual([
+      { period: '2026-06', points: 10, cumulative_score: 10 },
+      { period: '2026-07', points: 25, cumulative_score: 35 },
+      { period: '2026-08', points: -5, cumulative_score: 30 },
+    ])
+    expect(analytics.community).toEqual({ rank: 2, participants: 20, top_percent: 10 })
+    expect(analytics.streak.current_days).toBe(0)
+    expect(analytics.event_breakdown[0]).toEqual({
+      event_type: 'proposal_created',
+      count: 2,
+      points_per_event: 10,
+      points_total: 20,
+    })
+    expect(mockSetCache).toHaveBeenCalledWith(
+      expect.stringContaining('analytics'),
+      CITIZEN_ID,
+      expect.objectContaining({ citizen_id: CITIZEN_ID }),
+      600,
+    )
+  })
+
+  it('returns cached analytics without querying PostgreSQL', async () => {
+    const cached = {
+      citizen_id: CITIZEN_ID,
+      score_history: [],
+      community: { rank: 1, participants: 1, top_percent: 100 },
+      streak: { current_days: 0, active_dates: [] },
+      event_breakdown: [],
+      generated_at: '2026-09-01T00:00:00.000Z',
+    }
+    mockGetCache.mockResolvedValueOnce(cached)
+
+    const result = await getReputationAnalytics(CITIZEN_ID)
+
+    expect(result).toEqual(cached)
+    expect(mockQueryRaw).not.toHaveBeenCalled()
+  })
+})
 
 describe('getLeaderboard', () => {
   it('returns leaderboard entries ordered by score', async () => {
@@ -238,19 +280,12 @@ describe('getLeaderboard', () => {
   })
 })
 
-// ── getCitizenGraph ────────────────────────────────────────────────────────────
-
 describe('getCitizenGraph', () => {
   it('assembles graph from neo4j query results', async () => {
-    // voted_on
     mockRunCypher.mockResolvedValueOnce([{ proposal_id: 'p-1' }, { proposal_id: 'p-2' }])
-    // created_proposals
     mockRunCypher.mockResolvedValueOnce([{ proposal_id: 'p-3' }])
-    // submitted_reports
     mockRunCypher.mockResolvedValueOnce([{ report_id: 'r-1' }])
-    // delegates_to
     mockRunCypher.mockResolvedValueOnce([{ target_id: 'citizen-b' }])
-    // delegated_from
     mockRunCypher.mockResolvedValueOnce([])
 
     const graph = await getCitizenGraph(CITIZEN_ID)
