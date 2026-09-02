@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('Public landing', () => {
-  test('explains the product journey with the institutional visual system', async ({ page }) => {
+  test('renders the approved civic homepage with compiled layout styles', async ({ page }) => {
     await page.goto('/')
 
     await expect(
@@ -12,14 +12,21 @@ test.describe('Public landing', () => {
     await expect(
       page.getByAltText(/ilustración de cartagena conectada por una red/i),
     ).toBeVisible()
-    await expect(
-      page.getByAltText(/red de inteligencia ciudadana/i),
-    ).toBeVisible()
 
-    await expect(page.locator('#proposito')).toContainText('Una plataforma ciudadana')
-    await expect(page.locator('#como-funciona')).toContainText('de la señal al seguimiento')
-    await expect(page.locator('#capacidades')).toContainText('Herramientas conectadas')
+    await expect(page.locator('#proposito')).toContainText('Infraestructura ciudadana')
+    await expect(page.locator('#como-funciona')).toContainText('De una señal del territorio')
+    await expect(page.locator('#capacidades')).toContainText('Seis herramientas')
     await expect(page.locator('#ia')).toContainText('La decisión sigue siendo humana')
+    await expect(page.locator('#vision')).toContainText('La ciudadanía es el vértice del cambio')
+
+    const navDisplay = await page.locator('header nav').evaluate((element) => getComputedStyle(element).display)
+    expect(navDisplay).toBe('flex')
+
+    const headline = await page.getByRole('heading', { name: /cartagena la construimos juntos/i }).boundingBox()
+    expect(headline?.width ?? 0).toBeGreaterThan(280)
+
+    const listStyle = await page.locator('header ul').evaluate((element) => getComputedStyle(element).listStyleType)
+    expect(listStyle).toBe('none')
 
     await expect(page.getByText('Portal VÉRTICE', { exact: true })).toHaveCount(0)
   })
@@ -31,9 +38,13 @@ test.describe('Public landing', () => {
       'href',
       '/auth/register',
     )
-    await expect(page.getByRole('link', { name: /iniciar sesión/i }).first()).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /^ingresar$/i }).first()).toHaveAttribute(
       'href',
       '/auth/login',
+    )
+    await expect(page.getByRole('link', { name: /^crear cuenta$/i }).first()).toHaveAttribute(
+      'href',
+      '/auth/register',
     )
 
     await expect(page.locator('a[href="/docs"]')).toHaveCount(0)
