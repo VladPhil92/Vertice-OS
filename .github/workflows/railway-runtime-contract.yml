@@ -69,11 +69,12 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const config = JSON.parse(fs.readFileSync('railway.json', 'utf8'));
-          const expectedStart = './apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/index.js';
           if (config.build?.builder !== 'DOCKERFILE') throw new Error('Railway must use the API Dockerfile');
           if (config.build?.dockerfilePath !== 'apps/api/Dockerfile') throw new Error('Unexpected Railway Dockerfile path');
           if (config.deploy?.healthcheckPath !== '/health/ready') throw new Error('Unexpected Railway readiness path');
-          if (config.deploy?.startCommand !== expectedStart) throw new Error('Railway startCommand drifted from the canonical runtime contract');
+          if ('startCommand' in (config.deploy ?? {})) {
+            throw new Error('Railway must not override the Dockerfile CMD; production and runtime-contract entrypoints must be identical');
+          }
           NODE
 
       - name: Build canonical API production image
@@ -86,7 +87,7 @@ jobs:
           cmd=$(docker image inspect vertice-api-runtime:${{ github.sha }} --format '{{json .Config.Cmd}}')
           echo "Default image CMD: $cmd"
           echo "$cmd" | grep -F 'prisma migrate deploy --schema apps/api/prisma/schema.prisma'
-          echo "$cmd" | grep -F 'node apps/api/dist/index.js'
+          echo "$cmd" | grep -F "exec su -s /bin/sh nodeapp -c 'node apps/api/dist/index.js'"
           docker run --rm --entrypoint openssl vertice-api-runtime:${{ github.sha }} version
 
       - name: Start image with production-equivalent dependencies
