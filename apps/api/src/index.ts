@@ -5,14 +5,24 @@ import { redis } from './lib/redis'
 import { closeNeo4j } from './lib/neo4j'
 import { startJobWorker } from './lib/jobs'
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err)
+})
+
 async function main() {
+  console.error('[boot] main() start, PORT=', config.PORT, 'HOST=', config.HOST)
   const app = buildApp()
+  console.error('[boot] buildApp() returned, calling listen()')
 
   // Bind the HTTP socket before warming external dependencies. Railway can
   // now distinguish "process is alive but a required dependency is down"
   // from "the process never listened". Readiness remains fail-closed: Redis
   // and Postgres still have to pass /health/ready before the release is live.
   await app.listen({ port: config.PORT, host: config.HOST })
+  console.error('[boot] listen() resolved')
   app.log.info({
     host: config.HOST,
     port: config.PORT,
