@@ -5,7 +5,6 @@ import { ModulesSection } from '@/components/sections/ModulesSection'
 import { AISection } from '@/components/sections/AISection'
 import { RoadmapSection } from '@/components/sections/RoadmapSection'
 import { Navbar } from '@/components/layout/Navbar'
-import { StatusBar } from '@/components/layout/StatusBar'
 import { Footer } from '@/components/layout/Footer'
 
 export default function HomePage() {
@@ -21,7 +20,6 @@ export default function HomePage() {
         <RoadmapSection />
       </main>
       <Footer />
-      <StatusBar />
     </>
   )
 }

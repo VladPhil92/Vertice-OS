@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { BadgeCheck, Brain, FileText, Map, Star, Vote } from 'lucide-react'
+import { ArrowUpRight, BadgeCheck, Brain, FileText, Map, Star, Vote } from 'lucide-react'
 
 const MODULES = [
   {
@@ -12,7 +13,8 @@ const MODULES = [
     description:
       'Registra situaciones por categoría y ubicación, consulta el contexto territorial y sigue el estado de cada reporte.',
     path: '/dashboard/reports',
-    color: 'text-[#C0392B]',
+    color: '#D72638',
+    bg: '#FCEBED',
   },
   {
     number: '02',
@@ -20,113 +22,121 @@ const MODULES = [
     title: 'Propuestas ciudadanas',
     action: 'Convierte una idea en iniciativa',
     description:
-      'Estructura propuestas, consulta su estado y conserva en un solo lugar el contexto de cada iniciativa ciudadana.',
+      'Estructura propuestas, consulta su estado y conserva en un solo lugar el contexto de cada iniciativa.',
     path: '/dashboard/proposals',
-    color: 'text-gold',
+    color: '#B77C00',
+    bg: '#FFF4D1',
   },
   {
     number: '03',
     icon: Vote,
     title: 'Gobernanza',
-    action: 'Participa en decisiones',
+    action: 'Consulta y participa',
     description:
-      'Accede a las iniciativas que avanzan a debate o votación y consulta resultados dentro del mismo flujo de participación.',
+      'Accede a iniciativas que avanzan a debate o consulta y revisa resultados dentro del mismo flujo.',
     path: '/dashboard/governance',
-    color: 'text-[#1A7FBF]',
+    color: '#0A2A66',
+    bg: '#EDF2F8',
   },
   {
     number: '04',
     icon: Brain,
     title: 'Asistente cívico con IA',
-    action: 'Entiende antes de actuar',
+    action: 'Comprende antes de participar',
     description:
-      'Consulta temas cívicos, resume información y recibe apoyo para organizar una idea o interpretar el contexto de una discusión.',
+      'Consulta temas, resume información y recibe apoyo para organizar una idea o interpretar una discusión.',
     path: '/dashboard/ai',
-    color: 'text-cyan',
+    color: '#246CB6',
+    bg: '#EAF1FB',
   },
   {
     number: '05',
     icon: BadgeCheck,
     title: 'Identidad cívica',
-    action: 'Concentra tu participación',
+    action: 'Concentra tu actividad',
     description:
-      'Tu identidad dentro de VÉRTICE conecta tu cuenta con el historial de acciones y los mecanismos de verificación disponibles.',
+      'Tu cuenta conecta el historial de participación con los mecanismos de verificación disponibles en VÉRTICE.',
     path: '/dashboard/identity',
-    color: 'text-[#27AE60]',
+    color: '#178C8C',
+    bg: '#E7F6F5',
   },
   {
     number: '06',
     icon: Star,
-    title: 'Reputación y actividad',
+    title: 'Perfil y reputación',
     action: 'Consulta tu trayectoria',
     description:
-      'Visualiza tu actividad acumulada, participación y perfil cívico sin perder la relación entre las distintas acciones realizadas.',
+      'Visualiza actividad, contribuciones e historial sin perder la relación entre las distintas acciones realizadas.',
     path: '/dashboard/reputation',
-    color: 'text-[#9B59B6]',
+    color: '#2BA745',
+    bg: '#EAF6ED',
   },
 ] as const
 
 export function ModulesSection() {
   return (
-    <section id="capacidades" className="relative px-6 py-28 md:py-36">
+    <section id="capacidades" className="relative bg-[#F7F9FC] px-5 py-24 sm:px-6 md:py-32">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-16 grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+        <div className="mb-12 grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end md:mb-16">
           <div>
             <span className="section-tag">Qué puedes hacer</span>
             <motion.h2
-              className="font-display text-4xl font-700 tracking-[-0.03em] text-primary md:text-5xl"
+              className="font-display text-4xl font-extrabold tracking-[-0.04em] text-[#0A2A66] md:text-5xl"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.55 }}
             >
-              Seis capacidades conectadas.
+              Herramientas conectadas.
               <br />
-              <span className="text-gold">Un solo espacio ciudadano.</span>
+              <span className="text-[#D72638]">Una sola experiencia.</span>
             </motion.h2>
           </div>
-          <p className="max-w-2xl font-mono text-sm leading-7 text-secondary">
-            Los módulos del dashboard dejan de presentarse como piezas técnicas aisladas. Cada uno responde a una tarea concreta dentro del ciclo de participación.
+          <p className="max-w-2xl text-sm font-medium leading-7 text-[#607087] md:text-base">
+            Cada módulo responde a una tarea concreta. El diseño utiliza la misma iconografía, jerarquía y
+            sistema cromático del dashboard para que la transición entre la home y la plataforma sea natural.
           </p>
         </div>
 
-        <div className="grid gap-px bg-border md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {MODULES.map((mod, idx) => {
             const Icon = mod.icon
             return (
               <motion.article
                 key={mod.number}
-                className="group relative flex min-h-[320px] flex-col bg-bg p-8 transition-colors duration-300 hover:bg-surface"
+                className="group"
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-60px' }}
                 transition={{ duration: 0.45, delay: (idx % 3) * 0.07 }}
               >
-                <div className="mb-9 flex items-center justify-between">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-tertiary">
-                    Módulo {mod.number}
-                  </span>
-                  <div className={`flex h-10 w-10 items-center justify-center border border-border ${mod.color}`}>
-                    <Icon size={18} strokeWidth={1.5} />
+                <Link
+                  href={mod.path}
+                  className="civic-card-flat flex min-h-[290px] h-full flex-col p-6 transition duration-300 hover:-translate-y-1 hover:border-[#C9D6E5] hover:shadow-[0_20px_50px_rgba(10,42,102,.08)] sm:p-7"
+                >
+                  <div className="mb-6 flex items-start justify-between gap-4">
+                    <div
+                      className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                      style={{ color: mod.color, background: mod.bg }}
+                    >
+                      <Icon size={21} strokeWidth={1.8} />
+                    </div>
+                    <span className="rounded-full border border-[#E1E7EF] bg-[#FAFBFD] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em] text-[#7B8799]">
+                      {mod.number}
+                    </span>
                   </div>
-                </div>
 
-                <span className="mb-3 font-mono text-[9px] uppercase tracking-[0.18em] text-gold">
-                  {mod.action}
-                </span>
-                <h3 className="mb-4 font-display text-2xl font-600 leading-tight text-primary">
-                  {mod.title}
-                </h3>
-                <p className="font-mono text-[12px] leading-6 text-secondary">{mod.description}</p>
-
-                <div className="mt-auto flex items-center justify-between border-t border-border pt-5">
-                  <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-tertiary">
-                    Disponible en el dashboard
+                  <span className="text-[9px] font-extrabold uppercase tracking-[.13em]" style={{ color: mod.color }}>
+                    {mod.action}
                   </span>
-                  <span className="font-mono text-[9px] text-tertiary">{mod.path}</span>
-                </div>
+                  <h3 className="mt-2 text-xl font-extrabold leading-6 text-[#0A2A66] sm:text-2xl">{mod.title}</h3>
+                  <p className="mt-3 text-xs font-medium leading-6 text-[#607087]">{mod.description}</p>
 
-                <div className="absolute bottom-0 left-0 h-px w-0 bg-gold transition-all duration-300 group-hover:w-full" />
+                  <div className="mt-auto flex items-center justify-between border-t border-[#E8EDF3] pt-5">
+                    <span className="text-[10px] font-extrabold uppercase tracking-[.11em] text-[#607087]">Abrir módulo</span>
+                    <ArrowUpRight size={16} className="text-[#0A2A66] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </div>
+                </Link>
               </motion.article>
             )
           })}

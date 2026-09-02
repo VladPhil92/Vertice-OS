@@ -7,92 +7,101 @@ const STEPS = [
   {
     number: '01',
     icon: BadgeCheck,
-    title: 'Entra con una identidad cívica',
+    title: 'Crea tu identidad cívica',
     description:
-      'Tu cuenta concentra tu participación, tu historial y las acciones que realizas dentro de la plataforma.',
+      'Tu cuenta concentra el historial y las acciones que realizas dentro de la plataforma.',
     detail: 'Una identidad · un historial',
+    color: '#0A2A66',
+    bg: '#EDF2F8',
   },
   {
     number: '02',
     icon: FileSearch,
-    title: 'Registra lo que necesita atención',
+    title: 'Registra un asunto o una propuesta',
     description:
-      'Puedes reportar una situación territorial o estructurar una propuesta con categoría, contexto y seguimiento.',
-    detail: 'Problema o idea → registro estructurado',
+      'Añade ubicación, contexto y evidencia para convertir una señal inicial en información estructurada.',
+    detail: 'Territorio → registro',
+    color: '#D72638',
+    bg: '#FCEBED',
   },
   {
     number: '03',
     icon: MessagesSquare,
-    title: 'Entiende y delibera con contexto',
+    title: 'Consulta y delibera con contexto',
     description:
-      'La comunidad puede consultar información, revisar posiciones y usar la IA para sintetizar contenido antes de participar.',
-    detail: 'Más contexto antes de decidir',
+      'Revisa información disponible, posiciones y síntesis antes de participar en una discusión o consulta.',
+    detail: 'Contexto → deliberación',
+    color: '#246CB6',
+    bg: '#EAF1FB',
   },
   {
     number: '04',
     icon: Vote,
-    title: 'Decide y sigue el resultado',
+    title: 'Participa y sigue el resultado',
     description:
-      'Las iniciativas avanzan por estados visibles. Cuando corresponde, la plataforma habilita votación y conserva el resultado para seguimiento.',
-    detail: 'Decisión → resultado → trazabilidad',
+      'Los procesos avanzan por estados visibles y conservan los resultados para su consulta posterior.',
+    detail: 'Participación → seguimiento',
+    color: '#B77C00',
+    bg: '#FFF4D1',
   },
 ] as const
 
 export function HowItWorksSection() {
   return (
-    <section id="como-funciona" className="relative px-6 py-28 md:py-36">
-      <div className="absolute left-6 right-6 top-0 h-px bg-border" />
+    <section id="como-funciona" className="relative px-5 py-24 sm:px-6 md:py-32">
+      <div className="absolute left-6 right-6 top-0 h-px bg-[#E1E7EF]" />
 
       <div className="mx-auto max-w-7xl">
-        <div className="mb-16 grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
+        <div className="mb-12 grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-end md:mb-16">
           <div>
             <span className="section-tag">Cómo funciona</span>
             <motion.h2
-              className="font-display text-4xl font-700 tracking-[-0.03em] text-primary md:text-5xl"
+              className="font-display text-4xl font-extrabold tracking-[-0.04em] text-[#0A2A66] md:text-5xl"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.55 }}
             >
-              Un ciclo cívico completo,
+              Un recorrido claro,
               <br />
-              <span className="text-gold">no una colección de pantallas.</span>
+              <span className="text-[#D72638]">de la señal al seguimiento.</span>
             </motion.h2>
           </div>
-          <p className="max-w-2xl font-mono text-sm leading-7 text-secondary">
-            La experiencia está diseñada para que cada módulo tenga una función dentro del mismo recorrido:
-            identificar, registrar, entender, decidir y seguir. La tecnología queda detrás del flujo ciudadano.
+          <p className="max-w-2xl text-sm font-medium leading-7 text-[#607087] md:text-base">
+            La interfaz organiza cada función dentro del mismo ciclo. El usuario puede comprender qué paso está
+            realizando, qué información necesita y qué ocurre después.
           </p>
         </div>
 
-        <div className="grid gap-px bg-border md:grid-cols-2 xl:grid-cols-4">
+        <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="pointer-events-none absolute left-[10%] right-[10%] top-10 hidden h-px bg-[linear-gradient(90deg,#F5B700,#4A90E2,#D72638)] opacity-40 xl:block" />
+
           {STEPS.map((step, idx) => {
             const Icon = step.icon
             return (
               <motion.article
                 key={step.number}
-                className="relative flex min-h-[330px] flex-col bg-bg p-7 transition-colors hover:bg-surface md:p-8"
+                className="relative z-10 civic-card-flat flex min-h-[300px] flex-col p-6 transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(10,42,102,.08)] sm:p-7"
                 initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-50px' }}
                 transition={{ duration: 0.45, delay: idx * 0.07 }}
               >
-                <div className="mb-10 flex items-center justify-between">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-tertiary">
-                    Paso {step.number}
-                  </span>
-                  <div className="flex h-10 w-10 items-center justify-center border border-gold/25 text-gold">
-                    <Icon size={17} strokeWidth={1.5} />
+                <div className="mb-7 flex items-center justify-between">
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                    style={{ color: step.color, background: step.bg }}
+                  >
+                    <Icon size={21} strokeWidth={1.8} />
                   </div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#7B8799]">Paso {step.number}</span>
                 </div>
 
-                <h3 className="mb-4 font-display text-xl font-600 leading-tight text-primary">
-                  {step.title}
-                </h3>
-                <p className="font-mono text-[12px] leading-6 text-secondary">{step.description}</p>
+                <h3 className="text-xl font-extrabold leading-6 text-[#0A2A66]">{step.title}</h3>
+                <p className="mt-3 text-xs font-medium leading-6 text-[#607087]">{step.description}</p>
 
-                <div className="mt-auto border-t border-border pt-5">
-                  <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-gold">
+                <div className="mt-auto border-t border-[#E8EDF3] pt-5">
+                  <span className="text-[9px] font-extrabold uppercase tracking-[.12em]" style={{ color: step.color }}>
                     {step.detail}
                   </span>
                 </div>

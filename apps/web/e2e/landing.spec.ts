@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('Public landing', () => {
-  test('explains the civic value proposition and exposes the core journey', async ({ page }) => {
+  test('explains the product journey with the institutional visual system', async ({ page }) => {
     await page.goto('/')
 
     await expect(
@@ -9,10 +9,19 @@ test.describe('Public landing', () => {
     ).toBeVisible()
 
     await expect(page.getByAltText(/vértice — inteligencia ciudadana/i).first()).toBeVisible()
-    await expect(page.locator('#proposito')).toContainText('No es otra red social')
-    await expect(page.locator('#como-funciona')).toContainText('Un ciclo cívico completo')
-    await expect(page.locator('#capacidades')).toContainText('Seis capacidades conectadas')
+    await expect(
+      page.getByAltText(/ilustración de cartagena conectada por una red/i),
+    ).toBeVisible()
+    await expect(
+      page.getByAltText(/red de inteligencia ciudadana/i),
+    ).toBeVisible()
+
+    await expect(page.locator('#proposito')).toContainText('Una plataforma ciudadana')
+    await expect(page.locator('#como-funciona')).toContainText('de la señal al seguimiento')
+    await expect(page.locator('#capacidades')).toContainText('Herramientas conectadas')
     await expect(page.locator('#ia')).toContainText('La decisión sigue siendo humana')
+
+    await expect(page.getByText('Portal VÉRTICE', { exact: true })).toHaveCount(0)
   })
 
   test('keeps registration and login as the primary public routes', async ({ page }) => {

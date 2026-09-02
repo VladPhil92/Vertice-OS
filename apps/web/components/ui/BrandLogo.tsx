@@ -15,7 +15,9 @@ export function BrandLogo({ className = '', compact = false, priority = false }:
         width={480}
         height={134}
         priority={priority}
-        className={compact ? 'h-10 w-auto object-contain' : 'h-12 w-auto object-contain'}
+        quality={100}
+        sizes={compact ? '180px' : '220px'}
+        className={compact ? 'h-11 w-auto object-contain' : 'h-14 w-auto object-contain'}
       />
     </div>
   )
