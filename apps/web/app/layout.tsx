@@ -1,27 +1,25 @@
-import type { Metadata, Viewport } from 'next';
-import { Syne, DM_Mono, Fraunces } from 'next/font/google';
-import './globals.css';
+import type { Metadata, Viewport } from 'next'
+import { DM_Mono, Fraunces, Syne } from 'next/font/google'
+import './globals.css'
 
 const syne = Syne({
   subsets: ['latin'],
   variable: '--font-syne',
   weight: ['400', '600', '700', '800'],
-});
+})
 
 const dmMono = DM_Mono({
   subsets: ['latin'],
   variable: '--font-dm-mono',
   weight: ['300', '400', '500'],
-});
+})
 
-// `axes` no puede combinarse con `weight` en next/font — se fija el peso 300
-// del sistema de diseño y se omite el eje de optical sizing.
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-fraunces',
   weight: ['300'],
   style: ['normal', 'italic'],
-});
+})
 
 export const metadata: Metadata = {
   title: {
@@ -29,14 +27,15 @@ export const metadata: Metadata = {
     template: '%s | VÉRTICE OS',
   },
   description:
-    'Infraestructura cívica de próxima generación para Cartagena de Indias y Colombia. Participación continua, gobernanza transparente, inteligencia territorial.',
+    'Plataforma cívica para reportar asuntos del territorio, crear propuestas, deliberar, participar en decisiones y seguir resultados desde una sola experiencia.',
   keywords: [
-    'democracia',
     'participación ciudadana',
     'Cartagena',
     'Colombia',
     'civic tech',
     'gobernanza',
+    'reportes ciudadanos',
+    'propuestas ciudadanas',
   ],
   authors: [{ name: 'CTG One Corporation' }],
   robots: 'index, follow',
@@ -53,24 +52,22 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'es_CO',
     siteName: 'VÉRTICE OS',
+    title: 'VÉRTICE OS — Participación cívica con trazabilidad',
+    description:
+      'De una señal del barrio a una acción organizada: reporta, propone, entiende, decide y sigue resultados.',
   },
-};
+}
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: '#C8A84B',
-};
+}
 
-// La CSP la fija middleware.ts. Ya no usa nonce: era incompatible con la
-// generación estática de estas páginas (un nonce es por-request; el HTML
-// estático se genera en build) y dejaba el sitio sin ejecutar JavaScript.
-// Ver el comentario extenso en middleware.ts. Aquí no debe leerse headers():
-// eso vuelve dinámico todo el árbol y rompe la generación estática.
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html
@@ -79,5 +76,5 @@ export default function RootLayout({
     >
       <body className="bg-bg text-primary antialiased">{children}</body>
     </html>
-  );
+  )
 }
