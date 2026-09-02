@@ -18,6 +18,7 @@ import {
   Plus,
   User,
   X,
+  GitBranch,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
@@ -29,6 +30,7 @@ import { BrandLogo } from '@/components/ui/BrandLogo'
 const NAV_ITEMS = [
   { href: '/dashboard',            label: 'Inicio',          icon: LayoutDashboard, exact: true,  adminOnly: false },
   { href: '/dashboard/reports',    label: 'Mapa y reportes', icon: Map,             exact: false, adminOnly: false },
+  { href: '/dashboard/workflows',  label: 'Expedientes',     icon: GitBranch,       exact: false, adminOnly: false },
   { href: '/dashboard/proposals',  label: 'Propuestas',      icon: FileText,        exact: false, adminOnly: false },
   { href: '/dashboard/governance', label: 'Decidir',         icon: Vote,            exact: false, adminOnly: false },
   { href: '/dashboard/ai',         label: 'IA cívica',       icon: Sparkles,        exact: false, adminOnly: false },
