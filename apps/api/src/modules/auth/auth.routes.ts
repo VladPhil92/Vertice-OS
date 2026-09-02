@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { ZodError } from 'zod'
+import { z } from 'zod'
 import { RegisterSchema, LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, ChangePasswordSchema } from './auth.schema'
 import { requireAuth } from '../../middleware/auth'
 import {
@@ -12,9 +12,15 @@ import {
   resetPassword,
   changePassword,
 } from './auth.service'
+import { exchangeCtgOneFederation } from './federation.service'
 import { config } from '../../config'
 
 const REFRESH_COOKIE = 'vertice_refresh'
+
+const FederationExchangeSchema = z.object({
+  code: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  code_verifier: z.string().min(43).max(128).regex(/^[A-Za-z0-9._~-]+$/),
+})
 
 const cookieOpts = {
   httpOnly: true,
@@ -44,6 +50,25 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const { refresh_token, ...tokenResponse } = await loginCitizen(app, parsed.data, {
+      userAgent: request.headers['user-agent'],
+      ipAddress: request.ip,
+    })
+
+    reply.setCookie(REFRESH_COOKIE, refresh_token, cookieOpts)
+    return reply.send(tokenResponse)
+  })
+
+  // POST /auth/ctgone/exchange — canje de código PKCE por una sesión local.
+  // El JWT de CTG One nunca llega al navegador ni se reutiliza como JWT VÉRTICE.
+  app.post('/ctgone/exchange', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const parsed = FederationExchangeSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Solicitud de federación inválida', code: 'INVALID_FEDERATION_REQUEST' })
+    }
+
+    const { refresh_token, ...tokenResponse } = await exchangeCtgOneFederation(app, parsed.data, {
       userAgent: request.headers['user-agent'],
       ipAddress: request.ip,
     })

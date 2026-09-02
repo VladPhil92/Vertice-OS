@@ -29,7 +29,7 @@ model Locality {
 model Citizen {
   id                 String    @id @default(uuid()) @db.Uuid
   did                String    @unique
-  cedulaHash         String    @unique @map("cedula_hash")
+  cedulaHash         String?   @unique @map("cedula_hash")
   email              String?   @unique
   passwordHash       String?   @map("password_hash")
   localityId         Int?      @map("locality_id")
@@ -45,16 +45,17 @@ model Citizen {
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   lastActiveAt       DateTime? @map("last_active_at") @db.Timestamptz(6)
 
-  locality          Locality?           @relation(fields: [localityId], references: [id])
-  sessions          Session[]
-  reports           TerritorialReport[]
-  proposals         Proposal[]
-  delegationsGiven  Delegation[]        @relation("Delegator")
-  delegationsRecv   Delegation[]        @relation("Delegate")
-  reputationEvents  ReputationEvent[]
-  legalDocuments    LegalDocument[]
-  endorsements      ProposalEndorsement[]
-  voterRollEntries  ProposalVoterRoll[]
+  locality           Locality?           @relation(fields: [localityId], references: [id])
+  sessions           Session[]
+  externalIdentities ExternalIdentity[]
+  reports            TerritorialReport[]
+  proposals          Proposal[]
+  delegationsGiven   Delegation[]        @relation("Delegator")
+  delegationsRecv    Delegation[]        @relation("Delegate")
+  reputationEvents   ReputationEvent[]
+  legalDocuments     LegalDocument[]
+  endorsements       ProposalEndorsement[]
+  voterRollEntries   ProposalVoterRoll[]
 
   @@index([localityId], map: "idx_citizens_locality")
   @@index([reputationScore(sort: Desc)], map: "idx_citizens_reputation")
@@ -79,6 +80,26 @@ model Session {
   @@index([citizenId], map: "idx_sessions_citizen_id")
   @@index([expiresAt], map: "idx_sessions_expires_at")
   @@map("sessions")
+}
+
+// ── Identidades externas ───────────────────────────────────────────────────────
+// Vínculo durable entre una identidad acreditada por otro producto y el
+// ciudadano local. El email se conserva solo como evidencia del enlace; nunca
+// se usa por sí solo como clave para fusionar cuentas preexistentes.
+model ExternalIdentity {
+  id              String   @id @default(uuid()) @db.Uuid
+  provider        String   @db.VarChar(50)
+  providerSubject String   @map("provider_subject") @db.VarChar(191)
+  citizenId       String   @map("citizen_id") @db.Uuid
+  emailAtLink     String?  @map("email_at_link") @db.VarChar(320)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastLoginAt     DateTime @default(now()) @map("last_login_at") @db.Timestamptz(6)
+
+  citizen Citizen @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([citizenId], map: "idx_external_identities_citizen")
+  @@map("external_identities")
 }
 
 // ── Reportes territoriales ─────────────────────────────────────────────────────
@@ -154,12 +175,12 @@ model Proposal {
   votingEndsAt          DateTime? @map("voting_ends_at") @db.Timestamptz(6)
   decidedAt             DateTime? @map("decided_at") @db.Timestamptz(6)
 
-  author      Citizen?              @relation(fields: [authorId], references: [id])
-  locality    Locality?             @relation(fields: [localityId], references: [id])
-  votes       Vote[]
-  delegations Delegation[]
+  author       Citizen?             @relation(fields: [authorId], references: [id])
+  locality     Locality?            @relation(fields: [localityId], references: [id])
+  votes        Vote[]
+  delegations  Delegation[]
   endorsements ProposalEndorsement[]
-  voterRoll   ProposalVoterRoll[]
+  voterRoll    ProposalVoterRoll[]
 
   @@index([authorId], map: "idx_proposals_author")
   @@index([category, scope], map: "idx_proposals_category")
