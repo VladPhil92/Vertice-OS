@@ -56,6 +56,7 @@ model Citizen {
   legalDocuments     LegalDocument[]
   endorsements       ProposalEndorsement[]
   voterRollEntries   ProposalVoterRoll[]
+  civicCases         CivicCase[]
 
   @@index([localityId], map: "idx_citizens_locality")
   @@index([reputationScore(sort: Desc)], map: "idx_citizens_reputation")
@@ -129,6 +130,7 @@ model TerritorialReport {
 
   citizen  Citizen?  @relation(fields: [citizenId], references: [id])
   locality Locality? @relation(fields: [localityId], references: [id])
+  civicCase CivicCase?
 
   @@index([category, status], map: "idx_reports_category")
   @@index([citizenId], map: "idx_reports_citizen_id")
@@ -181,6 +183,7 @@ model Proposal {
   delegations  Delegation[]
   endorsements ProposalEndorsement[]
   voterRoll    ProposalVoterRoll[]
+  civicCase    CivicCase?
 
   @@index([authorId], map: "idx_proposals_author")
   @@index([category, scope], map: "idx_proposals_category")
@@ -318,11 +321,40 @@ model LegalDocument {
   updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   citizen Citizen @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+  civicCase CivicCase?
 
   @@index([citizenId, createdAt(sort: Desc)], map: "idx_legal_citizen")
   @@index([citizenId, status], map: "idx_legal_status")
   @@index([legalType, status], map: "idx_legal_type")
   @@map("legal_documents")
+}
+
+// ── Expedientes cívicos cross-module ──────────────────────────────────────────
+// Une de forma durable el recorrido Reporte → IA → Propuesta/Votación → Control
+// Público. La relación primaria nace de un reporte propio y puede escalar a una
+// propuesta y/o documento legal sin perder la procedencia ni los audit_id de IA.
+model CivicCase {
+  id                         String   @id @default(uuid()) @db.Uuid
+  citizenId                  String   @map("citizen_id") @db.Uuid
+  sourceReportId             String   @unique @map("source_report_id") @db.Uuid
+  proposalId                 String?  @unique @map("proposal_id") @db.Uuid
+  legalDocumentId            String?  @unique @map("legal_document_id") @db.Uuid
+  stage                      String   @default("reported") @db.VarChar(30)
+  territorialAnalysis        Json?    @map("territorial_analysis")
+  territorialAnalysisAuditId String?  @map("territorial_analysis_audit_id") @db.VarChar(36)
+  policyDraft                Json?    @map("policy_draft")
+  policyDraftAuditId         String?  @map("policy_draft_audit_id") @db.VarChar(36)
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  citizen       Citizen          @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+  sourceReport  TerritorialReport @relation(fields: [sourceReportId], references: [id], onDelete: Cascade)
+  proposal      Proposal?         @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  legalDocument LegalDocument?    @relation(fields: [legalDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([citizenId, updatedAt(sort: Desc)], map: "idx_civic_cases_citizen")
+  @@index([stage, updatedAt(sort: Desc)], map: "idx_civic_cases_stage")
+  @@map("civic_cases")
 }
 
 // ── Cola durable de trabajos ───────────────────────────────────────────────────
