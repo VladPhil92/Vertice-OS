@@ -171,7 +171,7 @@ interface TerritorialMapProps {
   centerLat?: number
   centerLng?: number
   zoom?: number
-  singlePin?: boolean      // sólo muestra un marcador (mode detalle)
+  singlePin?: boolean      // reservado para compatibilidad con modo detalle
 }
 
 export function TerritorialMap({
@@ -181,7 +181,7 @@ export function TerritorialMap({
   centerLat  = CTG_CENTER.latitude,
   centerLng  = CTG_CENTER.longitude,
   zoom       = 12,
-  singlePin  = false,
+  singlePin: _singlePin = false,
 }: TerritorialMapProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
