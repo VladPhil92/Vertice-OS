@@ -10,12 +10,12 @@ import {
 import {
   recordReputationEvent,
   getReputationProfile,
+  getReputationAnalytics,
   getLeaderboard,
   getCitizenGraph,
 } from './reputation.service'
 
 export async function reputationRoutes(app: FastifyInstance): Promise<void> {
-
   // ── GET /reputation/profile/:citizenId ────────────────────────────────────
   // Pública — cualquiera puede ver el perfil de reputación de un ciudadano
 
@@ -29,7 +29,7 @@ export async function reputationRoutes(app: FastifyInstance): Promise<void> {
 
       const profile = await getReputationProfile(parsed.data.citizen_id)
       return reply.send(profile)
-    }
+    },
   )
 
   // ── GET /reputation/me ─────────────────────────────────────────────────────
@@ -42,11 +42,25 @@ export async function reputationRoutes(app: FastifyInstance): Promise<void> {
       const citizenId = (request as unknown as { citizen: { sub: string } }).citizen.sub
       const profile = await getReputationProfile(citizenId)
       return reply.send(profile)
-    }
+    },
+  )
+
+  // ── GET /reputation/me/analytics ───────────────────────────────────────────
+  // Privado — historial, ranking y racha derivados de eventos reales.
+  // No expone PII ni sustituye PostgreSQL como fuente de verdad.
+
+  app.get(
+    '/me/analytics',
+    { preHandler: requireVerified },
+    async (request, reply) => {
+      const citizenId = (request as unknown as { citizen: { sub: string } }).citizen.sub
+      const analytics = await getReputationAnalytics(citizenId)
+      return reply.send(analytics)
+    },
   )
 
   // ── GET /reputation/graph/:citizenId ──────────────────────────────────────
-  // Pública — grafo de relaciones cívicas del ciudadano (votos, propuestas, reportes)
+  // Pública — grafo de relaciones cívicas del ciudadano
 
   app.get<{ Params: { citizenId: string } }>(
     '/graph/:citizenId',
@@ -58,7 +72,7 @@ export async function reputationRoutes(app: FastifyInstance): Promise<void> {
 
       const graph = await getCitizenGraph(parsed.data.citizen_id)
       return reply.send(graph)
-    }
+    },
   )
 
   // ── GET /reputation/leaderboard ───────────────────────────────────────────
@@ -74,12 +88,11 @@ export async function reputationRoutes(app: FastifyInstance): Promise<void> {
 
       const entries = await getLeaderboard(parsed.data)
       return reply.send({ entries, count: entries.length })
-    }
+    },
   )
 
   // ── POST /reputation/events ───────────────────────────────────────────────
-  // Interno — registrar un evento de reputación (llamado por otros módulos)
-  // En producción este endpoint requeriría un service token; en Fase I solo admins
+  // Interno — registrar un evento de reputación
 
   app.post<{ Body: RecordEventInput }>(
     '/events',
@@ -96,6 +109,6 @@ export async function reputationRoutes(app: FastifyInstance): Promise<void> {
 
       const event = await recordReputationEvent(parsed.data)
       return reply.status(201).send(event)
-    }
+    },
   )
 }
