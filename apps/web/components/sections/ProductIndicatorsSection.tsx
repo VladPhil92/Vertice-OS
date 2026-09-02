@@ -9,7 +9,6 @@ const INDICATORS = [
     note: 'Reportes, propuestas, gobernanza, IA, identidad y perfil.',
     color: '#246CB6',
     bg: '#EAF1FB',
-    progress: 86,
   },
   {
     icon: Route,
@@ -18,7 +17,6 @@ const INDICATORS = [
     note: 'Identidad, registro, deliberación y seguimiento.',
     color: '#D98B00',
     bg: '#FFF4D1',
-    progress: 72,
   },
   {
     icon: MapPin,
@@ -27,7 +25,6 @@ const INDICATORS = [
     note: 'Cartagena de Indias como primera experiencia de validación.',
     color: '#2BA745',
     bg: '#EAF6ED',
-    progress: 58,
   },
   {
     icon: Bot,
@@ -36,7 +33,6 @@ const INDICATORS = [
     note: 'Explica y sintetiza; no reemplaza la decisión humana.',
     color: '#6D5CC7',
     bg: '#F0ECFB',
-    progress: 64,
   },
 ] as const
 
@@ -61,20 +57,19 @@ export function ProductIndicatorsSection() {
                 Ver módulos →
               </a>
             </div>
-            <div className="mt-5 flex h-20 items-end gap-2 rounded-2xl bg-[#F7F9FC] px-4 pb-3 pt-4">
-              {[42, 68, 56, 84, 64, 92, 73, 88, 76, 96].map((height, index) => (
-                <span
-                  key={index}
-                  className="flex-1 rounded-t-md"
-                  style={{ height: `${height}%`, background: index % 3 === 0 ? '#F5B700' : index % 2 === 0 ? '#4A90E2' : '#0A2A66' }}
-                />
+            <div className="mt-5 grid grid-cols-6 gap-2 rounded-2xl bg-[#F7F9FC] p-4" aria-label="Seis módulos conectados">
+              {['#4A90E2', '#F5B700', '#0A2A66', '#6D5CC7', '#2BA745', '#D72638'].map((color, index) => (
+                <span key={index} className="h-12 rounded-xl" style={{ background: color }} />
               ))}
+            </div>
+            <div className="mt-3 text-[9px] font-semibold leading-5 text-[#7B8799]">
+              El gráfico representa categorías del sistema; no expresa rendimiento ni avance porcentual.
             </div>
           </div>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {INDICATORS.map(({ icon: Icon, label, value, note, color, bg, progress }) => (
+          {INDICATORS.map(({ icon: Icon, label, value, note, color, bg }) => (
             <article key={label} className="rounded-[22px] border border-[#E1E7EF] bg-white p-5 shadow-[0_12px_34px_rgba(10,42,102,.05)]">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={{ color, background: bg }}>
@@ -84,8 +79,10 @@ export function ProductIndicatorsSection() {
               </div>
               <div className="mt-5 text-[9px] font-extrabold uppercase tracking-[.12em] text-[#7B8799]">{label}</div>
               <p className="mt-2 min-h-[48px] text-[10px] font-medium leading-5 text-[#607087]">{note}</p>
-              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#E9EDF3]">
-                <div className="h-full rounded-full" style={{ width: `${progress}%`, background: color }} />
+              <div className="mt-4 flex gap-1.5">
+                {[0, 1, 2].map((segment) => (
+                  <span key={segment} className="h-1.5 flex-1 rounded-full" style={{ background: segment === 0 ? color : '#E9EDF3' }} />
+                ))}
               </div>
             </article>
           ))}
