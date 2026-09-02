@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import Link from 'next/link'
 
 const NAV_LINKS = [
-  { label: 'Plataforma', href: '#modulos' },
-  { label: 'Inteligencia IA', href: '#ia' },
-  { label: 'Hoja de Ruta', href: '#roadmap' },
-  { label: 'Documentación', href: '/docs' },
+  { label: 'Propósito', href: '#proposito' },
+  { label: 'Cómo funciona', href: '#como-funciona' },
+  { label: 'Qué puedes hacer', href: '#capacidades' },
+  { label: 'IA cívica', href: '#ia' },
+  { label: 'Visión', href: '#roadmap' },
 ] as const
 
 export function Navbar() {
@@ -24,13 +25,12 @@ export function Navbar() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'border-b border-border bg-bg/90 backdrop-blur-md' : ''
+      className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
+        scrolled ? 'border-b border-border bg-bg/92 backdrop-blur-xl' : 'bg-bg/40 backdrop-blur-sm'
       }`}
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
+        <Link href="/" className="group flex items-center gap-3">
           <div className="relative h-8 w-8">
             <svg viewBox="0 0 32 32" fill="none" className="h-full w-full">
               <polygon
@@ -49,18 +49,22 @@ export function Navbar() {
               />
             </svg>
           </div>
-          <span className="font-display text-sm font-700 tracking-widest text-primary uppercase">
-            VÉRTICE OS
-          </span>
+          <div>
+            <span className="block font-display text-sm font-700 uppercase tracking-widest text-primary">
+              VÉRTICE OS
+            </span>
+            <span className="hidden font-mono text-[8px] uppercase tracking-[0.18em] text-tertiary sm:block">
+              Infraestructura cívica
+            </span>
+          </div>
         </Link>
 
-        {/* Desktop links */}
-        <ul className="hidden md:flex items-center gap-8">
+        <ul className="hidden items-center gap-6 lg:flex xl:gap-8">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <a
                 href={link.href}
-                className="font-mono text-[11px] uppercase tracking-[0.15em] text-secondary transition-colors duration-200 hover:text-primary"
+                className="font-mono text-[10px] uppercase tracking-[0.14em] text-secondary transition-colors duration-200 hover:text-primary"
               >
                 {link.label}
               </a>
@@ -68,36 +72,34 @@ export function Navbar() {
           ))}
         </ul>
 
-        {/* CTA */}
-        <div className="hidden md:flex items-center gap-3">
-          <Link href="/auth/login" className="btn-ghost text-[11px]">
+        <div className="hidden items-center gap-3 md:flex">
+          <Link href="/auth/login" className="btn-ghost !px-5 text-[10px]">
             Ingresar
           </Link>
-          <Link href="/auth/register" className="btn-primary text-[11px]">
-            Registrarme
+          <Link href="/auth/register" className="btn-primary !px-5 text-[10px]">
+            Crear cuenta
           </Link>
         </div>
 
-        {/* Mobile menu button */}
         <button
-          className="md:hidden text-secondary hover:text-primary transition-colors"
+          className="text-secondary transition-colors hover:text-primary md:hidden"
           onClick={() => setMenuOpen(!menuOpen)}
           aria-label="Menú"
+          aria-expanded={menuOpen}
         >
           {menuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </nav>
 
-      {/* Mobile drawer */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-border bg-surface"
+            className="border-t border-border bg-surface md:hidden"
           >
-            <div className="flex flex-col gap-6 px-6 py-8">
+            <div className="flex flex-col gap-5 px-6 py-7">
               {NAV_LINKS.map((link) => (
                 <a
                   key={link.href}
@@ -108,12 +110,12 @@ export function Navbar() {
                   {link.label}
                 </a>
               ))}
-              <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                <Link href="/auth/login" className="btn-ghost text-center">
+              <div className="flex flex-col gap-3 border-t border-border pt-5">
+                <Link href="/auth/login" className="btn-ghost text-center" onClick={() => setMenuOpen(false)}>
                   Ingresar
                 </Link>
-                <Link href="/auth/register" className="btn-primary text-center">
-                  Registrarme
+                <Link href="/auth/register" className="btn-primary text-center" onClick={() => setMenuOpen(false)}>
+                  Crear cuenta
                 </Link>
               </div>
             </div>
