@@ -8,7 +8,7 @@ type BrandLogoProps = {
 
 export function BrandLogo({ className = '', compact = false, priority = false }: BrandLogoProps) {
   return (
-    <div className={`flex items-center ${className}`}>
+    <div className={`flex shrink-0 items-center overflow-visible py-1 ${className}`}>
       <Image
         src="/brand/vertice-logo.png"
         alt="VÉRTICE — Inteligencia ciudadana"
@@ -16,8 +16,12 @@ export function BrandLogo({ className = '', compact = false, priority = false }:
         height={134}
         priority={priority}
         quality={100}
-        sizes={compact ? '180px' : '220px'}
-        className={compact ? 'h-11 w-auto object-contain' : 'h-14 w-auto object-contain'}
+        sizes={compact ? '180px' : '230px'}
+        className={
+          compact
+            ? 'block h-auto w-[180px] max-w-full object-contain object-left'
+            : 'block h-auto w-[230px] max-w-full object-contain object-left'
+        }
       />
     </div>
   )
