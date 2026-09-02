@@ -1,113 +1,64 @@
-'use client'
-
-import { motion } from 'framer-motion'
-import { BadgeCheck, FileSearch, MessagesSquare, Vote } from 'lucide-react'
+import { BadgeCheck, FilePenLine, MessageSquareText, CheckCircle2 } from 'lucide-react'
 
 const STEPS = [
   {
-    number: '01',
+    number: '1',
     icon: BadgeCheck,
     title: 'Crea tu identidad cívica',
-    description:
-      'Tu cuenta concentra el historial y las acciones que realizas dentro de la plataforma.',
-    detail: 'Una identidad · un historial',
-    color: '#0A2A66',
-    bg: '#EDF2F8',
-  },
-  {
-    number: '02',
-    icon: FileSearch,
-    title: 'Registra un asunto o una propuesta',
-    description:
-      'Añade ubicación, contexto y evidencia para convertir una señal inicial en información estructurada.',
-    detail: 'Territorio → registro',
-    color: '#D72638',
-    bg: '#FCEBED',
-  },
-  {
-    number: '03',
-    icon: MessagesSquare,
-    title: 'Consulta y delibera con contexto',
-    description:
-      'Revisa información disponible, posiciones y síntesis antes de participar en una discusión o consulta.',
-    detail: 'Contexto → deliberación',
+    description: 'Regístrate y construye un historial de participación dentro de la plataforma.',
     color: '#246CB6',
     bg: '#EAF1FB',
   },
   {
-    number: '04',
-    icon: Vote,
-    title: 'Participa y sigue el resultado',
-    description:
-      'Los procesos avanzan por estados visibles y conservan los resultados para su consulta posterior.',
-    detail: 'Participación → seguimiento',
-    color: '#B77C00',
+    number: '2',
+    icon: FilePenLine,
+    title: 'Registra un asunto',
+    description: 'Reporta, propone o consulta un tema con ubicación, contexto y evidencia.',
+    color: '#D98B00',
     bg: '#FFF4D1',
+  },
+  {
+    number: '3',
+    icon: MessageSquareText,
+    title: 'Delibera con contexto',
+    description: 'Consulta información y participa en conversaciones organizadas alrededor del asunto.',
+    color: '#6D5CC7',
+    bg: '#F0ECFB',
+  },
+  {
+    number: '4',
+    icon: CheckCircle2,
+    title: 'Sigue el resultado',
+    description: 'Revisa estados, acciones y cambios para conservar una memoria cívica visible.',
+    color: '#2BA745',
+    bg: '#EAF6ED',
   },
 ] as const
 
 export function HowItWorksSection() {
   return (
-    <section id="como-funciona" className="relative px-5 py-24 sm:px-6 md:py-32">
-      <div className="absolute left-6 right-6 top-0 h-px bg-[#E1E7EF]" />
-
+    <section id="como-funciona" className="bg-white px-5 py-16 sm:px-6 md:py-20">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-12 grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-end md:mb-16">
-          <div>
-            <span className="section-tag">Cómo funciona</span>
-            <motion.h2
-              className="font-display text-4xl font-extrabold tracking-[-0.04em] text-[#0A2A66] md:text-5xl"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.55 }}
-            >
-              Un recorrido claro,
-              <br />
-              <span className="text-[#D72638]">de la señal al seguimiento.</span>
-            </motion.h2>
-          </div>
-          <p className="max-w-2xl text-sm font-medium leading-7 text-[#607087] md:text-base">
-            La interfaz organiza cada función dentro del mismo ciclo. El usuario puede comprender qué paso está
-            realizando, qué información necesita y qué ocurre después.
-          </p>
+        <div className="mx-auto mb-12 max-w-3xl text-center">
+          <span className="section-tag justify-center">Cómo funciona</span>
+          <h2 className="font-display text-3xl font-extrabold tracking-[-0.04em] text-[#0A2A66] md:text-4xl">
+            De una señal del territorio a un resultado que se puede seguir.
+          </h2>
         </div>
 
-        <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="pointer-events-none absolute left-[10%] right-[10%] top-10 hidden h-px bg-[linear-gradient(90deg,#F5B700,#4A90E2,#D72638)] opacity-40 xl:block" />
+        <div className="relative grid gap-8 md:grid-cols-2 xl:grid-cols-4 xl:gap-6">
+          <div className="pointer-events-none absolute left-[12%] right-[12%] top-8 hidden border-t border-dashed border-[#B8C6D8] xl:block" />
 
-          {STEPS.map((step, idx) => {
-            const Icon = step.icon
-            return (
-              <motion.article
-                key={step.number}
-                className="relative z-10 civic-card-flat flex min-h-[300px] flex-col p-6 transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(10,42,102,.08)] sm:p-7"
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-50px' }}
-                transition={{ duration: 0.45, delay: idx * 0.07 }}
-              >
-                <div className="mb-7 flex items-center justify-between">
-                  <div
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl"
-                    style={{ color: step.color, background: step.bg }}
-                  >
-                    <Icon size={21} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#7B8799]">Paso {step.number}</span>
-                </div>
-
-                <h3 className="text-xl font-extrabold leading-6 text-[#0A2A66]">{step.title}</h3>
-                <p className="mt-3 text-xs font-medium leading-6 text-[#607087]">{step.description}</p>
-
-                <div className="mt-auto border-t border-[#E8EDF3] pt-5">
-                  <span className="text-[9px] font-extrabold uppercase tracking-[.12em]" style={{ color: step.color }}>
-                    {step.detail}
-                  </span>
-                </div>
-              </motion.article>
-            )
-          })}
+          {STEPS.map(({ number, icon: Icon, title, description, color, bg }) => (
+            <article key={number} className="relative z-10 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-8 border-white shadow-[0_8px_24px_rgba(10,42,102,.08)]" style={{ color, background: bg }}>
+                <Icon size={25} strokeWidth={1.8} />
+              </div>
+              <div className="mt-4 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#7B8799]">Paso {number}</div>
+              <h3 className="mt-2 text-base font-extrabold text-[#0A2A66]">{title}</h3>
+              <p className="mx-auto mt-2 max-w-[250px] text-[11px] font-medium leading-5 text-[#607087]">{description}</p>
+            </article>
+          ))}
         </div>
       </div>
     </section>
