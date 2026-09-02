@@ -79,6 +79,16 @@ jobs:
       - name: Build canonical API production image
         run: docker build -f apps/api/Dockerfile -t vertice-api-runtime:${{ github.sha }} .
 
+      - name: Verify default Docker stage and Prisma prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmd=$(docker image inspect vertice-api-runtime:${{ github.sha }} --format '{{json .Config.Cmd}}')
+          echo "Default image CMD: $cmd"
+          echo "$cmd" | grep -F 'prisma migrate deploy --schema apps/api/prisma/schema.prisma'
+          echo "$cmd" | grep -F 'node apps/api/dist/index.js'
+          docker run --rm --entrypoint openssl vertice-api-runtime:${{ github.sha }} version
+
       - name: Start image with production-equivalent dependencies
         shell: bash
         run: |
