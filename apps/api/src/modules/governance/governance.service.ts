@@ -141,27 +141,40 @@ function computeVoteWeight(_reputationScore: number): number {
  * (proposals.eligible_voters), pudiendo desincronizarse si algo fallaba entre
  * medias.
  *
- * Ahora el conteo ES el número de filas insertadas en proposal_voter_roll —
- * misma consulta, mismo resultado, sin forma de que diverjan. Antes se conta-
- * ba SIEMPRE a todos los ciudadanos verificados de la ciudad sin importar el
- * scope; para neighborhood/locality el electorado ya se filtra al territorio
- * real de la propuesta.
+ * P0 Identity Assurance: el padrón y su denominador de quórum deben usar la
+ * misma política de admisión que el endpoint de voto. Solo entran ciudadanos
+ * con contacto verificado (nivel >= 2) y una ExternalIdentity emitida por un
+ * proveedor explícitamente autorizado. Si no hay proveedores configurados,
+ * el padrón queda vacío: fail-closed.
  */
 async function freezeVoterRoll(
   tx: Prisma.TransactionClient,
   proposalId: string,
   proposal: Proposal,
 ): Promise<number> {
+  const trustedProviders = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
+  if (trustedProviders.length === 0) return 0
+
+  const assuredIdentity = Prisma.sql`
+    c.verification_level >= 2
+    AND EXISTS (
+      SELECT 1
+      FROM external_identities ei
+      WHERE ei.citizen_id = c.id
+        AND ei.provider IN (${Prisma.join(trustedProviders)})
+    )
+  `
+
   let whereClause: Prisma.Sql
   let reason: string
 
   switch (proposal.scope) {
     case 'neighborhood':
-      whereClause = Prisma.sql`WHERE verification_level >= 1 AND neighborhood = ${proposal.neighborhood}`
+      whereClause = Prisma.sql`WHERE ${assuredIdentity} AND c.neighborhood = ${proposal.neighborhood}`
       reason = 'neighborhood_match'
       break
     case 'locality':
-      whereClause = Prisma.sql`WHERE verification_level >= 1 AND locality_id = ${proposal.locality_id}`
+      whereClause = Prisma.sql`WHERE ${assuredIdentity} AND c.locality_id = ${proposal.locality_id}`
       reason = 'locality_match'
       break
     // city/regional/national: no hay modelo de multi-ciudad todavía, así que
@@ -170,15 +183,15 @@ async function freezeVoterRoll(
     case 'regional':
     case 'national':
     default:
-      whereClause = Prisma.sql`WHERE verification_level >= 1`
+      whereClause = Prisma.sql`WHERE ${assuredIdentity}`
       reason = 'citywide'
   }
 
   const inserted = await tx.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
     INSERT INTO proposal_voter_roll
       (proposal_id, citizen_id, neighborhood, locality_id, verification_level, eligibility_reason)
-    SELECT ${proposalId}::uuid, id, neighborhood, locality_id, verification_level, ${reason}
-    FROM citizens
+    SELECT ${proposalId}::uuid, c.id, c.neighborhood, c.locality_id, c.verification_level, ${reason}
+    FROM citizens c
     ${whereClause}
     ON CONFLICT (proposal_id, citizen_id) DO NOTHING
     RETURNING citizen_id
@@ -607,14 +620,24 @@ export async function castVote(
   }
 
   // ── Liquid democracy: aggregate delegated weight ───────────────────────────
-  // Find delegators who trust this citizen (general or domain delegation).
+  // Una delegación solo puede aportar peso si el delegador también cumple la
+  // política P0 de identidad cívica vigente. Así no se puede eludir la puerta
+  // de identidad votando indirectamente a través de una cuenta asegurada.
+  const trustedProviders = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
+  const delegatedAssurance = trustedProviders.length > 0
+    ? Prisma.sql`
+        AND c.verification_level >= 2
+        AND EXISTS (
+          SELECT 1
+          FROM external_identities ei
+          WHERE ei.citizen_id = c.id
+            AND ei.provider IN (${Prisma.join(trustedProviders)})
+        )
+      `
+    : Prisma.sql`AND FALSE`
+
   // El nullifier de cada delegador se calcula con voteNullifier() (la misma
-  // función usada en todo el módulo) y NO se recalcula en SQL crudo: antes
-  // este bloque tenía su propia expresión `hmac(..., JWT_SECRET, 'sha256')`
-  // duplicada e inconsistente con voteNullifier(), que además seguía
-  // apuntando a JWT_SECRET incluso después de introducir
-  // VOTE_NULLIFIER_SECRET como clave dedicada — habría quedado
-  // silenciosamente desincronizada.
+  // función usada en todo el módulo) y NO se recalcula en SQL crudo.
   const delegatorRows = await prisma.$queryRaw<Array<{
     delegator_id: string
     reputation_score: string
@@ -625,6 +648,7 @@ export async function castVote(
     WHERE d.delegate_id   = ${citizenId}::uuid
       AND d.is_active     = true
       AND d.delegation_type IN ('general', 'domain')
+      ${delegatedAssurance}
   `)
 
   const delegatorNullifiers = delegatorRows.map(d => voteNullifier(d.delegator_id, proposalId))
