@@ -33,7 +33,23 @@ COPY . .
 RUN pnpm --filter @vertice/types build
 RUN pnpm --filter @vertice/api db:generate && pnpm --filter @vertice/api build
 
-# ── Production runner ─────────────────────────────────────────────────────────
+# ── Development (docker-compose local) ───────────────────────────────────────
+# Keep this stage before `runner`: Docker/Railway use the LAST stage when no
+# explicit target is supplied. Having development last caused production to
+# deploy an image with no source tree and the dev CMD, which exited with
+# `No projects found in "/app"` and then exhausted Railway's healthcheck.
+FROM base AS development
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+# Same reason as the runner stage below: apps/api's actual deps (fastify,
+# @prisma/client, etc.) live in apps/api/node_modules, not the root one.
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+# Source is volume-mounted by docker-compose
+EXPOSE 4000
+ENV NODE_ENV=development
+CMD ["pnpm", "--filter", "@vertice/api", "dev"]
+
+# ── Production runner (MUST remain the final stage) ──────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
@@ -44,9 +60,7 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodeapp
 # and apps/api/node_modules/@vertice/types → packages/types) are RELATIVE —
 # flattening dist+node_modules into a single top-level pair (as a normal
 # single-package Dockerfile would) leaves every one of those symlinks
-# dangling. Verified by hand: `node apps/api/dist/index.js` with exactly this
-# layout resolves fastify, the generated @prisma/client, and @vertice/types;
-# a flattened ./dist + ./node_modules layout does not.
+# dangling.
 COPY --from=builder --chown=nodeapp:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/dist ./apps/api/dist
@@ -58,18 +72,4 @@ USER nodeapp
 EXPOSE 4000
 # Production boot is self-contained: apply only pending Prisma migrations using
 # the schema's real monorepo path, then replace the shell with the API process.
-# Keeping this in the image avoids a fragile Railway dashboard-only Start
-# Command and guarantees that every deployment uses the same lifecycle.
 CMD ["sh", "-c", "./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/index.js"]
-
-# ── Development (docker-compose local) ───────────────────────────────────────
-FROM base AS development
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-# Same reason as the runner stage above: apps/api's actual deps (fastify,
-# @prisma/client, etc.) live in apps/api/node_modules, not the root one.
-COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-# Source is volume-mounted by docker-compose
-EXPOSE 4000
-ENV NODE_ENV=development
-CMD ["pnpm", "--filter", "@vertice/api", "dev"]
