@@ -27,7 +27,10 @@ const fraunces = Fraunces({
   style: ['normal', 'italic'],
 })
 
+const canonicalOrigin = new URL('https://vertice.ctgone.com')
+
 export const metadata: Metadata = {
+  metadataBase: canonicalOrigin,
   title: {
     default: 'VÉRTICE — Inteligencia Ciudadana',
     template: '%s | VÉRTICE',
@@ -44,7 +47,10 @@ export const metadata: Metadata = {
     'reportes ciudadanos',
     'propuestas ciudadanas',
   ],
-  authors: [{ name: 'VÉRTICE' }],
+  authors: [{ name: 'VÉRTICE' }, { name: 'CTG One' }],
+  alternates: {
+    canonical: '/',
+  },
   robots: 'index, follow',
   manifest: '/manifest.json',
   icons: {
@@ -57,6 +63,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
+    url: '/',
     locale: 'es_CO',
     siteName: 'VÉRTICE',
     title: 'VÉRTICE — Inteligencia Ciudadana',
