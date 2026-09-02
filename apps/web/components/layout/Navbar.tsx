@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import Link from 'next/link'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 
 const NAV_LINKS = [
   { label: 'Propósito', href: '#proposito' },
@@ -18,7 +19,7 @@ export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
+    const onScroll = () => setScrolled(window.scrollY > 18)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
@@ -26,37 +27,14 @@ export function Navbar() {
   return (
     <header
       className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
-        scrolled ? 'border-b border-border bg-bg/92 backdrop-blur-xl' : 'bg-bg/40 backdrop-blur-sm'
+        scrolled
+          ? 'border-b border-[#e1e7ef] bg-white/95 shadow-[0_8px_30px_rgba(10,42,102,0.06)] backdrop-blur-xl'
+          : 'bg-white/88 backdrop-blur-md'
       }`}
     >
-      <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <Link href="/" className="group flex items-center gap-3">
-          <div className="relative h-8 w-8">
-            <svg viewBox="0 0 32 32" fill="none" className="h-full w-full">
-              <polygon
-                points="16,2 30,28 2,28"
-                stroke="#C8A84B"
-                strokeWidth="1.5"
-                fill="none"
-                className="transition-all duration-300 group-hover:fill-gold/10"
-              />
-              <polygon
-                points="16,9 25,26 7,26"
-                stroke="#C8A84B"
-                strokeWidth="0.75"
-                fill="none"
-                opacity="0.4"
-              />
-            </svg>
-          </div>
-          <div>
-            <span className="block font-display text-sm font-700 uppercase tracking-widest text-primary">
-              VÉRTICE OS
-            </span>
-            <span className="hidden font-mono text-[8px] uppercase tracking-[0.18em] text-tertiary sm:block">
-              Infraestructura cívica
-            </span>
-          </div>
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
+        <Link href="/" className="flex items-center" aria-label="VÉRTICE — inicio">
+          <BrandLogo compact className="origin-left scale-[0.92] sm:scale-100" />
         </Link>
 
         <ul className="hidden items-center gap-6 lg:flex xl:gap-8">
@@ -64,7 +42,7 @@ export function Navbar() {
             <li key={link.href}>
               <a
                 href={link.href}
-                className="font-mono text-[10px] uppercase tracking-[0.14em] text-secondary transition-colors duration-200 hover:text-primary"
+                className="text-[12px] font-semibold text-[#4b5870] transition-colors duration-200 hover:text-[#0a2a66]"
               >
                 {link.label}
               </a>
@@ -73,16 +51,16 @@ export function Navbar() {
         </ul>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Link href="/auth/login" className="btn-ghost !px-5 text-[10px]">
-            Ingresar
+          <Link href="/auth/login" className="btn-ghost !min-h-10 !px-4 !py-2 text-[11px]">
+            Iniciar sesión
           </Link>
-          <Link href="/auth/register" className="btn-primary !px-5 text-[10px]">
-            Crear cuenta
+          <Link href="/auth/register" className="btn-citizen !min-h-10 !px-4 !py-2 text-[11px]">
+            Entrar a la plataforma
           </Link>
         </div>
 
         <button
-          className="text-secondary transition-colors hover:text-primary md:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#e1e7ef] bg-white text-[#0a2a66] md:hidden"
           onClick={() => setMenuOpen(!menuOpen)}
           aria-label="Menú"
           aria-expanded={menuOpen}
@@ -97,25 +75,25 @@ export function Navbar() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="border-t border-border bg-surface md:hidden"
+            className="border-t border-[#e1e7ef] bg-white md:hidden"
           >
-            <div className="flex flex-col gap-5 px-6 py-7">
+            <div className="flex flex-col gap-4 px-6 py-6">
               {NAV_LINKS.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
-                  className="font-mono text-[11px] uppercase tracking-[0.15em] text-secondary hover:text-primary"
+                  className="text-sm font-semibold text-[#4b5870] hover:text-[#0a2a66]"
                   onClick={() => setMenuOpen(false)}
                 >
                   {link.label}
                 </a>
               ))}
-              <div className="flex flex-col gap-3 border-t border-border pt-5">
+              <div className="grid gap-3 border-t border-[#e1e7ef] pt-5">
                 <Link href="/auth/login" className="btn-ghost text-center" onClick={() => setMenuOpen(false)}>
-                  Ingresar
+                  Iniciar sesión
                 </Link>
-                <Link href="/auth/register" className="btn-primary text-center" onClick={() => setMenuOpen(false)}>
-                  Crear cuenta
+                <Link href="/auth/register" className="btn-citizen text-center" onClick={() => setMenuOpen(false)}>
+                  Entrar a la plataforma
                 </Link>
               </div>
             </div>
