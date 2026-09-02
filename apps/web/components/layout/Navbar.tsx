@@ -33,8 +33,8 @@ export function Navbar() {
       }`}
     >
       <nav className="mx-auto flex min-h-[78px] max-w-7xl items-center justify-between gap-6 px-5 sm:px-6">
-        <Link href="/" className="shrink-0" aria-label="VÉRTICE — inicio">
-          <BrandLogo compact priority className="origin-left scale-[0.9] sm:scale-100" />
+        <Link href="/" className="shrink-0 overflow-visible" aria-label="VÉRTICE — inicio">
+          <BrandLogo compact priority />
         </Link>
 
         <ul className="hidden items-center gap-6 lg:flex xl:gap-8">
