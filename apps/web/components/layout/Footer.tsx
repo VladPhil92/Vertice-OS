@@ -28,8 +28,8 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-6 py-14">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr]">
           <div>
-            <div className="mb-5 inline-flex rounded-2xl bg-white px-4 py-3 shadow-sm">
-              <BrandLogo compact />
+            <div className="mb-6 inline-flex overflow-visible rounded-[24px] bg-[#FCF9F4] p-2 shadow-[0_18px_45px_rgba(0,0,0,.12)]">
+              <BrandLogo variant="full" />
             </div>
 
             <p className="mb-6 max-w-lg text-sm leading-7 text-white/[.74]">
