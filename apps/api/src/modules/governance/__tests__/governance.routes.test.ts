@@ -37,6 +37,7 @@ jest.mock('../governance.service', () => ({
 }))
 
 import { buildApp } from '../../../app'
+import { prisma } from '../../../lib/prisma'
 
 const app = buildApp()
 const DID = 'did:vertice:550e8400-e29b-41d4-a716-446655440000'
@@ -50,7 +51,10 @@ beforeAll(async () => {
   verifiedToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 1 })
 })
 afterAll(() => app.close())
-beforeEach(() => jest.resetAllMocks())
+beforeEach(() => {
+  jest.resetAllMocks()
+  ;(prisma.$queryRaw as jest.Mock).mockResolvedValue([])
+})
 
 const MOCK_PROPOSAL = {
   id: 'proposal-uuid',
@@ -328,7 +332,38 @@ describe('POST /governance/proposals/:id/vote', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('casts vote and returns 201 receipt', async () => {
+  it('returns 409 when the proposal has no frozen voter roll', async () => {
+    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ roll_exists: false, eligible: false }])
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/governance/proposals/proposal-uuid/vote',
+      headers: { authorization: `Bearer ${verifiedToken}` },
+      payload: { vote_value: 1 },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(JSON.parse(res.payload).code).toBe('VOTER_ROLL_UNAVAILABLE')
+    expect(mockVote).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when the citizen is not in the frozen voter roll', async () => {
+    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ roll_exists: true, eligible: false }])
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/governance/proposals/proposal-uuid/vote',
+      headers: { authorization: `Bearer ${verifiedToken}` },
+      payload: { vote_value: 1 },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(JSON.parse(res.payload).code).toBe('NOT_ELIGIBLE_VOTER')
+    expect(mockVote).not.toHaveBeenCalled()
+  })
+
+  it('casts vote and returns 201 receipt for an eligible citizen', async () => {
+    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ roll_exists: true, eligible: true }])
     mockVote.mockResolvedValueOnce({
       vote_id: 'vote-uuid',
       vote_weight: 1.0,
