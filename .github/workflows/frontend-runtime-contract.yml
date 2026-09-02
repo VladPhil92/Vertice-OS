@@ -26,7 +26,7 @@ env:
 
 jobs:
   web-runtime-contract:
-    name: Web API target contract
+    name: Web runtime contract
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -88,6 +88,20 @@ jobs:
         env:
           NEXT_PUBLIC_MAPBOX_TOKEN: ${{ env.MAPBOX_TOKEN }}
         run: pnpm --filter @vertice/web build
+
+      - name: Reject uncompiled Tailwind directives
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E '@tailwind[[:space:]]|@apply[[:space:]]' apps/web/.next/static/css 2>/dev/null; then
+            echo '::error::Production CSS contains uncompiled Tailwind/PostCSS directives.'
+            exit 1
+          fi
+          if ! grep -R -q 'display:flex' apps/web/.next/static/css 2>/dev/null; then
+            echo '::error::Compiled CSS is missing expected Tailwind utility output.'
+            exit 1
+          fi
+          echo 'Tailwind/PostCSS output is compiled.'
 
       - name: Reject localhost from browser bundles
         shell: bash

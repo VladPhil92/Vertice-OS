@@ -1,4 +1,4 @@
-import type { Config } from 'tailwindcss';
+import type { Config } from 'tailwindcss'
 
 const config: Config = {
   content: [
@@ -10,92 +10,63 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg:             '#050508',
-        surface:        '#0c0c14',
-        'surface-2':    '#121220',
-        border:         'rgba(255,255,255,0.06)',
-        'border-active':'rgba(255,255,255,0.15)',
-        // ── Sistema Cromático Institucional (Sistema 1) ──────────────────────
-        gold:           '#C8A84B',           // Oro institucional VÉRTICE
-        'gold-dim':     'rgba(200,168,75,0.15)',
-        citizen:        '#FFB522',           // Amarillo Ciudadano — ACTIVA
-        'citizen-dim':  'rgba(255,181,34,0.12)',
-        azure:          '#1A7FBF',           // Azul Claro institucional
-        'azure-dim':    'rgba(26,127,191,0.12)',
-        red:            '#C0392B',           // Rojo Acción — MOVILIZA
-        'red-dim':      'rgba(192,57,43,0.12)',
-        navy:           '#1A2744',           // Azul Institucional oscuro
-        'navy-light':   '#253565',
-        emerald:        '#27AE60',           // Tendencia positiva / Salud
-        'emerald-dim':  'rgba(39,174,96,0.12)',
-        primary:        '#F0EDE8',
-        secondary:      'rgba(240,237,232,0.45)',
-        tertiary:       'rgba(240,237,232,0.22)',
-        cyan:           '#4ECDC4',           // Agua / Transparencia
-        'cyan-dim':     'rgba(78,205,196,0.12)',
-        // ── Colores de módulos territoriales (Sistema 2) ─────────────────────
+        bg: '#F7F9FC',
+        surface: '#FFFFFF',
+        'surface-2': '#F0F4F9',
+        border: '#E1E7EF',
+        'border-active': '#C5D0DF',
+        gold: '#F5B700',
+        'gold-dim': 'rgba(245,183,0,0.13)',
+        citizen: '#F5B700',
+        'citizen-dim': 'rgba(245,183,0,0.12)',
+        azure: '#4A90E2',
+        'azure-dim': 'rgba(74,144,226,0.10)',
+        red: '#D72638',
+        'red-dim': 'rgba(215,38,56,0.10)',
+        navy: '#0A2A66',
+        'navy-light': '#163F86',
+        emerald: '#2BA745',
+        'emerald-dim': 'rgba(43,167,69,0.10)',
+        primary: '#0A2A66',
+        secondary: '#4B5870',
+        tertiary: '#7B8799',
+        cyan: '#178C8C',
+        'cyan-dim': 'rgba(23,140,140,0.10)',
         module: {
-          mobility:     '#1A7FBF',
-          water:        '#4ECDC4',
-          security:     '#C0392B',
-          health:       '#27AE60',
-          education:    '#FFB522',
-          services:     '#8E44AD',
-          culture:      '#E67E22',
-          economy:      '#1A2744',
+          mobility: '#4A90E2',
+          water: '#178C8C',
+          security: '#D72638',
+          health: '#2BA745',
+          education: '#F5B700',
+          services: '#6D5CC7',
+          culture: '#E47727',
+          economy: '#0A2A66',
         },
       },
       fontFamily: {
-        display: ['var(--font-syne)', 'sans-serif'],
+        display: ['var(--font-montserrat)', 'sans-serif'],
+        body: ['var(--font-inter)', 'sans-serif'],
         mono: ['var(--font-dm-mono)', 'monospace'],
         serif: ['var(--font-fraunces)', 'serif'],
       },
       fontSize: {
-        tag:   ['10px', { letterSpacing: '0.3em'  }],
+        tag: ['10px', { letterSpacing: '0.3em' }],
         label: ['11px', { letterSpacing: '0.15em' }],
-        micro: ['9px',  { letterSpacing: '0.2em'  }],
+        micro: ['9px', { letterSpacing: '0.2em' }],
       },
       animation: {
-        'fade-up':   'fadeUp 0.8s ease forwards',
-        'slow-pulse':'slowPulse 8s ease-in-out infinite',
-        blink:       'blink 2s ease-in-out infinite',
-        'scan-line': 'scanLine 3s linear infinite',
-        'gauge-fill':'gaugeFill 1.2s ease forwards',
-        'count-up':  'countUp 0.6s ease forwards',
+        'fade-up': 'fadeUp 0.8s ease forwards',
+        'slow-pulse': 'slowPulse 8s ease-in-out infinite',
       },
       keyframes: {
         fadeUp: {
           from: { opacity: '0', transform: 'translateY(20px)' },
-          to:   { opacity: '1', transform: 'translateY(0)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
         },
         slowPulse: {
           '0%, 100%': { opacity: '0.08', transform: 'scale(1)' },
-          '50%':      { opacity: '0.15', transform: 'scale(1.03)' },
+          '50%': { opacity: '0.15', transform: 'scale(1.03)' },
         },
-        blink: {
-          '0%, 100%': { opacity: '1' },
-          '50%':      { opacity: '0.3' },
-        },
-        scanLine: {
-          '0%':   { top: '0' },
-          '100%': { top: '100%' },
-        },
-        gaugeFill: {
-          from: { strokeDashoffset: '251.2' },
-        },
-        countUp: {
-          from: { opacity: '0', transform: 'translateY(8px)' },
-          to:   { opacity: '1', transform: 'translateY(0)' },
-        },
-      },
-      backgroundImage: {
-        'grid-pattern': `
-          linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
-        `,
-      },
-      backgroundSize: {
-        grid: '60px 60px',
       },
       fontWeight: {
         '300': '300',
@@ -108,6 +79,6 @@ const config: Config = {
     },
   },
   plugins: [],
-};
+}
 
-export default config;
+export default config
