@@ -18,7 +18,13 @@ const FOOTER_LINKS = {
 
 export function Footer() {
   return (
-    <footer className="mt-8 bg-[#0A2A66] pb-16 text-white">
+    <footer className="mt-8 overflow-hidden bg-[#0A2A66] text-white">
+      <div className="grid h-1.5 grid-cols-3">
+        <span className="bg-[#F5B700]" />
+        <span className="bg-[#4A90E2]" />
+        <span className="bg-[#D72638]" />
+      </div>
+
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr]">
           <div>
@@ -27,8 +33,8 @@ export function Footer() {
             </div>
 
             <p className="mb-7 max-w-lg text-sm leading-7 text-white/74">
-              VÉRTICE es inteligencia ciudadana aplicada al territorio: informa, conecta, organiza,
-              facilita la participación y hace visible el seguimiento a lo público.
+              VÉRTICE organiza información territorial, participación y seguimiento dentro de una experiencia
+              digital común para ciudadanos y comunidades.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -38,7 +44,7 @@ export function Footer() {
               </div>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-[11px] font-semibold text-white/75">
                 <Users size={14} className="text-[#F5B700]" />
-                La ciudadanía al centro
+                Ciudadanía al centro
               </div>
               <a
                 href="https://github.com/VladPhil92/Vertice-OS"
