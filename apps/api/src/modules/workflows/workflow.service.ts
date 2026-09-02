@@ -53,9 +53,10 @@ function proposalCategoryFor(reportCategory: string): ProposalCategory {
 
 function deriveStage(row: CivicCaseRow): string {
   if (row.legal_document_id) {
-    if (row.legal_status === 'submitted' || row.legal_status === 'responded' || row.legal_status === 'escalated') {
+    if (['submitted', 'responded', 'escalated', 'closed'].includes(row.legal_status ?? '')) {
       return 'control'
     }
+    return 'control_drafting'
   }
 
   if (row.proposal_id) {
