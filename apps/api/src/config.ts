@@ -1,5 +1,11 @@
 import { z } from 'zod'
 
+// Confirms this module is actually being evaluated. If this line never shows
+// up in Railway's deploy logs, the process died before config.ts loaded at
+// all (e.g. during the Prisma migration step), not because of a validation
+// failure below.
+process.stdout.write('[config] parsing environment variables...\n')
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -51,8 +57,16 @@ const schema = z.object({
 const parsed = schema.safeParse(process.env)
 
 if (!parsed.success) {
-  console.error('Variables de entorno inválidas:')
-  console.error(parsed.error.flatten().fieldErrors)
+  const fieldErrors = parsed.error.flatten().fieldErrors
+  const details = Object.entries(fieldErrors)
+    .map(([field, errors]) => `  - ${field}: ${(errors ?? []).join('; ') || 'invalid value'}`)
+    .join('\n')
+  process.stdout.write(
+    '[config] FATAL: invalid environment variables. The process will exit now.\n' +
+    'The following variable(s) are missing or fail validation:\n' +
+    `${details}\n` +
+    'Set the required value(s) in the Railway service Variables tab and redeploy.\n',
+  )
   process.exit(1)
 }
 
@@ -60,9 +74,13 @@ if (!parsed.success) {
 // secreto la API arrancaría "bien" y solo fallaría al primer uso de IA, así
 // que se comprueba aquí para que el error salga en el despliegue.
 if (parsed.data.NODE_ENV === 'production' && !parsed.data.AI_SERVICE_SECRET) {
-  console.error(
-    'AI_SERVICE_SECRET es obligatorio en producción: sin él las llamadas al ' +
-    'servicio de IA serán rechazadas.',
+  process.stdout.write(
+    '[config] FATAL: AI_SERVICE_SECRET is missing. The process will exit now.\n' +
+    'Requirement: AI_SERVICE_SECRET must be a non-empty string when NODE_ENV=production.\n' +
+    'Current value: unset (defaults to an empty string, which fails this check).\n' +
+    'Without it, every call from the API to the AI service will be rejected ' +
+    '(missing X-Service-Key).\n' +
+    'Fix: set AI_SERVICE_SECRET in the Railway service Variables tab and redeploy.\n',
   )
   process.exit(1)
 }
@@ -76,10 +94,16 @@ if (parsed.data.NODE_ENV === 'production') {
   if (!parsed.data.VOTE_NULLIFIER_SECRET) missing.push('VOTE_NULLIFIER_SECRET')
   if (!parsed.data.IDENTITY_PEPPER)       missing.push('IDENTITY_PEPPER')
   if (missing.length > 0) {
-    console.error(
-      `${missing.join(', ')} ${missing.length > 1 ? 'son' : 'es'} obligatorio(s) en ` +
-      'producción: sin ellos se reutilizaría JWT_SECRET para fines que deben ' +
-      'tener su propio dominio criptográfico.',
+    process.stdout.write(
+      `[config] FATAL: ${missing.join(', ')} missing. The process will exit now.\n` +
+      `Requirement: ${missing.join(' and ')} must be a string of at least 32 ` +
+      'characters when NODE_ENV=production.\n' +
+      `Current value: unset for ${missing.join(', ')}.\n` +
+      'Without them, the API would silently fall back to reusing JWT_SECRET for ' +
+      'these purposes, collapsing cryptographic domains that must stay separate ' +
+      '(sessions, vote nullifiers, ID document protection).\n' +
+      `Fix: set ${missing.join(' and ')} in the Railway service Variables tab and ` +
+      'redeploy.\n',
     )
     process.exit(1)
   }
@@ -89,9 +113,14 @@ if (parsed.data.NODE_ENV === 'production') {
 // en claro. Si hay blockchain configurada pero falta el pepper, el minting
 // fallaría en caliente; mejor detectarlo al arrancar.
 if (parsed.data.CIVIC_SBT_ADDRESS && !parsed.data.DID_COMMITMENT_PEPPER) {
-  console.error(
-    'DID_COMMITMENT_PEPPER es obligatorio cuando CIVIC_SBT_ADDRESS está ' +
-    'configurado: sin él no puede derivarse el compromiso del DID.',
+  process.stdout.write(
+    '[config] FATAL: DID_COMMITMENT_PEPPER is missing. The process will exit now.\n' +
+    'Requirement: DID_COMMITMENT_PEPPER must be a string of at least 32 characters ' +
+    'whenever CIVIC_SBT_ADDRESS is configured.\n' +
+    `Current value: CIVIC_SBT_ADDRESS=${parsed.data.CIVIC_SBT_ADDRESS}, ` +
+    'DID_COMMITMENT_PEPPER=unset.\n' +
+    'Without it, the DID commitment written on-chain cannot be derived.\n' +
+    'Fix: set DID_COMMITMENT_PEPPER in the Railway service Variables tab and redeploy.\n',
   )
   process.exit(1)
 }
