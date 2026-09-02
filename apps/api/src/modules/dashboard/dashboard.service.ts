@@ -6,6 +6,7 @@ import { getCitizenProfile } from '../auth/auth.service'
 import { getGovernanceStats } from '../governance/governance.service'
 import { getReputationProfile } from '../reputation/reputation.service'
 import { getTerritorialStats } from '../territorial/territorial.service'
+import { listCivicCases } from '../workflows/workflow.service'
 
 interface RecentReportRow {
   id: string
@@ -72,6 +73,7 @@ export async function getCitizenCommandCenter(citizenId: string) {
     recentLegal,
     eligibleVotingRows,
     endorsementRows,
+    civicCases,
   ] = await Promise.all([
     getCitizenProfile(citizenId),
     getReputationProfile(citizenId),
@@ -132,6 +134,7 @@ export async function getCitizenCommandCenter(citizenId: string) {
       FROM proposal_endorsements
       WHERE citizen_id = ${citizenId}::uuid
     `),
+    listCivicCases(citizenId, 5),
   ])
 
   const reportByStatus = countByStatus(reportStatusRows)
@@ -168,6 +171,7 @@ export async function getCitizenCommandCenter(citizenId: string) {
 
   const legalNeedsAction = (legalByStatus.draft ?? 0) + (legalByStatus.ready ?? 0)
   const reportInProgress = reportByStatus.in_progress ?? 0
+  const activeCivicCases = civicCases.filter((item) => item.stage !== 'decision').length
 
   return {
     profile: {
@@ -227,6 +231,11 @@ export async function getCitizenCommandCenter(citizenId: string) {
           created_at: document.created_at.toISOString(),
           submitted_at: document.submitted_at?.toISOString() ?? null,
         })),
+      },
+      workflows: {
+        total: civicCases.length,
+        active: activeCivicCases,
+        recent: civicCases,
       },
     },
     city: {
