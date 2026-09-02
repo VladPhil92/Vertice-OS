@@ -77,8 +77,12 @@ COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/prisma ./apps/api/prism
 COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/package.json ./packages/types/package.json
 COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/dist ./packages/types/dist
 
-USER nodeapp
 EXPOSE 4000
 # Production boot is self-contained: apply only pending Prisma migrations using
 # the schema's real monorepo path, then replace the shell with the API process.
-CMD ["sh", "-c", "./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/index.js"]
+# Deliberately NOT setting `USER nodeapp` for the whole container: Prisma
+# migrations must run as root so they can read the schema/engine files
+# without hitting permission issues, but the long-running Node process must
+# not run as root. `su` switches to the unprivileged user right before
+# exec'ing node, so only Node (not migrate deploy) runs unprivileged.
+CMD ["sh", "-c", "./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec su -s /bin/sh nodeapp -c 'node apps/api/dist/index.js'"]
