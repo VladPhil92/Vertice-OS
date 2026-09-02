@@ -1,0 +1,100 @@
+name: Frontend Runtime Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/frontend-runtime-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/frontend-runtime-contract.yml'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  web-runtime-contract:
+    name: Web API target contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PRODUCTION_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+      STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+      MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve browser API target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            api_url="${PRODUCTION_API_URL}"
+            if [ -z "${api_url}" ]; then
+              echo '::error::PRODUCTION_API_URL is required before main can be certified for production.'
+              exit 1
+            fi
+          else
+            api_url="${STAGING_API_URL:-https://api-preview.invalid}"
+          fi
+
+          case "${api_url}" in
+            http://localhost*|https://localhost*|http://127.0.0.1*|https://127.0.0.1*)
+              echo "::error::Browser API target must not point at localhost: ${api_url}"
+              exit 1
+              ;;
+          esac
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            case "${api_url}" in
+              https://*) ;;
+              *)
+                echo "::error::Production browser API target must use HTTPS: ${api_url}"
+                exit 1
+                ;;
+            esac
+          fi
+
+          echo "NEXT_PUBLIC_API_URL=${api_url}" >> "${GITHUB_ENV}"
+
+      - name: Build Next.js with resolved runtime target
+        env:
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ env.MAPBOX_TOKEN }}
+        run: pnpm --filter @vertice/web build
+
+      - name: Reject localhost from browser bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'https?://(localhost|127\.0\.0\.1):4000' apps/web/.next/static 2>/dev/null; then
+            echo '::error::A browser bundle still contains a localhost API target.'
+            exit 1
+          fi
+          echo 'Browser bundles contain no localhost API target.'
