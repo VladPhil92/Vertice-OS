@@ -83,7 +83,7 @@ export function ModulesSection() {
             >
               <div className="absolute inset-x-0 top-0 h-1" style={{ background: color }} />
               <div className="flex items-start justify-between gap-4">
-                <div className="flex h-13 w-13 items-center justify-center rounded-2xl p-3" style={{ color, background: bg }}>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ color, background: bg }}>
                   <Icon size={23} strokeWidth={1.8} />
                 </div>
                 <span className="text-[10px] font-extrabold tracking-[.14em] text-[#A8B1BE]">0{index + 1}</span>
