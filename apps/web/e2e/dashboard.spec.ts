@@ -1,6 +1,6 @@
 /**
  * Dashboard home page E2E tests.
- * Verifies live stats load and quick-action cards render.
+ * Verifies live stats load and the institutional citizen actions render.
  */
 import { test, expect, type Page } from '@playwright/test'
 
@@ -54,7 +54,6 @@ test.describe('Dashboard home', () => {
         },
       }),
     )
-    // Also mock recent-activity endpoints used by dashboard
     await page.route(`${API}/territorial/reports*`, (route) =>
       route.fulfill({ status: 200, json: { data: [], count: 0 } }),
     )
@@ -63,32 +62,31 @@ test.describe('Dashboard home', () => {
     )
   })
 
-  test('shows dashboard heading', async ({ page }) => {
+  test('shows the Cartagena citizen dashboard', async ({ page }) => {
     await page.goto('/dashboard')
-    await expect(page.getByRole('heading', { name: /vértice os/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /cartagena la construimos juntos/i })).toBeVisible()
+    await expect(page.getByAltText(/vértice — inteligencia ciudadana/i).first()).toBeVisible()
   })
 
   test('loads and displays live stats', async ({ page }) => {
     await page.goto('/dashboard')
 
-    // Wait for loading spinners to disappear
-    await expect(page.locator('.animate-spin').first()).not.toBeVisible({ timeout: 5000 })
-
-    await expect(page.getByText('23')).toBeVisible()  // proposals
-    await expect(page.getByText('34')).toBeVisible()  // open reports
-    await expect(page.getByText('1.3k')).toBeVisible() // reputation formatted
+    await expect(page.getByText('23')).toBeVisible()
+    await expect(page.getByText('34')).toBeVisible()
+    await expect(page.getByText('1.3k')).toBeVisible()
   })
 
-  test('shows all 4 quick-action cards', async ({ page }) => {
+  test('shows the citizen quick actions from the visual system', async ({ page }) => {
     await page.goto('/dashboard')
-    await expect(page.getByRole('link', { name: /nueva propuesta/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /reportar problema/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /consultar ia/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /doc\. legal/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /reportar un caso/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /votar y participar/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /generar propuesta/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /debatir con ia/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /ver mapa de la ciudad/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /control público/i })).toBeVisible()
   })
 
   test('still renders when stats API fails', async ({ page }) => {
-    // Override with failures
     await page.route(`${API}/territorial/stats`, (route) =>
       route.fulfill({ status: 500, json: {} }),
     )
@@ -97,9 +95,7 @@ test.describe('Dashboard home', () => {
     )
 
     await page.goto('/dashboard')
-    // Page should still render the heading despite failed stats
-    await expect(page.getByRole('heading', { name: /vértice os/i })).toBeVisible()
-    // Stats show 0 as fallback
+    await expect(page.getByRole('heading', { name: /cartagena la construimos juntos/i })).toBeVisible()
     await expect(page.getByText('0').first()).toBeVisible()
   })
 })

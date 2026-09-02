@@ -5,9 +5,10 @@ test.describe('Public landing', () => {
     await page.goto('/')
 
     await expect(
-      page.getByRole('heading', { name: /lo que pasa en tu barrio puede convertirse en acción pública/i }),
+      page.getByRole('heading', { name: /cartagena la construimos juntos/i }),
     ).toBeVisible()
 
+    await expect(page.getByAltText(/vértice — inteligencia ciudadana/i).first()).toBeVisible()
     await expect(page.locator('#proposito')).toContainText('No es otra red social')
     await expect(page.locator('#como-funciona')).toContainText('Un ciclo cívico completo')
     await expect(page.locator('#capacidades')).toContainText('Seis capacidades conectadas')
@@ -17,11 +18,11 @@ test.describe('Public landing', () => {
   test('keeps registration and login as the primary public routes', async ({ page }) => {
     await page.goto('/')
 
-    await expect(page.getByRole('link', { name: /crear mi identidad cívica/i })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /tu voz tiene poder/i })).toHaveAttribute(
       'href',
       '/auth/register',
     )
-    await expect(page.getByRole('link', { name: /^ingresar$/i }).first()).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /iniciar sesión/i }).first()).toHaveAttribute(
       'href',
       '/auth/login',
     )

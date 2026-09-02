@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { Github } from 'lucide-react'
+import { Github, MapPin, ShieldCheck, Users } from 'lucide-react'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 
 const FOOTER_LINKS = {
   Explorar: [
@@ -17,43 +18,34 @@ const FOOTER_LINKS = {
 
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-bg pb-24">
+    <footer className="mt-8 bg-[#0A2A66] pb-16 text-white">
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr]">
           <div>
-            <div className="mb-5 flex items-center gap-3">
-              <svg viewBox="0 0 32 32" fill="none" className="h-8 w-8 flex-shrink-0">
-                <polygon points="16,2 30,28 2,28" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
-                <polygon points="16,9 25,26 7,26" stroke="#C8A84B" strokeWidth="0.75" fill="none" opacity="0.4" />
-              </svg>
-              <div>
-                <span className="block font-display text-sm font-700 uppercase tracking-widest text-primary">
-                  VÉRTICE OS
-                </span>
-                <span className="font-mono text-[8px] uppercase tracking-[0.18em] text-tertiary">
-                  Sistema operativo cívico
-                </span>
-              </div>
+            <div className="mb-6 inline-flex rounded-2xl bg-white px-4 py-3 shadow-sm">
+              <BrandLogo compact />
             </div>
 
-            <p className="mb-6 max-w-lg font-mono text-[12px] leading-6 text-secondary">
-              Una plataforma para convertir señales del territorio en participación organizada:
-              reportar, proponer, entender, decidir y seguir resultados dentro de un mismo flujo.
+            <p className="mb-7 max-w-lg text-sm leading-7 text-white/74">
+              VÉRTICE es inteligencia ciudadana aplicada al territorio: informa, conecta, organiza,
+              facilita la participación y hace visible el seguimiento a lo público.
             </p>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-2 border border-border px-3 py-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-                <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-tertiary">
-                  Piloto de producto · Cartagena de Indias
-                </span>
+            <div className="flex flex-wrap gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-[11px] font-semibold text-white/75">
+                <MapPin size={14} className="text-[#F5B700]" />
+                Cartagena de Indias · piloto
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-[11px] font-semibold text-white/75">
+                <Users size={14} className="text-[#F5B700]" />
+                La ciudadanía al centro
               </div>
               <a
                 href="https://github.com/VladPhil92/Vertice-OS"
-                className="flex h-8 w-8 items-center justify-center border border-border text-tertiary transition-colors hover:border-border-active hover:text-primary"
-                aria-label="Repositorio de VÉRTICE OS en GitHub"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition hover:border-[#F5B700] hover:text-[#F5B700]"
+                aria-label="Repositorio de VÉRTICE en GitHub"
               >
-                <Github size={14} />
+                <Github size={15} />
               </a>
             </div>
           </div>
@@ -61,24 +53,18 @@ export function Footer() {
           {(Object.entries(FOOTER_LINKS) as [string, readonly { label: string; href: string }[]][]).map(
             ([category, links]) => (
               <div key={category}>
-                <h4 className="mb-5 font-mono text-[10px] uppercase tracking-[0.3em] text-gold">
+                <h4 className="mb-5 text-xs font-extrabold uppercase tracking-[0.16em] text-[#F5B700]">
                   {category}
                 </h4>
                 <ul className="flex flex-col gap-3">
                   {links.map((link) => (
                     <li key={link.label}>
                       {link.href.startsWith('/') ? (
-                        <Link
-                          href={link.href}
-                          className="font-mono text-[12px] text-secondary transition-colors duration-200 hover:text-primary"
-                        >
+                        <Link href={link.href} className="text-sm text-white/70 transition hover:text-white">
                           {link.label}
                         </Link>
                       ) : (
-                        <a
-                          href={link.href}
-                          className="font-mono text-[12px] text-secondary transition-colors duration-200 hover:text-primary"
-                        >
+                        <a href={link.href} className="text-sm text-white/70 transition hover:text-white">
                           {link.label}
                         </a>
                       )}
@@ -91,13 +77,14 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="border-t border-border">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <span className="font-mono text-[10px] text-tertiary">
-            © {new Date().getFullYear()} CTG One Corporation · VÉRTICE OS
+      <div className="border-t border-white/10">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+          <span className="text-[11px] text-white/55">
+            © {new Date().getFullYear()} VÉRTICE · Inteligencia ciudadana
           </span>
-          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-tertiary">
-            Participación · Territorio · Gobernanza · Inteligencia cívica
+          <span className="flex items-center gap-2 text-[11px] font-semibold text-white/65">
+            <ShieldCheck size={14} className="text-[#F5B700]" />
+            Diferentes en cada región, unidos en un solo país.
           </span>
         </div>
       </div>
