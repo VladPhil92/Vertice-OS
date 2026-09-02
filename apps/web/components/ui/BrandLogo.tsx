@@ -7,6 +7,8 @@ type BrandLogoProps = {
 }
 
 export function BrandLogo({ className = '', compact = false, priority = false }: BrandLogoProps) {
+  const widthClass = compact ? 'w-[190px] sm:w-[205px]' : 'w-[230px] sm:w-[250px]'
+
   return (
     <div className={`flex shrink-0 items-center overflow-visible py-1 ${className}`}>
       <Image
@@ -16,12 +18,8 @@ export function BrandLogo({ className = '', compact = false, priority = false }:
         height={134}
         priority={priority}
         quality={100}
-        sizes={compact ? '180px' : '230px'}
-        className={
-          compact
-            ? 'block h-auto w-[180px] max-w-full object-contain object-left'
-            : 'block h-auto w-[230px] max-w-full object-contain object-left'
-        }
+        sizes={compact ? '(max-width: 640px) 190px, 205px' : '(max-width: 640px) 230px, 250px'}
+        className={`block h-auto max-w-none shrink-0 object-contain object-left ${widthClass}`}
       />
     </div>
   )
