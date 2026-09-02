@@ -79,7 +79,6 @@ async function exchangeWithCtgOne(input: FederationExchangeInput) {
         'x-ctg-federation-secret': secret,
       },
       body: JSON.stringify(input),
-      cache: 'no-store',
       signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS),
     })
   } catch {
