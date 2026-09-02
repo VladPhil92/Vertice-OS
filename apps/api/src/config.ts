@@ -44,8 +44,9 @@ const schema = z.object({
 
   // Proveedores que VÉRTICE acepta como prueba externa de identidad para
   // acciones de gobernanza de alto impacto. Es una allowlist explícita:
-  // federación/SSO (por ejemplo `ctgone`) NO equivale a identidad asegurada
-  // salvo que el operador lo incluya conscientemente después de auditarlo.
+  // federación/SSO (por ejemplo el provider persistido `ctg_one`) NO equivale
+  // a identidad asegurada salvo que el operador lo incluya conscientemente
+  // después de auditar su proceso real de identity proofing.
   // Formato: "provider_a,provider_b". Vacío = fail-closed para identidad cívica.
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: z.string().default('').transform((value) =>
     Array.from(new Set(
