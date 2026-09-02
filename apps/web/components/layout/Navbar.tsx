@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Menu, X } from 'lucide-react'
+import { ArrowUpRight, Menu, X } from 'lucide-react'
 import Link from 'next/link'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
@@ -13,6 +13,8 @@ const NAV_LINKS = [
   { label: 'IA cívica', href: '#ia' },
   { label: 'Visión', href: '#roadmap' },
 ] as const
+
+const CTG_ONE_URL = 'https://ctgone.com'
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
@@ -51,6 +53,13 @@ export function Navbar() {
         </ul>
 
         <div className="hidden items-center gap-3 md:flex">
+          <a
+            href={CTG_ONE_URL}
+            className="inline-flex min-h-10 items-center gap-1.5 px-2 text-[11px] font-semibold text-[#607087] transition-colors hover:text-[#0a2a66]"
+          >
+            CTG One
+            <ArrowUpRight size={13} aria-hidden="true" />
+          </a>
           <Link href="/auth/login" className="btn-ghost !min-h-10 !px-4 !py-2 text-[11px]">
             Iniciar sesión
           </Link>
@@ -88,6 +97,14 @@ export function Navbar() {
                   {link.label}
                 </a>
               ))}
+              <a
+                href={CTG_ONE_URL}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#4b5870] hover:text-[#0a2a66]"
+                onClick={() => setMenuOpen(false)}
+              >
+                CTG One
+                <ArrowUpRight size={14} aria-hidden="true" />
+              </a>
               <div className="grid gap-3 border-t border-[#e1e7ef] pt-5">
                 <Link href="/auth/login" className="btn-ghost text-center" onClick={() => setMenuOpen(false)}>
                   Iniciar sesión
