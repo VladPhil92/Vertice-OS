@@ -1,140 +1,132 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Users, Map, Vote, Brain, Link2, Star } from 'lucide-react'
+import { BadgeCheck, Brain, FileText, Map, Star, Vote } from 'lucide-react'
 
 const MODULES = [
   {
     number: '01',
-    icon: Users,
-    title: 'Identidad Cívica Digital',
+    icon: Map,
+    title: 'Mapa y reportes',
+    action: 'Reporta lo que ocurre',
     description:
-      'DID descentralizado vinculado a cédula colombiana. Verificación de nivel sin exponer datos personales. Wallet ciudadana en Polygon.',
-    status: 'live',
-    color: 'cyan',
+      'Registra situaciones por categoría y ubicación, consulta el contexto territorial y sigue el estado de cada reporte.',
+    path: '/dashboard/reports',
+    color: 'text-[#C0392B]',
   },
   {
     number: '02',
-    icon: Map,
-    title: 'Motor Territorial',
+    icon: FileText,
+    title: 'Propuestas ciudadanas',
+    action: 'Convierte una idea en iniciativa',
     description:
-      'Reportes geoespaciales con PostGIS. Análisis de patrones por barrio. Seguimiento de resolución con IA territorial.',
-    status: 'live',
-    color: 'gold',
+      'Estructura propuestas, consulta su estado y conserva en un solo lugar el contexto de cada iniciativa ciudadana.',
+    path: '/dashboard/proposals',
+    color: 'text-gold',
   },
   {
     number: '03',
     icon: Vote,
-    title: 'Gobernanza y Decisión',
+    title: 'Gobernanza',
+    action: 'Participa en decisiones',
     description:
-      'Democracia líquida con delegación de voto. Propuestas con ciclo completo. Quórum dinámico por alcance territorial.',
-    status: 'live',
-    color: 'gold',
+      'Accede a las iniciativas que avanzan a debate o votación y consulta resultados dentro del mismo flujo de participación.',
+    path: '/dashboard/governance',
+    color: 'text-[#1A7FBF]',
   },
   {
     number: '04',
     icon: Brain,
-    title: 'Capa IA Multi-Agente',
+    title: 'Asistente cívico con IA',
+    action: 'Entiende antes de actuar',
     description:
-      'Orquestador LangGraph con 6 agentes especializados. RAG sobre documentos de Cartagena. Síntesis de debate y borradores de política.',
-    status: 'live',
-    color: 'cyan',
+      'Consulta temas cívicos, resume información y recibe apoyo para organizar una idea o interpretar el contexto de una discusión.',
+    path: '/dashboard/ai',
+    color: 'text-cyan',
   },
   {
     number: '05',
-    icon: Link2,
-    title: 'Blockchain Cívico',
+    icon: BadgeCheck,
+    title: 'Identidad cívica',
+    action: 'Concentra tu participación',
     description:
-      'VotingRegistry inmutable en Polygon. Soulbound Tokens de logros cívicos (ERC-5192). Transparencia radical on-chain.',
-    status: 'live',
-    color: 'gold',
+      'Tu identidad dentro de VÉRTICE conecta tu cuenta con el historial de acciones y los mecanismos de verificación disponibles.',
+    path: '/dashboard/identity',
+    color: 'text-[#27AE60]',
   },
   {
     number: '06',
     icon: Star,
-    title: 'Sistema de Reputación',
+    title: 'Reputación y actividad',
+    action: 'Consulta tu trayectoria',
     description:
-      'Score basado en eventos de participación. Grafo de relaciones en Neo4j. Detección de manipulación coordinada.',
-    status: 'live',
-    color: 'cyan',
+      'Visualiza tu actividad acumulada, participación y perfil cívico sin perder la relación entre las distintas acciones realizadas.',
+    path: '/dashboard/reputation',
+    color: 'text-[#9B59B6]',
   },
 ] as const
 
-const STATUS_LABELS = {
-  live:    { label: 'Activo',      dot: 'bg-cyan shadow-[0_0_8px_#4ECDC4]' },
-  beta:    { label: 'Beta',        dot: 'bg-gold shadow-[0_0_8px_#C8A84B]' },
-  planned: { label: 'En hoja de ruta', dot: 'bg-tertiary' },
-} as const
-
 export function ModulesSection() {
   return (
-    <section id="modulos" className="relative px-6 py-32">
+    <section id="capacidades" className="relative px-6 py-28 md:py-36">
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="mb-20 text-center">
-          <span className="section-tag">La Plataforma</span>
-          <motion.h2
-            className="font-display text-4xl font-700 tracking-[-0.02em] text-primary md:text-5xl"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            Seis módulos.
-            <br />
-            <span className="text-gold">Una infraestructura.</span>
-          </motion.h2>
+        <div className="mb-16 grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+          <div>
+            <span className="section-tag">Qué puedes hacer</span>
+            <motion.h2
+              className="font-display text-4xl font-700 tracking-[-0.03em] text-primary md:text-5xl"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.55 }}
+            >
+              Seis capacidades conectadas.
+              <br />
+              <span className="text-gold">Un solo espacio ciudadano.</span>
+            </motion.h2>
+          </div>
+          <p className="max-w-2xl font-mono text-sm leading-7 text-secondary">
+            Los módulos del dashboard dejan de presentarse como piezas técnicas aisladas. Cada uno responde a una tarea concreta dentro del ciclo de participación.
+          </p>
         </div>
 
-        {/* Grid */}
-        <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-px bg-border md:grid-cols-2 lg:grid-cols-3">
           {MODULES.map((mod, idx) => {
             const Icon = mod.icon
-            const status = STATUS_LABELS[mod.status]
-
             return (
               <motion.article
                 key={mod.number}
-                className="group relative flex flex-col gap-5 bg-bg p-8 transition-colors duration-300 hover:bg-surface"
+                className="group relative flex min-h-[320px] flex-col bg-bg p-8 transition-colors duration-300 hover:bg-surface"
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.5, delay: (idx % 3) * 0.08 }}
+                transition={{ duration: 0.45, delay: (idx % 3) * 0.07 }}
               >
-                {/* Module number */}
-                <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-tertiary">
-                  {mod.number}
-                </span>
-
-                {/* Icon */}
-                <div
-                  className={`flex h-10 w-10 items-center justify-center border border-border transition-colors duration-300 group-hover:border-border-active ${
-                    mod.color === 'cyan' ? 'text-cyan' : 'text-gold'
-                  }`}
-                >
-                  <Icon size={18} strokeWidth={1.5} />
-                </div>
-
-                {/* Content */}
-                <div className="flex-1">
-                  <h3 className="mb-3 font-display text-lg font-600 text-primary leading-tight">
-                    {mod.title}
-                  </h3>
-                  <p className="font-mono text-[13px] leading-relaxed text-secondary">
-                    {mod.description}
-                  </p>
-                </div>
-
-                {/* Status */}
-                <div className="flex items-center gap-2 pt-2 border-t border-border">
-                  <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
-                    {status.label}
+                <div className="mb-9 flex items-center justify-between">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-tertiary">
+                    Módulo {mod.number}
                   </span>
+                  <div className={`flex h-10 w-10 items-center justify-center border border-border ${mod.color}`}>
+                    <Icon size={18} strokeWidth={1.5} />
+                  </div>
                 </div>
 
-                {/* Hover corner accent */}
-                <div className="absolute bottom-0 right-0 h-px w-0 bg-gold transition-all duration-300 group-hover:w-full" />
+                <span className="mb-3 font-mono text-[9px] uppercase tracking-[0.18em] text-gold">
+                  {mod.action}
+                </span>
+                <h3 className="mb-4 font-display text-2xl font-600 leading-tight text-primary">
+                  {mod.title}
+                </h3>
+                <p className="font-mono text-[12px] leading-6 text-secondary">{mod.description}</p>
+
+                <div className="mt-auto flex items-center justify-between border-t border-border pt-5">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-tertiary">
+                    Disponible en el dashboard
+                  </span>
+                  <span className="font-mono text-[9px] text-tertiary">{mod.path}</span>
+                </div>
+
+                <div className="absolute bottom-0 left-0 h-px w-0 bg-gold transition-all duration-300 group-hover:w-full" />
               </motion.article>
             )
           })}

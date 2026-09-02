@@ -1,104 +1,104 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { ShieldCheck, MessageSquare, Vote } from 'lucide-react'
+import { BadgeCheck, FileSearch, MessagesSquare, Vote } from 'lucide-react'
 
 const STEPS = [
   {
     number: '01',
-    icon: ShieldCheck,
-    title: 'Verifica tu identidad',
+    icon: BadgeCheck,
+    title: 'Entra con una identidad cívica',
     description:
-      'Regístrate con tu cédula colombiana. El sistema genera tu DID descentralizado vinculado a Polygon — sin exponer tus datos personales.',
-    detail: 'Nivel 0 → Nivel 2 en minutos',
+      'Tu cuenta concentra tu participación, tu historial y las acciones que realizas dentro de la plataforma.',
+    detail: 'Una identidad · un historial',
   },
   {
     number: '02',
-    icon: MessageSquare,
-    title: 'Participa y reporta',
+    icon: FileSearch,
+    title: 'Registra lo que necesita atención',
     description:
-      'Crea propuestas, reporta problemas en tu barrio con geolocalización, vota en debate activo o consulta al asistente cívico con IA.',
-    detail: 'Todo registrado on-chain',
+      'Puedes reportar una situación territorial o estructurar una propuesta con categoría, contexto y seguimiento.',
+    detail: 'Problema o idea → registro estructurado',
   },
   {
     number: '03',
-    icon: Vote,
-    title: 'Acumula reputación',
+    icon: MessagesSquare,
+    title: 'Entiende y delibera con contexto',
     description:
-      'Cada acción suma a tu score cívico. Más reputación = mayor peso en votaciones. Los logros se acuñan como Soulbound Tokens.',
-    detail: 'La democracia que no se compra',
+      'La comunidad puede consultar información, revisar posiciones y usar la IA para sintetizar contenido antes de participar.',
+    detail: 'Más contexto antes de decidir',
+  },
+  {
+    number: '04',
+    icon: Vote,
+    title: 'Decide y sigue el resultado',
+    description:
+      'Las iniciativas avanzan por estados visibles. Cuando corresponde, la plataforma habilita votación y conserva el resultado para seguimiento.',
+    detail: 'Decisión → resultado → trazabilidad',
   },
 ] as const
 
 export function HowItWorksSection() {
   return (
-    <section id="como-funciona" className="relative px-6 py-32">
-      {/* Subtle separator line */}
-      <div className="absolute top-0 left-6 right-6 h-px bg-border" />
+    <section id="como-funciona" className="relative px-6 py-28 md:py-36">
+      <div className="absolute left-6 right-6 top-0 h-px bg-border" />
 
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="mb-20 text-center">
-          <span className="section-tag">El proceso</span>
-          <motion.h2
-            className="font-display text-4xl font-700 tracking-[-0.02em] text-primary md:text-5xl"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            Tres pasos.
-            <br />
-            <span className="text-gold">Participación real.</span>
-          </motion.h2>
+        <div className="mb-16 grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
+          <div>
+            <span className="section-tag">Cómo funciona</span>
+            <motion.h2
+              className="font-display text-4xl font-700 tracking-[-0.03em] text-primary md:text-5xl"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.55 }}
+            >
+              Un ciclo cívico completo,
+              <br />
+              <span className="text-gold">no una colección de pantallas.</span>
+            </motion.h2>
+          </div>
+          <p className="max-w-2xl font-mono text-sm leading-7 text-secondary">
+            La experiencia está diseñada para que cada módulo tenga una función dentro del mismo recorrido:
+            identificar, registrar, entender, decidir y seguir. La tecnología queda detrás del flujo ciudadano.
+          </p>
         </div>
 
-        {/* Steps */}
-        <div className="relative">
-          {/* Connector line (desktop) */}
-          <div
-            className="absolute top-10 left-0 right-0 hidden h-px lg:block"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(200,168,75,0.2), transparent)' }}
-          />
-
-          <div className="grid gap-12 lg:grid-cols-3 lg:gap-0">
-            {STEPS.map((step, idx) => {
-              const Icon = step.icon
-              return (
-                <motion.div
-                  key={step.number}
-                  className="relative flex flex-col items-center text-center lg:px-10"
-                  initial={{ opacity: 0, y: 24 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-40px' }}
-                  transition={{ duration: 0.5, delay: idx * 0.12 }}
-                >
-                  {/* Icon circle */}
-                  <div className="relative mb-8 flex h-20 w-20 items-center justify-center border border-gold/30 bg-surface">
-                    <Icon size={28} className="text-gold" strokeWidth={1.25} />
-                    {/* Step number badge */}
-                    <div className="absolute -top-3 -right-3 flex h-6 w-6 items-center justify-center border border-border bg-bg">
-                      <span className="font-mono text-[9px] text-gold">{step.number}</span>
-                    </div>
+        <div className="grid gap-px bg-border md:grid-cols-2 xl:grid-cols-4">
+          {STEPS.map((step, idx) => {
+            const Icon = step.icon
+            return (
+              <motion.article
+                key={step.number}
+                className="relative flex min-h-[330px] flex-col bg-bg p-7 transition-colors hover:bg-surface md:p-8"
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ duration: 0.45, delay: idx * 0.07 }}
+              >
+                <div className="mb-10 flex items-center justify-between">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-tertiary">
+                    Paso {step.number}
+                  </span>
+                  <div className="flex h-10 w-10 items-center justify-center border border-gold/25 text-gold">
+                    <Icon size={17} strokeWidth={1.5} />
                   </div>
+                </div>
 
-                  <h3 className="mb-4 font-display text-xl font-600 text-primary">
-                    {step.title}
-                  </h3>
+                <h3 className="mb-4 font-display text-xl font-600 leading-tight text-primary">
+                  {step.title}
+                </h3>
+                <p className="font-mono text-[12px] leading-6 text-secondary">{step.description}</p>
 
-                  <p className="mb-6 font-mono text-[13px] leading-relaxed text-secondary">
-                    {step.description}
-                  </p>
-
-                  <div className="border border-gold/20 px-4 py-2">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gold">
-                      {step.detail}
-                    </span>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
+                <div className="mt-auto border-t border-border pt-5">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-gold">
+                    {step.detail}
+                  </span>
+                </div>
+              </motion.article>
+            )
+          })}
         </div>
       </div>
     </section>
