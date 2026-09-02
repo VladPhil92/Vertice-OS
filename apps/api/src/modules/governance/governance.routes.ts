@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { requireVerified, requireModerator } from '../../middleware/auth'
+import { prisma } from '../../lib/prisma'
 import {
   CreateProposalSchema,
   ListProposalsSchema,
@@ -92,6 +93,37 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
+
+    // El padrón se congela cuando la propuesta entra en votación. La ruta de
+    // voto debe respetar ese snapshot: estar verificado no equivale por sí
+    // solo a pertenecer al electorado territorial de esta propuesta.
+    const eligibility = await prisma.$queryRaw<Array<{ roll_exists: boolean; eligible: boolean }>>`
+      SELECT
+        EXISTS(
+          SELECT 1 FROM proposal_voter_roll WHERE proposal_id = ${id}::uuid
+        ) AS roll_exists,
+        EXISTS(
+          SELECT 1
+          FROM proposal_voter_roll
+          WHERE proposal_id = ${id}::uuid
+            AND citizen_id = ${request.citizen.sub}::uuid
+        ) AS eligible
+    `
+
+    if (!eligibility[0]?.roll_exists) {
+      return reply.status(409).send({
+        error: 'La votación no tiene un padrón electoral congelado y no puede aceptar votos de forma segura',
+        code: 'VOTER_ROLL_UNAVAILABLE',
+      })
+    }
+
+    if (!eligibility[0]?.eligible) {
+      return reply.status(403).send({
+        error: 'No perteneces al padrón electoral de esta propuesta',
+        code: 'NOT_ELIGIBLE_VOTER',
+      })
+    }
+
     const receipt = await castVote(id, request.citizen.sub, parsed.data.vote_value)
     return reply.status(201).send(receipt)
   })
