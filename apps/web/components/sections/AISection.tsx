@@ -1,198 +1,156 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { MessageSquare, MapPin, FileText, BarChart3 } from 'lucide-react'
+import { FileText, MapPin, MessageSquare, Scale } from 'lucide-react'
 
-const AGENTS = [
+const USE_CASES = [
   {
     icon: MessageSquare,
-    name: 'CitizenAgent',
-    role: 'Consulta ciudadana general',
-    description: 'Responde preguntas sobre procesos, trámites y participación cívica en Cartagena.',
-  },
-  {
-    icon: MapPin,
-    name: 'TerritorialAgent',
-    role: 'Inteligencia territorial',
-    description: 'Analiza patrones de reportes por barrio e identifica causas sistémicas.',
-  },
-  {
-    icon: BarChart3,
-    name: 'GovernanceAgent',
-    role: 'Síntesis de debate',
-    description: 'Genera resúmenes imparciales de propuestas con posiciones a favor y en contra.',
+    title: 'Explicar',
+    description: 'Aclara conceptos, procesos y pasos de participación en lenguaje directo.',
   },
   {
     icon: FileText,
-    name: 'PolicyAgent',
-    role: 'Borradores de política',
-    description: 'Convierte demandas ciudadanas en propuestas estructuradas con 9 puntos del marco colombiano.',
+    title: 'Estructurar',
+    description: 'Ayuda a convertir una inquietud o idea inicial en contenido más ordenado y comprensible.',
+  },
+  {
+    icon: MapPin,
+    title: 'Contextualizar',
+    description: 'Relaciona preguntas con información territorial y patrones disponibles dentro de la plataforma.',
+  },
+  {
+    icon: Scale,
+    title: 'Sintetizar',
+    description: 'Resume argumentos y puntos de contraste para facilitar una deliberación mejor informada.',
   },
 ] as const
 
 const DEMO_MESSAGES = [
-  { role: 'user', text: '¿Cómo puedo crear una propuesta para mejorar el parque de Getsemaní?' },
+  { role: 'user', text: 'Quiero proponer una mejora para un parque de mi barrio. ¿Por dónde empiezo?' },
   {
     role: 'ai',
-    text: 'Para crear una propuesta en VÉRTICE OS necesitas:\n1. Verificar tu identidad cívica (nivel 1+)\n2. Ir a Gobernanza → Nueva propuesta\n3. Tu propuesta pasará por: idea → debate → votación → resultado\n\nNecesitas 10 avales para avanzar de idea a debate. ¿Quieres que te ayude a redactar los puntos clave?',
-    agent: 'CitizenAgent',
+    text: 'Puedo ayudarte a organizar la idea en cuatro partes: problema observado, lugar, propuesta concreta y resultado esperado. Después puedes llevar ese borrador al módulo de Propuestas y seguir su estado desde el dashboard.',
   },
 ] as const
 
 export function AISection() {
   return (
-    <section id="ia" className="relative px-6 py-32 overflow-hidden">
-      {/* Accent */}
+    <section id="ia" className="relative overflow-hidden px-6 py-28 md:py-36">
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 50% 40% at 80% 50%, rgba(78,205,196,0.04) 0%, transparent 70%)',
+            'radial-gradient(ellipse 50% 45% at 82% 45%, rgba(78,205,196,0.055) 0%, transparent 72%)',
         }}
       />
 
       <div className="relative mx-auto max-w-7xl">
-        <div className="grid gap-20 lg:grid-cols-2 lg:items-center">
-          {/* Left: text */}
+        <div className="grid gap-16 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
           <div>
-            <span className="section-tag">Inteligencia Artificial</span>
+            <span className="section-tag">IA cívica</span>
             <motion.h2
-              className="mb-6 font-display text-4xl font-700 tracking-[-0.02em] text-primary md:text-5xl"
+              className="mb-6 font-display text-4xl font-700 tracking-[-0.03em] text-primary md:text-5xl lg:text-6xl"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
+              transition={{ duration: 0.55 }}
             >
-              Seis agentes.
+              IA para entender mejor.
               <br />
-              <span className="text-cyan">Un orquestador.</span>
+              <span className="text-cyan">La decisión sigue siendo humana.</span>
             </motion.h2>
 
             <motion.p
-              className="mb-10 font-mono text-sm leading-relaxed text-secondary"
+              className="mb-10 max-w-2xl font-mono text-sm leading-7 text-secondary md:text-base"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.1 }}
+              transition={{ duration: 0.55, delay: 0.08 }}
             >
-              El motor de IA de VÉRTICE OS usa LangGraph para orquestar agentes
-              especializados en gobernanza, territorio y política pública. Cada
-              consulta ciudadana es enrutada automáticamente al agente más apropiado.
+              La inteligencia artificial de VÉRTICE funciona como una capa de apoyo para explicar,
+              ordenar, contextualizar y sintetizar información. No reemplaza la deliberación ni emite
+              decisiones en nombre de los ciudadanos.
             </motion.p>
 
-            {/* Agent grid */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              {AGENTS.map((agent, idx) => {
-                const Icon = agent.icon
+            <div className="grid gap-px bg-border sm:grid-cols-2">
+              {USE_CASES.map((item, idx) => {
+                const Icon = item.icon
                 return (
                   <motion.div
-                    key={agent.name}
-                    className="border border-border p-4 transition-colors hover:border-border-active hover:bg-surface"
-                    initial={{ opacity: 0, y: 16 }}
+                    key={item.title}
+                    className="bg-bg p-5 transition-colors hover:bg-surface"
+                    initial={{ opacity: 0, y: 14 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: idx * 0.07 }}
+                    transition={{ duration: 0.4, delay: idx * 0.06 }}
                   >
-                    <div className="mb-3 flex items-center gap-2">
-                      <Icon size={14} className="text-cyan" strokeWidth={1.5} />
-                      <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-gold">
-                        {agent.name}
-                      </span>
-                    </div>
-                    <div className="mb-1 font-display text-sm font-600 text-primary">
-                      {agent.role}
-                    </div>
-                    <div className="font-mono text-[12px] leading-relaxed text-secondary">
-                      {agent.description}
-                    </div>
+                    <Icon size={15} className="mb-5 text-cyan" strokeWidth={1.5} />
+                    <div className="mb-2 font-display text-lg font-600 text-primary">{item.title}</div>
+                    <p className="font-mono text-[11px] leading-5 text-secondary">{item.description}</p>
                   </motion.div>
                 )
               })}
             </div>
           </div>
 
-          {/* Right: demo chat */}
           <motion.div
             className="relative"
-            initial={{ opacity: 0, x: 30 }}
+            initial={{ opacity: 0, x: 28 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.7, delay: 0.2 }}
+            transition={{ duration: 0.65, delay: 0.14 }}
           >
-            <div className="border border-border bg-surface">
-              {/* Chat header */}
-              <div className="flex items-center justify-between border-b border-border px-5 py-3">
+            <div className="border border-border bg-surface shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
                 <div className="flex items-center gap-2">
                   <span className="status-dot" />
-                  <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-tertiary">
-                    Asistente Cívico
+                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary">
+                    Asistente cívico
                   </span>
                 </div>
-                <span className="font-mono text-[10px] text-tertiary">
-                  claude-sonnet-4-6
+                <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-tertiary">
+                  Contexto antes que respuesta
                 </span>
               </div>
 
-              {/* Messages */}
-              <div className="flex flex-col gap-4 p-5">
+              <div className="flex min-h-[330px] flex-col gap-5 p-5 md:p-7">
                 {DEMO_MESSAGES.map((msg, idx) => (
                   <div
                     key={idx}
-                    className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                    className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                   >
-                    {msg.role === 'ai' && (
-                      <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan">
-                        {'agent' in msg ? msg.agent : ''}
-                      </span>
-                    )}
+                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-tertiary">
+                      {msg.role === 'user' ? 'Ciudadano' : 'VÉRTICE IA'}
+                    </span>
                     <div
-                      className={`max-w-[85%] px-4 py-3 font-mono text-[13px] leading-relaxed ${
+                      className={`max-w-[90%] px-4 py-3.5 font-mono text-[12px] leading-6 ${
                         msg.role === 'user'
                           ? 'bg-navy text-primary'
                           : 'border border-border bg-bg text-secondary'
                       }`}
                     >
-                      {msg.text.split('\n').map((line, i) => (
-                        <span key={i}>
-                          {line}
-                          {i < msg.text.split('\n').length - 1 && <br />}
-                        </span>
-                      ))}
+                      {msg.text}
                     </div>
                   </div>
                 ))}
 
-                {/* Typing indicator */}
-                <div className="flex items-center gap-1.5">
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="h-1.5 w-1.5 rounded-full bg-tertiary animate-blink"
-                      style={{ animationDelay: `${i * 0.2}s` }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Input */}
-              <div className="border-t border-border px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex-1 font-mono text-[12px] text-tertiary">
-                    Escribe tu consulta cívica...
-                  </span>
-                  <div className="h-7 w-7 flex items-center justify-center border border-border text-tertiary">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                      <path d="M0 6l12-6-4.5 6 4.5 6z" />
-                    </svg>
+                <div className="mt-auto border-t border-border pt-5">
+                  <div className="flex items-center justify-between border border-border bg-bg px-4 py-3">
+                    <span className="font-mono text-[11px] text-tertiary">Escribe una consulta cívica...</span>
+                    <div className="flex h-7 w-7 items-center justify-center border border-cyan/20 text-cyan">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                        <path d="M0 6l12-6-4.5 6 4.5 6z" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Decorative label */}
-            <div className="absolute -top-3 -right-3 border border-gold/30 bg-bg px-3 py-1">
-              <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-gold">
-                Demo
+            <div className="absolute -bottom-4 -left-4 border border-cyan/20 bg-bg px-3 py-2">
+              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-cyan">
+                Apoyo · no autoridad
               </span>
             </div>
           </motion.div>
