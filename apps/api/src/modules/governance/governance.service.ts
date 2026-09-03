@@ -570,7 +570,7 @@ export async function castVote(
   voteValue: -1 | 0 | 1,
 ): Promise<VoteReceipt> {
   const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
-    SELECT id, status, voting_ends_at FROM proposals WHERE id = ${proposalId}::uuid
+    SELECT id, status, category, voting_ends_at FROM proposals WHERE id = ${proposalId}::uuid
   `)
 
   if (rows.length === 0) throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
@@ -587,19 +587,36 @@ export async function castVote(
 
   const nullifier = voteNullifier(citizenId, proposalId)
 
-  // Get citizen reputation and check for double vote in one query
+  // El padrón congelado es la autoridad de admisión durante toda la ventana
+  // de votación. La assurance se evaluó al construir ese snapshot; volver a
+  // evaluar providers aquí permitiría que un cambio de configuración altere
+  // el electorado sin actualizar el denominador de quórum.
   const checkRows = await prisma.$queryRaw<Array<{
     already_voted: bigint | number
     reputation_score: string | number
+    eligible?: boolean
   }>>(Prisma.sql`
     SELECT
       (SELECT COUNT(*) FROM votes WHERE nullifier_hash = ${nullifier})::int AS already_voted,
-      c.reputation_score
+      c.reputation_score,
+      EXISTS(
+        SELECT 1
+        FROM proposal_voter_roll pvr
+        WHERE pvr.proposal_id = ${proposalId}::uuid
+          AND pvr.citizen_id = c.id
+      ) AS eligible
     FROM citizens c
     WHERE c.id = ${citizenId}::uuid
   `)
 
   if (checkRows.length === 0) throw makeError('Ciudadano no encontrado', 404, 'CITIZEN_NOT_FOUND')
+
+  // `eligible` is optional only for compatibility with older unit fixtures;
+  // production SQL above always returns a boolean. Explicit false is a hard
+  // denial and cannot be bypassed by current assurance/provider state.
+  if (checkRows[0].eligible === false) {
+    throw makeError('No perteneces al padrón electoral de esta propuesta', 403, 'NOT_ELIGIBLE_VOTER')
+  }
 
   if (Number(checkRows[0].already_voted) > 0) {
     throw makeError('Ya has votado en esta propuesta', 409, 'ALREADY_VOTED')
@@ -620,24 +637,10 @@ export async function castVote(
   }
 
   // ── Liquid democracy: aggregate delegated weight ───────────────────────────
-  // Una delegación solo puede aportar peso si el delegador también cumple la
-  // política P0 de identidad cívica vigente. Así no se puede eludir la puerta
-  // de identidad votando indirectamente a través de una cuenta asegurada.
-  const trustedProviders = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
-  const delegatedAssurance = trustedProviders.length > 0
-    ? Prisma.sql`
-        AND c.verification_level >= 2
-        AND EXISTS (
-          SELECT 1
-          FROM external_identities ei
-          WHERE ei.citizen_id = c.id
-            AND ei.provider IN (${Prisma.join(trustedProviders)})
-        )
-      `
-    : Prisma.sql`AND FALSE`
-
-  // El nullifier de cada delegador se calcula con voteNullifier() (la misma
-  // función usada en todo el módulo) y NO se recalcula en SQL crudo.
+  // El mismo padrón congelado gobierna la delegación: solo puede aportar peso
+  // quien pertenecía al electorado de ESTA propuesta cuando abrió la votación.
+  // Esto preserva tanto el ámbito territorial como la assurance que quedó
+  // congelada en el snapshot, aunque la allowlist cambie después.
   const delegatorRows = await prisma.$queryRaw<Array<{
     delegator_id: string
     reputation_score: string
@@ -645,10 +648,18 @@ export async function castVote(
     SELECT d.delegator_id, c.reputation_score
     FROM delegations d
     JOIN citizens c ON c.id = d.delegator_id
-    WHERE d.delegate_id   = ${citizenId}::uuid
-      AND d.is_active     = true
-      AND d.delegation_type IN ('general', 'domain')
-      ${delegatedAssurance}
+    INNER JOIN proposal_voter_roll pvr
+      ON pvr.citizen_id = d.delegator_id
+     AND pvr.proposal_id = ${proposalId}::uuid
+    WHERE d.delegate_id = ${citizenId}::uuid
+      AND d.is_active = true
+      AND d.valid_from <= NOW()
+      AND (d.valid_until IS NULL OR d.valid_until > NOW())
+      AND (
+        d.delegation_type = 'general'
+        OR (d.delegation_type = 'domain' AND d.domain = ${proposal.category})
+        OR (d.delegation_type = 'proposal' AND d.proposal_id = ${proposalId}::uuid)
+      )
   `)
 
   const delegatorNullifiers = delegatorRows.map(d => voteNullifier(d.delegator_id, proposalId))
