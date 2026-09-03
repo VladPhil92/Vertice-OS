@@ -4,7 +4,7 @@ const configuredDevelopmentBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim().rep
  * Browser API target.
  *
  * Production is deliberately same-origin. The browser never talks to Railway
- * directly; Vercel proxies /_api/* to the canonical Railway API. This keeps
+ * directly; Vercel proxies /api/* to the canonical Railway API. This keeps
  * refresh cookies first-party, satisfies the CSP with `connect-src 'self'`,
  * and makes stale NEXT_PUBLIC_API_URL values unable to redirect credentials.
  *
@@ -13,7 +13,7 @@ const configuredDevelopmentBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim().rep
  */
 export const BASE_URL = process.env.NODE_ENV === 'development'
   ? (configuredDevelopmentBaseUrl || 'http://localhost:4000')
-  : '/_api'
+  : '/api'
 
 export function requireApiBaseUrl(): string {
   return BASE_URL
@@ -65,8 +65,6 @@ async function refreshAccessToken(): Promise<string | null> {
     } catch {
       return null
     } finally {
-      // Se libera en el microtask siguiente para que los 401 simultáneos
-      // alcancen a engancharse a esta misma promesa.
       setTimeout(() => { refreshInFlight = null }, 0)
     }
   })()
@@ -96,7 +94,6 @@ export async function apiFetch<T = unknown>(
     headers: buildHeaders(isPublic ? null : getToken()),
   })
 
-  // El access token caducó: se intenta refrescar una vez y se reintenta.
   if (res.status === 401 && !isPublic) {
     const newToken = await refreshAccessToken()
     if (newToken) {
@@ -111,7 +108,6 @@ export async function apiFetch<T = unknown>(
   if (res.status === 401) {
     localStorage.removeItem('access_token')
     redirectToLogin()
-    // Return a never-resolving promise so caller code doesn't continue
     return new Promise(() => undefined)
   }
 
