@@ -140,7 +140,15 @@ export function resolveProofingAdapterSecret(
     })
   }
 
-  const secret = keyRegistry[provider]?.[keyId]
+  const providerKeys = keyRegistry[provider]
+  if (!providerKeys) {
+    throw Object.assign(new Error('El ingress del proveedor de identity proofing no está configurado'), {
+      statusCode: 503,
+      code: 'PROOFING_PROVIDER_INGRESS_DISABLED',
+    })
+  }
+
+  const secret = providerKeys[keyId]
   if (!secret) {
     throw Object.assign(new Error('Identificador de llave de proofing inválido'), {
       statusCode: 401,
