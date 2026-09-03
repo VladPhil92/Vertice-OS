@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcrypt'
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '../../lib/prisma'
-import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt';
+import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt'
 import { generateRefreshToken, hashToken, refreshTokenExpiresAt } from '../../lib/jwt'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
@@ -13,18 +13,11 @@ import { logger } from '../../lib/logger'
 import { hashCedula } from '../../lib/identity-hash'
 import type { RegisterInput, LoginInput } from './auth.schema'
 import type { AuthTokenResponse, CitizenPublicProfile } from './auth.types'
+import { ensureBaselineRoleGrants, getRoleContext, setSessionActiveRole } from './roles.service'
 
 const PWD_RESET_PREFIX = 'vertice:pwd_reset'
 const PWD_RESET_TTL    = 30 * 60 // 30 minutos
 
-// Hash bcrypt fijo (de una contraseña que nadie tiene) usado únicamente para
-// que loginCitizen() tarde lo mismo exista o no el ciudadano. Sin esto, el
-// cuerpo de la respuesta es idéntico para "no existe" y "password
-// incorrecta" pero el TIEMPO no: sin este hash, bcrypt.compare() se saltaba
-// por completo cuando el ciudadano no existía, y esa diferencia (una
-// consulta a Postgres vs. bcrypt.compare, que a 12 rondas toma decenas de
-// milisegundos) es un canal de temporización — permite enumerar emails
-// registrados igual que si el mensaje de error los distinguiera.
 const DUMMY_PASSWORD_HASH = '$2b$12$N7QHfr8J/YmthQWHbgBcnO3Nz6gMEjEYV6xl5VAe9TeTAOQOpIjoy'
 
 function generateDid(uuid: string): string {
@@ -74,16 +67,13 @@ export async function registerCitizen(input: RegisterInput): Promise<{ citizen_i
 export async function loginCitizen(
   app: FastifyInstance,
   input: LoginInput,
-  meta: { userAgent?: string; ipAddress?: string }
+  meta: { userAgent?: string; ipAddress?: string },
 ): Promise<AuthTokenResponse & { refresh_token: string }> {
   const citizen = await prisma.citizen.findUnique({
     where: { email: input.email },
     select: { id: true, did: true, passwordHash: true, verificationLevel: true, role: true },
   })
 
-  // Cuerpo Y tiempo de respuesta idénticos para email inexistente y password
-  // incorrecta — previene user enumeration. bcrypt.compare() SIEMPRE corre,
-  // incluso contra un hash de relleno cuando el ciudadano no existe.
   const passwordMatch = await bcrypt.compare(
     input.password,
     citizen?.passwordHash ?? DUMMY_PASSWORD_HASH,
@@ -93,32 +83,30 @@ export async function loginCitizen(
     throw Object.assign(new Error('Credenciales inválidas'), { statusCode: 401, code: 'INVALID_CREDENTIALS' })
   }
 
+  const preferredRole = (citizen.role as CitizenRole) ?? 'citizen'
+  const activeRole = await ensureBaselineRoleGrants(citizen.id, preferredRole)
+  const refreshToken = generateRefreshToken()
+  const session = await prisma.session.create({
+    data: {
+      citizenId: citizen.id,
+      refreshTokenHash: hashToken(refreshToken),
+      expiresAt: refreshTokenExpiresAt(),
+      userAgent: meta.userAgent,
+      ipAddress: meta.ipAddress,
+    },
+    select: { id: true },
+  })
+  await setSessionActiveRole(session.id, citizen.id, activeRole)
+  await prisma.citizen.update({ where: { id: citizen.id }, data: { lastActiveAt: new Date() } })
+
   const payload: AccessTokenPayload = {
     sub: citizen.id,
     did: citizen.did,
     lvl: citizen.verificationLevel,
-    role: (citizen.role as CitizenRole) ?? 'citizen',
+    role: activeRole,
+    sid: session.id,
   }
-
   const accessToken = app.jwt.sign(payload, { expiresIn: config.JWT_ACCESS_EXPIRY_SECONDS })
-  const refreshToken = generateRefreshToken()
-  const refreshTokenHash = hashToken(refreshToken)
-
-  await prisma.$transaction([
-    prisma.session.create({
-      data: {
-        citizenId: citizen.id,
-        refreshTokenHash,
-        expiresAt: refreshTokenExpiresAt(),
-        userAgent: meta.userAgent,
-        ipAddress: meta.ipAddress,
-      },
-    }),
-    prisma.citizen.update({
-      where: { id: citizen.id },
-      data: { lastActiveAt: new Date() },
-    }),
-  ])
 
   return {
     access_token: accessToken,
@@ -131,7 +119,7 @@ export async function loginCitizen(
 
 export async function refreshAccessToken(
   app: FastifyInstance,
-  rawRefreshToken: string
+  rawRefreshToken: string,
 ): Promise<Omit<AuthTokenResponse, 'citizen_id'>> {
   const tokenHash = hashToken(rawRefreshToken)
 
@@ -144,11 +132,19 @@ export async function refreshAccessToken(
     throw Object.assign(new Error('Sesión inválida o expirada'), { statusCode: 401, code: 'INVALID_SESSION' })
   }
 
+  await ensureBaselineRoleGrants(
+    session.citizen.id,
+    (session.citizen.role as CitizenRole) ?? 'citizen',
+  )
+  const roleContext = await getRoleContext(session.citizen.id, session.id)
+  await setSessionActiveRole(session.id, session.citizen.id, roleContext.active_role)
+
   const payload: AccessTokenPayload = {
     sub: session.citizen.id,
     did: session.citizen.did,
     lvl: session.citizen.verificationLevel,
-    role: (session.citizen.role as CitizenRole) ?? 'citizen',
+    role: roleContext.active_role,
+    sid: session.id,
   }
 
   const accessToken = app.jwt.sign(payload, { expiresIn: config.JWT_ACCESS_EXPIRY_SECONDS })
@@ -213,16 +209,6 @@ export async function getCitizenProfile(citizenId: string): Promise<CitizenPubli
   return profile
 }
 
-// ── Change password (autenticado) ─────────────────────────────────────────────
-
-/**
- * Cambio de contraseña para un ciudadano ya autenticado — no existía ningún
- * camino para esto salvo el flujo de "olvidé mi contraseña" por correo.
- * Exige la contraseña actual (mismo motivo que en login: sin esto, robar un
- * access token de corta vida bastaría para secuestrar la cuenta de forma
- * permanente). Revoca todas las DEMÁS sesiones — la que hizo el cambio sigue
- * viva porque ya demostró conocer tanto la contraseña vieja como la nueva.
- */
 export async function changePassword(
   citizenId: string,
   currentPassword: string,
@@ -267,15 +253,12 @@ export async function changePassword(
   await delCache('profile', citizenId)
 }
 
-// ── Forgot / reset password ───────────────────────────────────────────────────
-
 export async function requestPasswordReset(email: string): Promise<void> {
   const citizen = await prisma.citizen.findUnique({
     where: { email },
     select: { id: true, email: true },
   })
 
-  // Return silently even if email not found — prevents user enumeration
   if (!citizen?.email) return
 
   const token = crypto.randomBytes(32).toString('hex')
@@ -284,13 +267,6 @@ export async function requestPasswordReset(email: string): Promise<void> {
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
-  // GETDEL consume el token atómicamente en una sola ida a Redis — antes era
-  // GET seguido de DEL después de la transacción de Postgres, dejando el
-  // token vigente (reutilizable dentro de su TTL de 30 min) durante toda esa
-  // ventana, e incluso de forma permanente si la transacción fallaba a mitad
-  // de camino (el DEL nunca llegaba a ejecutarse). Con GETDEL, dos
-  // solicitudes concurrentes con el mismo token — o un reintento tras un
-  // error real — nunca pueden consumirlo dos veces.
   const citizenId = await redis.getdel(`${PWD_RESET_PREFIX}:${token}`)
   if (!citizenId) {
     throw Object.assign(new Error('Token inválido o expirado'), {
@@ -306,7 +282,6 @@ export async function resetPassword(token: string, newPassword: string): Promise
       where: { id: citizenId },
       data: { passwordHash },
     }),
-    // Revoke all active sessions — force re-login everywhere
     prisma.session.updateMany({
       where: { citizenId, revokedAt: null },
       data: { revokedAt: new Date() },
