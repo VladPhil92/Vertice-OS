@@ -32,23 +32,22 @@ beforeEach(() => {
   mockConfig.DID_COMMITMENT_PEPPER = undefined
 })
 
+function expectUnavailable(work: () => unknown, code: string): void {
+  try {
+    work()
+    throw new Error(`Expected ${code}`)
+  } catch (error) {
+    expect(error).toMatchObject({ statusCode: 503, code })
+  }
+}
+
 describe('feature-scoped production configuration', () => {
   it('fails voting closed instead of reusing JWT_SECRET', () => {
-    expect(() => getVoteNullifierSecret()).toThrow(
-      expect.objectContaining({
-        statusCode: 503,
-        code: 'VOTING_CRYPTO_UNAVAILABLE',
-      }),
-    )
+    expectUnavailable(getVoteNullifierSecret, 'VOTING_CRYPTO_UNAVAILABLE')
   })
 
   it('fails CivicSBT commitment generation closed without a pepper', () => {
-    expect(() => getDidCommitmentPepper()).toThrow(
-      expect.objectContaining({
-        statusCode: 503,
-        code: 'BLOCKCHAIN_CRYPTO_UNAVAILABLE',
-      }),
-    )
+    expectUnavailable(getDidCommitmentPepper, 'BLOCKCHAIN_CRYPTO_UNAVAILABLE')
   })
 
   it('reports deliberately disabled optional features without marking them misconfigured', () => {
@@ -65,7 +64,7 @@ describe('feature-scoped production configuration', () => {
   it('reports a partially configured CivicSBT capability as misconfigured', () => {
     mockConfig.CIVIC_SBT_ADDRESS = '0x1111111111111111111111111111111111111111'
     mockConfig.POLYGON_RPC_URL = 'https://polygon.example.test'
-    mockConfig.POLYGON_PRIVATE_KEY = '0xprivate'
+    mockConfig.POLYGON_PRIVATE_KEY = 'test-private-key'
 
     expect(getFeatureCapabilities().civic_sbt).toBe('misconfigured')
   })
@@ -74,7 +73,7 @@ describe('feature-scoped production configuration', () => {
     mockConfig.CIVIC_SBT_ADDRESS = '0x1111111111111111111111111111111111111111'
     mockConfig.VOTING_REGISTRY_ADDRESS = '0x2222222222222222222222222222222222222222'
     mockConfig.POLYGON_RPC_URL = 'https://polygon.example.test'
-    mockConfig.POLYGON_PRIVATE_KEY = '0xprivate'
+    mockConfig.POLYGON_PRIVATE_KEY = 'test-private-key'
     mockConfig.DID_COMMITMENT_PEPPER = 'pepper-with-at-least-thirty-two-characters'
 
     const capabilities = getFeatureCapabilities()
