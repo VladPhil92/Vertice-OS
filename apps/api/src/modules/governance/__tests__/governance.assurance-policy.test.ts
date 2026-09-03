@@ -74,7 +74,9 @@ function sqlText(value: unknown): string {
 }
 
 beforeEach(() => {
-  jest.resetAllMocks()
+  // Preserve async mock implementations declared above (notifications,
+  // reputation, pubsub, cache) while isolating call history between tests.
+  jest.clearAllMocks()
   mockTransaction.mockImplementation((cb: (tx: { $queryRaw: typeof mockQueryRaw }) => unknown) =>
     cb({ $queryRaw: mockQueryRaw }),
   )
