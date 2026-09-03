@@ -45,7 +45,7 @@ invalid_voting AS (
     )
 )
 UPDATE proposals p
-SET status = 'archived', updated_at = NOW()
+SET status = 'archived'
 FROM invalid_voting invalid
 WHERE p.id = invalid.id;
 
