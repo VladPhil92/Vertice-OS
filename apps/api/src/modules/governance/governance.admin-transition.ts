@@ -57,14 +57,20 @@ export async function adminAdvanceProposalSafely(
   }
 
   const proposal = normalizeProposal(rows[0])
-  if (!proposal.author_id) {
+  const isFrozenVoteFinalization = proposal.status === 'voting'
+
+  // Pre-vote stages still use the author as the lifecycle principal expected
+  // by the canonical proposal service. A vote that already opened no longer
+  // depends on the continued existence of the author account: its electorate,
+  // thresholds and window are frozen and can be finalized independently.
+  if (!isFrozenVoteFinalization && !proposal.author_id) {
     await recordAuditEvent({
       actorId,
       action: 'admin_advance_proposal',
       targetType: 'proposal',
       targetId: proposalId,
       result: 'rejected',
-      reason: 'proposal has no author; canonical lifecycle cannot be impersonated safely',
+      reason: 'proposal has no author; pre-vote canonical lifecycle cannot be impersonated safely',
       metadata: { from: proposal.status },
     })
     throw makeError(
@@ -74,11 +80,10 @@ export async function adminAdvanceProposalSafely(
     )
   }
 
+  const lifecyclePrincipal = proposal.author_id ?? actorId
+
   try {
-    // Use the proposal author only as the lifecycle principal expected by the
-    // canonical pre-vote service. The real administrative actor stays in audit.
-    // Expired votes are finalized from their frozen election contract.
-    const advanced = await advanceProposalStageSafely(proposalId, proposal.author_id, {})
+    const advanced = await advanceProposalStageSafely(proposalId, lifecyclePrincipal, {})
 
     await recordAuditEvent({
       actorId,
@@ -89,9 +94,9 @@ export async function adminAdvanceProposalSafely(
       metadata: {
         from: proposal.status,
         to: advanced.status,
-        lifecycle_principal: proposal.author_id,
+        lifecycle_principal: isFrozenVoteFinalization ? null : proposal.author_id,
         canonical_transition: true,
-        frozen_result_contract: proposal.status === 'voting',
+        frozen_result_contract: isFrozenVoteFinalization,
       },
     })
 
