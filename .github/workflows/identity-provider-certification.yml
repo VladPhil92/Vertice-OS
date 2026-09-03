@@ -1,0 +1,60 @@
+name: Identity Provider Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/identity/identity-provider-adapter.ts'
+      - 'apps/api/src/modules/identity/identity-provider-adapter-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-registry.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-adapter.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
+      - '.github/workflows/identity-provider-certification.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/identity/identity-provider-adapter.ts'
+      - 'apps/api/src/modules/identity/identity-provider-adapter-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-registry.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-adapter.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
+      - '.github/workflows/identity-provider-certification.yml'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  native-adapter-certification:
+    name: Native adapter certification contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @vertice/types build
+
+      - name: Typecheck API
+        run: pnpm --filter @vertice/api typecheck
+
+      - name: Execute provider boundary certification tests
+        env:
+          NODE_ENV: test
+        run: >-
+          pnpm --filter @vertice/api exec jest --runInBand
+          src/modules/identity/__tests__/identity-provider-adapter.test.ts
+          src/modules/identity/__tests__/identity-provider-registry.test.ts

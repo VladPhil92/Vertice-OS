@@ -1,6 +1,6 @@
 # Civic Identity Assurance — VÉRTICE OS
 
-> Estado P0 implementado · snapshot 2 de septiembre de 2026
+> Estado P0.5 · snapshot 3 de septiembre de 2026
 
 ## Objetivo
 
@@ -14,26 +14,91 @@ VÉRTICE separa tres conceptos que no pueden tratarse como equivalentes:
 
 ---
 
-## Contrato P0 actual
+## Estado de la frontera P0
 
-VÉRTICE reutiliza `external_identities` como punto de vinculación de proveedores externos y aplica una frontera de política adicional:
+### P0.1 — Assurance policy y padrón congelado
 
-- solo providers incluidos en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` cuentan como evidencia de assurance;
+- solo providers incluidos en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` pueden contar como evidencia de assurance;
 - la allowlist está vacía por defecto;
 - allowlist vacía significa **fail-closed** para construir el electorado protegido;
 - `ctg_one` federation no es un provider de assurance por defecto;
-- el ciudadano debe cumplir también las reglas de verificación/contacto exigidas por el proceso electoral;
-- `/identity/assurance` expone el estado real sin relabeling engañoso de email o cédula declarada como KYC.
+- `/identity/assurance` expone el estado real sin relabeling engañoso de email o cédula declarada como KYC;
+- al abrir votación se congela `proposal_voter_roll`, que se convierte en la autoridad de admisión durante la elección.
+
+### P0.2 — Lifecycle durable de proofing
+
+VÉRTICE persiste pruebas y eventos de identity proofing con estados normalizados:
+
+`pending → review → verified / rejected / expired / revoked`
+
+La referencia del proveedor queda ligada a un único ciudadano y los eventos son idempotentes por `provider + event_id`. Los identificadores externos no se exponen al frontend.
+
+### P0.3 — Auth del ingress normalizado
+
+`POST /identity/proofing/events` es un salto **interno server-to-server** para eventos que ya fueron verificados por un adapter de proveedor.
+
+El ingress exige:
+
+- firma HMAC versionada;
+- timestamp firmado con ventana limitada;
+- `key-id` firmado;
+- secreto aislado por provider y key-id;
+- canonicalización determinística del evento;
+- rotación sin secreto global compartido entre proveedores.
+
+Este contrato autentica el salto adapter → VÉRTICE. **No sustituye la firma nativa del proveedor KYC.**
+
+### P0.4 — Provider activation boundary
+
+Un nombre configurado en variables de entorno no puede crear autoridad cívica por sí solo. Un provider queda operacional únicamente si coinciden:
+
+1. allowlist de política;
+2. adapter compilado en el registry;
+3. keyset aislado del ingress interno;
+4. elegibilidad del adapter para el runtime actual.
+
+`trusted_kyc` es sintético y no puede activarse en producción.
+
+### P0.5 — Native Provider Adapter Certification Boundary
+
+P0.5 elimina la bandera declarativa `productionEligible`. La elegibilidad productiva ahora deriva de un **adapter nativo ejecutable** creado mediante el contrato de `identity-provider-adapter.ts`.
+
+Todo futuro adapter nativo debe proporcionar código ejecutable para:
+
+- verificar criptográficamente el webhook nativo sobre los **bytes crudos** recibidos;
+- devolver un `event_id` y `signed_at` autenticados por ese protocolo;
+- realizar un claim atómico de replay para `provider + event_id`;
+- normalizar únicamente después de verificar la autenticidad nativa.
+
+El wrapper común de VÉRTICE aplica además:
+
+- límite de tamaño del payload;
+- validación del timestamp de recepción;
+- ventana máxima de frescura;
+- rechazo explícito de replay;
+- validación contra `CivicProofingEventSchema`;
+- binding del provider normalizado al adapter compilado;
+- binding de `event_id` al identificador autenticado del webhook.
+
+Existe un harness de certificación adversarial reutilizable que exige que cada adapter futuro demuestre, con fixtures del protocolo del proveedor:
+
+1. aceptación y normalización exacta de un webhook válido;
+2. rechazo de payload manipulado;
+3. rechazo de webhook sin autenticación nativa;
+4. rechazo de webhook obsoleto;
+5. rechazo de replay.
+
+Los cambios a esta frontera disparan un workflow dedicado `Identity Provider Certification` además del CI general.
 
 ---
 
 ## Assurance y padrón electoral congelado
 
-El modelo actual protege la votación en dos momentos distintos:
+El modelo protege la votación en dos momentos distintos.
 
 ### 1. Apertura de votación
 
-Al pasar una propuesta a `voting`, VÉRTICE construye un `proposal_voter_roll` con los ciudadanos que satisfacen la política vigente de identidad cívica y alcance territorial.
+Al pasar una propuesta a `voting`, VÉRTICE construye `proposal_voter_roll` con ciudadanos que satisfacen la política vigente de identidad cívica y alcance territorial.
 
 Ese snapshot fija el universo electoral y, por tanto, el denominador de quórum.
 
@@ -43,11 +108,7 @@ Una vez congelado el padrón, la admisión de votos directos y participación de
 
 **No se vuelve a inferir elegibilidad desde una configuración mutable de providers en cada request.**
 
-Esto evita que:
-
-- una modificación de allowlist cambie retroactivamente el electorado de una votación abierta;
-- la revocación/configuración de un provider produzca quórums inconsistentes a mitad de proceso;
-- rutas HTTP distintas apliquen políticas divergentes.
+Esto evita que una modificación de allowlist cambie retroactivamente el electorado, que una revocación/configuración produzca quórums inconsistentes a mitad del proceso o que rutas distintas apliquen políticas divergentes.
 
 Si la propuesta está en votación y no existe padrón congelado, el sistema debe fallar cerrado.
 
@@ -61,26 +122,25 @@ CTG One puede autenticar y federar una cuenta, pero:
 CTG One SSO ≠ Civic Identity Assurance
 ```
 
-No se debe añadir `ctg_one` a la allowlist salvo que el operador haya auditado y certificado que el flujo concreto de CTG One realiza identity proofing suficiente para el piloto.
-
 Login, matching de email, wallet ownership, account age o reputación no sustituyen proofing de identidad.
 
 ---
 
 ## Regla de onboarding de providers
 
-Un provider solo puede añadirse a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` cuando la integración garantice que su evidencia externa se crea después de un resultado válido de identity proofing.
+Un provider productivo solo puede incorporarse cuando cumpla **todas** estas capas:
 
-Para el piloto de Cartagena deben evaluarse al menos:
+1. selección y evaluación del proveedor real;
+2. implementación del protocolo nativo de firma/webhook usando `raw_body`;
+3. normalización PII-minimized al contrato VÉRTICE;
+4. replay store compartido y atómico para producción;
+5. ejecución satisfactoria del harness P0.5 con fixtures oficiales o reproducibles;
+6. registro compilado del adapter nativo;
+7. allowlist de política;
+8. keyset del salto interno adapter → VÉRTICE;
+9. canary y evidencia de revocación/expiración en producción antes de usar el provider para gobernanza real.
 
-- documento oficial aplicable en Colombia;
-- anti-spoofing / liveness o control equivalente cuando corresponda;
-- resistencia a duplicidad de persona;
-- referencia de verificación auditable;
-- estados de revisión/revocación/expiración;
-- minimización y retención de datos;
-- cumplimiento de obligaciones colombianas de protección de datos;
-- disponibilidad operativa e incident response.
+Para un piloto en Colombia deben evaluarse además documento oficial aplicable, anti-spoofing/liveness cuando corresponda, duplicidad de persona, referencias auditables, minimización y retención de datos, obligaciones de protección de datos, disponibilidad e incident response.
 
 ---
 
@@ -96,21 +156,25 @@ La assurance no se hereda desde el delegado: la pertenencia al padrón ya repres
 
 ## Limitaciones actuales
 
-P0 establece la frontera de confianza y la usa para congelar el electorado, pero no implica identidad productiva completa.
+P0.5 deja preparada y fail-closed la frontera para integrar un proveedor real, pero **no activa por sí sola un KYC productivo**.
 
-Pendientes de evolución:
+Pendientes externos/siguiente evolución:
 
-1. integrar y certificar un provider productivo de identity proofing;
-2. persistir lifecycle de assurance (`verified/revoked/expired/review`) con semántica independiente de links de federación genéricos;
-3. definir política explícita de assurance para creación de propuestas, endorsements y otras acciones de alto impacto;
-4. añadir revisión administrativa, revocación, reconciliación y evidencia operacional;
-5. exponer onboarding accionable de assurance en el dashboard ciudadano;
-6. definir tratamiento de revocaciones posteriores al snapshot para futuras votaciones sin alterar retrospectivamente elecciones ya abiertas.
+1. seleccionar un proveedor de identity proofing adecuado al piloto;
+2. implementar su adapter nativo concreto y su endpoint de webhook sin perder el raw body;
+3. conectar `claim_replay` a un store compartido y atómico de producción;
+4. ejecutar los vectores de certificación con el protocolo/fixtures reales del proveedor;
+5. realizar canary de verified/revoked/expired y evidencia operacional antes de habilitarlo en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`;
+6. continuar mejorando onboarding y revisión administrativa en el dashboard ciudadano.
 
 ---
 
-## Invariante de seguridad
+## Invariantes de seguridad
 
 **Ningún código puede inferir civic identity assurance únicamente desde login, email, CTG One federation, cédula autodeclarada, firma de wallet, reputación o antigüedad de cuenta.**
+
+**Ninguna variable de entorno puede convertir por sí sola un provider en adapter productivo.**
+
+**Ningún adapter debe normalizar o confiar en un webhook antes de autenticar el payload nativo exacto recibido.**
 
 Para votaciones abiertas, **ningún código puede sustituir el padrón congelado por una reevaluación ad hoc de providers**.
