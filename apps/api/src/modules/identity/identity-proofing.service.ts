@@ -48,6 +48,16 @@ export interface CivicIdentityProof {
   updated_at: Date
 }
 
+type StoredProofingEvent = {
+  citizen_id: string
+  provider_reference: string
+  status: CivicProofingStatus
+  assurance_level: number
+  evidence_hash: string | null
+  occurred_at: Date
+  expires_at: Date | null
+}
+
 const MAX_FUTURE_EVENT_SKEW_MS = 5 * 60 * 1000
 const MAX_SIGNATURE_SKEW_MS = 5 * 60 * 1000
 
@@ -59,12 +69,6 @@ function normalizedProvider(provider: string): string {
   return provider.trim().toLowerCase()
 }
 
-/**
- * Stable JSON representation signed by the VÉRTICE provider adapter after it
- * has verified the third party's native webhook. Fixed property order plus
- * normalized ISO timestamps removes delimiter ambiguity from the P0.2 pipe-
- * joined representation.
- */
 export function canonicalizeProofingEvent(input: CivicProofingEventInput): string {
   const occurredAt = new Date(input.occurred_at)
   const expiresAt = input.expires_at ? new Date(input.expires_at) : null
@@ -150,6 +154,21 @@ export function verifyProofingEventSignature(
   }
 
   return { provider, keyId, signedAt, signatureVersion: 1 }
+}
+
+function isSameStoredEvent(
+  stored: StoredProofingEvent,
+  input: CivicProofingEventInput,
+  occurredAt: Date,
+  expiresAt: Date | null,
+): boolean {
+  return stored.citizen_id === input.citizen_id
+    && stored.provider_reference === input.provider_reference
+    && stored.status === input.status
+    && Number(stored.assurance_level) === input.assurance_level
+    && (stored.evidence_hash ?? null) === (input.evidence_hash ?? null)
+    && stored.occurred_at.getTime() === occurredAt.getTime()
+    && (stored.expires_at?.getTime() ?? null) === (expiresAt?.getTime() ?? null)
 }
 
 export async function getCivicIdentityProofs(citizenId: string): Promise<CivicIdentityProof[]> {
@@ -255,6 +274,25 @@ export async function ingestCivicProofingEvent(
     `)
 
     if (eventRows.length === 0) {
+      const storedEvents = await tx.$queryRaw<StoredProofingEvent[]>(Prisma.sql`
+        SELECT citizen_id, provider_reference, status, assurance_level,
+               evidence_hash, occurred_at, expires_at
+        FROM civic_identity_proof_events
+        WHERE provider = ${provider}
+          AND event_id = ${normalized.event_id}
+        LIMIT 1
+      `)
+      if (!storedEvents[0]) {
+        throw makeError('Evento duplicado sin receipt asociado', 409, 'PROOFING_EVENT_ORPHANED')
+      }
+      if (!isSameStoredEvent(storedEvents[0], normalized, occurredAt, expiresAt)) {
+        throw makeError(
+          'El event_id ya está vinculado a un evento de proofing diferente',
+          409,
+          'PROOFING_EVENT_ID_CONFLICT',
+        )
+      }
+
       const duplicateProof = await tx.$queryRaw<CivicIdentityProof[]>(Prisma.sql`
         SELECT id, citizen_id, provider, provider_reference, status,
                assurance_level, evidence_hash, verified_at, expires_at, revoked_at,
