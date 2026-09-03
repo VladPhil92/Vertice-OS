@@ -5,10 +5,16 @@ const mockTransaction = jest.fn((cb: (tx: { $queryRaw: typeof mockQueryRaw }) =>
   cb({ $queryRaw: mockQueryRaw }),
 )
 
+const KEY_ID = 'test-key'
+const PROVIDER_KEY_SECRET = 'test-proofing-provider-key-32-characters!!'
+
 jest.mock('../../../config', () => ({
   config: {
+    NODE_ENV: 'test',
     CIVIC_IDENTITY_ASSURANCE_PROVIDERS: ['trusted_kyc'],
-    CIVIC_IDENTITY_PROOFING_EVENT_SECRET: 'test-proofing-event-secret-32-chars!!',
+    CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: JSON.stringify({
+      trusted_kyc: { 'test-key': PROVIDER_KEY_SECRET },
+    }),
   },
 }))
 
@@ -21,7 +27,7 @@ jest.mock('../../../lib/prisma', () => ({
 
 import { config } from '../../../config'
 import {
-  canonicalizeProofingEvent,
+  canonicalizeProofingEnvelope,
   ingestCivicProofingEvent,
   type CivicProofingEventInput,
 } from '../identity-proofing.service'
@@ -30,19 +36,22 @@ const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
 const OTHER_CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440099'
 
 function signatureFor(event: CivicProofingEventInput): string {
-  return `sha256=${createHmac('sha256', config.CIVIC_IDENTITY_PROOFING_EVENT_SECRET!)
-    .update(canonicalizeProofingEvent(event))
+  return `sha256=${createHmac('sha256', PROVIDER_KEY_SECRET)
+    .update(canonicalizeProofingEnvelope(event, KEY_ID))
     .digest('hex')}`
 }
 
 beforeEach(() => {
   jest.resetAllMocks()
+  config.NODE_ENV = 'test'
   config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.splice(
     0,
     config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length,
     'trusted_kyc',
   )
-  config.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = 'test-proofing-event-secret-32-chars!!'
+  config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
+    trusted_kyc: { [KEY_ID]: PROVIDER_KEY_SECRET },
+  })
   mockTransaction.mockImplementation((cb: (tx: { $queryRaw: typeof mockQueryRaw }) => unknown) =>
     cb({ $queryRaw: mockQueryRaw }),
   )
@@ -62,7 +71,7 @@ describe('identity proofing adversarial guards', () => {
       expires_at: null,
     }
 
-    await expect(ingestCivicProofingEvent(event, signatureFor(event))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(event, signatureFor(event), KEY_ID)).rejects.toMatchObject({
       statusCode: 400,
       code: 'FUTURE_PROOFING_EVENT',
     })
@@ -105,7 +114,7 @@ describe('identity proofing adversarial guards', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([winningProof])
 
-    await expect(ingestCivicProofingEvent(event, signatureFor(event))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(event, signatureFor(event), KEY_ID)).rejects.toMatchObject({
       statusCode: 409,
       code: 'PROOFING_SUBJECT_CONFLICT',
     })
