@@ -70,8 +70,8 @@ function normalizeProposal(row: ProposalRow): Proposal {
  * The frozen electorate is derived from durable civic proofs only for providers
  * that are both explicitly trusted and operationally configured to receive
  * authenticated updates/revocations. Federation/account linkage cannot create
- * governance eligibility, and a trusted provider with a broken ingress channel
- * is excluded fail-closed until that channel is restored.
+ * governance eligibility. If no provider satisfies both conditions the vote
+ * does not open at all; this avoids freezing an artificial empty electorate.
  */
 async function freezeProofBackedVoterRoll(
   tx: Prisma.TransactionClient,
@@ -79,7 +79,13 @@ async function freezeProofBackedVoterRoll(
   proposal: Proposal,
 ): Promise<number> {
   const operationalProviders = getOperationalCivicIdentityProviders()
-  if (operationalProviders.length === 0) return 0
+  if (operationalProviders.length === 0) {
+    throw makeError(
+      'La infraestructura de identity assurance cívica no está operacional',
+      503,
+      'CIVIC_IDENTITY_ASSURANCE_UNAVAILABLE',
+    )
+  }
 
   const assuredIdentity = Prisma.sql`
     c.verification_level >= 2
@@ -154,7 +160,7 @@ function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quo
 /**
  * Canonical proposal lifecycle. P0.3 changed the debate→voting electorate
  * source; P0.4 additionally requires the proof provider ingress to be
- * operational before that provider can contribute citizens to the snapshot.
+ * operational before the vote can open.
  */
 export async function advanceProposalStage(
   proposalId: string,
