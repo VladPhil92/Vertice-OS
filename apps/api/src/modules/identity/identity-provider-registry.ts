@@ -1,11 +1,12 @@
 import { config } from '../../config'
+import {
+  defineSyntheticCivicIdentityProviderAdapter,
+  isProductionCivicIdentityProviderAdapter,
+  type CivicIdentityProviderAdapterRegistration,
+  type NativeCivicIdentityProviderAdapter,
+} from './identity-provider-adapter'
 
 export type CivicIdentityProviderActivationState = 'ready' | 'disabled' | 'misconfigured'
-
-interface CivicIdentityProviderAdapterRegistration {
-  provider: string
-  productionEligible: boolean
-}
 
 type ProviderKeyRegistry = Record<string, Record<string, string>>
 
@@ -14,15 +15,18 @@ const KEY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 const MIN_SECRET_LENGTH = 32
 
 /**
- * Compile-time trust boundary. Environment configuration may request a
- * provider but cannot create civic authority on its own. A real production
- * provider must have its native vendor verification adapter implemented and
- * audited before a productionEligible registration is added here.
+ * Compile-time trust boundary.
  *
- * `trusted_kyc` is synthetic and can never activate in production.
+ * P0.5 removes declarative `productionEligible` flags. A production provider
+ * must now be represented by a NativeCivicIdentityProviderAdapter created by
+ * the executable certification contract in identity-provider-adapter.ts.
+ * Environment variables can request policy and keys, but cannot manufacture
+ * a production-capable adapter.
+ *
+ * `trusted_kyc` remains a synthetic test-only provider.
  */
 const REGISTERED_ADAPTERS: readonly CivicIdentityProviderAdapterRegistration[] = [
-  { provider: 'trusted_kyc', productionEligible: false },
+  defineSyntheticCivicIdentityProviderAdapter('trusted_kyc'),
 ]
 
 function normalizeProvider(provider: string): string {
@@ -65,16 +69,32 @@ function parseKeyRegistry(): ProviderKeyRegistry {
   return registry
 }
 
+function runtimeRegisteredAdapters(): readonly CivicIdentityProviderAdapterRegistration[] {
+  if (config.NODE_ENV !== 'production') return REGISTERED_ADAPTERS
+  return REGISTERED_ADAPTERS.filter(isProductionCivicIdentityProviderAdapter)
+}
+
 function registeredProviderSet(): Set<string> {
-  return new Set(
-    REGISTERED_ADAPTERS
-      .filter((adapter) => config.NODE_ENV !== 'production' || adapter.productionEligible)
-      .map((adapter) => adapter.provider),
-  )
+  return new Set(runtimeRegisteredAdapters().map((adapter) => adapter.provider))
 }
 
 export function getRegisteredCivicIdentityProviders(): string[] {
   return [...registeredProviderSet()]
+}
+
+/**
+ * Returns only a compiled native adapter. This is intentionally distinct from
+ * the policy/key activation check: future provider webhook routes must obtain
+ * their verifier from this function rather than trust a provider name supplied
+ * by configuration or request data.
+ */
+export function getNativeCivicIdentityProviderAdapter(
+  providerInput: string,
+): NativeCivicIdentityProviderAdapter | null {
+  const provider = normalizeProvider(providerInput)
+  const registration = REGISTERED_ADAPTERS.find((adapter) => adapter.provider === provider)
+  if (!registration || !isProductionCivicIdentityProviderAdapter(registration)) return null
+  return registration
 }
 
 /**
