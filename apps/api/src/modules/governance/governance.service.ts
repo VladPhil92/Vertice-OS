@@ -2,8 +2,8 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { config } from '../../config'
 import { delCache } from '../../lib/cache'
+import { enqueueJob } from '../../lib/jobs'
 import { createNotification } from '../notifications/notifications.service'
-import * as legacy from './governance.service.legacy'
 import type { Proposal, ProposalRow, ProposalScope, ProposalStatus } from './governance.types'
 import type { AdvanceStageInput } from './governance.schema'
 
@@ -22,6 +22,8 @@ export {
   adminArchiveProposal,
   adminListProposals,
 } from './governance.service.legacy'
+
+const ENDORSEMENTS_REQUIRED = 10
 
 const QUORUM_CONFIG: Record<ProposalScope, {
   quorum: number
@@ -65,9 +67,9 @@ function normalizeProposal(row: ProposalRow): Proposal {
 /**
  * P0.3 voter-roll convergence.
  *
- * The frozen electorate is derived from the exact same durable proof ledger
- * used by /identity/assurance. ExternalIdentity remains federation/account
- * linkage only and can no longer create governance eligibility.
+ * The frozen electorate is derived from the durable civic proof ledger used
+ * by /identity/assurance. Federation/account linkage cannot create governance
+ * eligibility. No trusted provider configured means an empty electorate.
  */
 async function freezeProofBackedVoterRoll(
   tx: Prisma.TransactionClient,
@@ -126,10 +128,32 @@ async function freezeProofBackedVoterRoll(
   return inserted.length
 }
 
+function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quorum_failed' {
+  const cfg = QUORUM_CONFIG[proposal.scope]
+  const eligibleVoters = proposal.eligible_voters ?? 0
+
+  if (eligibleVoters === 0) return 'quorum_failed'
+
+  const participationRate = proposal.total_votes / eligibleVoters
+  if (participationRate < cfg.quorum) return 'quorum_failed'
+
+  const totalWeighted =
+    proposal.approve_votes_weighted +
+    proposal.reject_votes_weighted +
+    proposal.abstain_votes_weighted
+
+  const approvalRate = totalWeighted > 0
+    ? proposal.approve_votes_weighted / totalWeighted
+    : 0
+
+  return approvalRate >= cfg.approval ? 'approved' : 'rejected'
+}
+
 /**
- * Compatibility facade: all governance behavior except debate→voting is
- * delegated unchanged to the certified legacy implementation. The single
- * intercepted transition freezes the electorate from civic_identity_proofs.
+ * Canonical proposal lifecycle. P0.3 changes only the debate→voting electorate
+ * source while preserving the established query/transaction contract for all
+ * other stages, avoiding the extra preflight SELECT introduced by the former
+ * compatibility facade.
  */
 export async function advanceProposalStage(
   proposalId: string,
@@ -145,56 +169,141 @@ export async function advanceProposalStage(
   }
 
   const proposal = normalizeProposal(rows[0])
+  const isVotingFinalization = proposal.status === 'voting' &&
+    proposal.voting_ends_at !== null &&
+    new Date() >= proposal.voting_ends_at
 
-  if (proposal.status !== 'debate') {
-    return legacy.advanceProposalStage(proposalId, citizenId, options)
-  }
-
-  if (proposal.author_id !== citizenId) {
+  if (!isVotingFinalization && proposal.author_id !== citizenId) {
     throw makeError('Solo el autor puede avanzar la propuesta', 403, 'NOT_AUTHOR')
   }
 
-  const cfg = QUORUM_CONFIG[proposal.scope]
-  const durationHours = options.voting_duration_hours ?? cfg.defaultHours
-  const clampedHours = Math.max(cfg.minHours, Math.min(cfg.maxHours, durationHours))
-  const votingEndsAt = new Date(Date.now() + clampedHours * 3600 * 1000)
+  let updatedRows: ProposalRow[]
 
-  const updatedRows = await prisma.$transaction(async (tx) => {
-    const eligibleVoters = await freezeProofBackedVoterRoll(tx, proposalId, proposal)
-    return tx.$queryRaw<ProposalRow[]>(Prisma.sql`
-      UPDATE proposals
-      SET status = 'voting',
-          voting_starts_at = NOW(),
-          voting_ends_at = ${votingEndsAt},
-          quorum_required = ${cfg.quorum},
-          approval_threshold = ${cfg.approval},
-          eligible_voters = ${eligibleVoters}
-      WHERE id = ${proposalId}::uuid
-        AND status = 'debate'
-      RETURNING *
-    `)
-  })
-
-  if (updatedRows.length === 0) {
-    const current = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
-      SELECT * FROM proposals WHERE id = ${proposalId}::uuid
-    `)
-    if (current.length === 0) {
-      throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
+  switch (proposal.status) {
+    case 'idea': {
+      if (proposal.endorsement_count < ENDORSEMENTS_REQUIRED) {
+        throw makeError(
+          `Se requieren al menos ${ENDORSEMENTS_REQUIRED} avales para avanzar`,
+          400,
+          'INSUFFICIENT_ENDORSEMENTS',
+        )
+      }
+      updatedRows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+        UPDATE proposals SET status = 'draft', draft_started_at = NOW()
+        WHERE id = ${proposalId}::uuid RETURNING *
+      `)
+      break
     }
-    return normalizeProposal(current[0])
+
+    case 'draft': {
+      updatedRows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+        UPDATE proposals SET status = 'debate', debate_started_at = NOW()
+        WHERE id = ${proposalId}::uuid RETURNING *
+      `)
+      break
+    }
+
+    case 'debate': {
+      const cfg = QUORUM_CONFIG[proposal.scope]
+      const durationHours = options.voting_duration_hours ?? cfg.defaultHours
+      const clampedHours = Math.max(cfg.minHours, Math.min(cfg.maxHours, durationHours))
+      const votingEndsAt = new Date(Date.now() + clampedHours * 3600 * 1000)
+
+      updatedRows = await prisma.$transaction(async (tx) => {
+        const eligibleVoters = await freezeProofBackedVoterRoll(tx, proposalId, proposal)
+        return tx.$queryRaw<ProposalRow[]>(Prisma.sql`
+          UPDATE proposals
+          SET status = 'voting',
+              voting_starts_at = NOW(),
+              voting_ends_at = ${votingEndsAt},
+              quorum_required = ${cfg.quorum},
+              approval_threshold = ${cfg.approval},
+              eligible_voters = ${eligibleVoters}
+          WHERE id = ${proposalId}::uuid
+            AND status = 'debate'
+          RETURNING *
+        `)
+      })
+
+      if (updatedRows.length === 0) {
+        const current = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+          SELECT * FROM proposals WHERE id = ${proposalId}::uuid
+        `)
+        if (current.length === 0) {
+          throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
+        }
+        return normalizeProposal(current[0])
+      }
+      break
+    }
+
+    case 'voting': {
+      if (!isVotingFinalization) {
+        throw makeError('La votación aún está activa', 400, 'VOTING_STILL_ACTIVE')
+      }
+
+      const result = computeVotingResult(proposal)
+      const closed = await prisma.$transaction(async (tx) => {
+        const closedRows = await tx.$queryRaw<ProposalRow[]>(Prisma.sql`
+          UPDATE proposals
+          SET status = ${result}, decided_at = NOW()
+          WHERE id = ${proposalId}::uuid AND status = 'voting'
+          RETURNING *
+        `)
+        if (closedRows.length === 0) return null
+
+        await enqueueJob('record_voting_result', {
+          proposalId: proposal.id,
+          title: proposal.title,
+          description: proposal.description,
+          totalVotes: proposal.total_votes,
+          approveWeighted: proposal.approve_votes_weighted,
+          rejectWeighted: proposal.reject_votes_weighted,
+          abstainWeighted: proposal.abstain_votes_weighted,
+          result,
+          ipfsResultUri: proposal.ipfs_result_uri,
+        }, tx)
+
+        return closedRows
+      })
+
+      if (closed === null) {
+        const current = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
+          SELECT * FROM proposals WHERE id = ${proposalId}::uuid
+        `)
+        if (current.length === 0) {
+          throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
+        }
+        return normalizeProposal(current[0])
+      }
+
+      updatedRows = closed
+      break
+    }
+
+    default:
+      throw makeError(`Estado '${proposal.status}' no permite avance manual`, 400, 'TERMINAL_STATUS')
   }
 
   await delCache('proposal', proposalId)
   await delCache('stats', 'global')
 
   const advanced = normalizeProposal(updatedRows[0])
-  if (advanced.author_id) {
+  const STAGE_LABEL: Record<string, string> = {
+    draft: 'Borrador',
+    debate: 'En debate',
+    voting: 'En votación',
+    approved: 'Aprobada',
+    rejected: 'Rechazada',
+    quorum_failed: 'Sin quórum',
+  }
+
+  if (advanced.author_id && STAGE_LABEL[advanced.status]) {
     createNotification(
       advanced.author_id,
       'proposal_stage',
-      'Propuesta avanzó a: En votación',
-      `"${advanced.title}" cambió de etapa a En votación.`,
+      `Propuesta avanzó a: ${STAGE_LABEL[advanced.status]}`,
+      `"${advanced.title}" cambió de etapa a ${STAGE_LABEL[advanced.status]}.`,
       `/dashboard/governance/${advanced.id}`,
     ).catch(() => null)
   }
