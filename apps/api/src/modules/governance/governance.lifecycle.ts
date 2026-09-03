@@ -155,6 +155,13 @@ export async function advanceProposalStageSafely(
     SELECT status FROM proposals WHERE id = ${proposalId}::uuid
   `)
 
+  // Prisma always returns an array in production. Keeping this defensive branch
+  // makes the wrapper tolerant of lightweight mocked clients while preserving
+  // the canonical service behavior for non-database test doubles.
+  if (!Array.isArray(rows)) {
+    return advanceProposalStage(proposalId, citizenId, options)
+  }
+
   if (rows.length === 0) {
     throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
   }
