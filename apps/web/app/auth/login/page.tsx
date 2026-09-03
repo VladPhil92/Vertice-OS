@@ -39,9 +39,13 @@ export default function LoginPage() {
       // Cookie readable by Next.js Edge Middleware — used for server-side route protection.
       // Lifetime matches the refresh token (7 days); actual JWT validity enforced by the API.
       document.cookie = `vertice_auth=1; path=/; max-age=${7 * 24 * 3600}; SameSite=Strict`
-      // Redirect to the originally requested page, or the dashboard
-      const params = new URLSearchParams(window.location.search)
-      window.location.href = params.get('next') ?? '/dashboard'
+
+      // Never redirect from a user-controlled query parameter after login.
+      // The previous `?next=` flow assigned arbitrary input to window.location,
+      // allowing an attacker to turn the trusted login page into an open redirect.
+      // Authenticated navigation resumes from the dashboard; internal deep-link
+      // restoration can later be reintroduced with a server-owned allowlist.
+      window.location.assign('/dashboard')
     } catch (err) {
       setError(
         err instanceof Error && err.message === 'API_NOT_CONFIGURED'
@@ -108,7 +112,6 @@ export default function LoginPage() {
               <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#9AA6B5]">
                 o usa tu cuenta VÉRTICE
               </span>
-              <div className="h-px flex-1 bg-[#E1E7EF]" />
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
