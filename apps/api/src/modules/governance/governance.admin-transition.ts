@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { recordAuditEvent } from '../../lib/audit'
-import { advanceProposalStage } from './governance.service'
+import { advanceProposalStageSafely } from './governance.lifecycle'
 import type { Proposal, ProposalRow, ProposalStatus } from './governance.types'
 
 function makeError(message: string, statusCode: number, code: string): Error {
@@ -30,14 +30,10 @@ function normalizeProposal(row: ProposalRow): Proposal {
 }
 
 /**
- * Administrative lifecycle changes must reuse the same transition engine as a
- * citizen-authored proposal. Moderation authority may initiate the command, but
- * it cannot bypass endorsements, voter-roll freezing, quorum configuration or
- * voting-window finalization rules.
- *
- * The database migration for this phase independently enforces the two most
- * important invariants: entering `voting` requires a matching frozen roll and
- * leaving an active vote before voting_ends_at is rejected.
+ * Administrative lifecycle changes reuse the same canonical entrypoint as
+ * citizen-authored proposals. Moderation authority may initiate the command,
+ * but it cannot bypass endorsements, frozen voter-roll construction, frozen
+ * quorum/approval thresholds or voting-window finalization.
  */
 export async function adminAdvanceProposalSafely(
   proposalId: string,
@@ -61,14 +57,20 @@ export async function adminAdvanceProposalSafely(
   }
 
   const proposal = normalizeProposal(rows[0])
-  if (!proposal.author_id) {
+  const isFrozenVoteFinalization = proposal.status === 'voting'
+
+  // Pre-vote stages still use the author as the lifecycle principal expected
+  // by the canonical proposal service. A vote that already opened no longer
+  // depends on the continued existence of the author account: its electorate,
+  // thresholds and window are frozen and can be finalized independently.
+  if (!isFrozenVoteFinalization && !proposal.author_id) {
     await recordAuditEvent({
       actorId,
       action: 'admin_advance_proposal',
       targetType: 'proposal',
       targetId: proposalId,
       result: 'rejected',
-      reason: 'proposal has no author; canonical lifecycle cannot be impersonated safely',
+      reason: 'proposal has no author; pre-vote canonical lifecycle cannot be impersonated safely',
       metadata: { from: proposal.status },
     })
     throw makeError(
@@ -78,10 +80,10 @@ export async function adminAdvanceProposalSafely(
     )
   }
 
+  const lifecyclePrincipal = proposal.author_id ?? actorId
+
   try {
-    // Use the proposal author only as the lifecycle principal expected by the
-    // canonical service. The real administrative actor is preserved in audit.
-    const advanced = await advanceProposalStage(proposalId, proposal.author_id, {})
+    const advanced = await advanceProposalStageSafely(proposalId, lifecyclePrincipal, {})
 
     await recordAuditEvent({
       actorId,
@@ -92,8 +94,9 @@ export async function adminAdvanceProposalSafely(
       metadata: {
         from: proposal.status,
         to: advanced.status,
-        lifecycle_principal: proposal.author_id,
+        lifecycle_principal: isFrozenVoteFinalization ? null : proposal.author_id,
         canonical_transition: true,
+        frozen_result_contract: isFrozenVoteFinalization,
       },
     })
 
