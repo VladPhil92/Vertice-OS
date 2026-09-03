@@ -44,6 +44,25 @@ FROM citizens
 WHERE role IN ('moderator', 'admin', 'superadmin')
 ON CONFLICT (citizen_id, role) DO NOTHING;
 
+-- New local or federated citizens receive the baseline grant at creation time.
+-- This keeps account creation independent from privileged authorization code.
+CREATE OR REPLACE FUNCTION provision_citizen_role_grant()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO citizen_role_grants (citizen_id, role, source)
+  VALUES (NEW.id, 'citizen', 'account_creation')
+  ON CONFLICT (citizen_id, role) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS citizens_provision_role_grant ON citizens;
+CREATE TRIGGER citizens_provision_role_grant
+AFTER INSERT ON citizens
+FOR EACH ROW EXECUTE FUNCTION provision_citizen_role_grant();
+
 -- Existing sessions keep their prior effective role after the migration.
 UPDATE sessions s
 SET active_role = c.role
