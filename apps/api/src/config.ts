@@ -15,13 +15,12 @@ const schema = z.object({
   REDIS_URL: z.string().url(),
 
   JWT_SECRET: z.string().min(32),
-  JWT_ACCESS_EXPIRY_SECONDS: z.coerce.number().int().positive().default(900),       // 15 min
-  JWT_REFRESH_EXPIRY_SECONDS: z.coerce.number().int().positive().default(604800),   // 7 días
+  JWT_ACCESS_EXPIRY_SECONDS: z.coerce.number().int().positive().default(900),
+  JWT_REFRESH_EXPIRY_SECONDS: z.coerce.number().int().positive().default(604800),
 
   // Claves separadas de JWT_SECRET a propósito — un dominio criptográfico por
-  // uso, para que rotar JWT_SECRET (p.ej. tras un incidente de sesión) no
-  // invalide silenciosamente el historial de nulificadores de voto ni la
-  // protección de las cédulas ya almacenadas.
+  // uso, para que rotar JWT_SECRET no invalide silenciosamente nulificadores
+  // de voto ni la protección de identidades ya almacenadas.
   VOTE_NULLIFIER_SECRET: z.string().min(32).optional(),
   IDENTITY_PEPPER:       z.string().min(32).optional(),
 
@@ -43,11 +42,7 @@ const schema = z.object({
   CTG_ONE_FEDERATION_SECRET: z.string().min(32).optional(),
 
   // Proveedores que VÉRTICE acepta como prueba externa de identidad para
-  // acciones de gobernanza de alto impacto. Es una allowlist explícita:
-  // federación/SSO (por ejemplo el provider persistido `ctg_one`) NO equivale
-  // a identidad asegurada salvo que el operador lo incluya conscientemente
-  // después de auditar su proceso real de identity proofing.
-  // Formato: "provider_a,provider_b". Vacío = fail-closed para identidad cívica.
+  // acciones de gobernanza de alto impacto. Vacío = fail-closed.
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: z.string().default('').transform((value) =>
     Array.from(new Set(
       value
@@ -57,16 +52,13 @@ const schema = z.object({
     )),
   ),
 
-  // ── Blockchain (Polygon) — opcionales: si no están, el minting se omite ──
-  POLYGON_RPC_URL:        z.string().url().optional(),
-  POLYGON_PRIVATE_KEY:    z.string().optional(),
-  CIVIC_SBT_ADDRESS:      z.string().optional(),
-  VOTING_REGISTRY_ADDRESS: z.string().optional(),
-  // Secreto usado para derivar el compromiso del DID que se escribe on-chain.
-  // Es permanente por despliegue: rotarlo rompe la correspondencia con los
-  // badges ya emitidos.
-  DID_COMMITMENT_PEPPER:  z.string().min(32).optional(),
-  IPFS_GATEWAY:           z.string().url().default('https://ipfs.io/ipfs'),
+  // ── Blockchain (Polygon) — capacidades opcionales ─────────────────
+  POLYGON_RPC_URL:          z.string().url().optional(),
+  POLYGON_PRIVATE_KEY:      z.string().optional(),
+  CIVIC_SBT_ADDRESS:        z.string().optional(),
+  VOTING_REGISTRY_ADDRESS:  z.string().optional(),
+  DID_COMMITMENT_PEPPER:    z.string().min(32).optional(),
+  IPFS_GATEWAY:             z.string().url().default('https://ipfs.io/ipfs'),
 })
 
 const parsed = schema.safeParse(process.env)
@@ -85,42 +77,34 @@ if (!parsed.success) {
   process.exit(1)
 }
 
-// Feature-scoped secrets do not decide whether the entire API can boot.
-// In production their consumers fail closed with 503 (see feature-secrets.ts)
-// instead of silently falling back to JWT_SECRET or taking unrelated modules
-// offline. This keeps the platform available while preserving crypto-domain
-// separation and makes missing feature configuration visible at the exact
-// capability boundary that needs it.
+// Feature-scoped configuration never decides whether the entire API can boot.
+// Missing/partial optional capabilities fail closed at their feature boundary
+// and are exposed as non-secret diagnostics from /health/ready.
 if (parsed.data.NODE_ENV === 'production') {
   const degraded: string[] = []
   if (!parsed.data.AI_SERVICE_SECRET)      degraded.push('AI_SERVICE_SECRET → civic AI disabled')
   if (!parsed.data.VOTE_NULLIFIER_SECRET) degraded.push('VOTE_NULLIFIER_SECRET → voting disabled')
   if (!parsed.data.IDENTITY_PEPPER)       degraded.push('IDENTITY_PEPPER → document identity disabled')
 
+  if (parsed.data.CIVIC_SBT_ADDRESS) {
+    if (!parsed.data.POLYGON_RPC_URL)       degraded.push('POLYGON_RPC_URL → CivicSBT misconfigured')
+    if (!parsed.data.POLYGON_PRIVATE_KEY)   degraded.push('POLYGON_PRIVATE_KEY → CivicSBT misconfigured')
+    if (!parsed.data.DID_COMMITMENT_PEPPER) degraded.push('DID_COMMITMENT_PEPPER → CivicSBT misconfigured')
+  }
+
+  if (parsed.data.VOTING_REGISTRY_ADDRESS) {
+    if (!parsed.data.POLYGON_RPC_URL)      degraded.push('POLYGON_RPC_URL → VotingRegistry misconfigured')
+    if (!parsed.data.POLYGON_PRIVATE_KEY)  degraded.push('POLYGON_PRIVATE_KEY → VotingRegistry misconfigured')
+  }
+
   if (degraded.length > 0) {
     process.stdout.write(
       '[config] WARNING: API booting with degraded feature capabilities.\n' +
       degraded.map((item) => `  - ${item}`).join('\n') + '\n' +
-      'Affected endpoints fail closed with HTTP 503; no feature secret falls back to JWT_SECRET in production.\n' +
+      'Affected features fail closed when invoked; core API readiness remains governed by PostgreSQL and Redis.\n' +
       'Set the missing value(s) in Railway Variables and redeploy to restore full capability.\n',
     )
   }
-}
-
-// El compromiso del DID es lo único que se escribe on-chain en lugar del DID
-// en claro. Si blockchain está explícitamente configurada pero falta el pepper,
-// esa configuración es internamente inválida y debe impedir el arranque.
-if (parsed.data.CIVIC_SBT_ADDRESS && !parsed.data.DID_COMMITMENT_PEPPER) {
-  process.stdout.write(
-    '[config] FATAL: DID_COMMITMENT_PEPPER is missing. The process will exit now.\n' +
-    'Requirement: DID_COMMITMENT_PEPPER must be a string of at least 32 characters ' +
-    'whenever CIVIC_SBT_ADDRESS is configured.\n' +
-    `Current value: CIVIC_SBT_ADDRESS=${parsed.data.CIVIC_SBT_ADDRESS}, ` +
-    'DID_COMMITMENT_PEPPER=unset.\n' +
-    'Without it, the DID commitment written on-chain cannot be derived.\n' +
-    'Fix: set DID_COMMITMENT_PEPPER in the Railway service Variables tab and redeploy.\n',
-  )
-  process.exit(1)
 }
 
 export const config = parsed.data
