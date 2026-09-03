@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
-import { config } from '../../config'
 import { delCache } from '../../lib/cache'
 import { enqueueJob } from '../../lib/jobs'
+import { getActivatedCivicIdentityProviders } from '../identity/identity-provider-registry'
 import { createNotification } from '../notifications/notifications.service'
 import type { Proposal, ProposalRow, ProposalScope, ProposalStatus } from './governance.types'
 import type { AdvanceStageInput } from './governance.schema'
@@ -65,18 +65,17 @@ function normalizeProposal(row: ProposalRow): Proposal {
 }
 
 /**
- * P0.3 voter-roll convergence.
- *
- * The frozen electorate is derived from the durable civic proof ledger used
- * by /identity/assurance. Federation/account linkage cannot create governance
- * eligibility. No trusted provider configured means an empty electorate.
+ * Frozen electoral roll sourced from the proof ledger. P0.4 adds a second
+ * activation boundary: a provider must be configured AND backed by a compiled
+ * provider-adapter registration. Environment configuration alone can never
+ * make an arbitrary identity source authoritative for voting.
  */
 async function freezeProofBackedVoterRoll(
   tx: Prisma.TransactionClient,
   proposalId: string,
   proposal: Proposal,
 ): Promise<number> {
-  const trustedProviders = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
+  const trustedProviders = getActivatedCivicIdentityProviders()
   if (trustedProviders.length === 0) return 0
 
   const assuredIdentity = Prisma.sql`
@@ -149,12 +148,6 @@ function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quo
   return approvalRate >= cfg.approval ? 'approved' : 'rejected'
 }
 
-/**
- * Canonical proposal lifecycle. P0.3 changes only the debate→voting electorate
- * source while preserving the established query/transaction contract for all
- * other stages, avoiding the extra preflight SELECT introduced by the former
- * compatibility facade.
- */
 export async function advanceProposalStage(
   proposalId: string,
   citizenId: string,
