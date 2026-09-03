@@ -84,12 +84,15 @@ describe('deriveDIDCommitment', () => {
     mutableConfig.DID_COMMITMENT_PEPPER = undefined
 
     try {
-      expect(() => deriveDIDCommitment(DID)).toThrow(
-        expect.objectContaining({
+      try {
+        deriveDIDCommitment(DID)
+        throw new Error('Expected BLOCKCHAIN_CRYPTO_UNAVAILABLE')
+      } catch (error) {
+        expect(error).toMatchObject({
           statusCode: 503,
           code: 'BLOCKCHAIN_CRYPTO_UNAVAILABLE',
-        }),
-      )
+        })
+      }
     } finally {
       mutableConfig.DID_COMMITMENT_PEPPER = original
     }
