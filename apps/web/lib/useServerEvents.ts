@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
+import { BASE_URL } from '@/lib/api'
 
 export interface RealtimeEvent {
   channel: 'territorial' | 'governance' | 'system'
@@ -10,8 +11,6 @@ export interface RealtimeEvent {
 }
 
 type EventHandler = (event: RealtimeEvent) => void
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 export function useServerEvents(
   channels: ('territorial' | 'governance' | 'system')[],
@@ -27,7 +26,7 @@ export function useServerEvents(
   const connect = useCallback(() => {
     if (unmounted.current) return
 
-    const url = `${API_URL}/events?channels=${channels.join(',')}`
+    const url = `${BASE_URL}/events?channels=${channels.join(',')}`
     const es = new EventSource(url, { withCredentials: true })
     esRef.current = es
 
