@@ -141,27 +141,40 @@ function computeVoteWeight(_reputationScore: number): number {
  * (proposals.eligible_voters), pudiendo desincronizarse si algo fallaba entre
  * medias.
  *
- * Ahora el conteo ES el número de filas insertadas en proposal_voter_roll —
- * misma consulta, mismo resultado, sin forma de que diverjan. Antes se conta-
- * ba SIEMPRE a todos los ciudadanos verificados de la ciudad sin importar el
- * scope; para neighborhood/locality el electorado ya se filtra al territorio
- * real de la propuesta.
+ * P0 Identity Assurance: el padrón y su denominador de quórum deben usar la
+ * misma política de admisión que el endpoint de voto. Solo entran ciudadanos
+ * con contacto verificado (nivel >= 2) y una ExternalIdentity emitida por un
+ * proveedor explícitamente autorizado. Si no hay proveedores configurados,
+ * el padrón queda vacío: fail-closed.
  */
 async function freezeVoterRoll(
   tx: Prisma.TransactionClient,
   proposalId: string,
   proposal: Proposal,
 ): Promise<number> {
+  const trustedProviders = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
+  if (trustedProviders.length === 0) return 0
+
+  const assuredIdentity = Prisma.sql`
+    c.verification_level >= 2
+    AND EXISTS (
+      SELECT 1
+      FROM external_identities ei
+      WHERE ei.citizen_id = c.id
+        AND ei.provider IN (${Prisma.join(trustedProviders)})
+    )
+  `
+
   let whereClause: Prisma.Sql
   let reason: string
 
   switch (proposal.scope) {
     case 'neighborhood':
-      whereClause = Prisma.sql`WHERE verification_level >= 1 AND neighborhood = ${proposal.neighborhood}`
+      whereClause = Prisma.sql`WHERE ${assuredIdentity} AND c.neighborhood = ${proposal.neighborhood}`
       reason = 'neighborhood_match'
       break
     case 'locality':
-      whereClause = Prisma.sql`WHERE verification_level >= 1 AND locality_id = ${proposal.locality_id}`
+      whereClause = Prisma.sql`WHERE ${assuredIdentity} AND c.locality_id = ${proposal.locality_id}`
       reason = 'locality_match'
       break
     // city/regional/national: no hay modelo de multi-ciudad todavía, así que
@@ -170,15 +183,15 @@ async function freezeVoterRoll(
     case 'regional':
     case 'national':
     default:
-      whereClause = Prisma.sql`WHERE verification_level >= 1`
+      whereClause = Prisma.sql`WHERE ${assuredIdentity}`
       reason = 'citywide'
   }
 
   const inserted = await tx.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
     INSERT INTO proposal_voter_roll
       (proposal_id, citizen_id, neighborhood, locality_id, verification_level, eligibility_reason)
-    SELECT ${proposalId}::uuid, id, neighborhood, locality_id, verification_level, ${reason}
-    FROM citizens
+    SELECT ${proposalId}::uuid, c.id, c.neighborhood, c.locality_id, c.verification_level, ${reason}
+    FROM citizens c
     ${whereClause}
     ON CONFLICT (proposal_id, citizen_id) DO NOTHING
     RETURNING citizen_id
@@ -557,7 +570,7 @@ export async function castVote(
   voteValue: -1 | 0 | 1,
 ): Promise<VoteReceipt> {
   const rows = await prisma.$queryRaw<ProposalRow[]>(Prisma.sql`
-    SELECT id, status, voting_ends_at FROM proposals WHERE id = ${proposalId}::uuid
+    SELECT id, status, category, voting_ends_at FROM proposals WHERE id = ${proposalId}::uuid
   `)
 
   if (rows.length === 0) throw makeError('Propuesta no encontrada', 404, 'PROPOSAL_NOT_FOUND')
@@ -574,19 +587,36 @@ export async function castVote(
 
   const nullifier = voteNullifier(citizenId, proposalId)
 
-  // Get citizen reputation and check for double vote in one query
+  // El padrón congelado es la autoridad de admisión durante toda la ventana
+  // de votación. La assurance se evaluó al construir ese snapshot; volver a
+  // evaluar providers aquí permitiría que un cambio de configuración altere
+  // el electorado sin actualizar el denominador de quórum.
   const checkRows = await prisma.$queryRaw<Array<{
     already_voted: bigint | number
     reputation_score: string | number
+    eligible?: boolean
   }>>(Prisma.sql`
     SELECT
       (SELECT COUNT(*) FROM votes WHERE nullifier_hash = ${nullifier})::int AS already_voted,
-      c.reputation_score
+      c.reputation_score,
+      EXISTS(
+        SELECT 1
+        FROM proposal_voter_roll pvr
+        WHERE pvr.proposal_id = ${proposalId}::uuid
+          AND pvr.citizen_id = c.id
+      ) AS eligible
     FROM citizens c
     WHERE c.id = ${citizenId}::uuid
   `)
 
   if (checkRows.length === 0) throw makeError('Ciudadano no encontrado', 404, 'CITIZEN_NOT_FOUND')
+
+  // `eligible` is optional only for compatibility with older unit fixtures;
+  // production SQL above always returns a boolean. Explicit false is a hard
+  // denial and cannot be bypassed by current assurance/provider state.
+  if (checkRows[0].eligible === false) {
+    throw makeError('No perteneces al padrón electoral de esta propuesta', 403, 'NOT_ELIGIBLE_VOTER')
+  }
 
   if (Number(checkRows[0].already_voted) > 0) {
     throw makeError('Ya has votado en esta propuesta', 409, 'ALREADY_VOTED')
@@ -607,14 +637,10 @@ export async function castVote(
   }
 
   // ── Liquid democracy: aggregate delegated weight ───────────────────────────
-  // Find delegators who trust this citizen (general or domain delegation).
-  // El nullifier de cada delegador se calcula con voteNullifier() (la misma
-  // función usada en todo el módulo) y NO se recalcula en SQL crudo: antes
-  // este bloque tenía su propia expresión `hmac(..., JWT_SECRET, 'sha256')`
-  // duplicada e inconsistente con voteNullifier(), que además seguía
-  // apuntando a JWT_SECRET incluso después de introducir
-  // VOTE_NULLIFIER_SECRET como clave dedicada — habría quedado
-  // silenciosamente desincronizada.
+  // El mismo padrón congelado gobierna la delegación: solo puede aportar peso
+  // quien pertenecía al electorado de ESTA propuesta cuando abrió la votación.
+  // Esto preserva tanto el ámbito territorial como la assurance que quedó
+  // congelada en el snapshot, aunque la allowlist cambie después.
   const delegatorRows = await prisma.$queryRaw<Array<{
     delegator_id: string
     reputation_score: string
@@ -622,9 +648,18 @@ export async function castVote(
     SELECT d.delegator_id, c.reputation_score
     FROM delegations d
     JOIN citizens c ON c.id = d.delegator_id
-    WHERE d.delegate_id   = ${citizenId}::uuid
-      AND d.is_active     = true
-      AND d.delegation_type IN ('general', 'domain')
+    INNER JOIN proposal_voter_roll pvr
+      ON pvr.citizen_id = d.delegator_id
+     AND pvr.proposal_id = ${proposalId}::uuid
+    WHERE d.delegate_id = ${citizenId}::uuid
+      AND d.is_active = true
+      AND d.valid_from <= NOW()
+      AND (d.valid_until IS NULL OR d.valid_until > NOW())
+      AND (
+        d.delegation_type = 'general'
+        OR (d.delegation_type = 'domain' AND d.domain = ${proposal.category})
+        OR (d.delegation_type = 'proposal' AND d.proposal_id = ${proposalId}::uuid)
+      )
   `)
 
   const delegatorNullifiers = delegatorRows.map(d => voteNullifier(d.delegator_id, proposalId))

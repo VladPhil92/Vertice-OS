@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
 import { requireVerified, requireModerator } from '../../middleware/auth'
 import { prisma } from '../../lib/prisma'
@@ -94,10 +95,15 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
 
-    // El padrón se congela cuando la propuesta entra en votación. La ruta de
-    // voto debe respetar ese snapshot: estar verificado no equivale por sí
-    // solo a pertenecer al electorado territorial de esta propuesta.
-    const eligibility = await prisma.$queryRaw<Array<{ roll_exists: boolean; eligible: boolean }>>`
+    // El padrón se congela al abrir la votación y es la autoridad de
+    // elegibilidad durante toda esa ventana. La assurance vigente se usa para
+    // CONSTRUIR nuevos padrones y para onboarding, pero un cambio posterior de
+    // providers no puede modificar retroactivamente un electorado ni su
+    // denominador de quórum.
+    const eligibility = await prisma.$queryRaw<Array<{
+      roll_exists: boolean
+      eligible: boolean
+    }>>(Prisma.sql`
       SELECT
         EXISTS(
           SELECT 1 FROM proposal_voter_roll WHERE proposal_id = ${id}::uuid
@@ -108,7 +114,7 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
           WHERE proposal_id = ${id}::uuid
             AND citizen_id = ${request.citizen.sub}::uuid
         ) AS eligible
-    `
+    `)
 
     if (!eligibility[0]?.roll_exists) {
       return reply.status(409).send({

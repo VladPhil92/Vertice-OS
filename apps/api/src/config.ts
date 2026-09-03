@@ -42,6 +42,21 @@ const schema = z.object({
   CTG_ONE_FEDERATION_EXCHANGE_URL: z.string().url().default('https://ctgone.com/api/federation/vertice/exchange'),
   CTG_ONE_FEDERATION_SECRET: z.string().min(32).optional(),
 
+  // Proveedores que VÉRTICE acepta como prueba externa de identidad para
+  // acciones de gobernanza de alto impacto. Es una allowlist explícita:
+  // federación/SSO (por ejemplo el provider persistido `ctg_one`) NO equivale
+  // a identidad asegurada salvo que el operador lo incluya conscientemente
+  // después de auditar su proceso real de identity proofing.
+  // Formato: "provider_a,provider_b". Vacío = fail-closed para identidad cívica.
+  CIVIC_IDENTITY_ASSURANCE_PROVIDERS: z.string().default('').transform((value) =>
+    Array.from(new Set(
+      value
+        .split(',')
+        .map((provider) => provider.trim().toLowerCase())
+        .filter(Boolean),
+    )),
+  ),
+
   // ── Blockchain (Polygon) — opcionales: si no están, el minting se omite ──
   POLYGON_RPC_URL:        z.string().url().optional(),
   POLYGON_PRIVATE_KEY:    z.string().optional(),
