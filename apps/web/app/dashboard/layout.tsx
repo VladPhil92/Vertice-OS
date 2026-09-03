@@ -26,6 +26,7 @@ import { LiveToast, useToasts } from '@/components/ui/LiveToast'
 import { NotificationBell } from '@/components/ui/NotificationBell'
 import { PwaRegister } from '@/components/pwa/PwaRegister'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+import { RoleSwitcher } from '@/components/auth/RoleSwitcher'
 
 const NAV_ITEMS = [
   { href: '/dashboard',            label: 'Inicio',          icon: LayoutDashboard, exact: true,  adminOnly: false },
@@ -123,7 +124,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
-        {NAV_ITEMS.filter(item => !item.adminOnly || ['moderator', 'admin'].includes(role)).map(({ href, label, icon: Icon, exact }) => {
+        {NAV_ITEMS.filter(item => !item.adminOnly || ['moderator', 'admin', 'superadmin'].includes(role)).map(({ href, label, icon: Icon, exact }) => {
           const active = isActive(href, exact)
           return (
             <Link
@@ -152,23 +153,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         })}
       </nav>
 
-      <div className="border-t border-[#E1E7EF] p-3">
-        <div className="mb-3 rounded-2xl bg-[#0A2A66] p-4 text-white">
-          <div className="text-[9px] font-bold uppercase tracking-[.14em] text-[#B6CBEC]">Principio VÉRTICE</div>
-          <div className="mt-2 text-sm font-extrabold leading-5">La ciudadanía es el vértice del cambio.</div>
-          <div className="mt-3 flex gap-1">
-            <span className="h-1 w-7 rounded-full bg-[#F5B700]" />
-            <span className="h-1 w-7 rounded-full bg-white" />
-            <span className="h-1 w-7 rounded-full bg-[#D72638]" />
+      <div className="border-t border-[#E1E7EF] pt-3">
+        <RoleSwitcher onRoleChange={setRole} />
+        <div className="px-3 pb-3">
+          <div className="mb-3 rounded-2xl bg-[#0A2A66] p-4 text-white">
+            <div className="text-[9px] font-bold uppercase tracking-[.14em] text-[#B6CBEC]">Principio VÉRTICE</div>
+            <div className="mt-2 text-sm font-extrabold leading-5">La ciudadanía es el vértice del cambio.</div>
+            <div className="mt-3 flex gap-1">
+              <span className="h-1 w-7 rounded-full bg-[#F5B700]" />
+              <span className="h-1 w-7 rounded-full bg-white" />
+              <span className="h-1 w-7 rounded-full bg-[#D72638]" />
+            </div>
           </div>
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold text-[#7B8799] transition hover:bg-[#FCEBED] hover:text-[#D72638]"
+          >
+            <LogOut size={15} />
+            Cerrar sesión
+          </button>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold text-[#7B8799] transition hover:bg-[#FCEBED] hover:text-[#D72638]"
-        >
-          <LogOut size={15} />
-          Cerrar sesión
-        </button>
       </div>
     </aside>
   )

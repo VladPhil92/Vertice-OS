@@ -1,13 +1,14 @@
 import crypto from 'crypto'
 import { config } from '../config'
 
-export type CitizenRole = 'citizen' | 'moderator' | 'admin'
+export type CitizenRole = 'citizen' | 'moderator' | 'admin' | 'superadmin'
 
 export interface AccessTokenPayload {
   sub: string           // citizen UUID
   did: string
   lvl: number           // verificationLevel
-  role: CitizenRole
+  role: CitizenRole     // active role for this session
+  sid?: string          // session UUID; absent only on legacy tokens issued before role switching
   iat?: number
   exp?: number
 }

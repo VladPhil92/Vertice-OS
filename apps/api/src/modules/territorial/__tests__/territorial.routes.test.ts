@@ -5,7 +5,7 @@ jest.mock('../../../lib/redis', () => ({
 jest.mock('../../../lib/prisma', () => ({
   prisma: {
     citizen: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), update: jest.fn() },
-    $queryRaw: jest.fn().mockResolvedValue([]),
+    $queryRaw: jest.fn().mockResolvedValue([{ ok: 1 }]),
     $queryRawUnsafe: jest.fn().mockResolvedValue([]),
   },
 }))
@@ -41,7 +41,7 @@ beforeAll(async () => {
   moderatorToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'moderator' })
 })
 afterAll(() => app.close())
-beforeEach(() => jest.resetAllMocks())
+beforeEach(() => jest.clearAllMocks())
 
 const MOCK_REPORT = {
   id: 'rep-uuid',
