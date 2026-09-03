@@ -1,3 +1,5 @@
+const mockGetActiveProof = jest.fn()
+
 jest.mock('../../../config', () => ({
   config: {
     CIVIC_IDENTITY_ASSURANCE_PROVIDERS: ['trusted_kyc'],
@@ -7,8 +9,11 @@ jest.mock('../../../config', () => ({
 jest.mock('../../../lib/prisma', () => ({
   prisma: {
     citizen: { findUnique: jest.fn() },
-    externalIdentity: { findFirst: jest.fn() },
   },
+}))
+
+jest.mock('../identity-proofing.service', () => ({
+  getActiveCivicIdentityProof: mockGetActiveProof,
 }))
 
 import { config } from '../../../config'
@@ -39,55 +44,51 @@ describe('getCivicIdentityAssurance', () => {
     expect(status.assured).toBe(false)
     expect(status.governance_eligible).toBe(false)
     expect(status.requirements.contact_verified).toBe(true)
-    expect(status.requirements.trusted_identity_provider_linked).toBe(false)
-    expect(prisma.externalIdentity.findFirst).not.toHaveBeenCalled()
+    expect(status.requirements.active_identity_proof).toBe(false)
+    expect(mockGetActiveProof).not.toHaveBeenCalled()
   })
 
-  it('does not treat a trusted provider as sufficient without verified contact', async () => {
+  it('does not treat a verified proof as sufficient without verified contact', async () => {
     ;(prisma.citizen.findUnique as jest.Mock).mockResolvedValueOnce({
       id: CITIZEN_ID,
       verificationLevel: 1,
     })
-    ;(prisma.externalIdentity.findFirst as jest.Mock).mockResolvedValueOnce({
+    mockGetActiveProof.mockResolvedValueOnce({
       provider: 'trusted_kyc',
-      createdAt: new Date('2026-09-02T20:00:00.000Z'),
+      verified_at: new Date('2026-09-02T20:00:00.000Z'),
+      expires_at: null,
     })
 
     const status = await getCivicIdentityAssurance(CITIZEN_ID)
 
     expect(status.assured).toBe(false)
     expect(status.requirements.contact_verified).toBe(false)
-    expect(status.requirements.trusted_identity_provider_linked).toBe(true)
+    expect(status.requirements.active_identity_proof).toBe(true)
   })
 
-  it('does not promote ordinary federation to civic identity assurance', async () => {
+  it('does not promote an account link when there is no active proof', async () => {
     ;(prisma.citizen.findUnique as jest.Mock).mockResolvedValueOnce({
       id: CITIZEN_ID,
       verificationLevel: 2,
     })
-    ;(prisma.externalIdentity.findFirst as jest.Mock).mockResolvedValueOnce(null)
+    mockGetActiveProof.mockResolvedValueOnce(null)
 
     const status = await getCivicIdentityAssurance(CITIZEN_ID)
 
     expect(status.assured).toBe(false)
-    expect(prisma.externalIdentity.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          citizenId: CITIZEN_ID,
-          provider: { in: ['trusted_kyc'] },
-        }),
-      }),
-    )
+    expect(status.provider).toBeNull()
+    expect(status.requirements.active_identity_proof).toBe(false)
   })
 
-  it('marks a contact-verified citizen with a trusted provider as governance eligible', async () => {
+  it('marks a contact-verified citizen with an active trusted proof as governance eligible', async () => {
     ;(prisma.citizen.findUnique as jest.Mock).mockResolvedValueOnce({
       id: CITIZEN_ID,
       verificationLevel: 2,
     })
-    ;(prisma.externalIdentity.findFirst as jest.Mock).mockResolvedValueOnce({
+    mockGetActiveProof.mockResolvedValueOnce({
       provider: 'trusted_kyc',
-      createdAt: new Date('2026-09-02T20:00:00.000Z'),
+      verified_at: new Date('2026-09-02T20:00:00.000Z'),
+      expires_at: new Date('2027-09-02T20:00:00.000Z'),
     })
 
     const status = await getCivicIdentityAssurance(CITIZEN_ID)
@@ -99,10 +100,11 @@ describe('getCivicIdentityAssurance', () => {
       governance_eligible: true,
       verification_level: 2,
       provider: 'trusted_kyc',
-      provider_linked_at: '2026-09-02T20:00:00.000Z',
+      provider_verified_at: '2026-09-02T20:00:00.000Z',
+      provider_expires_at: '2027-09-02T20:00:00.000Z',
       requirements: {
         contact_verified: true,
-        trusted_identity_provider_linked: true,
+        active_identity_proof: true,
       },
     })
   })

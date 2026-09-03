@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireVerified } from '../../middleware/auth'
-import { ConfirmCedulaSchema, ConfirmEmailTokenSchema, UpdateProfileSchema, ConnectWalletSchema } from './identity.schema'
+import {
+  ConfirmCedulaSchema,
+  ConfirmEmailTokenSchema,
+  UpdateProfileSchema,
+  ConnectWalletSchema,
+  CivicProofingEventSchema,
+} from './identity.schema'
 import { z } from 'zod'
 import {
   resolveDID,
@@ -14,6 +20,10 @@ import {
   requestWalletNonce,
 } from './identity.service'
 import { getCivicIdentityAssurance } from './identity-assurance.service'
+import {
+  getCivicIdentityProofs,
+  ingestCivicProofingEvent,
+} from './identity-proofing.service'
 
 const WalletNonceSchema = z.object({
   wallet_address: z
@@ -57,11 +67,63 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // GET /identity/assurance — frontera explícita entre login/contacto e
-  // identidad cívica apta para acciones de gobernanza. Solo proveedores
-  // incluidos en CIVIC_IDENTITY_ASSURANCE_PROVIDERS pueden elevar este estado.
+  // identidad cívica apta para acciones de gobernanza. P0.2 exige un proof
+  // vigente; un ExternalIdentity/SSO aislado ya no eleva este estado.
   app.get('/assurance', { preHandler: requireAuth }, async (request, reply) => {
     const assurance = await getCivicIdentityAssurance(request.citizen.sub)
     return reply.send(assurance)
+  })
+
+  // GET /identity/proofing — historial resumido del proofing del ciudadano.
+  // No devuelve provider_reference para evitar exponer identificadores internos
+  // de terceros al frontend.
+  app.get('/proofing', { preHandler: requireAuth }, async (request, reply) => {
+    const proofs = await getCivicIdentityProofs(request.citizen.sub)
+    return reply.send({
+      proofs: proofs.map((proof) => ({
+        id: proof.id,
+        provider: proof.provider,
+        status: proof.status,
+        assurance_level: Number(proof.assurance_level),
+        verified_at: proof.verified_at?.toISOString() ?? null,
+        expires_at: proof.expires_at?.toISOString() ?? null,
+        revoked_at: proof.revoked_at?.toISOString() ?? null,
+        updated_at: proof.updated_at.toISOString(),
+      })),
+    })
+  })
+
+  // POST /identity/proofing/events — ingress server-to-server para eventos
+  // normalizados por adaptadores KYC. No usa JWT ciudadano: la autenticación
+  // es HMAC con CIVIC_IDENTITY_PROOFING_EVENT_SECRET y cada evento es idempotente.
+  app.post('/proofing/events', {
+    config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const parsed = CivicProofingEventSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Evento de identity proofing inválido',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+
+    const rawSignature = request.headers['x-vertice-proofing-signature']
+    const signature = Array.isArray(rawSignature) ? rawSignature[0] : rawSignature
+    const result = await ingestCivicProofingEvent(parsed.data, signature)
+
+    return reply.status(result.duplicate ? 200 : 202).send({
+      accepted: true,
+      duplicate: result.duplicate,
+      proof: {
+        id: result.proof.id,
+        provider: result.proof.provider,
+        status: result.proof.status,
+        assurance_level: Number(result.proof.assurance_level),
+        verified_at: result.proof.verified_at?.toISOString() ?? null,
+        expires_at: result.proof.expires_at?.toISOString() ?? null,
+        revoked_at: result.proof.revoked_at?.toISOString() ?? null,
+      },
+    })
   })
 
   // ── Verificación de cédula (nivel 0 → 1) ─────────────────────────────────

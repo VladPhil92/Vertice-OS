@@ -51,6 +51,10 @@ const schema = z.object({
         .filter(Boolean),
     )),
   ),
+  // Secreto del contrato normalizado entre adaptadores KYC y la API. Los
+  // adaptadores validan primero la firma nativa del proveedor y luego firman
+  // el evento canónico. Ausente = ingress deshabilitado.
+  CIVIC_IDENTITY_PROOFING_EVENT_SECRET: z.string().min(32).optional(),
 
   // ── Blockchain (Polygon) — capacidades opcionales ─────────────────
   POLYGON_RPC_URL:          z.string().url().optional(),
@@ -73,6 +77,25 @@ if (!parsed.success) {
     'The following variable(s) are missing or fail validation:\n' +
     `${details}\n` +
     'Set the required value(s) in the Railway service Variables tab and redeploy.\n',
+  )
+  process.exit(1)
+}
+
+// P0.2 activation interlock. Governance still freezes its voter roll through
+// the legacy ExternalIdentity projection. Until P0.3 converges that query on
+// `civic_identity_proofs`, production must not accept a non-empty assurance
+// provider allowlist. This makes premature provider activation impossible by
+// configuration alone and preserves the fail-closed boundary.
+if (
+  parsed.data.NODE_ENV === 'production' &&
+  parsed.data.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length > 0
+) {
+  process.stdout.write(
+    '[config] FATAL: civic identity assurance activation is locked during P0.2.\n' +
+    'CIVIC_IDENTITY_ASSURANCE_PROVIDERS must remain empty in production until ' +
+    'the governance voter roll has converged on civic_identity_proofs (P0.3).\n' +
+    'This lock prevents legacy ExternalIdentity links from becoming an alternate ' +
+    'governance eligibility path.\n',
   )
   process.exit(1)
 }
