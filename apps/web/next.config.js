@@ -21,7 +21,8 @@ const nextConfig = {
   },
   env: {
     NEXT_PUBLIC_MAPBOX_TOKEN:  process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-    NEXT_PUBLIC_API_URL:       process.env.NEXT_PUBLIC_API_URL,
+    // Production API traffic is same-origin through /_api and never requires a
+    // public Railway origin to be embedded in client JavaScript.
     NEXT_PUBLIC_WS_URL:        process.env.NEXT_PUBLIC_WS_URL,
     NEXT_PUBLIC_POLYGON_RPC:   process.env.NEXT_PUBLIC_POLYGON_RPC,
     NEXT_PUBLIC_SENTRY_DSN:    process.env.NEXT_PUBLIC_SENTRY_DSN,

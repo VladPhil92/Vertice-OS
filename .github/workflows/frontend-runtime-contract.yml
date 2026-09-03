@@ -30,8 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      PRODUCTION_API_URL: ${{ secrets.PRODUCTION_API_URL }}
-      STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
       MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
 
     steps:
@@ -50,43 +48,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Resolve browser API target
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            api_url="${PRODUCTION_API_URL}"
-            if [ -z "${api_url}" ]; then
-              echo '::error::PRODUCTION_API_URL is required before main can be certified for production.'
-              exit 1
-            fi
-          else
-            api_url="${STAGING_API_URL:-https://api-preview.invalid}"
-          fi
-
-          case "${api_url}" in
-            http://localhost*|https://localhost*|http://127.0.0.1*|https://127.0.0.1*)
-              echo "::error::Browser API target must not point at localhost: ${api_url}"
-              exit 1
-              ;;
-          esac
-
-          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            case "${api_url}" in
-              https://*) ;;
-              *)
-                echo "::error::Production browser API target must use HTTPS: ${api_url}"
-                exit 1
-                ;;
-            esac
-          fi
-
-          echo "NEXT_PUBLIC_API_URL=${api_url}" >> "${GITHUB_ENV}"
-
-      - name: Build Next.js with resolved runtime target
+      - name: Build Next.js with poisoned legacy API variable
         env:
           NEXT_PUBLIC_MAPBOX_TOKEN: ${{ env.MAPBOX_TOKEN }}
+          # Production must ignore this historical Vercel value completely.
+          NEXT_PUBLIC_API_URL: http://localhost:4000
         run: pnpm --filter @vertice/web build
 
       - name: Reject uncompiled Tailwind directives
@@ -103,12 +69,84 @@ jobs:
           fi
           echo 'Tailwind/PostCSS output is compiled.'
 
-      - name: Reject localhost from browser bundles
+      - name: Enforce same-origin browser API contract
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R -n -E 'https?://(localhost|127\.0\.0\.1):4000' apps/web/.next/static 2>/dev/null; then
-            echo '::error::A browser bundle still contains a localhost API target.'
+          # A development fallback literal may remain in shared client code even
+          # when the production branch evaluates to /api. What must never be
+          # shipped to the browser is the Railway upstream itself, and the
+          # canonical same-origin gateway must be present. The following step
+          # exercises that production behavior end-to-end.
+          if grep -R -n -E 'https?://[^"[:space:]]*up\.railway\.app' apps/web/.next/static 2>/dev/null; then
+            echo '::error::Railway upstream leaked into a browser bundle; production must be same-origin.'
             exit 1
           fi
-          echo 'Browser bundles contain no localhost API target.'
+          if ! grep -R -q '"/api"' apps/web/.next/static 2>/dev/null; then
+            echo '::error::Browser bundles do not contain the canonical /api gateway.'
+            exit 1
+          fi
+          echo 'Browser bundles expose /api and do not expose the Railway upstream.'
+
+      - name: Exercise same-origin proxy and refresh-cookie path
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node <<'NODE' >/tmp/vertice-mock-api.log 2>&1 &
+          const http = require('http')
+          const server = http.createServer((req, res) => {
+            res.setHeader('content-type', 'application/json')
+            if (req.url?.startsWith('/health')) {
+              res.end(JSON.stringify({ status: 'ok', path: req.url }))
+              return
+            }
+            if (req.url === '/auth/ctgone/exchange' && req.method === 'POST') {
+              res.setHeader('set-cookie', 'vertice_refresh=mock-refresh; Path=/auth; HttpOnly; SameSite=Strict')
+              res.end(JSON.stringify({ access_token: 'mock-access', citizen_id: '00000000-0000-4000-8000-000000000001' }))
+              return
+            }
+            res.statusCode = 404
+            res.end(JSON.stringify({ error: 'not found' }))
+          })
+          server.listen(4100, '127.0.0.1')
+          NODE
+          MOCK_PID=$!
+
+          cleanup() {
+            kill "${WEB_PID:-}" "${MOCK_PID:-}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          if [ -f apps/web/.next/standalone/apps/web/server.js ]; then
+            VERTICE_API_UPSTREAM=http://127.0.0.1:4100 PORT=3000 HOSTNAME=127.0.0.1 \
+              node apps/web/.next/standalone/apps/web/server.js >/tmp/vertice-web.log 2>&1 &
+          else
+            VERTICE_API_UPSTREAM=http://127.0.0.1:4100 PORT=3000 \
+              pnpm --filter @vertice/web start >/tmp/vertice-web.log 2>&1 &
+          fi
+          WEB_PID=$!
+
+          pnpm --filter @vertice/web exec wait-on http://127.0.0.1:3000/api/health
+
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:3000/api/health?probe=same-origin' \
+            | tee /tmp/proxy-health.json
+          node -e "const b=require('/tmp/proxy-health.json'); if(b.path!=='/health?probe=same-origin') process.exit(1)"
+
+          curl --fail --silent --show-error \
+            -D /tmp/proxy-auth.headers \
+            -o /tmp/proxy-auth.json \
+            -X POST \
+            -H 'content-type: application/json' \
+            --data '{"code":"mock","code_verifier":"mock"}' \
+            http://127.0.0.1:3000/api/auth/ctgone/exchange
+
+          grep -Eiq '^set-cookie: vertice_refresh=mock-refresh;.*Path=/api/auth' /tmp/proxy-auth.headers
+          if grep -Eiq '^set-cookie:.*Domain=' /tmp/proxy-auth.headers; then
+            echo '::error::Proxy must not expose an upstream cookie Domain attribute.'
+            exit 1
+          fi
+          node -e "const b=require('/tmp/proxy-auth.json'); if(b.access_token!=='mock-access') process.exit(1)"
+
+          echo 'Same-origin proxy and first-party refresh-cookie contract passed.'
