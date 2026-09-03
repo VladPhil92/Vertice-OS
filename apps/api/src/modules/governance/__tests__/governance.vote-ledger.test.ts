@@ -87,7 +87,11 @@ describe('canonical liquid-democracy vote ledger', () => {
     expect(contextSql).toContain('FOR UPDATE')
 
     const delegationSql = sqlText(mockQueryRaw.mock.calls[3]?.[0])
-    expect(delegationSql).toContain('SELECT DISTINCT d.delegator_id')
+    expect(delegationSql).toContain('WITH effective_delegations AS')
+    expect(delegationSql).toContain('DISTINCT ON (d.delegator_id)')
+    expect(delegationSql).toContain("WHEN 'proposal' THEN 3")
+    expect(delegationSql).toContain("WHEN 'domain' THEN 2")
+    expect(delegationSql).toContain('WHERE ed.delegate_id')
     expect(delegationSql).toContain('proposal_voter_roll')
     expect(delegationSql).toContain('d.valid_until')
 
