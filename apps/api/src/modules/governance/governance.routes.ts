@@ -1,7 +1,5 @@
-import { Prisma } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
 import { requireVerified, requireModerator } from '../../middleware/auth'
-import { prisma } from '../../lib/prisma'
 import {
   CreateProposalSchema,
   ListProposalsSchema,
@@ -15,7 +13,6 @@ import {
   getProposalById,
   endorseProposal,
   advanceProposalStage,
-  castVote,
   getVoteTally,
   createDelegation,
   revokeDelegation,
@@ -25,6 +22,7 @@ import {
   adminArchiveProposal,
   adminListProposals,
 } from './governance.service'
+import { castVoteLedger } from './governance.vote-ledger'
 
 export async function governanceRoutes(app: FastifyInstance): Promise<void> {
   // ── Públicos ──────────────────────────────────────────────────────────────
@@ -95,42 +93,10 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
 
-    // El padrón se congela al abrir la votación y es la autoridad de
-    // elegibilidad durante toda esa ventana. La assurance vigente se usa para
-    // CONSTRUIR nuevos padrones y para onboarding, pero un cambio posterior de
-    // providers no puede modificar retroactivamente un electorado ni su
-    // denominador de quórum.
-    const eligibility = await prisma.$queryRaw<Array<{
-      roll_exists: boolean
-      eligible: boolean
-    }>>(Prisma.sql`
-      SELECT
-        EXISTS(
-          SELECT 1 FROM proposal_voter_roll WHERE proposal_id = ${id}::uuid
-        ) AS roll_exists,
-        EXISTS(
-          SELECT 1
-          FROM proposal_voter_roll
-          WHERE proposal_id = ${id}::uuid
-            AND citizen_id = ${request.citizen.sub}::uuid
-        ) AS eligible
-    `)
-
-    if (!eligibility[0]?.roll_exists) {
-      return reply.status(409).send({
-        error: 'La votación no tiene un padrón electoral congelado y no puede aceptar votos de forma segura',
-        code: 'VOTER_ROLL_UNAVAILABLE',
-      })
-    }
-
-    if (!eligibility[0]?.eligible) {
-      return reply.status(403).send({
-        error: 'No perteneces al padrón electoral de esta propuesta',
-        code: 'NOT_ELIGIBLE_VOTER',
-      })
-    }
-
-    const receipt = await castVote(id, request.citizen.sub, parsed.data.vote_value)
+    // Toda la política de admisión, delegación, override directo y tally vive
+    // en una única transacción del ledger. La ruta solo autentica y valida el
+    // contrato HTTP, evitando duplicar reglas electorales en dos capas.
+    const receipt = await castVoteLedger(id, request.citizen.sub, parsed.data.vote_value)
     return reply.status(201).send(receipt)
   })
 

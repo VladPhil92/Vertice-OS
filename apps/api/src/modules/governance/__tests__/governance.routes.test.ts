@@ -28,7 +28,6 @@ jest.mock('../governance.service', () => ({
   getProposalById: mockGetById,
   endorseProposal: mockEndorse,
   advanceProposalStage: mockAdvance,
-  castVote: mockVote,
   getVoteTally: mockTally,
   createDelegation: mockCreateDelegation,
   revokeDelegation: mockRevokeDelegation,
@@ -36,8 +35,11 @@ jest.mock('../governance.service', () => ({
   getGovernanceStats: mockStats,
 }))
 
+jest.mock('../governance.vote-ledger', () => ({
+  castVoteLedger: mockVote,
+}))
+
 import { buildApp } from '../../../app'
-import { prisma } from '../../../lib/prisma'
 
 const app = buildApp()
 const DID = 'did:vertice:550e8400-e29b-41d4-a716-446655440000'
@@ -53,7 +55,6 @@ beforeAll(async () => {
 afterAll(() => app.close())
 beforeEach(() => {
   jest.resetAllMocks()
-  ;(prisma.$queryRaw as jest.Mock).mockResolvedValue([])
 })
 
 const MOCK_PROPOSAL = {
@@ -332,8 +333,11 @@ describe('POST /governance/proposals/:id/vote', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('returns 409 when the proposal has no frozen voter roll', async () => {
-    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ roll_exists: false, eligible: false }])
+  it('propagates 409 when the canonical ledger has no frozen voter roll', async () => {
+    mockVote.mockRejectedValueOnce(Object.assign(
+      new Error('La votación no tiene un padrón electoral congelado'),
+      { statusCode: 409, code: 'VOTER_ROLL_UNAVAILABLE' },
+    ))
 
     const res = await app.inject({
       method: 'POST',
@@ -344,11 +348,13 @@ describe('POST /governance/proposals/:id/vote', () => {
 
     expect(res.statusCode).toBe(409)
     expect(JSON.parse(res.payload).code).toBe('VOTER_ROLL_UNAVAILABLE')
-    expect(mockVote).not.toHaveBeenCalled()
   })
 
-  it('returns 403 when the citizen is not in the frozen voter roll', async () => {
-    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ roll_exists: true, eligible: false }])
+  it('propagates 403 when the canonical ledger rejects frozen-roll membership', async () => {
+    mockVote.mockRejectedValueOnce(Object.assign(
+      new Error('No perteneces al padrón electoral de esta propuesta'),
+      { statusCode: 403, code: 'NOT_ELIGIBLE_VOTER' },
+    ))
 
     const res = await app.inject({
       method: 'POST',
@@ -359,17 +365,16 @@ describe('POST /governance/proposals/:id/vote', () => {
 
     expect(res.statusCode).toBe(403)
     expect(JSON.parse(res.payload).code).toBe('NOT_ELIGIBLE_VOTER')
-    expect(mockVote).not.toHaveBeenCalled()
   })
 
   it('casts vote and returns 201 receipt for an eligible citizen', async () => {
-    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ roll_exists: true, eligible: true }])
     mockVote.mockResolvedValueOnce({
       vote_id: 'vote-uuid',
       vote_weight: 1.0,
       vote_value: 1,
       proposal_id: 'proposal-uuid',
       created_at: new Date(),
+      delegated_count: 0,
     })
 
     const res = await app.inject({
