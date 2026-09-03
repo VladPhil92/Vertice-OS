@@ -78,33 +78,6 @@ if (!parsed.success) {
 }
 
 // Feature-scoped configuration never decides whether the entire API can boot.
-// Missing/partial optional capabilities fail closed at their feature boundary
-// and are exposed as non-secret diagnostics from /health/ready.
-if (parsed.data.NODE_ENV === 'production') {
-  const degraded: string[] = []
-  if (!parsed.data.AI_SERVICE_SECRET)      degraded.push('AI_SERVICE_SECRET → civic AI disabled')
-  if (!parsed.data.VOTE_NULLIFIER_SECRET) degraded.push('VOTE_NULLIFIER_SECRET → voting disabled')
-  if (!parsed.data.IDENTITY_PEPPER)       degraded.push('IDENTITY_PEPPER → document identity disabled')
-
-  if (parsed.data.CIVIC_SBT_ADDRESS) {
-    if (!parsed.data.POLYGON_RPC_URL)       degraded.push('POLYGON_RPC_URL → CivicSBT misconfigured')
-    if (!parsed.data.POLYGON_PRIVATE_KEY)   degraded.push('POLYGON_PRIVATE_KEY → CivicSBT misconfigured')
-    if (!parsed.data.DID_COMMITMENT_PEPPER) degraded.push('DID_COMMITMENT_PEPPER → CivicSBT misconfigured')
-  }
-
-  if (parsed.data.VOTING_REGISTRY_ADDRESS) {
-    if (!parsed.data.POLYGON_RPC_URL)      degraded.push('POLYGON_RPC_URL → VotingRegistry misconfigured')
-    if (!parsed.data.POLYGON_PRIVATE_KEY)  degraded.push('POLYGON_PRIVATE_KEY → VotingRegistry misconfigured')
-  }
-
-  if (degraded.length > 0) {
-    process.stdout.write(
-      '[config] WARNING: API booting with degraded feature capabilities.\n' +
-      degraded.map((item) => `  - ${item}`).join('\n') + '\n' +
-      'Affected features fail closed when invoked; core API readiness remains governed by PostgreSQL and Redis.\n' +
-      'Set the missing value(s) in Railway Variables and redeploy to restore full capability.\n',
-    )
-  }
-}
-
+// Missing/partial optional capabilities fail closed at their feature boundary;
+// /health/ready exposes their coarse state without logging or returning secrets.
 export const config = parsed.data
