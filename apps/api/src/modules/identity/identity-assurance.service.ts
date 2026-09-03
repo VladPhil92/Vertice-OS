@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma'
 import { config } from '../../config'
+import { getActiveCivicIdentityProof } from './identity-proofing.service'
 
 export interface CivicIdentityAssuranceStatus {
   citizen_id: string
@@ -8,20 +9,22 @@ export interface CivicIdentityAssuranceStatus {
   governance_eligible: boolean
   verification_level: number
   provider: string | null
-  provider_linked_at: string | null
+  provider_verified_at: string | null
+  provider_expires_at: string | null
   requirements: {
     contact_verified: boolean
-    trusted_identity_provider_linked: boolean
+    active_identity_proof: boolean
   }
 }
 
 /**
  * Identity assurance is deliberately separate from authentication/federation.
  *
- * An ExternalIdentity only becomes evidence for civic governance when its
- * provider is present in CIVIC_IDENTITY_ASSURANCE_PROVIDERS. That prevents a
- * generic SSO link (for example `ctgone`) from silently being promoted to KYC.
- * Empty allowlist = fail-closed.
+ * P0.2: an ExternalIdentity link is no longer sufficient evidence. The
+ * citizen must have contact verification plus an ACTIVE, VERIFIED proofing
+ * record from a provider in CIVIC_IDENTITY_ASSURANCE_PROVIDERS. Proofs that
+ * are rejected, expired, revoked or below assurance level 2 never authorize
+ * civic governance.
  */
 export async function getCivicIdentityAssurance(
   citizenId: string,
@@ -38,10 +41,9 @@ export async function getCivicIdentityAssurance(
     })
   }
 
-  const providers = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
   const contactVerified = citizen.verificationLevel >= 2
 
-  if (providers.length === 0) {
+  if (config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length === 0) {
     return {
       citizen_id: citizen.id,
       assured: false,
@@ -49,28 +51,18 @@ export async function getCivicIdentityAssurance(
       governance_eligible: false,
       verification_level: citizen.verificationLevel,
       provider: null,
-      provider_linked_at: null,
+      provider_verified_at: null,
+      provider_expires_at: null,
       requirements: {
         contact_verified: contactVerified,
-        trusted_identity_provider_linked: false,
+        active_identity_proof: false,
       },
     }
   }
 
-  const trustedIdentity = await prisma.externalIdentity.findFirst({
-    where: {
-      citizenId,
-      provider: { in: providers },
-    },
-    select: {
-      provider: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  const trustedProviderLinked = Boolean(trustedIdentity)
-  const assured = contactVerified && trustedProviderLinked
+  const activeProof = await getActiveCivicIdentityProof(citizenId)
+  const proofActive = Boolean(activeProof)
+  const assured = contactVerified && proofActive
 
   return {
     citizen_id: citizen.id,
@@ -78,13 +70,12 @@ export async function getCivicIdentityAssurance(
     status: assured ? 'assured' : 'required',
     governance_eligible: assured,
     verification_level: citizen.verificationLevel,
-    provider: trustedIdentity?.provider ?? null,
-    // This is the time VÉRTICE linked the provider identity, not a claim about
-    // when the provider performed its own verification.
-    provider_linked_at: trustedIdentity?.createdAt.toISOString() ?? null,
+    provider: activeProof?.provider ?? null,
+    provider_verified_at: activeProof?.verified_at?.toISOString() ?? null,
+    provider_expires_at: activeProof?.expires_at?.toISOString() ?? null,
     requirements: {
       contact_verified: contactVerified,
-      trusted_identity_provider_linked: trustedProviderLinked,
+      active_identity_proof: proofActive,
     },
   }
 }
