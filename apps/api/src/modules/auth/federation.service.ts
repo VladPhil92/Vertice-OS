@@ -7,6 +7,11 @@ import { prisma } from '../../lib/prisma'
 import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt'
 import { generateRefreshToken, hashToken, refreshTokenExpiresAt } from '../../lib/jwt'
 import type { AuthTokenResponse } from './auth.types'
+import {
+  bootstrapFederatedSuperadmin,
+  ensureBaselineRoleGrants,
+  setSessionActiveRole,
+} from './roles.service'
 
 const SOURCE_PROVIDER = 'ctg_one'
 const TARGET_PROVIDER = 'vertice'
@@ -25,6 +30,7 @@ type CtgOneFederationIdentity = {
   subject?: unknown
   email?: unknown
   email_verified?: unknown
+  authorities?: unknown
 }
 
 function federationError(message: string, statusCode: number, code: string) {
@@ -41,10 +47,14 @@ function normalizeInput(input: FederationExchangeInput): FederationExchangeInput
 function normalizeIdentity(raw: CtgOneFederationIdentity): {
   subject: string
   email: string
+  authorities: string[]
 } {
   const provider = raw.provider
   const subject = typeof raw.subject === 'string' ? raw.subject.trim() : ''
   const email = typeof raw.email === 'string' ? raw.email.trim().toLowerCase() : ''
+  const authorities = Array.isArray(raw.authorities)
+    ? raw.authorities.filter((value): value is string => typeof value === 'string')
+    : []
 
   if (
     provider !== TARGET_PROVIDER
@@ -57,7 +67,7 @@ function normalizeIdentity(raw: CtgOneFederationIdentity): {
     throw federationError('Identidad federada inválida', 502, 'INVALID_FEDERATION_IDENTITY')
   }
 
-  return { subject, email }
+  return { subject, email, authorities }
 }
 
 async function exchangeWithCtgOne(input: FederationExchangeInput) {
@@ -136,8 +146,6 @@ async function resolveCitizen(subject: string, email: string) {
     return existingIdentity.citizen
   }
 
-  // Email equality is not sufficient proof of account ownership. A local
-  // account must be linked through an explicit authenticated linking flow.
   const emailCollision = await prisma.citizen.findUnique({
     where: { email },
     select: { id: true },
@@ -209,31 +217,32 @@ export async function exchangeCtgOneFederation(
   const identity = await exchangeWithCtgOne(input)
   const citizen = await resolveCitizen(identity.subject, identity.email)
 
+  const bootstrappedRole = await bootstrapFederatedSuperadmin(citizen.id, identity.authorities)
+  const preferredRole = bootstrappedRole ?? ((citizen.role as CitizenRole) ?? 'citizen')
+  const activeRole = await ensureBaselineRoleGrants(citizen.id, preferredRole)
+
+  const refreshToken = generateRefreshToken()
+  const session = await prisma.session.create({
+    data: {
+      citizenId: citizen.id,
+      refreshTokenHash: hashToken(refreshToken),
+      expiresAt: refreshTokenExpiresAt(),
+      userAgent: meta.userAgent,
+      ipAddress: meta.ipAddress,
+    },
+    select: { id: true },
+  })
+  await setSessionActiveRole(session.id, citizen.id, activeRole)
+  await prisma.citizen.update({ where: { id: citizen.id }, data: { lastActiveAt: new Date() } })
+
   const payload: AccessTokenPayload = {
     sub: citizen.id,
     did: citizen.did,
     lvl: citizen.verificationLevel,
-    role: (citizen.role as CitizenRole) ?? 'citizen',
+    role: activeRole,
+    sid: session.id,
   }
-
   const accessToken = app.jwt.sign(payload, { expiresIn: config.JWT_ACCESS_EXPIRY_SECONDS })
-  const refreshToken = generateRefreshToken()
-
-  await prisma.$transaction([
-    prisma.session.create({
-      data: {
-        citizenId: citizen.id,
-        refreshTokenHash: hashToken(refreshToken),
-        expiresAt: refreshTokenExpiresAt(),
-        userAgent: meta.userAgent,
-        ipAddress: meta.ipAddress,
-      },
-    }),
-    prisma.citizen.update({
-      where: { id: citizen.id },
-      data: { lastActiveAt: new Date() },
-    }),
-  ])
 
   return {
     access_token: accessToken,
