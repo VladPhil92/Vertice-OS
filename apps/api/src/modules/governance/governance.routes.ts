@@ -3,6 +3,7 @@ import { requireVerified, requireModerator } from '../../middleware/auth'
 import {
   CreateProposalSchema,
   ListProposalsSchema,
+  AdminListProposalsSchema,
   CastVoteSchema,
   AdvanceStageSchema,
   AdminArchiveSchema,
@@ -135,13 +136,13 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Admin / Moderación ────────────────────────────────────────────────────
 
-  // Admin listing reuses the validated public query contract instead of the
-  // legacy raw query that referenced non-existent proposal columns.
+  // Admin listing keeps the historical 200-row moderation queue until the UI
+  // gains explicit pagination, while validating the same filters as public list.
   app.get('/admin/proposals', {
     preHandler: requireModerator,
     config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
   }, async (request, reply) => {
-    const parsed = ListProposalsSchema.safeParse(request.query)
+    const parsed = AdminListProposalsSchema.safeParse(request.query)
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
     }
