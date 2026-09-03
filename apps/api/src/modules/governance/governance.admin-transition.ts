@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { recordAuditEvent } from '../../lib/audit'
-import { advanceProposalStage } from './governance.service'
+import { advanceProposalStageSafely } from './governance.lifecycle'
 import type { Proposal, ProposalRow, ProposalStatus } from './governance.types'
 
 function makeError(message: string, statusCode: number, code: string): Error {
@@ -30,14 +30,10 @@ function normalizeProposal(row: ProposalRow): Proposal {
 }
 
 /**
- * Administrative lifecycle changes must reuse the same transition engine as a
- * citizen-authored proposal. Moderation authority may initiate the command, but
- * it cannot bypass endorsements, voter-roll freezing, quorum configuration or
- * voting-window finalization rules.
- *
- * The database migration for this phase independently enforces the two most
- * important invariants: entering `voting` requires a matching frozen roll and
- * leaving an active vote before voting_ends_at is rejected.
+ * Administrative lifecycle changes reuse the same canonical entrypoint as
+ * citizen-authored proposals. Moderation authority may initiate the command,
+ * but it cannot bypass endorsements, frozen voter-roll construction, frozen
+ * quorum/approval thresholds or voting-window finalization.
  */
 export async function adminAdvanceProposalSafely(
   proposalId: string,
@@ -80,8 +76,9 @@ export async function adminAdvanceProposalSafely(
 
   try {
     // Use the proposal author only as the lifecycle principal expected by the
-    // canonical service. The real administrative actor is preserved in audit.
-    const advanced = await advanceProposalStage(proposalId, proposal.author_id, {})
+    // canonical pre-vote service. The real administrative actor stays in audit.
+    // Expired votes are finalized from their frozen election contract.
+    const advanced = await advanceProposalStageSafely(proposalId, proposal.author_id, {})
 
     await recordAuditEvent({
       actorId,
@@ -94,6 +91,7 @@ export async function adminAdvanceProposalSafely(
         to: advanced.status,
         lifecycle_principal: proposal.author_id,
         canonical_transition: true,
+        frozen_result_contract: proposal.status === 'voting',
       },
     })
 
