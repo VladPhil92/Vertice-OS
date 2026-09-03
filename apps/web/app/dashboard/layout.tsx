@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   LayoutDashboard,
   ShieldCheck,
@@ -49,28 +49,12 @@ const BOTTOM_NAV = [
   { href: '/dashboard/reputation',  label: 'Perfil',   icon: User, exact: false },
 ] as const
 
-function getTokenRole(): string {
-  if (typeof window === 'undefined') return 'citizen'
-  try {
-    const token = localStorage.getItem('access_token')
-    if (!token) return 'citizen'
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    return (payload.role as string) ?? 'citizen'
-  } catch {
-    return 'citizen'
-  }
-}
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [role, setRole] = useState<string>('citizen')
   const { toasts, addToast, dismiss } = useToasts()
-
-  useEffect(() => {
-    setRole(getTokenRole())
-  }, [])
 
   const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     if (event.type === 'report:created') {
