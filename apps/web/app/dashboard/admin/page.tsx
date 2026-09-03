@@ -8,6 +8,12 @@ import { apiFetch } from '@/lib/api'
 
 type ReportStatus = 'open' | 'in_progress' | 'resolved' | 'rejected' | 'duplicate'
 type ProposalStatus = 'idea' | 'draft' | 'debate' | 'voting' | 'approved' | 'rejected' | 'archived' | 'executed'
+type Role = 'citizen' | 'moderator' | 'admin' | 'superadmin'
+
+interface RoleContext {
+  assigned_roles: Role[]
+  active_role: Role
+}
 
 interface ReportSummary {
   id: string
@@ -33,6 +39,15 @@ interface ProposalSummary {
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
+
+const MODERATION_ROLES: Role[] = ['moderator', 'admin', 'superadmin']
+
+const ROLE_LABEL: Record<Role, string> = {
+  citizen: 'Ciudadano',
+  moderator: 'Moderador',
+  admin: 'Administrador',
+  superadmin: 'Superadmin',
+}
 
 const REPORT_STATUS_OPTIONS: ReportStatus[] = ['open', 'in_progress', 'resolved', 'rejected', 'duplicate']
 
@@ -60,19 +75,6 @@ const PROPOSAL_ADVANCE_LABEL: Partial<Record<ProposalStatus, string>> = {
   draft:  'Avanzar → Debate',
   debate: 'Abrir votación',
   voting: 'Aprobar',
-}
-
-// ─── Access guard ─────────────────────────────────────────────────────────────
-
-function getTokenRole(): string {
-  try {
-    const token = localStorage.getItem('access_token')
-    if (!token) return 'citizen'
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    return (payload.role as string) ?? 'citizen'
-  } catch {
-    return 'citizen'
-  }
 }
 
 // ─── Reports tab ─────────────────────────────────────────────────────────────
@@ -376,13 +378,51 @@ type Tab = 'reports' | 'proposals'
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('reports')
-  const [role, setRole] = useState<string>('citizen')
+  const [roleContext, setRoleContext] = useState<RoleContext | null>(null)
+  const [roleError, setRoleError] = useState<string | null>(null)
 
   useEffect(() => {
-    setRole(getTokenRole())
+    let cancelled = false
+
+    apiFetch<RoleContext>('/auth/roles')
+      .then((context) => {
+        if (!cancelled) setRoleContext(context)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRoleError(error instanceof Error ? error.message : 'No fue posible verificar los permisos')
+        }
+      })
+
+    return () => { cancelled = true }
   }, [])
 
-  if (!['moderator', 'admin'].includes(role)) {
+  if (!roleContext && !roleError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex items-center gap-2 font-mono text-[12px] text-tertiary">
+          <RefreshCw size={14} className="animate-spin" />
+          Verificando autoridad…
+        </div>
+      </div>
+    )
+  }
+
+  if (roleError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="max-w-md rounded border border-red/30 bg-red/5 px-5 py-4 text-center">
+          <AlertCircle size={28} className="mx-auto mb-3 text-red-400" />
+          <p className="font-mono text-[12px] text-red-400">No fue posible verificar los permisos</p>
+          <p className="mt-1 font-mono text-[10px] text-tertiary">{roleError}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const role = roleContext!.active_role
+
+  if (!MODERATION_ROLES.includes(role)) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
@@ -403,7 +443,7 @@ export default function AdminPage() {
             Panel de Moderación
           </h1>
           <p className="font-mono text-[11px] uppercase tracking-widest text-tertiary">
-            {role === 'admin' ? 'Administrador' : 'Moderador'}
+            {ROLE_LABEL[role]}
           </p>
         </div>
       </div>
