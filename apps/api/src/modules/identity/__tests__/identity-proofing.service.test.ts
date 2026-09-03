@@ -5,10 +5,16 @@ const mockTransaction = jest.fn((cb: (tx: { $queryRaw: typeof mockQueryRaw }) =>
   cb({ $queryRaw: mockQueryRaw }),
 )
 
+const KEY_ID = 'test-key'
+const PROVIDER_KEY_SECRET = 'test-proofing-provider-key-32-characters!!'
+
 jest.mock('../../../config', () => ({
   config: {
+    NODE_ENV: 'test',
     CIVIC_IDENTITY_ASSURANCE_PROVIDERS: ['trusted_kyc'],
-    CIVIC_IDENTITY_PROOFING_EVENT_SECRET: 'test-proofing-event-secret-32-chars!!',
+    CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: JSON.stringify({
+      trusted_kyc: { 'test-key': PROVIDER_KEY_SECRET },
+    }),
   },
 }))
 
@@ -21,6 +27,7 @@ jest.mock('../../../lib/prisma', () => ({
 
 import { config } from '../../../config'
 import {
+  canonicalizeProofingEnvelope,
   canonicalizeProofingEvent,
   getActiveCivicIdentityProof,
   getCivicIdentityProofs,
@@ -58,20 +65,23 @@ const PROOF = {
   updated_at: new Date('2026-09-03T01:00:00.000Z'),
 }
 
-function signatureFor(event: CivicProofingEventInput): string {
-  return `sha256=${createHmac('sha256', config.CIVIC_IDENTITY_PROOFING_EVENT_SECRET!)
-    .update(canonicalizeProofingEvent(event))
+function signatureFor(event: CivicProofingEventInput, keyId = KEY_ID): string {
+  return `sha256=${createHmac('sha256', PROVIDER_KEY_SECRET)
+    .update(canonicalizeProofingEnvelope(event, keyId))
     .digest('hex')}`
 }
 
 beforeEach(() => {
   jest.resetAllMocks()
+  config.NODE_ENV = 'test'
   config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.splice(
     0,
     config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length,
     'trusted_kyc',
   )
-  config.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = 'test-proofing-event-secret-32-chars!!'
+  config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
+    trusted_kyc: { [KEY_ID]: PROVIDER_KEY_SECRET },
+  })
   mockTransaction.mockImplementation((cb: (tx: { $queryRaw: typeof mockQueryRaw }) => unknown) =>
     cb({ $queryRaw: mockQueryRaw }),
   )
@@ -98,24 +108,27 @@ describe('canonical proofing contract', () => {
       .toThrow('Timestamp de proofing inválido')
   })
 
-  it('fails closed when ingress secret is absent', () => {
-    config.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = undefined
-    expect(() => verifyProofingEventSignature(BASE_EVENT, undefined)).toThrow(
-      'La ingestión de identity proofing no está configurada',
+  it('fails closed when provider ingress keys are absent', () => {
+    config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = ''
+    expect(() => verifyProofingEventSignature(BASE_EVENT, undefined, KEY_ID)).toThrow(
+      'El ingress del proveedor de identity proofing no está configurado',
     )
   })
 
-  it('rejects malformed and incorrect signatures', () => {
-    expect(() => verifyProofingEventSignature(BASE_EVENT, 'sha256=bad')).toThrow(
+  it('rejects malformed, incorrect, and unknown-key signatures', () => {
+    expect(() => verifyProofingEventSignature(BASE_EVENT, 'sha256=bad', KEY_ID)).toThrow(
       'Firma de proofing inválida',
     )
-    expect(() => verifyProofingEventSignature(BASE_EVENT, `sha256=${'0'.repeat(64)}`)).toThrow(
+    expect(() => verifyProofingEventSignature(BASE_EVENT, `sha256=${'0'.repeat(64)}`, KEY_ID)).toThrow(
       'Firma de proofing inválida',
+    )
+    expect(() => verifyProofingEventSignature(BASE_EVENT, signatureFor(BASE_EVENT), 'retired-key')).toThrow(
+      'Identificador de llave de proofing inválido',
     )
   })
 
-  it('accepts a valid canonical HMAC signature', () => {
-    expect(() => verifyProofingEventSignature(BASE_EVENT, signatureFor(BASE_EVENT))).not.toThrow()
+  it('accepts a valid provider-scoped canonical HMAC signature', () => {
+    expect(() => verifyProofingEventSignature(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).not.toThrow()
   })
 })
 
@@ -125,7 +138,7 @@ describe('proof queries', () => {
     await expect(getCivicIdentityProofs(CITIZEN_ID)).resolves.toEqual([PROOF])
   })
 
-  it('fails closed without trusted providers before hitting the database', async () => {
+  it('fails closed without operational providers before hitting the database', async () => {
     config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.splice(0)
     await expect(getActiveCivicIdentityProof(CITIZEN_ID)).resolves.toBeNull()
     expect(mockQueryRaw).not.toHaveBeenCalled()
@@ -141,7 +154,7 @@ describe('proof queries', () => {
 describe('signed proofing event ingestion', () => {
   it('rejects providers outside the explicit assurance allowlist', async () => {
     const event = { ...BASE_EVENT, provider: 'unknown_kyc' }
-    await expect(ingestCivicProofingEvent(event, signatureFor(event))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(event, signatureFor(event), KEY_ID)).rejects.toMatchObject({
       statusCode: 403,
       code: 'UNTRUSTED_PROOFING_PROVIDER',
     })
@@ -150,7 +163,7 @@ describe('signed proofing event ingestion', () => {
 
   it('rejects verified events below assurance level 2', async () => {
     const event = { ...BASE_EVENT, assurance_level: 1 }
-    await expect(ingestCivicProofingEvent(event, signatureFor(event))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(event, signatureFor(event), KEY_ID)).rejects.toMatchObject({
       statusCode: 400,
       code: 'INSUFFICIENT_ASSURANCE_LEVEL',
     })
@@ -159,7 +172,7 @@ describe('signed proofing event ingestion', () => {
 
   it('rejects unknown or inactive citizens', async () => {
     mockQueryRaw.mockResolvedValueOnce([])
-    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).rejects.toMatchObject({
       statusCode: 404,
       code: 'CITIZEN_NOT_FOUND',
     })
@@ -170,7 +183,7 @@ describe('signed proofing event ingestion', () => {
       .mockResolvedValueOnce([{ id: CITIZEN_ID }])
       .mockResolvedValueOnce([{ citizen_id: '550e8400-e29b-41d4-a716-446655440099' }])
 
-    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).rejects.toMatchObject({
       statusCode: 409,
       code: 'PROOFING_SUBJECT_CONFLICT',
     })
@@ -183,7 +196,7 @@ describe('signed proofing event ingestion', () => {
       .mockResolvedValueOnce([{ id: 'event-row' }])
       .mockResolvedValueOnce([PROOF])
 
-    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT))).resolves.toEqual({
+    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).resolves.toEqual({
       proof: PROOF,
       duplicate: false,
     })
@@ -198,7 +211,7 @@ describe('signed proofing event ingestion', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([PROOF])
 
-    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT))).resolves.toEqual({
+    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).resolves.toEqual({
       proof: PROOF,
       duplicate: true,
     })
@@ -212,7 +225,7 @@ describe('signed proofing event ingestion', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
 
-    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).rejects.toMatchObject({
       statusCode: 409,
       code: 'PROOFING_EVENT_ORPHANED',
     })
@@ -232,7 +245,7 @@ describe('signed proofing event ingestion', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([newerProof])
 
-    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT))).resolves.toEqual({
+    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).resolves.toEqual({
       proof: newerProof,
       duplicate: false,
     })
@@ -246,7 +259,7 @@ describe('signed proofing event ingestion', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
 
-    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT))).rejects.toMatchObject({
+    await expect(ingestCivicProofingEvent(BASE_EVENT, signatureFor(BASE_EVENT), KEY_ID)).rejects.toMatchObject({
       statusCode: 409,
       code: 'PROOFING_STATE_CONFLICT',
     })
