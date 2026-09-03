@@ -140,7 +140,7 @@ describe('POST /identity/proofing/events', () => {
     expect(mockIngestEvent).not.toHaveBeenCalled()
   })
 
-  it('accepts a new signed normalized event with 202', async () => {
+  it('passes signature and provider key id to the normalized ingress service', async () => {
     mockIngestEvent.mockResolvedValueOnce({
       duplicate: false,
       proof: {
@@ -154,16 +154,20 @@ describe('POST /identity/proofing/events', () => {
       },
     })
 
+    const signature = `sha256=${'a'.repeat(64)}`
     const res = await app.inject({
       method: 'POST',
       url: '/identity/proofing/events',
-      headers: { 'x-vertice-proofing-signature': `sha256=${'a'.repeat(64)}` },
+      headers: {
+        'x-vertice-proofing-signature': signature,
+        'x-vertice-proofing-key-id': 'test-key',
+      },
       payload,
     })
 
     expect(res.statusCode).toBe(202)
     expect(JSON.parse(res.payload).duplicate).toBe(false)
-    expect(mockIngestEvent).toHaveBeenCalledWith(payload, `sha256=${'a'.repeat(64)}`)
+    expect(mockIngestEvent).toHaveBeenCalledWith(payload, signature, 'test-key')
   })
 
   it('returns 200 for an idempotent provider retry', async () => {
@@ -183,7 +187,10 @@ describe('POST /identity/proofing/events', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/identity/proofing/events',
-      headers: { 'x-vertice-proofing-signature': `sha256=${'b'.repeat(64)}` },
+      headers: {
+        'x-vertice-proofing-signature': `sha256=${'b'.repeat(64)}`,
+        'x-vertice-proofing-key-id': 'test-key',
+      },
       payload,
     })
 
