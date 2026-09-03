@@ -12,6 +12,43 @@ CREATE INDEX "idx_proposal_voter_roll_effective_delegate"
   ON "proposal_voter_roll" ("proposal_id", "effective_delegate_id")
   WHERE "effective_delegate_id" IS NOT NULL;
 
+-- Legacy cutover safety. The former administrative force-advance path could
+-- create `voting` rows without the same voter-roll/window/threshold contract as
+-- the canonical debate -> voting transition. Such a consultation cannot be
+-- retroactively certified without inventing facts. Archive it before installing
+-- the new guards; only verifiably consistent active votes continue through the
+-- cutover below.
+WITH roll_counts AS (
+  SELECT p.id, COUNT(pvr.citizen_id)::INTEGER AS roll_count
+  FROM proposals p
+  LEFT JOIN proposal_voter_roll pvr ON pvr.proposal_id = p.id
+  WHERE p.status = 'voting'
+  GROUP BY p.id
+),
+invalid_voting AS (
+  SELECT p.id
+  FROM proposals p
+  INNER JOIN roll_counts r ON r.id = p.id
+  WHERE p.status = 'voting'
+    AND (
+      p.voting_starts_at IS NULL
+      OR p.voting_ends_at IS NULL
+      OR p.voting_ends_at <= p.voting_starts_at
+      OR p.quorum_required IS NULL
+      OR p.quorum_required < 0
+      OR p.quorum_required > 1
+      OR p.approval_threshold IS NULL
+      OR p.approval_threshold < 0
+      OR p.approval_threshold > 1
+      OR p.eligible_voters IS NULL
+      OR p.eligible_voters <> r.roll_count
+    )
+)
+UPDATE proposals p
+SET status = 'archived', updated_at = NOW()
+FROM invalid_voting invalid
+WHERE p.id = invalid.id;
+
 -- Cutover for proposals that are already voting when this migration lands.
 -- We snapshot their current effective delegation at migration time rather than
 -- fabricating a historical opening-time mapping that can no longer be proven.
