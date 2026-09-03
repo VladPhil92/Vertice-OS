@@ -93,6 +93,49 @@ jobs:
           echo "$cmd" | grep -F "exec su -s /bin/sh nodeapp -c 'node apps/api/dist/index.js'"
           docker run --rm --entrypoint openssl vertice-api-runtime:${{ github.sha }} version
 
+      - name: Start CTG One federation contract double
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup node <<'NODE' >/tmp/ctg-one-federation.log 2>&1 &
+          const http = require('http')
+          const expected = 'ci-federation-secret-ci-federation-secret-1234567890'
+          const server = http.createServer((req, res) => {
+            res.setHeader('content-type', 'application/json')
+            if (req.method !== 'POST' || req.url !== '/exchange') {
+              res.statusCode = 404
+              res.end(JSON.stringify({ error: 'NOT_FOUND' }))
+              return
+            }
+            if (req.headers['x-ctg-federation-secret'] !== expected) {
+              res.statusCode = 401
+              res.end(JSON.stringify({ error: 'UNAUTHORIZED' }))
+              return
+            }
+            let body = ''
+            req.on('data', (chunk) => { body += chunk })
+            req.on('end', () => {
+              try {
+                const parsed = JSON.parse(body)
+                if (typeof parsed.code !== 'string' || typeof parsed.code_verifier !== 'string') {
+                  throw new Error('invalid')
+                }
+              } catch {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'INVALID_EXCHANGE_REQUEST' }))
+                return
+              }
+              res.statusCode = 401
+              res.end(JSON.stringify({ error: 'INVALID_OR_EXPIRED_CODE' }))
+            })
+          })
+          server.listen(4101, '127.0.0.1')
+          NODE
+          for attempt in $(seq 1 20); do
+            if curl -sS -o /dev/null http://127.0.0.1:4101/not-found; then break; fi
+            sleep 0.25
+          done
+
       - name: Start image with production-equivalent dependencies
         shell: bash
         run: |
@@ -110,6 +153,8 @@ jobs:
             -e AI_SERVICE_URL=http://127.0.0.1:8001 \
             -e CORS_ORIGIN=http://127.0.0.1:3000 \
             -e NEO4J_URI=bolt://127.0.0.1:17687 \
+            -e CTG_ONE_FEDERATION_EXCHANGE_URL=http://127.0.0.1:4101/exchange \
+            -e CTG_ONE_FEDERATION_SECRET=ci-federation-secret-ci-federation-secret-1234567890 \
             -e RAILWAY_GIT_COMMIT_SHA=${{ github.sha }} \
             vertice-api-runtime:${{ github.sha }}
 
@@ -147,6 +192,7 @@ jobs:
           if (body.checks?.database !== 'ok') throw new Error('Postgres is not ready');
           if (body.checks?.redis !== 'ok') throw new Error('Redis is not ready');
           if (body.checks?.neo4j !== 'fail') throw new Error('Contract must prove optional Neo4j does not block readiness');
+          if (body.capabilities?.ctg_one_federation !== 'ready') throw new Error('CTG One federation capability is not ready');
           if (body.revision !== process.env.GITHUB_SHA) throw new Error(`Revision mismatch: ${body.revision}`);
           NODE
 
@@ -155,9 +201,18 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:4000/health | tee /tmp/health.json
           node -e "const b=require('/tmp/health.json'); if(b.status!=='ok'||b.revision!==process.env.GITHUB_SHA) process.exit(1)"
 
+      - name: Verify non-destructive federation canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error http://127.0.0.1:4000/health/federation | tee /tmp/federation.json
+          node -e "const b=require('/tmp/federation.json'); if(b.status!=='ready'||b.remote_status!==401||b.revision!==process.env.GITHUB_SHA) process.exit(1)"
+
       - name: Publish runtime logs
         if: always()
-        run: docker logs vertice-api-runtime || true
+        run: |
+          docker logs vertice-api-runtime || true
+          cat /tmp/ctg-one-federation.log 2>/dev/null || true
 
       - name: Stop runtime container
         if: always()

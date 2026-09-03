@@ -19,6 +19,8 @@ const EXCHANGE_TIMEOUT_MS = 5_000
 const SUBJECT_PATTERN = /^[0-9a-f-]{36}$/i
 const CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/
+const FEDERATION_PROBE_CODE = 'A'.repeat(43)
+const FEDERATION_PROBE_VERIFIER = 'B'.repeat(43)
 
 export type FederationExchangeInput = {
   code: string
@@ -31,6 +33,23 @@ type CtgOneFederationIdentity = {
   email?: unknown
   email_verified?: unknown
   authorities?: unknown
+}
+
+type RemoteFederationError = {
+  error?: unknown
+}
+
+export type FederationProbeState =
+  | 'ready'
+  | 'local_unconfigured'
+  | 'remote_unconfigured'
+  | 'secret_mismatch'
+  | 'unavailable'
+  | 'unexpected_response'
+
+export type FederationProbeResult = {
+  status: FederationProbeState
+  remote_status?: number
 }
 
 function federationError(message: string, statusCode: number, code: string) {
@@ -70,6 +89,65 @@ function normalizeIdentity(raw: CtgOneFederationIdentity): {
   return { subject, email, authorities }
 }
 
+async function remoteErrorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body = await response.clone().json() as RemoteFederationError
+    return typeof body.error === 'string' ? body.error : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function federationHeaders(secret: string): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'x-ctg-federation-secret': secret,
+  }
+}
+
+/**
+ * Non-destructive production canary for the CTG One trust contract.
+ *
+ * It submits a syntactically valid but deliberately nonexistent PKCE code. A
+ * healthy CTG One exchange must authenticate the service secret first and then
+ * reject the fake code with INVALID_OR_EXPIRED_CODE. No real authorization
+ * code can be consumed by this probe.
+ */
+export async function probeCtgOneFederation(): Promise<FederationProbeResult> {
+  const secret = config.CTG_ONE_FEDERATION_SECRET?.trim()
+  if (!secret) return { status: 'local_unconfigured' }
+
+  let response: Response
+  try {
+    response = await fetch(config.CTG_ONE_FEDERATION_EXCHANGE_URL, {
+      method: 'POST',
+      headers: federationHeaders(secret),
+      body: JSON.stringify({
+        code: FEDERATION_PROBE_CODE,
+        code_verifier: FEDERATION_PROBE_VERIFIER,
+      }),
+      signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS),
+    })
+  } catch {
+    return { status: 'unavailable' }
+  }
+
+  const code = await remoteErrorCode(response)
+  if (response.status === 401 && code === 'INVALID_OR_EXPIRED_CODE') {
+    return { status: 'ready', remote_status: response.status }
+  }
+  if (response.status === 401 && code === 'UNAUTHORIZED') {
+    return { status: 'secret_mismatch', remote_status: response.status }
+  }
+  if (response.status === 503 && code === 'FEDERATION_SECRET_NOT_CONFIGURED') {
+    return { status: 'remote_unconfigured', remote_status: response.status }
+  }
+  if (response.status === 503) {
+    return { status: 'unavailable', remote_status: response.status }
+  }
+  return { status: 'unexpected_response', remote_status: response.status }
+}
+
 async function exchangeWithCtgOne(input: FederationExchangeInput) {
   const secret = config.CTG_ONE_FEDERATION_SECRET?.trim()
   if (!secret) {
@@ -84,10 +162,7 @@ async function exchangeWithCtgOne(input: FederationExchangeInput) {
   try {
     response = await fetch(config.CTG_ONE_FEDERATION_EXCHANGE_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-ctg-federation-secret': secret,
-      },
+      headers: federationHeaders(secret),
       body: JSON.stringify(input),
       signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS),
     })
@@ -96,8 +171,31 @@ async function exchangeWithCtgOne(input: FederationExchangeInput) {
   }
 
   if (!response.ok) {
+    const code = await remoteErrorCode(response)
+
+    if (response.status === 401 && code === 'UNAUTHORIZED') {
+      throw federationError(
+        'La credencial de federación fue rechazada por CTG One',
+        503,
+        'CTG_ONE_FEDERATION_SECRET_MISMATCH',
+      )
+    }
     if (response.status === 400 || response.status === 401) {
       throw federationError('Código federado inválido o expirado', 401, 'INVALID_FEDERATION_CODE')
+    }
+    if (response.status === 503 && code === 'FEDERATION_SECRET_NOT_CONFIGURED') {
+      throw federationError(
+        'CTG One no tiene configurado el contrato de federación',
+        503,
+        'CTG_ONE_FEDERATION_REMOTE_NOT_CONFIGURED',
+      )
+    }
+    if (response.status === 503 && code === 'FEDERATION_AUTHORITY_LOOKUP_FAILED') {
+      throw federationError(
+        'CTG One no pudo validar la autoridad federada',
+        503,
+        'CTG_ONE_FEDERATION_AUTHORITY_UNAVAILABLE',
+      )
     }
     throw federationError('CTG One no disponible', 503, 'CTG_ONE_FEDERATION_UNAVAILABLE')
   }
