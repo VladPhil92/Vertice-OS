@@ -192,6 +192,109 @@ BEFORE UPDATE OF "status" ON "proposals"
 FOR EACH ROW
 EXECUTE FUNCTION freeze_governance_electorate_transition();
 
+-- After a vote has opened, its electorate-defining parameters are immutable.
+-- A later code/config change therefore cannot silently rewrite the rules of an
+-- in-progress or historical consultation.
+CREATE OR REPLACE FUNCTION protect_frozen_election_contract()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.voting_starts_at IS NOT NULL AND (
+    NEW.author_id IS DISTINCT FROM OLD.author_id
+    OR NEW.category IS DISTINCT FROM OLD.category
+    OR NEW.scope IS DISTINCT FROM OLD.scope
+    OR NEW.locality_id IS DISTINCT FROM OLD.locality_id
+    OR NEW.neighborhood IS DISTINCT FROM OLD.neighborhood
+    OR NEW.voting_starts_at IS DISTINCT FROM OLD.voting_starts_at
+    OR NEW.voting_ends_at IS DISTINCT FROM OLD.voting_ends_at
+    OR NEW.quorum_required IS DISTINCT FROM OLD.quorum_required
+    OR NEW.approval_threshold IS DISTINCT FROM OLD.approval_threshold
+    OR NEW.eligible_voters IS DISTINCT FROM OLD.eligible_voters
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '23514',
+      MESSAGE = 'election contract is immutable after voting opens';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_protect_frozen_election_contract" ON "proposals";
+CREATE TRIGGER "trg_protect_frozen_election_contract"
+BEFORE UPDATE OF
+  "author_id", "category", "scope", "locality_id", "neighborhood",
+  "voting_starts_at", "voting_ends_at", "quorum_required",
+  "approval_threshold", "eligible_voters"
+ON "proposals"
+FOR EACH ROW
+EXECUTE FUNCTION protect_frozen_election_contract();
+
+-- Closing a vote must agree with the thresholds that were frozen on the
+-- proposal when voting opened. This blocks legacy/admin SQL from forcing an
+-- arbitrary terminal result after the deadline. The application currently
+-- uses the same scope configuration to compute these values; if code and the
+-- frozen contract ever diverge, finalization fails loudly rather than silently
+-- recording a different civic decision.
+CREATE OR REPLACE FUNCTION validate_frozen_voting_result()
+RETURNS TRIGGER AS $$
+DECLARE
+  expected_status TEXT;
+  participation_rate NUMERIC;
+  total_weight NUMERIC;
+  approval_rate NUMERIC;
+BEGIN
+  IF OLD.status = 'voting' AND NEW.status IS DISTINCT FROM 'voting' THEN
+    IF OLD.voting_ends_at IS NULL OR NOW() < OLD.voting_ends_at THEN
+      RETURN NEW; -- early exit is rejected by freeze_governance_electorate_transition
+    END IF;
+
+    IF OLD.eligible_voters IS NULL
+       OR OLD.eligible_voters <= 0
+       OR OLD.quorum_required IS NULL
+       OR OLD.approval_threshold IS NULL THEN
+      expected_status := 'quorum_failed';
+    ELSE
+      participation_rate := OLD.total_votes::NUMERIC / OLD.eligible_voters::NUMERIC;
+
+      IF participation_rate < OLD.quorum_required THEN
+        expected_status := 'quorum_failed';
+      ELSE
+        total_weight := OLD.approve_votes_weighted
+                      + OLD.reject_votes_weighted
+                      + OLD.abstain_votes_weighted;
+        approval_rate := CASE
+          WHEN total_weight > 0 THEN OLD.approve_votes_weighted / total_weight
+          ELSE 0
+        END;
+        expected_status := CASE
+          WHEN approval_rate >= OLD.approval_threshold THEN 'approved'
+          ELSE 'rejected'
+        END;
+      END IF;
+    END IF;
+
+    IF NEW.status <> expected_status THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514',
+        MESSAGE = format(
+          'voting result mismatch for proposal %s: expected=%s requested=%s',
+          OLD.id,
+          expected_status,
+          NEW.status
+        );
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_validate_frozen_voting_result" ON "proposals";
+CREATE TRIGGER "trg_validate_frozen_voting_result"
+BEFORE UPDATE OF "status" ON "proposals"
+FOR EACH ROW
+EXECUTE FUNCTION validate_frozen_voting_result();
+
 -- The entire voter-roll snapshot becomes immutable once a proposal has ever
 -- opened voting. This covers membership, eligibility metadata and frozen
 -- delegation data, and also blocks later INSERT/DELETE operations. Checking
