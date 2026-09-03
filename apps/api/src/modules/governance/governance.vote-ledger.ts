@@ -78,10 +78,12 @@ async function rebuildProposalTally(tx: Prisma.TransactionClient, proposalId: st
  * - delegated participation is persisted with the delegator nullifier;
  * - a later direct vote overrides that citizen's delegated row instead of
  *   double-counting participation;
+ * - overlapping delegations resolve deterministically as proposal > domain >
+ *   general before selecting the effective delegate;
  * - proposal tallies are rebuilt from the durable vote ledger, never from
  *   incremental arithmetic that can drift after retries or concurrency;
  * - the proposal row is locked for the transaction so admission, delegation
- *   claims and tally rebuild form one serializable operation per proposal.
+ *   claims and tally rebuild form one serialized operation per proposal.
  */
 export async function castVoteLedger(
   proposalId: string,
@@ -184,25 +186,43 @@ export async function castVoteLedger(
       directVote = inserted[0]
     }
 
-    // Only delegators in the same frozen electorate can be claimed. DISTINCT
-    // prevents multiple active scopes pointing to the same delegate from
-    // multiplying one citizen's participation.
+    // Resolve one effective delegation per delegator BEFORE filtering by the
+    // delegate who is currently voting. This is critical: filtering by
+    // delegate first would make overlapping scopes race-dependent (for example
+    // a general delegate could claim a citizen before that citizen's
+    // proposal-specific delegate votes). Specificity is deterministic:
+    // proposal > matching domain > general; newest row breaks same-tier ties.
     const delegatorRows = await tx.$queryRaw<DelegatorRow[]>(Prisma.sql`
-      SELECT DISTINCT d.delegator_id
-      FROM delegations d
-      INNER JOIN proposal_voter_roll pvr
-        ON pvr.proposal_id = ${proposalId}::uuid
-       AND pvr.citizen_id = d.delegator_id
-      WHERE d.delegate_id = ${citizenId}::uuid
-        AND d.delegator_id <> ${citizenId}::uuid
-        AND d.is_active = true
-        AND d.valid_from <= NOW()
-        AND (d.valid_until IS NULL OR d.valid_until > NOW())
-        AND (
-          d.delegation_type = 'general'
-          OR (d.delegation_type = 'domain' AND d.domain = ${proposal.category})
-          OR (d.delegation_type = 'proposal' AND d.proposal_id = ${proposalId}::uuid)
-        )
+      WITH effective_delegations AS (
+        SELECT DISTINCT ON (d.delegator_id)
+          d.delegator_id,
+          d.delegate_id
+        FROM delegations d
+        INNER JOIN proposal_voter_roll pvr
+          ON pvr.proposal_id = ${proposalId}::uuid
+         AND pvr.citizen_id = d.delegator_id
+        WHERE d.is_active = true
+          AND d.valid_from <= NOW()
+          AND (d.valid_until IS NULL OR d.valid_until > NOW())
+          AND (
+            d.delegation_type = 'general'
+            OR (d.delegation_type = 'domain' AND d.domain = ${proposal.category})
+            OR (d.delegation_type = 'proposal' AND d.proposal_id = ${proposalId}::uuid)
+          )
+        ORDER BY
+          d.delegator_id,
+          CASE d.delegation_type
+            WHEN 'proposal' THEN 3
+            WHEN 'domain' THEN 2
+            ELSE 1
+          END DESC,
+          d.created_at DESC,
+          d.id DESC
+      )
+      SELECT ed.delegator_id
+      FROM effective_delegations ed
+      WHERE ed.delegate_id = ${citizenId}::uuid
+        AND ed.delegator_id <> ${citizenId}::uuid
     `)
 
     const delegatedValues = delegatorRows.map(({ delegator_id }) => Prisma.sql`
@@ -235,7 +255,10 @@ export async function castVoteLedger(
     }
 
     // A single authoritative recomputation makes retries, direct overrides and
-    // delegated claims converge to the exact same aggregate state.
+    // delegated claims converge to the exact same aggregate state. The votes
+    // table already has a proposal/value/weight index for this read path; keep
+    // correctness-first recomputation until production volume justifies a
+    // benchmarked incremental tally design.
     await rebuildProposalTally(tx, proposalId)
 
     return { directVote, delegatedCount }
