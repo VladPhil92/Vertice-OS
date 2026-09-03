@@ -39,6 +39,8 @@ export interface CivicIdentityProof {
   updated_at: Date
 }
 
+const MAX_FUTURE_EVENT_SKEW_MS = 5 * 60 * 1000
+
 function makeError(message: string, statusCode: number, code: string): Error {
   return Object.assign(new Error(message), { statusCode, code })
 }
@@ -130,6 +132,7 @@ export async function getActiveCivicIdentityProof(
       AND status = 'verified'
       AND assurance_level >= 2
       AND verified_at IS NOT NULL
+      AND verified_at <= NOW()
       AND revoked_at IS NULL
       AND (expires_at IS NULL OR expires_at > NOW())
     ORDER BY assurance_level DESC, verified_at DESC
@@ -167,6 +170,13 @@ export async function ingestCivicProofingEvent(
 
   const occurredAt = new Date(normalized.occurred_at)
   const expiresAt = normalized.expires_at ? new Date(normalized.expires_at) : null
+  if (occurredAt.getTime() > Date.now() + MAX_FUTURE_EVENT_SKEW_MS) {
+    throw makeError(
+      'El evento de identity proofing está fechado demasiado lejos en el futuro',
+      400,
+      'FUTURE_PROOFING_EVENT',
+    )
+  }
 
   return prisma.$transaction(async (tx) => {
     const citizen = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -218,6 +228,13 @@ export async function ingestCivicProofingEvent(
       if (!duplicateProof[0]) {
         throw makeError('Evento duplicado sin estado de proofing asociado', 409, 'PROOFING_EVENT_ORPHANED')
       }
+      if (duplicateProof[0].citizen_id !== normalized.citizen_id) {
+        throw makeError(
+          'La referencia del proveedor ya pertenece a otro ciudadano',
+          409,
+          'PROOFING_SUBJECT_CONFLICT',
+        )
+      }
       return { proof: duplicateProof[0], duplicate: true }
     }
 
@@ -248,7 +265,8 @@ export async function ingestCivicProofingEvent(
         END,
         last_event_at = EXCLUDED.last_event_at,
         updated_at = NOW()
-      WHERE EXCLUDED.last_event_at >= civic_identity_proofs.last_event_at
+      WHERE civic_identity_proofs.citizen_id = EXCLUDED.citizen_id
+        AND EXCLUDED.last_event_at >= civic_identity_proofs.last_event_at
       RETURNING id, citizen_id, provider, provider_reference, status,
                 assurance_level, evidence_hash, verified_at, expires_at, revoked_at,
                 last_event_at, created_at, updated_at
@@ -266,6 +284,13 @@ export async function ingestCivicProofingEvent(
       `)
       if (!current[0]) {
         throw makeError('No fue posible reconciliar el estado de proofing', 409, 'PROOFING_STATE_CONFLICT')
+      }
+      if (current[0].citizen_id !== normalized.citizen_id) {
+        throw makeError(
+          'La referencia del proveedor ya pertenece a otro ciudadano',
+          409,
+          'PROOFING_SUBJECT_CONFLICT',
+        )
       }
       return { proof: current[0], duplicate: false }
     }
