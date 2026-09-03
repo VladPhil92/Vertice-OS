@@ -1,510 +1,387 @@
 # Arquitectura Técnica — VÉRTICE OS
 
-> Documento maestro de arquitectura · v0.1.0  
+> Arquitectura implementada · snapshot 2 de septiembre de 2026  
 > Cartagena de Indias, Colombia
 
+Este documento describe el **runtime que existe hoy**. Los componentes futuros se marcan explícitamente como planeados; no deben confundirse con dependencias operativas.
+
 ---
 
-## 1. Visión de Sistema
+## 1. Topología actual
 
-VÉRTICE OS es una plataforma de infraestructura cívica distribuida compuesta por microservicios especializados, una capa multi-agente de IA, y un sistema de confianza basado en blockchain. Está diseñada para operar a escala territorial desde un municipio hasta múltiples países.
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         CLIENTES                                 │
-│    Web (Next.js)    ·    Mobile (PWA)    ·    API Partners       │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │ HTTPS / WSS
-┌────────────────────────────▼─────────────────────────────────────┐
-│                     API GATEWAY (GraphQL)                        │
-│              Rate Limiting · Auth · Observability                │
-└──────┬──────────┬──────────┬──────────┬──────────┬──────────────┘
-       │          │          │          │          │
-┌──────▼──┐ ┌────▼────┐ ┌───▼───┐ ┌───▼───┐ ┌───▼──────────┐
-│  Auth   │ │Identity │ │Govern.│ │ AI    │ │  Territorial │
-│ Service │ │ Service │ │Engine │ │Orch.  │ │   Engine     │
-└──────┬──┘ └────┬────┘ └───┬───┘ └───┬───┘ └───┬──────────┘
-       │         │          │         │          │
-┌──────▼─────────▼──────────▼─────────▼──────────▼────────────┐
-│                    EVENT BUS (Kafka / Redis Streams)          │
-└──────────────────────────────────────────────────────────────┘
-┌──────────┬───────────┬──────────┬──────────┬─────────────────┐
-│PostgreSQL│  MongoDB  │  Neo4j   │ Pinecone │     Redis       │
-│+ PostGIS │ (NoSQL)   │ (Graph)  │ (Vector) │    (Cache)      │
-└──────────┴───────────┴──────────┴──────────┴─────────────────┘
+```text
 ┌──────────────────────────────────────────────────────────────┐
-│              BLOCKCHAIN LAYER (Polygon PoS)                  │
-│           EAS · IPFS · Smart Contracts · The Graph          │
+│                    CLIENTE WEB / PWA                         │
+│                  apps/web — Next.js 15                      │
+│                                                              │
+│ Dashboard · Identity · Reports · Governance · Legal · AI     │
+│ Workflows · Reputation · Authority · Notifications           │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ HTTPS / REST
+┌──────────────────────────▼───────────────────────────────────┐
+│                    apps/api — Fastify 5                      │
+│                                                              │
+│ auth · dashboard · identity · territorial · governance       │
+│ reputation · legal · ai · workflows · notifications · events│
+└──────────────┬────────────────┬───────────────────┬───────────┘
+               │                │                   │
+               │                │                   └── Neo4j
+               │                │                       reputación/grafo
+               │                └── Redis
+               │                    sesiones/cache/rate-limit/pubsub
+               └── PostgreSQL 16 + PostGIS
+                   estado canónico + geodatos + ledger cívico
+
+                           │ HTTP interno
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    apps/ai — FastAPI                         │
+│ LangGraph · 7 agentes · Claude · Pinecone · Voyage AI       │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│ contracts/ — Solidity ^0.8.24 + Hardhat                     │
+│ CivicSBT · VotingRegistry · Polygon / Amoy                  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
----
+### Contrato de transporte
 
-## 2. Microservicios
-
-### 2.1 Auth Service
-**Responsabilidad:** Autenticación y autorización de todos los actores del sistema.
-
-**Stack:** Node.js + TypeScript + Fastify
-
-**Funcionalidades:**
-- OAuth 2.0 + PKCE para clientes web y móvil
-- JWT con rotación automática (access: 15min, refresh: 7d)
-- MFA: TOTP + biometría (WebAuthn)
-- Integración con Registraduría Nacional para verificación de cédula
-- Sesiones distribuidas en Redis con invalidación instantánea
-
-**APIs:**
-```
-POST /auth/register          # Registro inicial
-POST /auth/verify-identity   # Verificación cédula + selfie
-POST /auth/token             # Obtener tokens
-POST /auth/refresh           # Renovar access token
-POST /auth/logout            # Invalidar sesión
-GET  /auth/me                # Perfil autenticado
-```
+La API activa es **REST sobre Fastify**. No existe un gateway GraphQL/Apollo Federation operativo en `apps/api/src/app.ts`; por tanto, GraphQL no debe presentarse como la interfaz canónica actual.
 
 ---
 
-### 2.2 Identity Service
-**Responsabilidad:** Gestión de identidades cívicas digitales soberanas.
+## 2. Aplicación web
 
-**Stack:** Node.js + TypeScript + Prisma
+**Ruta:** `apps/web`  
+**Framework:** Next.js 15.5.23 + React 18  
+**Deploy:** Vercel
 
-**Funcionalidades:**
-- Creación y gestión de DIDs (Decentralized Identifiers) bajo W3C standard
-- Emisión de Verifiable Credentials (VC) en JSON-LD
-- Zero-Knowledge Proofs para verificar atributos sin revelarlos
-- Sistema de validación comunitaria (3 ciudadanos verificados → 1 nuevo)
-- Perfil cívico: barrio, localidad, intereses, habilidades verificadas
+### Superficies principales
 
-**Flujo de verificación:**
-```
-Usuario ingresa cédula
-        ↓
-Registraduría API valida (hash commitment, nunca texto plano)
-        ↓
-Liveness check (selfie vs foto cédula — procesado localmente)
-        ↓
-DID generado localmente en dispositivo
-        ↓
-DID Document anclado en Polygon (solo hash)
-        ↓
-VC emitida y almacenada en wallet del usuario
-        ↓
-Validación comunitaria activa (24h window)
-        ↓
-Perfil cívico verificado y activo
-```
+- `/dashboard` — centro de comando `Mi VÉRTICE`;
+- `/dashboard/identity` — identidad y assurance;
+- `/dashboard/reports` — reportes territoriales;
+- `/dashboard/proposals` y `/dashboard/governance` — propuestas y decisión colectiva;
+- `/dashboard/legal` — control público / legal;
+- `/dashboard/ai` — interacción con IA cívica;
+- `/dashboard/reputation` — reputación;
+- `/dashboard/workflows` — expedientes cívicos cross-module;
+- `/dashboard/authority` — autoridad de roles para superadmin;
+- `/dashboard/admin` — herramientas administrativas existentes.
+
+### Estado y datos
+
+- TanStack Query para fetching/caching de cliente;
+- Zustand para estado global;
+- Mapbox/react-map-gl para territorio;
+- SSE para eventos en tiempo real;
+- Sentry para observabilidad.
 
 ---
 
-### 2.3 Territorial Engine
-**Responsabilidad:** Inteligencia geoespacial del territorio.
+## 3. API
 
-**Stack:** Python + FastAPI + PostGIS + Mapbox
+**Ruta:** `apps/api`  
+**Runtime:** Node.js 20+  
+**Framework:** Fastify 5.11.2  
+**ORM:** Prisma 5  
+**Deploy:** Railway
 
-**Pipeline de datos:**
-```python
-# Clasificación de reporte entrante
-{
-  "texto": "El hueco en la calle 30 con carrera 5 lleva 3 meses",
-  "coordenadas": {"lat": 10.391, "lng": -75.479},
-  "foto": "base64...",
-  "timestamp": "2025-11-15T10:23:00Z"
-}
+`apps/api/src/app.ts` registra actualmente:
 
-# → Clasificación ML: categoria="infraestructura", subcategoria="vial"
-# → Urgencia: 0.72 (alta)
-# → Clustering: asignado a cluster CTG-INF-042
-# → Geocoding: Localidad Histórica, Barrio Getsemaní
-# → Alerta: Líder territorial asignado notificado
+```text
+/auth
+/dashboard
+/identity
+/territorial
+/governance
+/reputation
+/legal
+/ai
+/workflows
+/notifications
+/events (SSE)
 ```
 
-**Modelos ML:**
-- **Clasificación:** BERT fine-tuned en español (HuggingFace) para categorizar reportes
-- **Clustering:** HDBSCAN para agrupación geoespacial sin número de clusters predefinido
-- **Predicción:** XGBoost sobre series temporales para anticipar zonas de deterioro
-- **Sentimiento:** RoBERTa fine-tuned para análisis de comentarios ciudadanos
+### Readiness
 
-**API Endpoints:**
-```
-POST /territorial/report          # Nuevo reporte ciudadano
-GET  /territorial/heatmap         # Mapa de calor por categoría
-GET  /territorial/clusters        # Clusters activos
-GET  /territorial/priority-zones  # Zonas de mayor urgencia
-GET  /territorial/analytics       # Dashboard analytics
-PUT  /territorial/report/:id      # Actualizar estado de reporte
-```
+`GET /health/ready` distingue dependencias requeridas y degradables:
+
+- PostgreSQL: requerido;
+- Redis: requerido;
+- Neo4j: opcional/degradable.
+
+La caída de Neo4j no debe impedir por sí sola que la API arranque; la ausencia de PostgreSQL o Redis sí.
+
+### Runtime productivo
+
+El Dockerfile es la fuente de verdad del entrypoint. La secuencia esperada es:
+
+1. arrancar el contenedor;
+2. ejecutar migraciones Prisma;
+3. bajar privilegios para el proceso Node de larga duración;
+4. exponer readiness;
+5. Railway usa el healthcheck configurado y no debe redefinir un `startCommand` divergente.
 
 ---
 
-### 2.4 Governance Engine
-**Responsabilidad:** Motor de democracia líquida y decisiones colectivas.
+## 4. Datos
 
-**Stack:** Go + PostgreSQL + Redis
+### PostgreSQL + PostGIS
 
-**Ciclo de vida de una propuesta:**
-```
-ESTADO: IDEA
-  - Creada por ciudadano verificado
-  - Mínimo 10 endorsements para avanzar
+Base canónica para:
 
-ESTADO: DRAFT  
-  - 7 días de comentarios públicos
-  - IA moderadora activa
-  - Enmiendas permitidas
+- ciudadanos;
+- sesiones y grants persistentes relacionados con autoridad;
+- identidades externas;
+- localidades y geodatos;
+- reportes;
+- propuestas;
+- padrón electoral congelado;
+- votos y ledger de participación;
+- delegaciones;
+- expedientes cívicos;
+- documentos/acciones legales;
+- notificaciones y auditoría según el dominio.
 
-ESTADO: DEBATE
-  - Sesión de debate estructurado (72h)
-  - Delegación de voto disponible
-  - IA de gobernanza sintetiza posiciones
+### Redis
 
-ESTADO: VOTING
-  - Ventana de votación (48-168h según impacto)
-  - Quórum dinámico requerido
-  - Voto ponderado por reputación cívica
+Usos activos:
 
-ESTADO: APPROVED / REJECTED
-  - Resultado registrado on-chain
-  - Responsable asignado automáticamente
-  - Tracking de ejecución activo
+- cache;
+- rate limiting;
+- sesiones/estado efímero;
+- pub/sub para eventos en tiempo real.
 
-ESTADO: EXECUTED / FAILED_EXECUTION
-  - Evaluación ciudadana de cumplimiento
-  - Impacto en reputación del responsable
-```
+### Neo4j
 
-**Quórum dinámico:**
-| Tipo de Decisión | Umbral Aprobación | Quórum Mínimo |
-|-----------------|------------------|---------------|
-| Barrio | 40% | 15% elegibles |
-| Localidad | 50% | 20% elegibles |
-| Ciudad | 55% | 25% elegibles |
-| Política Pública Mayor | 60% | 30% elegibles |
+Usado para capacidades de reputación/grafo. No es la autoridad primaria de identidad ni de votación.
+
+### Bases no activas como requisito
+
+MongoDB aparecía en diseños tempranos. No es una dependencia obligatoria del runtime actual y no debe figurar como parte necesaria del stack hasta que exista una integración real.
 
 ---
 
-### 2.5 AI Orchestrator
-**Responsabilidad:** Orquestación del sistema multi-agente de IA.
+## 5. Identidad, autenticación y autorización
 
-**Stack:** Python + LangGraph + Claude API
+### 5.1 Autenticación local
 
-**Arquitectura:**
-```python
-# Router Agent — decide qué agente activar
-class RouterAgent:
-    def route(self, query: Query) -> Agent:
-        intent = self.classify_intent(query)
-        return self.agent_map[intent]
+- JWT;
+- bcrypt;
+- cookies/sesiones propias de VÉRTICE;
+- refresh/session semantics definidas por el módulo de auth.
 
-# Ejemplo de grafo de agentes (LangGraph)
-workflow = StateGraph(AgentState)
-workflow.add_node("citizen_agent", CitizenAgent())
-workflow.add_node("governance_agent", GovernanceAgent())
-workflow.add_node("policy_agent", PolicyAgent())
-workflow.add_node("territorial_agent", TerritorialAgent())
-workflow.add_node("integrity_agent", IntegrityAgent())
-workflow.add_node("comms_agent", CommsAgent())
-workflow.add_node("memory_layer", MemoryLayer())
+### 5.2 Federación CTG One
 
-workflow.add_conditional_edges("router", route_query)
-workflow.add_edge("*", "memory_layer")  # Todos pasan por memoria
+La federación usa un flujo explícito y server-side con PKCE/intercambio corto. VÉRTICE emite su propia sesión.
+
+Invariantes:
+
+- no compartir cookies mediante `Domain=.ctgone.com`;
+- no transportar tokens en query strings/fragments;
+- no asumir identidad por compartir dominio;
+- no vincular una cuenta por mera coincidencia de email;
+- `ctg_one` federation no equivale a civic identity assurance.
+
+### 5.3 Civic identity assurance
+
+`CIVIC_IDENTITY_ASSURANCE_PROVIDERS` contiene los providers aprobados para proofing fuerte de identidad cívica.
+
+La allowlist vacía es fail-closed.
+
+Al abrir una votación, el sistema construye un padrón congelado usando las reglas de assurance vigentes para esa transición. Durante la ventana de voto, ese snapshot se convierte en la autoridad electoral estable.
+
+### 5.4 Roles y autoridad
+
+Modelo actual:
+
+```text
+persistent grants: citizen | moderator | admin | superadmin
+session.active_role
+JWT.sid → sesión
+privileged request → validación de grant persistente
 ```
 
-**RAG Pipeline:**
-```
-Query ciudadana
-      ↓
-Embedding (text-embedding-3-large)
-      ↓
-Pinecone: cosine similarity search → top-20 chunks
-      ↓
-Cross-encoder re-ranking → top-5 chunks
-      ↓
-Context window: [System Prompt + Retrieved Chunks + Query]
-      ↓
-Claude API (claude-sonnet-4-20250514)
-      ↓
-Response + fuentes citadas + nivel de confianza
-      ↓
-Audit log inmutable
-```
+Capacidades:
 
-**Documentos indexados en RAG:**
-- Plan de Ordenamiento Territorial (POT) Cartagena
-- Plan de Desarrollo Municipal vigente
-- Actas del Concejo Distrital (últimos 5 años)
-- Normativa DIAN, MinTIC, MinInterior relevante
-- Jurisprudencia Corte Constitucional
-- Histórico de propuestas y debates de la plataforma
+- cambio de rol activo por sesión;
+- panel de autoridad;
+- bootstrap controlado del primer superadmin;
+- nuevos superadmins concedidos dentro de VÉRTICE;
+- protección del último superadmin;
+- audit trail append-only para eventos de autoridad.
 
 ---
 
-### 2.6 Reputation Service
-**Responsabilidad:** Sistema de reputación cívica multidimensional.
+## 6. Motor territorial y expedientes cívicos
 
-**Stack:** Node.js + Neo4j (graph) + Redis
+### Reportes
 
-**Vectores de reputación:**
+El módulo territorial persiste reportes georreferenciados y sirve superficies de mapa/análisis. El ciudadano puede operar sobre reportes propios desde el dashboard.
+
+### Expediente cívico
+
+`civic_cases` une dominios antes aislados:
+
+```text
+Reporte
+  ↓
+Análisis IA
+  ↓
+Propuesta
+  ↓
+Deliberación / Votación / Decisión
+  ↓
+Control público / Acción legal
 ```
-Reputación_Total = (
-  Participación      × 0.25 +   # Votaciones, debates, asistencias
-  Impacto_Verificado × 0.35 +   # Problemas resueltos atribuibles
-  Calidad            × 0.20 +   # Propuestas aprobadas, upvotes pares
-  Consistencia       × 0.10 +   # Participación sostenida anti-burst
-  Colaboración       × 0.10     # Endorse acertados, trabajo en red
-)
-```
 
-**Anti-manipulación:**
-- **Decay function:** `R(t) = R₀ × e^(-λt)` — la reputación decae sin actividad
-- **Rate limiting:** máximo +X puntos por semana (previene farming)
-- **Cooling periods:** grandes acciones tienen delays de validación
-- **Graph analysis:** Neo4j detecta clusters sospechosos de validación cruzada
-- **Human review:** outliers automáticamente flaggeados para revisión
+El workflow conserva:
 
-**Soulbound Tokens (SBT):**
-- La reputación cívica es no-transferible
-- Implementada como SBT (ERC-5114) en Polygon
-- Los logros cívicos se mintean como SBTs verificables
+- source report;
+- citizen ownership;
+- outputs y audit IDs de IA;
+- proposal linkage;
+- legal/public-control linkage;
+- etapa derivada desde estados canónicos downstream.
+
+No se deben duplicar puntos de reputación por acciones que ya generan un evento canónico en su módulo original.
 
 ---
 
-## 3. Capa Blockchain
+## 7. Gobernanza y ledger electoral
 
-### Dónde SÍ usar blockchain
-- ✅ Registro inmutable de resultados de votaciones
-- ✅ Atestaciones de identidad verificada (EAS)
-- ✅ Compromisos gubernamentales con timestamp criptográfico
-- ✅ Contribuciones cívicas verificadas para reputación
-- ✅ Documentos públicos en IPFS con hash on-chain
+### Padrón congelado
 
-### Dónde NO usar blockchain
-- ❌ Almacenamiento de datos personales
-- ❌ Lógica que requiere velocidad sub-segundo
-- ❌ Sistemas que requieren reversibilidad
-- ❌ Operaciones frecuentes sin necesidad de inmutabilidad
+Antes de aceptar votos, la propuesta debe poseer un `proposal_voter_roll` válido. El sistema falla cerrado si el padrón no existe.
 
-### Smart Contracts (Solidity)
+La elegibilidad durante la votación se lee del snapshot, no de un conjunto mutable de identidades externas.
 
-```solidity
-// VotingRegistry.sol — Registro inmutable de votaciones
-contract VotingRegistry {
-    struct VotingRecord {
-        bytes32 proposalHash;   // Hash de la propuesta
-        uint256 timestamp;
-        uint256 totalVotes;
-        uint256 approveVotes;
-        uint256 rejectVotes;
-        bool approved;
-        string ipfsResultsURI;  // Datos completos en IPFS
-    }
-    
-    mapping(bytes32 => VotingRecord) public records;
-    
-    event VotingFinalized(
-        bytes32 indexed proposalId,
-        bool approved,
-        uint256 timestamp
-    );
-    
-    function recordVoting(
-        bytes32 proposalId,
-        bytes32 proposalHash,
-        uint256 totalVotes,
-        uint256 approveVotes,
-        string calldata ipfsURI
-    ) external onlyGovernanceEngine {
-        // Registro inmutable + emit evento
-    }
-}
-```
+### Delegaciones
 
-```solidity
-// CivicSBT.sol — Soulbound Tokens para reputación cívica
-contract CivicSBT is ERC5114 {
-    // No-transferible, vinculado a DID del ciudadano
-    // Representa logros cívicos verificados
-}
-```
+Scopes soportados:
 
-### Chain Selection: Polygon PoS
-- **Costo:** ~$0.001 por transacción
-- **Finalidad:** ~2 segundos
-- **EVM-compatible:** ecosistema de herramientas maduro
-- **Presencia en Colombia:** exchanges y on-ramps disponibles
+- `general`;
+- `domain`;
+- `proposal`.
+
+La resolución respeta:
+
+- validez temporal;
+- precedencia `proposal > domain > general`;
+- pertenencia al padrón de la propuesta.
+
+### Ledger canónico
+
+El contrato de participación debe garantizar:
+
+- un participante no ejerce doble influencia directa/delegada;
+- los nullifiers permanecen opacos;
+- una participación delegada puede ser reemplazada por voto directo del ciudadano sin crear una segunda voz;
+- tallies y `total_votes` representan participantes durables, no simplemente requests HTTP;
+- el quórum usa el mismo universo conceptual que la admisión electoral.
+
+No volver a implementar validaciones de admisión duplicadas en la ruta HTTP; la lógica electoral debe permanecer centralizada.
 
 ---
 
-## 4. Base de Datos — Schema Principal
+## 8. Servicio de IA
 
-### PostgreSQL (datos relacionales + geoespaciales)
+**Ruta:** `apps/ai`  
+**Framework:** FastAPI  
+**Orquestación:** LangGraph
 
-```sql
--- Ciudadanos verificados
-CREATE TABLE citizens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    did TEXT UNIQUE NOT NULL,           -- Decentralized Identifier
-    cedula_hash TEXT UNIQUE NOT NULL,   -- Hash SHA-256, nunca texto plano
-    locality_id INTEGER REFERENCES localities(id),
-    neighborhood TEXT,
-    reputation_score DECIMAL(10,4) DEFAULT 0,
-    verification_level SMALLINT DEFAULT 0,  -- 0:básico, 1:verificado, 2:validado
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    last_active_at TIMESTAMPTZ
-);
+Agentes implementados:
 
--- Reportes territoriales
-CREATE TABLE territorial_reports (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    citizen_id UUID REFERENCES citizens(id),
-    category TEXT NOT NULL,             -- infraestructura, seguridad, salud, etc.
-    subcategory TEXT,
-    description TEXT NOT NULL,
-    location GEOGRAPHY(POINT, 4326) NOT NULL,  -- PostGIS
-    neighborhood TEXT,
-    urgency_score DECIMAL(4,3),         -- 0.0 a 1.0 (ML score)
-    cluster_id TEXT,                    -- HDBSCAN cluster
-    status TEXT DEFAULT 'open',         -- open, in_progress, resolved, rejected
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    resolved_at TIMESTAMPTZ,
-    CONSTRAINT valid_urgency CHECK (urgency_score BETWEEN 0 AND 1)
-);
+1. CitizenAgent
+2. GovernanceAgent
+3. PolicyAgent
+4. TerritorialAgent
+5. IntegrityAgent
+6. CommsAgent
+7. LegalAgent
 
-CREATE INDEX idx_reports_location ON territorial_reports USING GIST(location);
-CREATE INDEX idx_reports_status ON territorial_reports(status, created_at DESC);
+El `BaseAgent.MODEL` actual es `claude-sonnet-4-6`.
 
--- Propuestas de gobernanza
-CREATE TABLE proposals (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    author_id UUID REFERENCES citizens(id),
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    category TEXT NOT NULL,
-    scope TEXT NOT NULL,                -- barrio, localidad, ciudad, pais
-    status TEXT DEFAULT 'idea',
-    endorsement_count INTEGER DEFAULT 0,
-    quorum_required DECIMAL(4,3),
-    approval_threshold DECIMAL(4,3),
-    blockchain_tx_hash TEXT,            -- Hash de tx cuando se registra on-chain
-    ipfs_uri TEXT,                      -- Documento completo en IPFS
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    voting_starts_at TIMESTAMPTZ,
-    voting_ends_at TIMESTAMPTZ
-);
+### RAG
 
--- Votos (el conteo es público, el voto individual es privado)
-CREATE TABLE votes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    proposal_id UUID REFERENCES proposals(id),
-    citizen_hash TEXT NOT NULL,         -- Hash del ciudadano, no ID directo
-    vote_weight DECIMAL(6,4) NOT NULL,  -- Ponderado por reputación
-    vote_value SMALLINT NOT NULL,       -- 1=favor, -1=contra, 0=abstención
-    nullifier_hash TEXT UNIQUE NOT NULL, -- ZKP nullifier: evita doble voto
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+Pipeline activo cuando existen credenciales:
+
+```text
+consulta
+  ↓
+Voyage AI voyage-3 embedding
+  ↓
+Pinecone similarity search
+  ↓
+fragmentos relevantes
+  ↓
+agente LangGraph / Claude
 ```
 
-### Neo4j (grafo de relaciones cívicas)
-
-```cypher
-// Nodos principales
-(:Citizen {did, reputation_score, locality})
-(:Proposal {id, title, status})
-(:TerritorialReport {id, category, cluster})
-(:LocalLeader {did, territory, verified})
-
-// Relaciones
-(:Citizen)-[:ENDORSED]->(:Proposal)
-(:Citizen)-[:VOTED_ON {weight, value}]->(:Proposal)
-(:Citizen)-[:REPORTED]->(:TerritorialReport)
-(:Citizen)-[:VALIDATES]->(:Citizen)  // Red de validación comunitaria
-(:Citizen)-[:DELEGATES_TO {domain}]->(:Citizen)  // Delegación de voto
-
-// Query: detectar clusters de validación sospechosos
-MATCH (a:Citizen)-[:VALIDATES]->(b:Citizen)-[:VALIDATES]->(a)
-WHERE NOT (a)-[:VALIDATED_BY_EXTERNAL]->()
-RETURN a, b, COUNT(*) as mutual_validations
-HAVING mutual_validations > 5
-```
+Sin configuración de Pinecone/Voyage, el servicio debe degradarse de forma controlada; el fallback hash evita crash pero no debe presentarse como retrieval semántico equivalente.
 
 ---
 
-## 5. Seguridad — Zero Trust Architecture
+## 9. Blockchain
 
-```
-Principio: "Nunca confiar, siempre verificar"
+**Ruta:** `contracts`  
+**Tooling:** Solidity ^0.8.24, Hardhat, OpenZeppelin 5
 
-Toda comunicación:
-├── mTLS entre microservicios
-├── JWT + PKCE para clientes
-├── API Keys rotadas cada 30 días
-└── Vault para gestión de secretos
+Contratos presentes:
 
-Datos en reposo:
-├── AES-256-GCM para datos sensibles
-├── Cédulas nunca almacenadas (solo hash)
-├── Biometría procesada localmente
-└── Backups cifrados geográficamente distribuidos
+- `CivicSBT`;
+- `VotingRegistry`.
 
-Datos en tránsito:
-├── TLS 1.3 obligatorio
-├── HSTS preloading
-└── Certificate Pinning en apps móviles
+Scripts disponibles:
 
-Monitoreo:
-├── SIEM (Elastic Security)
-├── Anomaly detection en tiempo real
-├── Audit log inmutable para toda acción sensible
-└── Penetration testing trimestral
-```
+- local;
+- Polygon Amoy;
+- Polygon mainnet.
 
----
+Clasificación arquitectónica: **código implementado, activación on-chain dependiente del entorno**.
 
-## 6. Observabilidad
+### Uso permitido
 
-```
-Métricas:    Prometheus + Grafana
-Logs:        Loki + Grafana
-Trazas:      Jaeger (distributed tracing)
-Alertas:     PagerDuty
-Uptime:      99.9% SLA objetivo (Fase I), 99.99% (Fase III+)
-```
+- evidencia inmutable de resultados;
+- atestaciones/compromisos donde exista justificación;
+- hashes y referencias de artefactos públicos.
+
+### Uso prohibido
+
+- PII;
+- cédula en claro;
+- email en claro;
+- sentido individual del voto;
+- secretos o credenciales.
 
 ---
 
-## 7. CI/CD Pipeline
+## 10. Componentes planeados o retirados del contrato actual
 
-```yaml
-# .github/workflows/ci.yml (estructura)
-stages:
-  - lint          # ESLint, Prettier, mypy
-  - test          # Jest, pytest, Go test
-  - security      # SAST (Semgrep), Dependency scan
-  - build         # Docker build + push
-  - deploy-staging
-  - integration-tests
-  - deploy-production (manual gate)
-```
+Los siguientes conceptos no deben figurar como “implementados” sin cambios verificables en código:
 
----
-
-## 8. Estimación de Recursos (Fase I — MVP)
-
-| Recurso | Especificación | Costo/mes estimado |
-|---------|---------------|-------------------|
-| Kubernetes cluster (3 nodos) | 4 vCPU, 16GB RAM c/u | ~$450 USD |
-| PostgreSQL (managed) | 2 vCPU, 8GB, 100GB | ~$150 USD |
-| MongoDB Atlas | M30 cluster | ~$200 USD |
-| Redis (managed) | 1GB cache | ~$50 USD |
-| Pinecone | Starter | ~$70 USD |
-| Cloudflare | Pro plan | ~$25 USD |
-| Claude API | ~500K tokens/día | ~$300 USD |
-| Misc (IPFS, CDN, monitoring) | — | ~$100 USD |
-| **Total estimado Fase I** | | **~$1,345 USD/mes** |
+- Apollo Federation / GraphQL gateway;
+- microservicio de gobernanza en Go;
+- Kafka como event bus obligatorio;
+- MongoDB como datastore requerido;
+- The Graph como indexador productivo requerido;
+- integración certificada con Registraduría;
+- biometría/liveness productivos;
+- VC wallet como requisito operativo;
+- DAO productiva.
 
 ---
 
-*Documento vivo — actualizar con cada sprint.*  
-*Última actualización: v0.1.0*
+## 11. Regla de mantenimiento documental
+
+Cuando un PR cambie arquitectura, actualizar simultáneamente:
+
+1. `README.md`;
+2. `docs/CURRENT_STATE.md`;
+3. este documento;
+4. el documento de dominio afectado;
+5. `CLAUDE.md` si el cambio altera una regla que futuros agentes deben respetar.
+
+La documentación arquitectónica debe describir primero el sistema **existente** y separar después la evolución futura.
