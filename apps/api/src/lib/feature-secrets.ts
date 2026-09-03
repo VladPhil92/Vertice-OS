@@ -91,10 +91,9 @@ export function getFeatureCapabilities(): FeatureCapabilities {
     civic_ai: config.AI_SERVICE_SECRET ? 'ready' : 'disabled',
     voting_crypto: config.VOTE_NULLIFIER_SECRET ? 'ready' : 'disabled',
     identity_crypto: config.IDENTITY_PEPPER ? 'ready' : 'disabled',
+    ctg_one_federation: config.CTG_ONE_FEDERATION_SECRET ? 'ready' : 'disabled',
     civic_identity_assurance: getCivicIdentityProviderActivationState(),
     civic_identity_proofing_ingress: getCivicIdentityProofingIngressState(),
-    ctg_one_federation: config.CTG_ONE_FEDERATION_SECRET ? 'ready' : 'disabled',
-    civic_identity_assurance: config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length > 0 ? 'ready' : 'disabled',
     civic_sbt: contractCapability(config.CIVIC_SBT_ADDRESS, true),
     voting_registry: contractCapability(config.VOTING_REGISTRY_ADDRESS, false),
   }

@@ -144,7 +144,6 @@ describe('POST /identity/proofing/events', () => {
     expect(mockIngestEvent).not.toHaveBeenCalled()
   })
 
-  it('passes signature and provider key id to the normalized ingress service', async () => {
   it('forwards the complete provider-isolated authentication envelope', async () => {
     mockIngestEvent.mockResolvedValueOnce({
       duplicate: false,
@@ -159,13 +158,10 @@ describe('POST /identity/proofing/events', () => {
       },
     })
 
-    const signature = `sha256=${'a'.repeat(64)}`
     const res = await app.inject({
       method: 'POST',
       url: '/identity/proofing/events',
       headers: {
-        'x-vertice-proofing-signature': signature,
-        'x-vertice-proofing-key-id': 'test-key',
         'x-vertice-proofing-signature': `v1=${'a'.repeat(64)}`,
         'x-vertice-proofing-timestamp': '1788404400',
         'x-vertice-proofing-key-id': 'primary',
@@ -175,7 +171,6 @@ describe('POST /identity/proofing/events', () => {
 
     expect(res.statusCode).toBe(202)
     expect(JSON.parse(res.payload).duplicate).toBe(false)
-    expect(mockIngestEvent).toHaveBeenCalledWith(payload, signature, 'test-key')
     expect(mockIngestEvent).toHaveBeenCalledWith(payload, {
       signature: `v1=${'a'.repeat(64)}`,
       timestamp: '1788404400',
@@ -201,8 +196,6 @@ describe('POST /identity/proofing/events', () => {
       method: 'POST',
       url: '/identity/proofing/events',
       headers: {
-        'x-vertice-proofing-signature': `sha256=${'b'.repeat(64)}`,
-        'x-vertice-proofing-key-id': 'test-key',
         'x-vertice-proofing-signature': `v1=${'b'.repeat(64)}`,
         'x-vertice-proofing-timestamp': '1788404400',
         'x-vertice-proofing-key-id': 'primary',

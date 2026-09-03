@@ -5,16 +5,12 @@ const mockTransaction = jest.fn((cb: (tx: { $queryRaw: typeof mockQueryRaw }) =>
   cb({ $queryRaw: mockQueryRaw }),
 )
 
-const KEY_ID = 'test-key'
-const PROVIDER_KEY_SECRET = 'test-proofing-provider-key-32-characters!!'
 const PROVIDER_SECRET = 'test-proofing-adapter-secret-32-chars!!'
 
 jest.mock('../../../config', () => ({
   config: {
-    NODE_ENV: 'test',
     CIVIC_IDENTITY_ASSURANCE_PROVIDERS: ['trusted_kyc'],
     CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: JSON.stringify({
-      trusted_kyc: { 'test-key': PROVIDER_KEY_SECRET },
       trusted_kyc: { primary: 'test-proofing-adapter-secret-32-chars!!' },
     }),
   },
@@ -37,10 +33,6 @@ import {
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
 const OTHER_CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440099'
 
-function signatureFor(event: CivicProofingEventInput): string {
-  return `sha256=${createHmac('sha256', PROVIDER_KEY_SECRET)
-    .update(canonicalizeProofingEnvelope(event, KEY_ID))
-    .digest('hex')}`
 function authFor(event: CivicProofingEventInput) {
   const timestamp = String(Math.floor(Date.now() / 1000))
   const keyId = 'primary'
@@ -52,14 +44,12 @@ function authFor(event: CivicProofingEventInput) {
 
 beforeEach(() => {
   jest.resetAllMocks()
-  config.NODE_ENV = 'test'
   config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.splice(
     0,
     config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length,
     'trusted_kyc',
   )
   config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
-    trusted_kyc: { [KEY_ID]: PROVIDER_KEY_SECRET },
     trusted_kyc: { primary: PROVIDER_SECRET },
   })
   mockTransaction.mockImplementation((cb: (tx: { $queryRaw: typeof mockQueryRaw }) => unknown) =>
@@ -81,7 +71,6 @@ describe('identity proofing adversarial guards', () => {
       expires_at: null,
     }
 
-    await expect(ingestCivicProofingEvent(event, signatureFor(event), KEY_ID)).rejects.toMatchObject({
     await expect(ingestCivicProofingEvent(event, authFor(event))).rejects.toMatchObject({
       statusCode: 400,
       code: 'FUTURE_PROOFING_EVENT',
@@ -125,7 +114,6 @@ describe('identity proofing adversarial guards', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([winningProof])
 
-    await expect(ingestCivicProofingEvent(event, signatureFor(event), KEY_ID)).rejects.toMatchObject({
     await expect(ingestCivicProofingEvent(event, authFor(event))).rejects.toMatchObject({
       statusCode: 409,
       code: 'PROOFING_SUBJECT_CONFLICT',

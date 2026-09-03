@@ -13,7 +13,6 @@ type MutableConfig = {
   AI_SERVICE_SECRET: string
   CTG_ONE_FEDERATION_SECRET?: string
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: string[]
-  CIVIC_IDENTITY_PROOFING_EVENT_SECRET?: string
   CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: string
   POLYGON_RPC_URL?: string
   POLYGON_PRIVATE_KEY?: string
@@ -31,7 +30,6 @@ const original = {
   AI_SERVICE_SECRET: mutableConfig.AI_SERVICE_SECRET,
   CTG_ONE_FEDERATION_SECRET: mutableConfig.CTG_ONE_FEDERATION_SECRET,
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: [...mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS],
-  CIVIC_IDENTITY_PROOFING_EVENT_SECRET: mutableConfig.CIVIC_IDENTITY_PROOFING_EVENT_SECRET,
   CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: mutableConfig.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON,
   POLYGON_RPC_URL: mutableConfig.POLYGON_RPC_URL,
   POLYGON_PRIVATE_KEY: mutableConfig.POLYGON_PRIVATE_KEY,
@@ -48,7 +46,6 @@ beforeEach(() => {
   mutableConfig.AI_SERVICE_SECRET = ''
   mutableConfig.CTG_ONE_FEDERATION_SECRET = undefined
   mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS = []
-  mutableConfig.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = undefined
   mutableConfig.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = ''
   mutableConfig.POLYGON_RPC_URL = undefined
   mutableConfig.POLYGON_PRIVATE_KEY = undefined
@@ -101,6 +98,8 @@ describe('feature-scoped production configuration', () => {
     const capabilities = getFeatureCapabilities()
     expect(capabilities.civic_identity_assurance).toBe('misconfigured')
     expect(capabilities.civic_identity_proofing_ingress).toBe('misconfigured')
+  })
+
   it('reports CTG One federation ready only when its shared secret is configured', () => {
     mutableConfig.CTG_ONE_FEDERATION_SECRET = 'federation-secret-with-at-least-thirty-two-characters'
 

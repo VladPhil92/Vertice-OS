@@ -10,14 +10,9 @@ process.env.NEO4J_PASSWORD = 'vertice'
 // Claves separadas de JWT_SECRET — ver config.ts
 process.env.VOTE_NULLIFIER_SECRET = 'test-nullifier-secret-32-chars-min!!'
 process.env.IDENTITY_PEPPER = 'test-identity-pepper-32-chars-min!!'
-// Proveedor sintético exclusivo de test/desarrollo. El registro de adaptadores
-// lo excluye de forma absoluta cuando NODE_ENV=production.
+// Proveedor ficticio exclusivo del entorno de test. Producción conserva el
+// default fail-closed (allowlist vacía) hasta integrar y auditar un proveedor real.
 process.env.CIVIC_IDENTITY_ASSURANCE_PROVIDERS = 'trusted_kyc'
-process.env.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
-  trusted_kyc: { 'test-key': 'test-proofing-provider-key-32-characters!!' },
-})
-// Contrato legacy, conservado sólo para certificar compatibilidad de config.
-process.env.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = 'test-proofing-event-secret-32-chars!!'
 // P0.4: un proveedor trusted solo es operacional si también existe una llave
 // de ingress provider-scoped. Este secreto es exclusivamente de fixtures.
 process.env.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({

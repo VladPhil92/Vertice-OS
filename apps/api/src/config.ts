@@ -51,11 +51,6 @@ const schema = z.object({
         .filter(Boolean),
     )),
   ),
-  // Contrato legacy P0.2. Se conserva durante la transición de configuración,
-  // pero P0.4 autentica el ingress con llaves aisladas por proveedor/key-id.
-  CIVIC_IDENTITY_PROOFING_EVENT_SECRET: z.string().min(32).optional(),
-  // JSON feature-scoped: {"provider":{"key-id":"secret>=32"}}. Un JSON
-  // inválido degrada sólo identity proofing; no impide arrancar la API base.
   // Contrato legacy P0.2. Se conserva temporalmente para una migración de
   // configuración sin ruptura, pero P0.4 ya no lo usa para autenticar ingress.
   CIVIC_IDENTITY_PROOFING_EVENT_SECRET: z.string().min(32).optional(),

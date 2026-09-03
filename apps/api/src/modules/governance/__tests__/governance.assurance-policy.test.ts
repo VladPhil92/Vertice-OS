@@ -5,16 +5,7 @@ const mockTransaction = jest.fn((cb: (tx: { $queryRaw: typeof mockQueryRaw }) =>
 
 jest.mock('../../../config', () => ({
   config: {
-    NODE_ENV: 'test',
     CIVIC_IDENTITY_ASSURANCE_PROVIDERS: ['trusted_kyc'],
-    CIVIC_IDENTITY_PROVIDER_REGISTRATIONS: JSON.stringify([
-      {
-        provider: 'trusted_kyc',
-        adapter: 'test-native-signature-adapter',
-        approvedAt: '2026-09-03T00:00:00.000Z',
-        approvedBy: 'governance-assurance-policy-test',
-      },
-    ]),
     CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: JSON.stringify({
       trusted_kyc: { test: 'test-proofing-adapter-secret-32-chars!!' },
     }),

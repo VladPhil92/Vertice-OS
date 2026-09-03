@@ -2,7 +2,6 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { delCache } from '../../lib/cache'
 import { enqueueJob } from '../../lib/jobs'
-import { getActivatedCivicIdentityProviders } from '../identity/identity-provider-registry'
 import { createNotification } from '../notifications/notifications.service'
 import { getOperationalCivicIdentityProviders } from '../identity/identity-proofing-provider-config'
 import type { Proposal, ProposalRow, ProposalScope, ProposalStatus } from './governance.types'
@@ -66,10 +65,6 @@ function normalizeProposal(row: ProposalRow): Proposal {
 }
 
 /**
- * Frozen electoral roll sourced from the proof ledger. P0.4 adds a second
- * activation boundary: a provider must be configured AND backed by a compiled
- * provider-adapter registration. Environment configuration alone can never
- * make an arbitrary identity source authoritative for voting.
  * P0.4 voter-roll activation interlock.
  *
  * The frozen electorate is derived from durable civic proofs only for providers
@@ -83,8 +78,6 @@ async function freezeProofBackedVoterRoll(
   proposalId: string,
   proposal: Proposal,
 ): Promise<number> {
-  const trustedProviders = getActivatedCivicIdentityProviders()
-  if (trustedProviders.length === 0) return 0
   const operationalProviders = getOperationalCivicIdentityProviders()
   if (operationalProviders.length === 0) {
     throw makeError(

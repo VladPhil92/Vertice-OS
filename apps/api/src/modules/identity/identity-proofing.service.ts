@@ -2,10 +2,6 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import {
-  getActivatedCivicIdentityProviders,
-  isActivatedCivicIdentityProvider,
-  resolveProofingAdapterSecret,
-} from './identity-provider-registry'
   getOperationalCivicIdentityProviders,
   resolveProofingAdapterSecret,
 } from './identity-proofing-provider-config'
@@ -73,10 +69,6 @@ function normalizedProvider(provider: string): string {
   return provider.trim().toLowerCase()
 }
 
-/**
- * Canonical normalized event produced only after a provider adapter validates
- * the vendor's native webhook/signature contract.
- */
 export function canonicalizeProofingEvent(input: CivicProofingEventInput): string {
   const occurredAt = new Date(input.occurred_at)
   const expiresAt = input.expires_at ? new Date(input.expires_at) : null
@@ -97,21 +89,6 @@ export function canonicalizeProofingEvent(input: CivicProofingEventInput): strin
   })
 }
 
-/** Bind key-id into the authenticated envelope so key rotation is auditable. */
-export function canonicalizeProofingEnvelope(
-  input: CivicProofingEventInput,
-  keyId: string,
-): string {
-  return `${keyId}|${canonicalizeProofingEvent(input)}`
-}
-
-export function verifyProofingEventSignature(
-  input: CivicProofingEventInput,
-  signatureHeader: string | undefined,
-  keyIdHeader: string | undefined,
-): void {
-  const { keyId, secret } = resolveProofingAdapterSecret(input.provider, keyIdHeader)
-  const supplied = signatureHeader?.replace(/^sha256=/i, '') ?? ''
 export function canonicalizeProofingEnvelope(
   input: CivicProofingEventInput,
   timestamp: string,
@@ -168,7 +145,6 @@ export function verifyProofingEventSignature(
   }
 
   const expected = createHmac('sha256', secret)
-    .update(canonicalizeProofingEnvelope(input, keyId))
     .update(canonicalizeProofingEnvelope(normalized, timestamp, keyId))
     .digest()
   const received = Buffer.from(supplied, 'hex')
@@ -209,7 +185,6 @@ export async function getCivicIdentityProofs(citizenId: string): Promise<CivicId
 export async function getActiveCivicIdentityProof(
   citizenId: string,
 ): Promise<CivicIdentityProof | null> {
-  const providers = getActivatedCivicIdentityProviders()
   const providers = getOperationalCivicIdentityProviders()
   if (providers.length === 0) return null
 
@@ -235,21 +210,6 @@ export async function getActiveCivicIdentityProof(
 
 export async function ingestCivicProofingEvent(
   input: CivicProofingEventInput,
-  signatureHeader: string | undefined,
-  keyIdHeader: string | undefined,
-): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
-  const provider = normalizedProvider(input.provider)
-
-  if (!isActivatedCivicIdentityProvider(provider)) {
-    throw makeError(
-      'Proveedor de identity proofing no autorizado',
-      403,
-      'UNTRUSTED_PROOFING_PROVIDER',
-    )
-  }
-
-  const normalized: CivicProofingEventInput = { ...input, provider }
-  verifyProofingEventSignature(normalized, signatureHeader, keyIdHeader)
   auth: CivicProofingIngressAuth,
 ): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
   const provider = normalizedProvider(input.provider)
