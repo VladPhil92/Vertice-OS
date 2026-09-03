@@ -1,33 +1,21 @@
-const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
-
-function isLoopbackUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
-  } catch {
-    return false
-  }
-}
+const configuredDevelopmentBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
 
 /**
  * Browser API target.
  *
- * Localhost is a development-only default. Production builds must never silently
- * send citizen credentials or authenticated requests to the user's own machine.
- * A stale Vercel variable pointing at loopback therefore fails closed.
+ * Production is deliberately same-origin. The browser never talks to Railway
+ * directly; Vercel proxies /_api/* to the canonical Railway API. This keeps
+ * refresh cookies first-party, satisfies the CSP with `connect-src 'self'`,
+ * and makes stale NEXT_PUBLIC_API_URL values unable to redirect credentials.
+ *
+ * Development may still point directly at a local API for the normal local
+ * monorepo workflow.
  */
-const productionConfiguredBaseUrl = configuredBaseUrl && !isLoopbackUrl(configuredBaseUrl)
-  ? configuredBaseUrl
-  : ''
-
 export const BASE_URL = process.env.NODE_ENV === 'development'
-  ? (configuredBaseUrl || 'http://localhost:4000')
-  : productionConfiguredBaseUrl
+  ? (configuredDevelopmentBaseUrl || 'http://localhost:4000')
+  : '/_api'
 
 export function requireApiBaseUrl(): string {
-  if (!BASE_URL) {
-    throw new Error('API_NOT_CONFIGURED')
-  }
   return BASE_URL
 }
 
