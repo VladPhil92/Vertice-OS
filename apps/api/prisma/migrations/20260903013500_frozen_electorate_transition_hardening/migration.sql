@@ -12,6 +12,64 @@ CREATE INDEX "idx_proposal_voter_roll_effective_delegate"
   ON "proposal_voter_roll" ("proposal_id", "effective_delegate_id")
   WHERE "effective_delegate_id" IS NOT NULL;
 
+-- Cutover for proposals that are already voting when this migration lands.
+-- We snapshot their current effective delegation at migration time rather than
+-- fabricating a historical opening-time mapping that can no longer be proven.
+UPDATE proposal_voter_roll pvr
+   SET delegation_frozen_at = NOW()
+  FROM proposals p
+ WHERE p.id = pvr.proposal_id
+   AND p.status = 'voting'
+   AND pvr.delegation_frozen_at IS NULL;
+
+WITH active_voting AS (
+  SELECT id, category
+  FROM proposals
+  WHERE status = 'voting'
+),
+effective_delegations AS (
+  SELECT DISTINCT ON (p.id, d.delegator_id)
+    p.id AS proposal_id,
+    d.delegator_id,
+    d.delegate_id,
+    d.id AS source_delegation_id,
+    d.delegation_type
+  FROM active_voting p
+  INNER JOIN proposal_voter_roll delegator_roll
+    ON delegator_roll.proposal_id = p.id
+  INNER JOIN delegations d
+    ON d.delegator_id = delegator_roll.citizen_id
+  INNER JOIN proposal_voter_roll delegate_roll
+    ON delegate_roll.proposal_id = p.id
+   AND delegate_roll.citizen_id = d.delegate_id
+  WHERE d.is_active = TRUE
+    AND d.delegator_id <> d.delegate_id
+    AND d.valid_from <= NOW()
+    AND (d.valid_until IS NULL OR d.valid_until > NOW())
+    AND (
+      d.delegation_type = 'general'
+      OR (d.delegation_type = 'domain' AND d.domain = p.category)
+      OR (d.delegation_type = 'proposal' AND d.proposal_id = p.id)
+    )
+  ORDER BY
+    p.id,
+    d.delegator_id,
+    CASE d.delegation_type
+      WHEN 'proposal' THEN 3
+      WHEN 'domain' THEN 2
+      ELSE 1
+    END DESC,
+    d.created_at DESC,
+    d.id DESC
+)
+UPDATE proposal_voter_roll pvr
+   SET effective_delegate_id = ed.delegate_id,
+       source_delegation_id = ed.source_delegation_id,
+       effective_delegation_type = ed.delegation_type
+  FROM effective_delegations ed
+ WHERE pvr.proposal_id = ed.proposal_id
+   AND pvr.citizen_id = ed.delegator_id;
+
 -- Every transition into `voting` must arrive with the canonical voter-roll
 -- denominator already computed by the application transaction. This prevents
 -- direct SQL/admin paths from opening a vote without a frozen electorate.
