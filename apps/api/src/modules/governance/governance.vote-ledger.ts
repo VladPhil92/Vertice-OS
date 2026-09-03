@@ -11,7 +11,6 @@ import type { VoteReceipt } from './governance.types'
 type VoteContextRow = {
   id: string
   status: string
-  category: string
   voting_ends_at: Date | null
   roll_exists: boolean
   eligible: boolean
@@ -75,6 +74,8 @@ async function rebuildProposalTally(tx: Prisma.TransactionClient, proposalId: st
  * Invariants:
  * - one frozen-roll citizen = one durable vote row per proposal;
  * - delegated participation is persisted with the delegator nullifier;
+ * - effective delegation is read exclusively from the voter-roll snapshot
+ *   frozen when the proposal entered voting, never from live delegations;
  * - a later direct vote overrides that citizen's delegated row instead of
  *   double-counting participation;
  * - proposal tallies are rebuilt from the durable vote ledger, never from
@@ -94,7 +95,6 @@ export async function castVoteLedger(
       SELECT
         p.id,
         p.status,
-        p.category,
         p.voting_ends_at,
         EXISTS(
           SELECT 1
@@ -183,42 +183,17 @@ export async function castVoteLedger(
       directVote = inserted[0]
     }
 
-    // Resolve the delegator's effective delegation BEFORE filtering by the
-    // current delegate. Otherwise a broad/general delegate voting first could
-    // claim a citizen who had a more specific proposal/domain delegation to
-    // somebody else. Specificity is deterministic: proposal > domain > general;
-    // newest wins inside the same specificity level.
+    // Delegation is frozen at debate -> voting by the database transition
+    // trigger. Live changes to `delegations` after that moment must not mutate
+    // the electorate or change whose ballot can represent a frozen voter.
     const delegatorRows = await tx.$queryRaw<DelegatorRow[]>(Prisma.sql`
-      WITH effective_delegations AS (
-        SELECT DISTINCT ON (d.delegator_id)
-          d.delegator_id,
-          d.delegate_id
-        FROM delegations d
-        INNER JOIN proposal_voter_roll pvr
-          ON pvr.proposal_id = ${proposalId}::uuid
-         AND pvr.citizen_id = d.delegator_id
-        WHERE d.is_active = true
-          AND d.valid_from <= NOW()
-          AND (d.valid_until IS NULL OR d.valid_until > NOW())
-          AND (
-            d.delegation_type = 'general'
-            OR (d.delegation_type = 'domain' AND d.domain = ${proposal.category})
-            OR (d.delegation_type = 'proposal' AND d.proposal_id = ${proposalId}::uuid)
-          )
-        ORDER BY
-          d.delegator_id,
-          CASE d.delegation_type
-            WHEN 'proposal' THEN 3
-            WHEN 'domain' THEN 2
-            ELSE 1
-          END DESC,
-          d.created_at DESC,
-          d.id DESC
-      )
-      SELECT ed.delegator_id
-      FROM effective_delegations ed
-      WHERE ed.delegate_id = ${citizenId}::uuid
-        AND ed.delegator_id <> ${citizenId}::uuid
+      SELECT pvr.citizen_id AS delegator_id
+      FROM proposal_voter_roll pvr
+      WHERE pvr.proposal_id = ${proposalId}::uuid
+        AND pvr.effective_delegate_id = ${citizenId}::uuid
+        AND pvr.citizen_id <> ${citizenId}::uuid
+        AND pvr.delegation_frozen_at IS NOT NULL
+      ORDER BY pvr.citizen_id
     `)
 
     const delegatedValues = delegatorRows.map(({ delegator_id }) => Prisma.sql`

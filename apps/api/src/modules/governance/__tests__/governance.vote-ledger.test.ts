@@ -9,6 +9,7 @@ const mockLoggerError = jest.fn()
 
 jest.mock('../../../config', () => ({
   config: {
+    NODE_ENV: 'test',
     VOTE_NULLIFIER_SECRET: 'test-nullifier-secret-32-chars-min!!',
     JWT_SECRET: 'test-secret-with-at-least-32-characters-ok',
   },
@@ -33,7 +34,6 @@ const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
 const CONTEXT = {
   id: PROPOSAL_ID,
   status: 'voting',
-  category: 'infraestructura',
   voting_ends_at: new Date(Date.now() + 3600 * 1000),
   roll_exists: true,
   eligible: true,
@@ -61,7 +61,7 @@ beforeEach(() => {
 })
 
 describe('canonical liquid-democracy vote ledger', () => {
-  it('persists delegated participants and rebuilds the proposal tally from durable vote rows', async () => {
+  it('persists frozen delegated participants and rebuilds the proposal tally from durable vote rows', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([CONTEXT])
       .mockResolvedValueOnce([])
@@ -87,13 +87,11 @@ describe('canonical liquid-democracy vote ledger', () => {
     expect(contextSql).toContain('FOR UPDATE')
 
     const delegationSql = sqlText(mockQueryRaw.mock.calls[3]?.[0])
-    expect(delegationSql).toContain('WITH effective_delegations AS')
-    expect(delegationSql).toContain('DISTINCT ON (d.delegator_id)')
-    expect(delegationSql).toContain("WHEN 'proposal' THEN 3")
-    expect(delegationSql).toContain("WHEN 'domain' THEN 2")
-    expect(delegationSql).toContain('WHERE ed.delegate_id')
     expect(delegationSql).toContain('proposal_voter_roll')
-    expect(delegationSql).toContain('d.valid_until')
+    expect(delegationSql).toContain('effective_delegate_id')
+    expect(delegationSql).toContain('delegation_frozen_at IS NOT NULL')
+    expect(delegationSql).not.toContain('FROM delegations')
+    expect(delegationSql).not.toContain('valid_until')
 
     const delegatedInsertSql = sqlText(mockQueryRaw.mock.calls[4]?.[0])
     expect(delegatedInsertSql).toContain('is_delegated')

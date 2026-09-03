@@ -217,18 +217,24 @@ model ProposalEndorsement {
 // fue correcto. El conteo ahora es literalmente el número de filas insertadas
 // aquí en la misma transacción — no puede desincronizarse del padrón.
 model ProposalVoterRoll {
-  proposalId         String   @map("proposal_id") @db.Uuid
-  citizenId          String   @map("citizen_id") @db.Uuid
-  neighborhood       String?
-  localityId         Int?     @map("locality_id")
-  verificationLevel  Int      @map("verification_level") @db.SmallInt
-  eligibilityReason  String   @map("eligibility_reason")
-  frozenAt           DateTime @default(now()) @map("frozen_at") @db.Timestamptz(6)
+  proposalId              String    @map("proposal_id") @db.Uuid
+  citizenId               String    @map("citizen_id") @db.Uuid
+  neighborhood            String?
+  localityId              Int?      @map("locality_id")
+  verificationLevel       Int       @map("verification_level") @db.SmallInt
+  eligibilityReason       String    @map("eligibility_reason")
+  frozenAt                DateTime  @default(now()) @map("frozen_at") @db.Timestamptz(6)
+  effectiveDelegateId     String?   @map("effective_delegate_id") @db.Uuid
+  sourceDelegationId      String?   @map("source_delegation_id") @db.Uuid
+  effectiveDelegationType String?   @map("effective_delegation_type") @db.VarChar(20)
+  delegationFrozenAt      DateTime? @map("delegation_frozen_at") @db.Timestamptz(6)
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   citizen  Citizen  @relation(fields: [citizenId], references: [id], onDelete: Cascade)
 
   @@id([proposalId, citizenId])
+  // The partial DB index on (proposal_id, effective_delegate_id) is managed by
+  // the SQL migration because Prisma does not model its WHERE predicate here.
   @@map("proposal_voter_roll")
 }
 
@@ -347,7 +353,7 @@ model CivicCase {
   createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  citizen       Citizen          @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+  citizen       Citizen           @relation(fields: [citizenId], references: [id], onDelete: Cascade)
   sourceReport  TerritorialReport @relation(fields: [sourceReportId], references: [id], onDelete: Cascade)
   proposal      Proposal?         @relation(fields: [proposalId], references: [id], onDelete: SetNull)
   legalDocument LegalDocument?    @relation(fields: [legalDocumentId], references: [id], onDelete: SetNull)
