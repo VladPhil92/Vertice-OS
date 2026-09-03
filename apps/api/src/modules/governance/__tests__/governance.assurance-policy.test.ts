@@ -108,7 +108,30 @@ describe('P0 governance identity assurance policy', () => {
     expect(rosterSql).toContain('ei.provider IN')
   })
 
-  it('filters delegated voting weight through the same assurance policy', async () => {
+  it('rejects a direct voter who is not in the frozen roll', async () => {
+    const votingProposal = {
+      ...BASE_PROPOSAL,
+      status: 'voting',
+      voting_ends_at: new Date(Date.now() + 3600 * 1000),
+    }
+
+    mockQueryRaw
+      .mockResolvedValueOnce([votingProposal])
+      .mockResolvedValueOnce([{ already_voted: 0, reputation_score: '0.0000', eligible: false }])
+
+    await expect(castVote(
+      BASE_PROPOSAL.id,
+      '550e8400-e29b-41d4-a716-446655440099',
+      1,
+    )).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'NOT_ELIGIBLE_VOTER',
+    })
+
+    expect(mockQueryRaw).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses the frozen roll for delegated weight and preserves validity and delegation scope', async () => {
     const votingProposal = {
       ...BASE_PROPOSAL,
       status: 'voting',
@@ -123,7 +146,7 @@ describe('P0 governance identity assurance policy', () => {
 
     mockQueryRaw
       .mockResolvedValueOnce([votingProposal])
-      .mockResolvedValueOnce([{ already_voted: 0, reputation_score: '0.0000' }])
+      .mockResolvedValueOnce([{ already_voted: 0, reputation_score: '0.0000', eligible: true }])
       .mockResolvedValueOnce([voteRow])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -136,9 +159,20 @@ describe('P0 governance identity assurance policy', () => {
 
     expect(receipt.vote_weight).toBe(1)
     expect(receipt.delegated_count).toBe(0)
+
+    const directEligibilitySql = sqlText(mockQueryRaw.mock.calls[1]?.[0])
+    expect(directEligibilitySql).toContain('proposal_voter_roll')
+    expect(directEligibilitySql).not.toContain('external_identities')
+
     const delegationSql = sqlText(mockQueryRaw.mock.calls[3]?.[0])
-    expect(delegationSql).toContain('external_identities')
-    expect(delegationSql).toContain('c.verification_level >= 2')
-    expect(delegationSql).toContain('ei.provider IN')
+    expect(delegationSql).toContain('proposal_voter_roll')
+    expect(delegationSql).toContain('pvr.proposal_id')
+    expect(delegationSql).toContain('pvr.citizen_id')
+    expect(delegationSql).toContain('d.valid_from <= NOW()')
+    expect(delegationSql).toContain('d.valid_until IS NULL OR d.valid_until > NOW()')
+    expect(delegationSql).toContain("d.delegation_type = 'general'")
+    expect(delegationSql).toContain("d.delegation_type = 'domain'")
+    expect(delegationSql).toContain("d.delegation_type = 'proposal'")
+    expect(delegationSql).not.toContain('external_identities')
   })
 })
