@@ -29,6 +29,7 @@ jest.mock('ethers', () => {
 })
 
 // The module reads config at import time — ensure env vars are set (setup.ts does this)
+import { config } from '../../config'
 import { isBlockchainConfigured, isValidWalletAddress, BadgeType, deriveDIDCommitment, buildCitizenBadgeURI } from '../blockchain'
 
 describe('isBlockchainConfigured', () => {
@@ -78,16 +79,22 @@ describe('deriveDIDCommitment', () => {
   })
 
   it('falla si falta el pepper en vez de emitir un compromiso débil', () => {
-    const original = process.env.DID_COMMITMENT_PEPPER
-    jest.resetModules()
-    delete process.env.DID_COMMITMENT_PEPPER
+    const mutableConfig = config as unknown as { DID_COMMITMENT_PEPPER?: string }
+    const original = mutableConfig.DID_COMMITMENT_PEPPER
+    mutableConfig.DID_COMMITMENT_PEPPER = undefined
+
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const fresh = require('../blockchain')
-      expect(() => fresh.deriveDIDCommitment(DID)).toThrow(/DID_COMMITMENT_PEPPER/)
+      try {
+        deriveDIDCommitment(DID)
+        throw new Error('Expected BLOCKCHAIN_CRYPTO_UNAVAILABLE')
+      } catch (error) {
+        expect(error).toMatchObject({
+          statusCode: 503,
+          code: 'BLOCKCHAIN_CRYPTO_UNAVAILABLE',
+        })
+      }
     } finally {
-      process.env.DID_COMMITMENT_PEPPER = original
-      jest.resetModules()
+      mutableConfig.DID_COMMITMENT_PEPPER = original
     }
   })
 })

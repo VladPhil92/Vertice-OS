@@ -9,6 +9,7 @@ import { config } from './config'
 import { redis } from './lib/redis'
 import { prisma } from './lib/prisma'
 import { getNeo4jDriver } from './lib/neo4j'
+import { getFeatureCapabilities } from './lib/feature-secrets'
 import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
@@ -57,12 +58,10 @@ export function buildApp() {
     trustProxy: true,
   })
 
-  // ── Plugins ──────────────────────────────────────────────────────
-
   app.register(sensible)
 
   app.register(helmet, {
-    contentSecurityPolicy: false, // gestionado en Next.js
+    contentSecurityPolicy: false,
   })
 
   app.register(cors, {
@@ -78,7 +77,6 @@ export function buildApp() {
     sign: { algorithm: 'HS256' },
   })
 
-  // Rate limiting deshabilitado en test para simplificar fixtures
   if (config.NODE_ENV !== 'test') {
     app.register(rateLimit, {
       global: true,
@@ -92,11 +90,6 @@ export function buildApp() {
     })
   }
 
-  // ── Error handler global ─────────────────────────────────────────
-
-  // Fastify 5 tipa el `error` del handler como `unknown` (en 4 era
-  // FastifyError), así que se normaliza una vez en lugar de castear campo a
-  // campo. El comportamiento es idéntico: mismos códigos, mismo mensaje.
   app.setErrorHandler((error, request, reply) => {
     const err = error as { statusCode?: number; code?: string; message?: string }
     const statusCode = err.statusCode ?? 500
@@ -118,8 +111,6 @@ export function buildApp() {
     })
   })
 
-  // ── Health checks ────────────────────────────────────────────────
-
   app.get('/health', async () => ({
     status: 'ok',
     version: '0.1.0',
@@ -127,17 +118,9 @@ export function buildApp() {
     timestamp: new Date().toISOString(),
   }))
 
-  // Readiness. Distingue dependencias REQUERIDAS de OPCIONALES a propósito:
-  // este endpoint es el healthcheck del despliegue, así que marcar el
-  // servicio como no-listo equivale a impedir que arranque.
-  //
-  // Postgres y Redis son requeridos: sin ellos no hay autenticación, sesiones,
-  // ni datos — el servicio no puede atender nada útil.
-  //
-  // Neo4j es opcional: solo alimenta el grafo de reputación. Su conectividad
-  // nunca debe bloquear la respuesta de readiness. Las tres sondas se ejecutan
-  // en paralelo y con timeout explícito para que una dependencia inaccesible
-  // no pueda consumir por sí sola toda la ventana de healthcheck de Railway.
+  // PostgreSQL and Redis are the only deployment-blocking runtime dependencies.
+  // Neo4j and feature-scoped integrations can degrade independently and are
+  // surfaced below without leaking secrets, provider names, addresses or URLs.
   app.get('/health/ready', async (_request, reply) => {
     const [redisProbe, databaseProbe, neo4jProbe] = await Promise.allSettled([
       withTimeout('redis', redis.ping()),
@@ -162,18 +145,25 @@ export function buildApp() {
       }
     }
 
+    const capabilities = getFeatureCapabilities()
     const healthy = checks.redis === 'ok' && checks.database === 'ok'
+    // "disabled" is a deliberate feature state and does not make the core API
+    // unhealthy. "misconfigured" means an operator enabled part of a feature
+    // but omitted another required value and should be visible as degradation.
+    const featureDegraded = Object.values(capabilities).some((state) => state === 'misconfigured')
+    const dependencyDegraded = checks.neo4j !== 'ok'
 
     return reply.status(healthy ? 200 : 503).send({
-      status: healthy ? (checks.neo4j === 'ok' ? 'ok' : 'degraded') : 'unavailable',
+      status: healthy
+        ? (dependencyDegraded || featureDegraded ? 'degraded' : 'ok')
+        : 'unavailable',
       checks,
+      capabilities,
       version: '0.1.0',
       revision: deployedRevision(),
       timestamp: new Date().toISOString(),
     })
   })
-
-  // ── Routes ───────────────────────────────────────────────────────
 
   app.register(authRoutes, { prefix: '/auth' })
   app.register(dashboardRoutes, { prefix: '/dashboard' })

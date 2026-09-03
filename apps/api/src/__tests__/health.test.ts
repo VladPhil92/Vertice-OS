@@ -65,6 +65,11 @@ describe('GET /health/ready', () => {
     expect(body.checks.redis).toBe('ok')
     expect(body.checks.database).toBe('ok')
     expect(body.checks.neo4j).toBe('ok')
+    expect(body.capabilities).toMatchObject({
+      voting_crypto: 'ready',
+      identity_crypto: 'ready',
+    })
+    expect(body.capabilities).not.toHaveProperty('secrets')
   })
 
   it('returns 503 when Redis fails — dependencia requerida', async () => {
@@ -91,8 +96,7 @@ describe('GET /health/ready', () => {
 
   // Regresión: Neo4j contaba como dependencia requerida, así que el
   // healthcheck del despliegue devolvía 503 permanentemente cuando no se
-  // desplegaba Neo4j — y la plataforma mataba el contenedor por "never became
-  // healthy", haciendo imposible el piloto que explícitamente lo excluye.
+  // desplegaba Neo4j. Sigue siendo observable, pero no bloquea la API base.
   it('sigue LISTO (200) cuando solo Neo4j falla — es dependencia opcional', async () => {
     mockVerifyConnectivity.mockRejectedValueOnce(new Error('ServiceUnavailable'))
 
