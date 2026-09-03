@@ -168,9 +168,17 @@ describe('canonical proofing contract P0.4', () => {
     })
     const otherEvent = { ...BASE_EVENT, provider: 'other_kyc', event_id: 'evt-other' }
 
-    expect(() => verifyProofingEventSignature(otherEvent, authFor(otherEvent, {
-      secret: PROVIDER_SECRET,
-    }))).toThrow('Firma de proofing inválida')
+    let error: unknown
+    try {
+      verifyProofingEventSignature(otherEvent, authFor(otherEvent, { secret: PROVIDER_SECRET }))
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error).toMatchObject({
+      statusCode: 503,
+      code: 'PROOFING_PROVIDER_ADAPTER_UNAVAILABLE',
+    })
   })
 })
 

@@ -13,6 +13,7 @@ type MutableConfig = {
   AI_SERVICE_SECRET: string
   CTG_ONE_FEDERATION_SECRET?: string
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: string[]
+  CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: string
   POLYGON_RPC_URL?: string
   POLYGON_PRIVATE_KEY?: string
   CIVIC_SBT_ADDRESS?: string
@@ -29,6 +30,7 @@ const original = {
   AI_SERVICE_SECRET: mutableConfig.AI_SERVICE_SECRET,
   CTG_ONE_FEDERATION_SECRET: mutableConfig.CTG_ONE_FEDERATION_SECRET,
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: [...mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS],
+  CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: mutableConfig.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON,
   POLYGON_RPC_URL: mutableConfig.POLYGON_RPC_URL,
   POLYGON_PRIVATE_KEY: mutableConfig.POLYGON_PRIVATE_KEY,
   CIVIC_SBT_ADDRESS: mutableConfig.CIVIC_SBT_ADDRESS,
@@ -44,6 +46,7 @@ beforeEach(() => {
   mutableConfig.AI_SERVICE_SECRET = ''
   mutableConfig.CTG_ONE_FEDERATION_SECRET = undefined
   mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS = []
+  mutableConfig.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = ''
   mutableConfig.POLYGON_RPC_URL = undefined
   mutableConfig.POLYGON_PRIVATE_KEY = undefined
   mutableConfig.CIVIC_SBT_ADDRESS = undefined
@@ -80,9 +83,21 @@ describe('feature-scoped production configuration', () => {
       identity_crypto: 'disabled',
       ctg_one_federation: 'disabled',
       civic_identity_assurance: 'disabled',
+      civic_identity_proofing_ingress: 'disabled',
       civic_sbt: 'disabled',
       voting_registry: 'disabled',
     })
+  })
+
+  it('reports a configured provider without a production adapter as misconfigured', () => {
+    mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS = ['unregistered_provider']
+    mutableConfig.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
+      unregistered_provider: { '2026-09': 'proofing-provider-key-with-32-characters!!' },
+    })
+
+    const capabilities = getFeatureCapabilities()
+    expect(capabilities.civic_identity_assurance).toBe('misconfigured')
+    expect(capabilities.civic_identity_proofing_ingress).toBe('misconfigured')
   })
 
   it('reports CTG One federation ready only when its shared secret is configured', () => {

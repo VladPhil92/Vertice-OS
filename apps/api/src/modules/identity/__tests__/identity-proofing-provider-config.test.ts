@@ -37,9 +37,18 @@ describe('proofing provider configuration', () => {
   it('fails closed on malformed feature-scoped JSON without crashing unrelated API config', () => {
     config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = '{broken'
     expect(getOperationalCivicIdentityProviders()).toEqual([])
-    expect(() => resolveProofingAdapterSecret('trusted_kyc', 'primary')).toThrow(
-      'configuración de llaves de identity proofing es inválida',
-    )
+
+    let error: unknown
+    try {
+      resolveProofingAdapterSecret('trusted_kyc', 'primary')
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error).toMatchObject({
+      statusCode: 503,
+      code: 'PROOFING_PROVIDER_CONFIG_INVALID',
+    })
   })
 
   it('only activates providers present in both trust policy and key registry', () => {
