@@ -18,6 +18,14 @@ export const ListProposalsSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 })
 
+// Moderation historically loaded up to 200 proposals in one queue and the
+// current admin UI does not yet expose pagination controls. Preserve that
+// operational contract while still validating every filter/offset parameter.
+export const AdminListProposalsSchema = ListProposalsSchema.extend({
+  limit: z.coerce.number().int().min(1).max(200).default(200),
+  offset: z.coerce.number().int().min(0).default(0),
+})
+
 export const CastVoteSchema = z.object({
   vote_value: z.union([z.literal(-1), z.literal(0), z.literal(1)]),
 })
@@ -53,6 +61,7 @@ export const CreateDelegationSchema = z.object({
 
 export type CreateProposalInput = z.infer<typeof CreateProposalSchema>
 export type ListProposalsInput = z.infer<typeof ListProposalsSchema>
+export type AdminListProposalsInput = z.infer<typeof AdminListProposalsSchema>
 export type CastVoteInput = z.infer<typeof CastVoteSchema>
 export type AdvanceStageInput = z.infer<typeof AdvanceStageSchema>
 export type AdminArchiveInput = z.infer<typeof AdminArchiveSchema>
