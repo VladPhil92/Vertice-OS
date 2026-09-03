@@ -147,7 +147,10 @@ export function buildApp() {
 
     const capabilities = getFeatureCapabilities()
     const healthy = checks.redis === 'ok' && checks.database === 'ok'
-    const featureDegraded = Object.values(capabilities).some((state) => state !== 'ready')
+    // "disabled" is a deliberate feature state and does not make the core API
+    // unhealthy. "misconfigured" means an operator enabled part of a feature
+    // but omitted another required value and should be visible as degradation.
+    const featureDegraded = Object.values(capabilities).some((state) => state === 'misconfigured')
     const dependencyDegraded = checks.neo4j !== 'ok'
 
     return reply.status(healthy ? 200 : 503).send({
