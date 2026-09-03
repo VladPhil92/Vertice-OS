@@ -18,10 +18,10 @@ import {
   revokeDelegation,
   getMyDelegations,
   getGovernanceStats,
-  adminAdvanceProposal,
   adminArchiveProposal,
   adminListProposals,
 } from './governance.service'
+import { adminAdvanceProposalSafely } from './governance.admin-transition'
 import { castVoteLedger } from './governance.vote-ledger'
 
 export async function governanceRoutes(app: FastifyInstance): Promise<void> {
@@ -93,9 +93,9 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
 
-    // Toda la política de admisión, delegación, override directo y tally vive
-    // en una única transacción del ledger. La ruta solo autentica y valida el
-    // contrato HTTP, evitando duplicar reglas electorales en dos capas.
+    // Toda la política de admisión, delegación congelada, override directo y
+    // tally vive en una única transacción del ledger. La ruta solo autentica y
+    // valida el contrato HTTP, evitando duplicar reglas electorales en dos capas.
     const receipt = await castVoteLedger(id, request.citizen.sub, parsed.data.vote_value)
     return reply.status(201).send(receipt)
   })
@@ -155,12 +155,14 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: proposals, count: proposals.length })
   })
 
-  // POST /governance/admin/proposals/:id/advance — forzar avance de ciclo de vida
+  // POST /governance/admin/proposals/:id/advance — iniciar el mismo avance
+  // canónico que usa el ciclo ciudadano. La autoridad administrativa queda en
+  // audit logs, pero no puede saltarse padrón, quórum ni ventana de votación.
   app.post('/admin/proposals/:id/advance', {
     preHandler: requireModerator,
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const proposal = await adminAdvanceProposal(id, request.citizen.sub)
+    const proposal = await adminAdvanceProposalSafely(id, request.citizen.sub)
     return reply.send(proposal)
   })
 
