@@ -1,13 +1,28 @@
 const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
 
+function isLoopbackUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+  } catch {
+    return false
+  }
+}
+
 /**
  * Browser API target.
  *
  * Localhost is a development-only default. Production builds must never silently
  * send citizen credentials or authenticated requests to the user's own machine.
+ * A stale Vercel variable pointing at loopback therefore fails closed.
  */
-export const BASE_URL = configuredBaseUrl
-  ?? (process.env.NODE_ENV === 'development' ? 'http://localhost:4000' : '')
+const productionConfiguredBaseUrl = configuredBaseUrl && !isLoopbackUrl(configuredBaseUrl)
+  ? configuredBaseUrl
+  : ''
+
+export const BASE_URL = process.env.NODE_ENV === 'development'
+  ? (configuredBaseUrl || 'http://localhost:4000')
+  : productionConfiguredBaseUrl
 
 export function requireApiBaseUrl(): string {
   if (!BASE_URL) {
