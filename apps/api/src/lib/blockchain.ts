@@ -1,8 +1,7 @@
 import { JsonRpcProvider, Wallet, Contract, isAddress, keccak256, toUtf8Bytes } from 'ethers'
 import { config } from '../config'
 import { logger } from './logger'
-
-// ── ABI mínimo de CivicSBT (solo las funciones que usa el backend) ────────────
+import { getDidCommitmentPepper } from './feature-secrets'
 
 const CIVIC_SBT_ABI = [
   {
@@ -29,35 +28,16 @@ const CIVIC_SBT_ABI = [
   },
 ] as const
 
-// ── Compromiso del DID ────────────────────────────────────────────────────────
-
 /**
- * Deriva el valor que se escribe on-chain a partir del DID del ciudadano.
- *
- * El contrato nunca recibe el DID en claro: guardarlo crearía un vínculo
- * público y permanente entre wallet, identidad cívica y actividad política,
- * correlacionable con los registros off-chain de votos, propuestas y reportes.
- *
- * El pepper es un secreto del backend, así que un observador de la cadena no
- * puede recalcular el compromiso de un DID que ya conozca para averiguar si
- * tiene badges. La derivación es determinista, de modo que la prevención de
- * duplicados on-chain sigue funcionando.
- *
- * Rotar el pepper invalida la correspondencia con los tokens ya emitidos: debe
- * tratarse como un valor permanente por despliegue.
+ * Deriva el compromiso que se escribe on-chain sin exponer el DID en claro.
+ * El pepper no tiene fallback seguro: si falta, la capacidad blockchain falla
+ * con 503 en este límite de funcionalidad, sin derribar el resto de la API.
  */
 export function deriveDIDCommitment(citizenDID: string): string {
-  const pepper = config.DID_COMMITMENT_PEPPER
-  if (!pepper) {
-    throw Object.assign(
-      new Error('DID_COMMITMENT_PEPPER no configurado: no se puede emitir on-chain'),
-      { code: 'MISSING_DID_PEPPER' },
-    )
-  }
+  const pepper = getDidCommitmentPepper()
   return keccak256(toUtf8Bytes(`${pepper}:${citizenDID}`))
 }
 
-// BadgeType enum — debe coincidir con CivicSBT.sol
 export const BadgeType = {
   CITIZEN_VERIFIED:       0,
   PROPOSAL_APPROVED:      1,
@@ -67,8 +47,6 @@ export const BadgeType = {
 } as const
 
 export type BadgeTypeValue = typeof BadgeType[keyof typeof BadgeType]
-
-// ── ABI mínimo de VotingRegistry ─────────────────────────────────────────────
 
 const VOTING_REGISTRY_ABI = [
   {
@@ -97,26 +75,19 @@ const VOTING_REGISTRY_ABI = [
   },
 ] as const
 
-// ── Singleton del contrato CivicSBT ───────────────────────────────────────────
-
 let _contract: Contract | null = null
 
 function getContract(): Contract | null {
   if (_contract) return _contract
 
   const { POLYGON_RPC_URL, POLYGON_PRIVATE_KEY, CIVIC_SBT_ADDRESS } = config
-
-  if (!POLYGON_RPC_URL || !POLYGON_PRIVATE_KEY || !CIVIC_SBT_ADDRESS) {
-    return null
-  }
+  if (!POLYGON_RPC_URL || !POLYGON_PRIVATE_KEY || !CIVIC_SBT_ADDRESS) return null
 
   const provider = new JsonRpcProvider(POLYGON_RPC_URL)
-  const wallet   = new Wallet(POLYGON_PRIVATE_KEY, provider)
+  const wallet = new Wallet(POLYGON_PRIVATE_KEY, provider)
   _contract = new Contract(CIVIC_SBT_ADDRESS, CIVIC_SBT_ABI, wallet)
   return _contract
 }
-
-// ── Singleton del contrato VotingRegistry ─────────────────────────────────────
 
 let _votingRegistry: Contract | null = null
 
@@ -124,51 +95,40 @@ function getVotingRegistry(): Contract | null {
   if (_votingRegistry) return _votingRegistry
 
   const { POLYGON_RPC_URL, POLYGON_PRIVATE_KEY, VOTING_REGISTRY_ADDRESS } = config
-
-  if (!POLYGON_RPC_URL || !POLYGON_PRIVATE_KEY || !VOTING_REGISTRY_ADDRESS) {
-    return null
-  }
+  if (!POLYGON_RPC_URL || !POLYGON_PRIVATE_KEY || !VOTING_REGISTRY_ADDRESS) return null
 
   const provider = new JsonRpcProvider(POLYGON_RPC_URL)
-  const wallet   = new Wallet(POLYGON_PRIVATE_KEY, provider)
+  const wallet = new Wallet(POLYGON_PRIVATE_KEY, provider)
   _votingRegistry = new Contract(VOTING_REGISTRY_ADDRESS, VOTING_REGISTRY_ABI, wallet)
   return _votingRegistry
 }
 
-// ── Funciones públicas ────────────────────────────────────────────────────────
-
 export function isBlockchainConfigured(): boolean {
-  return !!(config.POLYGON_RPC_URL && config.POLYGON_PRIVATE_KEY && config.CIVIC_SBT_ADDRESS)
+  return !!(
+    config.POLYGON_RPC_URL &&
+    config.POLYGON_PRIVATE_KEY &&
+    config.CIVIC_SBT_ADDRESS &&
+    config.DID_COMMITMENT_PEPPER
+  )
 }
 
 export function isValidWalletAddress(address: string): boolean {
   return isAddress(address)
 }
 
-/**
- * Comprueba on-chain si un DID ya tiene un badge de cierto tipo.
- * Devuelve false si la blockchain no está configurada.
- */
 export async function checkHasBadge(did: string, badgeType: BadgeTypeValue): Promise<boolean> {
   const contract = getContract()
   if (!contract) return false
   try {
     return await contract.hasBadge(deriveDIDCommitment(did), badgeType) as boolean
   } catch (err) {
+    const maybeFeatureError = err as { statusCode?: number }
+    if (maybeFeatureError.statusCode === 503) throw err
     logger.error('[blockchain] hasBadge error', err)
     return false
   }
 }
 
-/**
- * Emite un CivicSBT CITIZEN_VERIFIED a la wallet del ciudadano.
- * Llamado exclusivamente por el worker de jobs (ver lib/jobs.ts), que necesita
- * distinguir un fallo real (reintentar) de un no-op legítimo (badge ya
- * emitido). Por eso solo la comprobación de idempotencia devuelve null — un
- * error real de red/contrato se propaga para que el job se reintente en vez
- * de desaparecer en silencio.
- * Devuelve el tokenId como string, o null si el badge ya existía/no está configurado.
- */
 export async function mintCitizenBadge(
   recipientAddress: string,
   citizenDID: string,
@@ -178,12 +138,8 @@ export async function mintCitizenBadge(
   if (!contract) return null
 
   const commitment = deriveDIDCommitment(citizenDID)
-
-  // Verificar idempotencia on-chain antes de gastar gas
   const alreadyHas = await contract.hasBadge(commitment, BadgeType.CITIZEN_VERIFIED)
   if (alreadyHas) {
-    // Se registra el compromiso, no el DID: los logs no deben reintroducir
-    // el vínculo que el contrato evita.
     logger.info(`[blockchain] ${commitment} ya tiene CITIZEN_VERIFIED badge — omitiendo mint`)
     return null
   }
@@ -201,42 +157,14 @@ export async function mintCitizenBadge(
   return tokenId
 }
 
-/**
- * Construye el tokenURI de metadata para el badge de identidad cívica.
- * En producción debería apuntar a un JSON en IPFS; en dev usa una URL local.
- */
 export function buildCitizenBadgeURI(citizenDID: string, level: number): string {
   if (!isBlockchainConfigured()) {
     return `did:vertice:badge:citizen_verified:${encodeURIComponent(citizenDID)}`
   }
-  // El tokenURI se almacena on-chain y es públicamente legible, así que lleva
-  // el compromiso y no el DID: incrustarlo aquí habría anulado la protección
-  // que aporta didCommitment en el resto del contrato.
   const commitment = deriveDIDCommitment(citizenDID)
-  // En Fase I usamos el gateway IPFS configurado con un hash placeholder.
-  // En Fase II se genera el JSON real y se sube a Pinecone/IPFS antes del mint.
   return `${config.IPFS_GATEWAY}/QmVerticeCitizenBadge?c=${commitment}&level=${level}`
 }
 
-// ── VotingRegistry ────────────────────────────────────────────────────────────
-
-/**
- * Registra el resultado de una votación on-chain en VotingRegistry.
- * Llamado exclusivamente por el worker de jobs (ver lib/jobs.ts) — igual que
- * mintCitizenBadge, solo el caso de idempotencia legítima devuelve null; un
- * error real se propaga para que el job se reintente en vez de perderse.
- * Devuelve el tx hash, o null si ya estaba registrado/no está configurado.
- *
- * @param proposalUUID  UUID de la propuesta (se convierte a bytes32 via keccak256)
- * @param contentHash   keccak256 de title+description para integridad
- * @param totalVotes    Número total de votos emitidos
- * @param approveW      Votos ponderados a favor (float, se escala ×1_000_000)
- * @param rejectW       Votos ponderados en contra
- * @param abstainW      Abstenciones ponderadas
- * @param approved      true si la propuesta fue aprobada
- * @param quorumReached true si se alcanzó el quórum mínimo
- * @param ipfsURI       URI del JSON de resultados en IPFS (placeholder en Fase I)
- */
 export async function recordProposalVoting(
   proposalUUID: string,
   contentHash: string,
@@ -251,23 +179,21 @@ export async function recordProposalVoting(
   const contract = getVotingRegistry()
   if (!contract) return null
 
-  const proposalId   = keccak256(toUtf8Bytes(proposalUUID))
+  const proposalId = keccak256(toUtf8Bytes(proposalUUID))
   const proposalHash = contentHash as `0x${string}`
 
-  // Idempotencia: no re-registrar si ya está grabado
   const alreadyRecorded = await contract.isRecorded(proposalId) as boolean
   if (alreadyRecorded) {
     logger.info(`[blockchain] proposal ${proposalUUID} ya está registrado en VotingRegistry`)
     return null
   }
 
-  // Weighted votes son floats (e.g. 3.5) — escalar ×1_000_000 para uint256
   const tx = await contract.recordVoting(
     proposalId,
     proposalHash,
     BigInt(totalVotes),
     BigInt(Math.round(approveW * 1_000_000)),
-    BigInt(Math.round(rejectW  * 1_000_000)),
+    BigInt(Math.round(rejectW * 1_000_000)),
     BigInt(Math.round(abstainW * 1_000_000)),
     approved,
     quorumReached,
@@ -279,10 +205,6 @@ export async function recordProposalVoting(
   return hash
 }
 
-/**
- * Construye el bytes32 hash del contenido de una propuesta para VotingRegistry.
- * Determinístico dado el mismo título + descripción.
- */
 export function buildProposalContentHash(title: string, description: string): string {
   return keccak256(toUtf8Bytes(`${title}::${description}`))
 }
