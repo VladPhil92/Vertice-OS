@@ -36,4 +36,29 @@ jobs:
               --config p/python \
               --config p/secrets \
               --config p/sql-injection \
+              --exclude-rule javascript.express.security.audit.xss.direct-response-write.direct-response-write \
+              --exclude-rule generic.secrets.security.detected-bcrypt-hash.detected-bcrypt-hash \
               .
+
+      # The excluded Express rule is framework-specific and treats Fastify's
+      # JSON `reply.send(object)` as an HTML response sink. VÉRTICE API uses
+      # Fastify JSON serialization, not Express `Response.write`/HTML rendering.
+      #
+      # The generic bcrypt rule is replaced with this stricter repository gate:
+      # exactly the known public timing-equalization dummy may exist in source;
+      # any other committed bcrypt hash fails CI.
+      - name: Reject unexpected committed bcrypt hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          known_dummy='$2b$12$N7QHfr8J/YmthQWHbgBcnO3Nz6gMEjEYV6xl5VAe9TeTAOQOpIjoy'
+          findings="$(git grep -n -E '\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}' || true)"
+          unexpected="$(printf '%s\n' "$findings" | grep -Fv "$known_dummy" || true)"
+
+          if [ -n "$unexpected" ]; then
+            echo 'Unexpected bcrypt hash material is committed:'
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+
+          echo 'No unexpected bcrypt hashes are committed.'
