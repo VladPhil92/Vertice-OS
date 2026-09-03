@@ -1,0 +1,39 @@
+name: Semgrep Community SAST
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Semgrep CE
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Community Edition runs without a Semgrep account/token. Keep this gate
+      # independent from managed Semgrep so SAST cannot silently disappear when
+      # SEMGREP_APP_TOKEN is absent. The image version is pinned for reproducible
+      # scans instead of following `latest`.
+      - name: Static application security scan
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" \
+            -w /src \
+            semgrep/semgrep:1.172.0 \
+            semgrep scan \
+              --error \
+              --metrics=off \
+              --config p/typescript \
+              --config p/python \
+              --config p/secrets \
+              --config p/sql-injection \
+              .
