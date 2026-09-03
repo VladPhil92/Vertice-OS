@@ -23,6 +23,8 @@ jest.mock('../../../lib/prisma', () => ({
   prisma: {
     citizen: mockCitizen,
     session: mockSession,
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     $transaction: jest.fn(),
   },
 }))
@@ -73,6 +75,9 @@ beforeEach(() => {
   // Defaults para el flujo normal
   ;(bcrypt.hash as jest.Mock).mockResolvedValue('$2b$12$hashed_for_testing')
   ;(bcrypt.compare as jest.Mock).mockResolvedValue(true)
+  ;(prisma.$queryRaw as jest.Mock).mockResolvedValue([])
+  ;(prisma.$executeRaw as jest.Mock).mockResolvedValue(1)
+  mockSession.create.mockResolvedValue({ id: 'session-uuid' })
   mockApp.jwt.sign = jest.fn().mockReturnValue('mock.access.token')
 })
 
@@ -175,6 +180,7 @@ describe('loginCitizen', () => {
       did: 'did:vertice:citizen-uuid',
       passwordHash: '$2b$12$hash',
       verificationLevel: 1,
+      role: 'citizen',
     })
     // bcrypt.compare ya devuelve true por el beforeEach
     ;(prisma.$transaction as jest.Mock).mockResolvedValueOnce([{}, {}])
@@ -189,6 +195,12 @@ describe('loginCitizen', () => {
     expect(result.token_type).toBe('Bearer')
     expect(result.refresh_token).toHaveLength(80) // 40 bytes → hex = 80 chars
     expect(result.citizen_id).toBe('citizen-uuid')
+    expect(mockSession.create).toHaveBeenCalled()
+    expect(prisma.$executeRaw).toHaveBeenCalled()
+    expect(mockApp.jwt.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'citizen', sid: 'session-uuid' }),
+      expect.any(Object),
+    )
   })
 })
 
