@@ -24,7 +24,6 @@ jest.mock('../governance.service', () => ({
   getProposalById: jest.fn(),
   endorseProposal: jest.fn(),
   advanceProposalStage: jest.fn(),
-  castVote: mockCastVote,
   getVoteTally: jest.fn(),
   createDelegation: jest.fn(),
   revokeDelegation: jest.fn(),
@@ -35,8 +34,11 @@ jest.mock('../governance.service', () => ({
   adminListProposals: jest.fn(),
 }))
 
+jest.mock('../governance.vote-ledger', () => ({
+  castVoteLedger: mockCastVote,
+}))
+
 import { buildApp } from '../../../app'
-import { prisma } from '../../../lib/prisma'
 
 const app = buildApp()
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
@@ -55,12 +57,8 @@ beforeEach(() => {
   jest.resetAllMocks()
 })
 
-describe('P0 civic identity assurance — frozen voting boundary', () => {
-  it('allows a frozen-roll member to vote without re-evaluating the current assurance provider policy', async () => {
-    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{
-      roll_exists: true,
-      eligible: true,
-    }])
+describe('P0 civic identity assurance — canonical frozen voting boundary', () => {
+  it('allows a frozen-roll member to vote without route-level provider re-evaluation', async () => {
     mockCastVote.mockResolvedValueOnce({
       vote_id: '550e8400-e29b-41d4-a716-446655440020',
       vote_weight: 1,
@@ -81,11 +79,11 @@ describe('P0 civic identity assurance — frozen voting boundary', () => {
     expect(mockCastVote).toHaveBeenCalledWith(PROPOSAL_ID, CITIZEN_ID, 1)
   })
 
-  it('rejects a citizen outside the frozen electorate', async () => {
-    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{
-      roll_exists: true,
-      eligible: false,
-    }])
+  it('propagates frozen-electorate rejection from the canonical ledger', async () => {
+    mockCastVote.mockRejectedValueOnce(Object.assign(
+      new Error('No perteneces al padrón electoral de esta propuesta'),
+      { statusCode: 403, code: 'NOT_ELIGIBLE_VOTER' },
+    ))
 
     const response = await app.inject({
       method: 'POST',
@@ -95,17 +93,14 @@ describe('P0 civic identity assurance — frozen voting boundary', () => {
     })
 
     expect(response.statusCode).toBe(403)
-    expect(JSON.parse(response.payload)).toMatchObject({
-      code: 'NOT_ELIGIBLE_VOTER',
-    })
-    expect(mockCastVote).not.toHaveBeenCalled()
+    expect(JSON.parse(response.payload)).toMatchObject({ code: 'NOT_ELIGIBLE_VOTER' })
   })
 
-  it('fails closed when a voting proposal has no frozen electorate', async () => {
-    ;(prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{
-      roll_exists: false,
-      eligible: false,
-    }])
+  it('fails closed when the canonical ledger reports no frozen electorate', async () => {
+    mockCastVote.mockRejectedValueOnce(Object.assign(
+      new Error('La votación no tiene un padrón electoral congelado'),
+      { statusCode: 409, code: 'VOTER_ROLL_UNAVAILABLE' },
+    ))
 
     const response = await app.inject({
       method: 'POST',
@@ -115,9 +110,6 @@ describe('P0 civic identity assurance — frozen voting boundary', () => {
     })
 
     expect(response.statusCode).toBe(409)
-    expect(JSON.parse(response.payload)).toMatchObject({
-      code: 'VOTER_ROLL_UNAVAILABLE',
-    })
-    expect(mockCastVote).not.toHaveBeenCalled()
+    expect(JSON.parse(response.payload)).toMatchObject({ code: 'VOTER_ROLL_UNAVAILABLE' })
   })
 })
