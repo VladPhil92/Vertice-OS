@@ -68,6 +68,7 @@ describe('GET /health/ready', () => {
     expect(body.capabilities).toMatchObject({
       voting_crypto: 'ready',
       identity_crypto: 'ready',
+      ctg_one_federation: 'disabled',
     })
     expect(body.capabilities).not.toHaveProperty('secrets')
   })
@@ -107,5 +108,16 @@ describe('GET /health/ready', () => {
     expect(body.checks.neo4j).toBe('fail')
     expect(body.checks.redis).toBe('ok')
     expect(body.checks.database).toBe('ok')
+  })
+})
+
+describe('GET /health/federation', () => {
+  it('fails closed without exposing secrets when the local trust secret is absent', async () => {
+    const res = await app.inject({ method: 'GET', url: '/health/federation' })
+    expect(res.statusCode).toBe(503)
+    const body = JSON.parse(res.payload)
+    expect(body.status).toBe('local_unconfigured')
+    expect(body).not.toHaveProperty('secret')
+    expect(body).not.toHaveProperty('url')
   })
 })

@@ -11,6 +11,7 @@ type MutableConfig = {
   VOTE_NULLIFIER_SECRET?: string
   IDENTITY_PEPPER?: string
   AI_SERVICE_SECRET: string
+  CTG_ONE_FEDERATION_SECRET?: string
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: string[]
   CIVIC_IDENTITY_PROOFING_EVENT_SECRET?: string
   CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: string
@@ -28,6 +29,7 @@ const original = {
   VOTE_NULLIFIER_SECRET: mutableConfig.VOTE_NULLIFIER_SECRET,
   IDENTITY_PEPPER: mutableConfig.IDENTITY_PEPPER,
   AI_SERVICE_SECRET: mutableConfig.AI_SERVICE_SECRET,
+  CTG_ONE_FEDERATION_SECRET: mutableConfig.CTG_ONE_FEDERATION_SECRET,
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: [...mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS],
   CIVIC_IDENTITY_PROOFING_EVENT_SECRET: mutableConfig.CIVIC_IDENTITY_PROOFING_EVENT_SECRET,
   CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: mutableConfig.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON,
@@ -44,6 +46,7 @@ beforeEach(() => {
   mutableConfig.VOTE_NULLIFIER_SECRET = undefined
   mutableConfig.IDENTITY_PEPPER = undefined
   mutableConfig.AI_SERVICE_SECRET = ''
+  mutableConfig.CTG_ONE_FEDERATION_SECRET = undefined
   mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS = []
   mutableConfig.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = undefined
   mutableConfig.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = ''
@@ -81,6 +84,7 @@ describe('feature-scoped production configuration', () => {
       civic_ai: 'disabled',
       voting_crypto: 'disabled',
       identity_crypto: 'disabled',
+      ctg_one_federation: 'disabled',
       civic_identity_assurance: 'disabled',
       civic_identity_proofing_ingress: 'disabled',
       civic_sbt: 'disabled',
@@ -97,6 +101,10 @@ describe('feature-scoped production configuration', () => {
     const capabilities = getFeatureCapabilities()
     expect(capabilities.civic_identity_assurance).toBe('misconfigured')
     expect(capabilities.civic_identity_proofing_ingress).toBe('misconfigured')
+  it('reports CTG One federation ready only when its shared secret is configured', () => {
+    mutableConfig.CTG_ONE_FEDERATION_SECRET = 'federation-secret-with-at-least-thirty-two-characters'
+
+    expect(getFeatureCapabilities().ctg_one_federation).toBe('ready')
   })
 
   it('reports a partially configured CivicSBT capability as misconfigured', () => {

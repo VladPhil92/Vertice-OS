@@ -12,6 +12,7 @@ import { getNeo4jDriver } from './lib/neo4j'
 import { getFeatureCapabilities } from './lib/feature-secrets'
 import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
+import { probeCtgOneFederation } from './modules/auth/federation.service'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
 import { territorialRoutes } from './modules/territorial/territorial.routes'
@@ -160,6 +161,20 @@ export function buildApp() {
       checks,
       capabilities,
       version: '0.1.0',
+      revision: deployedRevision(),
+      timestamp: new Date().toISOString(),
+    })
+  })
+
+  // On-demand operational canary for CTG One federation. This endpoint never
+  // uses a real authorization code and never returns credentials or provider
+  // configuration. It exists to distinguish secret/configuration drift from
+  // network/provider failures without weakening the fail-closed auth path.
+  app.get('/health/federation', async (_request, reply) => {
+    const probe = await probeCtgOneFederation()
+    return reply.status(probe.status === 'ready' ? 200 : 503).send({
+      status: probe.status,
+      ...(probe.remote_status ? { remote_status: probe.remote_status } : {}),
       revision: deployedRevision(),
       timestamp: new Date().toISOString(),
     })

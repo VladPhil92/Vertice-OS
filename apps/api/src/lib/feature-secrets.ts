@@ -64,6 +64,7 @@ export interface FeatureCapabilities {
   civic_ai: CapabilityState
   voting_crypto: CapabilityState
   identity_crypto: CapabilityState
+  ctg_one_federation: CapabilityState
   civic_identity_assurance: CapabilityState
   civic_identity_proofing_ingress: CapabilityState
   civic_sbt: CapabilityState
@@ -92,6 +93,8 @@ export function getFeatureCapabilities(): FeatureCapabilities {
     identity_crypto: config.IDENTITY_PEPPER ? 'ready' : 'disabled',
     civic_identity_assurance: getCivicIdentityProviderActivationState(),
     civic_identity_proofing_ingress: getCivicIdentityProofingIngressState(),
+    ctg_one_federation: config.CTG_ONE_FEDERATION_SECRET ? 'ready' : 'disabled',
+    civic_identity_assurance: config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length > 0 ? 'ready' : 'disabled',
     civic_sbt: contractCapability(config.CIVIC_SBT_ADDRESS, true),
     voting_registry: contractCapability(config.VOTING_REGISTRY_ADDRESS, false),
   }
