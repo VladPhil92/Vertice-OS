@@ -2,7 +2,6 @@ import { Prisma } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
 import { requireVerified, requireModerator } from '../../middleware/auth'
 import { prisma } from '../../lib/prisma'
-import { config } from '../../config'
 import {
   CreateProposalSchema,
   ListProposalsSchema,
@@ -96,44 +95,24 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
 
-    // P0 Identity Assurance: authentication, a self-declared document and an
-    // email OTP are not sufficient evidence for a civic vote. The citizen must
-    // also have an ExternalIdentity from an explicitly trusted assurance
-    // provider. The allowlist is empty by default, so production is fail-closed
-    // until a real provider has been audited and configured. CTG One SSO is not
-    // implicitly trusted merely because the accounts are federated.
-    const trustedProviders = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
-    const identityAssurance = trustedProviders.length > 0
-      ? Prisma.sql`EXISTS (
-          SELECT 1
-          FROM citizens c
-          INNER JOIN external_identities ei ON ei.citizen_id = c.id
-          WHERE c.id = ${request.citizen.sub}::uuid
-            AND c.verification_level >= 2
-            AND ei.provider IN (${Prisma.join(trustedProviders)})
-        )`
-      : Prisma.sql`FALSE`
-
-    // El padrón se congela cuando la propuesta entra en votación. La ruta de
-    // voto debe respetar ese snapshot Y comprobar la identidad asegurada en el
-    // momento del voto; pertenecer históricamente al padrón no mantiene el
-    // derecho si la política de assurance deja de cumplirse.
+    // El padrón se congela al abrir la votación y es la autoridad de
+    // elegibilidad durante toda esa ventana. La assurance vigente se usa para
+    // CONSTRUIR nuevos padrones y para onboarding, pero un cambio posterior de
+    // providers no puede modificar retroactivamente un electorado ni su
+    // denominador de quórum.
     const eligibility = await prisma.$queryRaw<Array<{
       roll_exists: boolean
-      identity_assured?: boolean
       eligible: boolean
     }>>(Prisma.sql`
       SELECT
         EXISTS(
           SELECT 1 FROM proposal_voter_roll WHERE proposal_id = ${id}::uuid
         ) AS roll_exists,
-        ${identityAssurance} AS identity_assured,
         EXISTS(
           SELECT 1
           FROM proposal_voter_roll
           WHERE proposal_id = ${id}::uuid
             AND citizen_id = ${request.citizen.sub}::uuid
-            AND ${identityAssurance}
         ) AS eligible
     `)
 
@@ -141,15 +120,6 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(409).send({
         error: 'La votación no tiene un padrón electoral congelado y no puede aceptar votos de forma segura',
         code: 'VOTER_ROLL_UNAVAILABLE',
-      })
-    }
-
-    // `identity_assured` is optional only to preserve compatibility with older
-    // test fixtures; the production SQL above always returns a boolean.
-    if (eligibility[0]?.identity_assured === false) {
-      return reply.status(403).send({
-        error: 'Esta acción requiere identidad cívica verificada por un proveedor externo autorizado',
-        code: 'CIVIC_IDENTITY_REQUIRED',
       })
     }
 
