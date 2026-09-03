@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
+import { requireApiBaseUrl } from '@/lib/api'
 import { LiveToast, useToasts } from '@/components/ui/LiveToast'
 import { NotificationBell } from '@/components/ui/NotificationBell'
 import { PwaRegister } from '@/components/pwa/PwaRegister'
@@ -76,12 +77,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   async function handleSignOut() {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+      const apiUrl = requireApiBaseUrl()
+      await fetch(`${apiUrl}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       })
     } catch {
-      // Ignore network errors — still clear local state.
+      // Ignore unavailable API/network errors — local sign-out must still complete.
     }
     localStorage.removeItem('access_token')
     localStorage.removeItem('citizen_id')
