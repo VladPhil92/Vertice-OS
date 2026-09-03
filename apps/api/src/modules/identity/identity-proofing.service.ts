@@ -1,10 +1,10 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { Prisma } from '@prisma/client'
-import { config } from '../../config'
 import { prisma } from '../../lib/prisma'
 import {
   getActivatedCivicIdentityProviders,
   isActivatedCivicIdentityProvider,
+  resolveProofingAdapterSecret,
 } from './identity-provider-registry'
 
 export type CivicProofingStatus =
@@ -54,12 +54,8 @@ function normalizedProvider(provider: string): string {
 }
 
 /**
- * Canonical payload signed by the VÉRTICE provider adapter.
- *
- * This is intentionally an internal normalized contract, not a claim that an
- * arbitrary third-party KYC webhook signs this exact representation. A real
- * provider adapter must first validate the vendor's native signature and only
- * then forward a normalized event to this ingress.
+ * Canonical normalized event produced only after a provider adapter validates
+ * the vendor's native webhook/signature contract.
  */
 export function canonicalizeProofingEvent(input: CivicProofingEventInput): string {
   const occurredAt = new Date(input.occurred_at)
@@ -81,26 +77,27 @@ export function canonicalizeProofingEvent(input: CivicProofingEventInput): strin
   ].join('|')
 }
 
+/** Bind key-id into the authenticated envelope so key rotation is auditable. */
+export function canonicalizeProofingEnvelope(
+  input: CivicProofingEventInput,
+  keyId: string,
+): string {
+  return `${keyId}|${canonicalizeProofingEvent(input)}`
+}
+
 export function verifyProofingEventSignature(
   input: CivicProofingEventInput,
   signatureHeader: string | undefined,
+  keyIdHeader: string | undefined,
 ): void {
-  const secret = config.CIVIC_IDENTITY_PROOFING_EVENT_SECRET
-  if (!secret) {
-    throw makeError(
-      'La ingestión de identity proofing no está configurada',
-      503,
-      'PROOFING_EVENT_INGRESS_DISABLED',
-    )
-  }
-
+  const { keyId, secret } = resolveProofingAdapterSecret(input.provider, keyIdHeader)
   const supplied = signatureHeader?.replace(/^sha256=/i, '') ?? ''
   if (!/^[0-9a-f]{64}$/i.test(supplied)) {
     throw makeError('Firma de proofing inválida', 401, 'INVALID_PROOFING_SIGNATURE')
   }
 
   const expected = createHmac('sha256', secret)
-    .update(canonicalizeProofingEvent(input))
+    .update(canonicalizeProofingEnvelope(input, keyId))
     .digest()
   const received = Buffer.from(supplied, 'hex')
 
@@ -149,11 +146,10 @@ export async function getActiveCivicIdentityProof(
 export async function ingestCivicProofingEvent(
   input: CivicProofingEventInput,
   signatureHeader: string | undefined,
+  keyIdHeader: string | undefined,
 ): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
   const provider = normalizedProvider(input.provider)
 
-  // Configuration alone cannot authorize a civic identity source. The provider
-  // must also have a compiled/audited adapter registration.
   if (!isActivatedCivicIdentityProvider(provider)) {
     throw makeError(
       'Proveedor de identity proofing no autorizado',
@@ -163,7 +159,7 @@ export async function ingestCivicProofingEvent(
   }
 
   const normalized: CivicProofingEventInput = { ...input, provider }
-  verifyProofingEventSignature(normalized, signatureHeader)
+  verifyProofingEventSignature(normalized, signatureHeader, keyIdHeader)
 
   if (normalized.status === 'verified' && normalized.assurance_level < 2) {
     throw makeError(
