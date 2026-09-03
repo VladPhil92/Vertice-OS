@@ -74,8 +74,6 @@ function sqlText(value: unknown): string {
 }
 
 beforeEach(() => {
-  // Preserve async mock implementations declared above (notifications,
-  // reputation, pubsub, cache) while isolating call history between tests.
   jest.clearAllMocks()
   mockTransaction.mockImplementation((cb: (tx: { $queryRaw: typeof mockQueryRaw }) => unknown) =>
     cb({ $queryRaw: mockQueryRaw }),
@@ -83,7 +81,7 @@ beforeEach(() => {
 })
 
 describe('P0 governance identity assurance policy', () => {
-  it('freezes the voter roll from assured identities only, so quorum uses the same electorate as vote admission', async () => {
+  it('freezes the voter roll from active proof ledger rows only', async () => {
     const votingProposal = {
       ...BASE_PROPOSAL,
       status: 'voting',
@@ -103,9 +101,15 @@ describe('P0 governance identity assurance policy', () => {
 
     expect(result.eligible_voters).toBe(1)
     const rosterSql = sqlText(mockQueryRaw.mock.calls[1]?.[0])
-    expect(rosterSql).toContain('external_identities')
+    expect(rosterSql).toContain('civic_identity_proofs')
     expect(rosterSql).toContain('c.verification_level >= 2')
-    expect(rosterSql).toContain('ei.provider IN')
+    expect(rosterSql).toContain('cip.provider IN')
+    expect(rosterSql).toContain("cip.status = 'verified'")
+    expect(rosterSql).toContain('cip.assurance_level >= 2')
+    expect(rosterSql).toContain('cip.verified_at <= NOW()')
+    expect(rosterSql).toContain('cip.revoked_at IS NULL')
+    expect(rosterSql).toContain('cip.expires_at IS NULL OR cip.expires_at > NOW()')
+    expect(rosterSql).not.toContain('external_identities')
   })
 
   it('rejects a direct voter who is not in the frozen roll', async () => {

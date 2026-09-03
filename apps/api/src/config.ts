@@ -81,25 +81,6 @@ if (!parsed.success) {
   process.exit(1)
 }
 
-// P0.2 activation interlock. Governance still freezes its voter roll through
-// the legacy ExternalIdentity projection. Until P0.3 converges that query on
-// `civic_identity_proofs`, production must not accept a non-empty assurance
-// provider allowlist. This makes premature provider activation impossible by
-// configuration alone and preserves the fail-closed boundary.
-if (
-  parsed.data.NODE_ENV === 'production' &&
-  parsed.data.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length > 0
-) {
-  process.stdout.write(
-    '[config] FATAL: civic identity assurance activation is locked during P0.2.\n' +
-    'CIVIC_IDENTITY_ASSURANCE_PROVIDERS must remain empty in production until ' +
-    'the governance voter roll has converged on civic_identity_proofs (P0.3).\n' +
-    'This lock prevents legacy ExternalIdentity links from becoming an alternate ' +
-    'governance eligibility path.\n',
-  )
-  process.exit(1)
-}
-
 // Feature-scoped configuration never decides whether the entire API can boot.
 // Missing/partial optional capabilities fail closed at their feature boundary;
 // /health/ready exposes their coarse state without logging or returning secrets.
