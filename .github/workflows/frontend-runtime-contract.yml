@@ -78,7 +78,7 @@ jobs:
           # shipped to the browser is the Railway upstream itself, and the
           # canonical same-origin gateway must be present. The following step
           # exercises that production behavior end-to-end.
-          if grep -R -n -E 'https?://[^"'"' ]*up\.railway\.app' apps/web/.next/static 2>/dev/null; then
+          if grep -R -n -E 'https?://[^"[:space:]]*up\.railway\.app' apps/web/.next/static 2>/dev/null; then
             echo '::error::Railway upstream leaked into a browser bundle; production must be same-origin.'
             exit 1
           fi
