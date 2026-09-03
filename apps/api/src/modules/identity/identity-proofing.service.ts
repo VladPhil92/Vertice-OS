@@ -2,6 +2,10 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { Prisma } from '@prisma/client'
 import { config } from '../../config'
 import { prisma } from '../../lib/prisma'
+import {
+  getActivatedCivicIdentityProviders,
+  isActivatedCivicIdentityProvider,
+} from './identity-provider-registry'
 
 export type CivicProofingStatus =
   | 'pending'
@@ -53,9 +57,9 @@ function normalizedProvider(provider: string): string {
  * Canonical payload signed by the VÉRTICE provider adapter.
  *
  * This is intentionally an internal normalized contract, not a claim that an
- * arbitrary third-party KYC webhook signs this exact representation. A future
- * provider adapter must first validate the vendor's native signature and then
- * sign this normalized event before forwarding it to the API.
+ * arbitrary third-party KYC webhook signs this exact representation. A real
+ * provider adapter must first validate the vendor's native signature and only
+ * then forward a normalized event to this ingress.
  */
 export function canonicalizeProofingEvent(input: CivicProofingEventInput): string {
   const occurredAt = new Date(input.occurred_at)
@@ -119,7 +123,7 @@ export async function getCivicIdentityProofs(citizenId: string): Promise<CivicId
 export async function getActiveCivicIdentityProof(
   citizenId: string,
 ): Promise<CivicIdentityProof | null> {
-  const providers = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
+  const providers = getActivatedCivicIdentityProviders()
   if (providers.length === 0) return null
 
   const rows = await prisma.$queryRaw<CivicIdentityProof[]>(Prisma.sql`
@@ -147,9 +151,10 @@ export async function ingestCivicProofingEvent(
   signatureHeader: string | undefined,
 ): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
   const provider = normalizedProvider(input.provider)
-  const trustedProviders = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
 
-  if (!trustedProviders.includes(provider)) {
+  // Configuration alone cannot authorize a civic identity source. The provider
+  // must also have a compiled/audited adapter registration.
+  if (!isActivatedCivicIdentityProvider(provider)) {
     throw makeError(
       'Proveedor de identity proofing no autorizado',
       403,
