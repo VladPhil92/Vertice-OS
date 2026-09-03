@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { requireApiBaseUrl } from '@/lib/api'
 
 const VERIFIER_KEY = 'vertice.ctgone.pkce_verifier'
 const STATE_KEY = 'vertice.ctgone.state'
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 export default function CtgOneFederationCallbackPage() {
   const [error, setError] = useState('')
@@ -31,7 +31,8 @@ export default function CtgOneFederationCallbackPage() {
       }
 
       try {
-        const response = await fetch(`${API_URL}/auth/ctgone/exchange`, {
+        const apiUrl = requireApiBaseUrl()
+        const response = await fetch(`${apiUrl}/auth/ctgone/exchange`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -59,7 +60,12 @@ export default function CtgOneFederationCallbackPage() {
         window.location.replace('/dashboard')
       } catch (cause) {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'No fue posible completar la conexión con CTG One.')
+          const message = cause instanceof Error && cause.message === 'API_NOT_CONFIGURED'
+            ? 'La API productiva de VÉRTICE no está configurada. El acceso federado se mantiene bloqueado de forma segura.'
+            : cause instanceof Error
+              ? cause.message
+              : 'No fue posible completar la conexión con CTG One.'
+          setError(message)
         }
       }
     }
