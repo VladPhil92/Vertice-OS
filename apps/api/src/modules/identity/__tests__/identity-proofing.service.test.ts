@@ -65,6 +65,16 @@ const PROOF = {
   updated_at: new Date('2026-09-03T01:00:00.000Z'),
 }
 
+const STORED_EVENT = {
+  citizen_id: CITIZEN_ID,
+  provider_reference: BASE_EVENT.provider_reference,
+  status: BASE_EVENT.status,
+  assurance_level: BASE_EVENT.assurance_level,
+  evidence_hash: BASE_EVENT.evidence_hash ?? null,
+  occurred_at: new Date(BASE_EVENT.occurred_at),
+  expires_at: new Date(BASE_EVENT.expires_at!),
+}
+
 function authFor(
   event: CivicProofingEventInput,
   options: { timestamp?: number; keyId?: string; secret?: string } = {},
@@ -76,6 +86,11 @@ function authFor(
     .update(canonicalizeProofingEnvelope(event, timestamp, keyId))
     .digest('hex')
   return { signature: `v1=${signature}`, timestamp, key_id: keyId }
+}
+
+function sqlText(value: unknown): string {
+  const sql = value as { strings?: readonly string[] }
+  return sql.strings?.join(' ') ?? String(value)
 }
 
 beforeEach(() => {
@@ -244,27 +259,42 @@ describe('provider-isolated signed proofing event ingestion', () => {
     })
     expect(mockTransaction).toHaveBeenCalledTimes(1)
     expect(mockQueryRaw).toHaveBeenCalledTimes(4)
-    const eventInsert = String(mockQueryRaw.mock.calls[2]?.[0])
+    const eventInsert = sqlText(mockQueryRaw.mock.calls[2]?.[0])
     expect(eventInsert).toContain('ingress_signature_version')
     expect(eventInsert).toContain('ingress_key_id')
     expect(eventInsert).toContain('ingress_signed_at')
   })
 
-  it('treats provider retries as idempotent without reapplying state', async () => {
+  it('treats an exact provider retry as idempotent without reapplying state', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([{ id: CITIZEN_ID }])
       .mockResolvedValueOnce([{ citizen_id: CITIZEN_ID }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([STORED_EVENT])
       .mockResolvedValueOnce([PROOF])
 
     await expect(ingestCivicProofingEvent(BASE_EVENT, authFor(BASE_EVENT))).resolves.toEqual({
       proof: PROOF,
       duplicate: true,
     })
-    expect(mockQueryRaw).toHaveBeenCalledTimes(4)
+    expect(mockQueryRaw).toHaveBeenCalledTimes(5)
   })
 
-  it('rejects an impossible duplicate event with no state row', async () => {
+  it('rejects reuse of the same event_id with different signed content', async () => {
+    const conflicting = { ...BASE_EVENT, status: 'revoked' as const }
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: CITIZEN_ID }])
+      .mockResolvedValueOnce([{ citizen_id: CITIZEN_ID }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([STORED_EVENT])
+
+    await expect(ingestCivicProofingEvent(conflicting, authFor(conflicting))).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'PROOFING_EVENT_ID_CONFLICT',
+    })
+  })
+
+  it('rejects an impossible duplicate event with no receipt row', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([{ id: CITIZEN_ID }])
       .mockResolvedValueOnce([])
