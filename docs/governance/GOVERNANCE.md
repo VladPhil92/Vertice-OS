@@ -1,300 +1,303 @@
 # Marco de Gobernanza — VÉRTICE OS
 
-> Documento de gobernanza · v0.1.0  
-> Principios, reglas y mecanismos de decisión colectiva
+> Contrato de gobernanza implementado · snapshot 2 de septiembre de 2026
+
+VÉRTICE OS trata la gobernanza como infraestructura continua. Este documento describe las reglas que el código actual intenta hacer cumplir y separa esas reglas de mecanismos futuros o experimentales.
 
 ---
 
-## Filosofía de Gobernanza
+## 1. Principios
 
-VÉRTICE OS opera bajo el principio de que **la gobernanza es una infraestructura, no un evento**. Cada mecanismo diseñado aquí busca:
-
-1. **Maximizar participación genuina** — no solo acceso formal
-2. **Resistir captura** — por dinero, clientelismo o poder concentrado
-3. **Garantizar trazabilidad** — toda decisión debe poder ser auditada
-4. **Preservar diversidad** — las minorías tienen voz, no solo mayorías
-
----
-
-## Modelo de Democracia Líquida
-
-### Definición
-La democracia líquida permite a cada ciudadano elegir su modo de participación en cada decisión:
-
-```
-OPCIÓN A: Voto Directo
-  El ciudadano vota personalmente en cada propuesta.
-
-OPCIÓN B: Delegación Específica
-  El ciudadano delega su voto a una persona de confianza
-  SOLO para una propuesta o categoría específica.
-
-OPCIÓN C: Delegación General
-  El ciudadano delega su voto a un representante
-  para todas las propuestas de un dominio (ej: movilidad).
-
-OPCIÓN D: Meta-delegación
-  El delegado puede re-delegar (con límite de 3 niveles
-  para evitar cadenas infinitas).
-
-REVOCACIÓN: Siempre instantánea, hasta el cierre de la votación.
-```
-
-### Ponderación del Voto
-
-El voto no es igual para todos — está ponderado por **reputación cívica**:
-
-```
-Peso_Voto = 1.0 + (Reputación_Normalizada × 0.5)
-
-Donde Reputación_Normalizada ∈ [0, 1]
-
-Ejemplo:
-  Ciudadano nuevo (rep = 0):      Peso = 1.0
-  Ciudadano medio (rep = 0.5):    Peso = 1.25
-  Ciudadano top (rep = 1.0):      Peso = 1.5
-
-Límite máximo de peso: 1.5× (nadie puede tener más de
-1.5 veces el peso de un ciudadano base)
-```
-
-**Justificación:** La participación verificada y el impacto real merecen más peso. Pero ningún ciudadano puede dominar unilateralmente una votación.
+1. **Una persona no debe ejercer doble influencia en una misma propuesta.**
+2. **La elegibilidad electoral debe ser estable durante la ventana de votación.**
+3. **La autenticación no equivale a identidad cívica asegurada.**
+4. **La delegación debe ser explícita, revocable y acotada.**
+5. **El sentido individual del voto debe permanecer privado.**
+6. **El conteo agregado y el proceso de admisión deben ser auditables.**
+7. **La reputación puede modular participación según la política vigente, pero no sustituye identidad ni crea autoridad administrativa.**
+8. **Las decisiones de VÉRTICE son mecanismos cívicos/consultivos y no sustituyen los procedimientos jurídicos vinculantes aplicables en Colombia.**
 
 ---
 
-## Ciclo de Vida de una Propuesta
+## 2. Ciclo de una propuesta
 
-### Etapa 1: IDEA
-**Duración:** Sin límite de tiempo  
-**Requisitos para avanzar:** 10 endorsements de ciudadanos verificados
+El dominio de gobernanza mantiene una máquina de estados de propuesta. Las transiciones relevantes incluyen creación, deliberación, apertura de votación y resultado.
 
-```
-REGLAS:
-- Cualquier ciudadano verificado puede crear una idea
-- Debe incluir: título, descripción, categoría, alcance territorial
-- La IA de gobernanza sugiere categoría y posibles duplicados
-- Si existe propuesta similar activa, se notifica al autor
-```
+La regla crítica para abrir una votación es la creación de un **padrón electoral congelado** (`proposal_voter_roll`).
 
-### Etapa 2: DRAFT
-**Duración:** 7 días  
-**Acciones permitidas:** Comentarios públicos, enmiendas del autor
-
-```
-REGLAS:
-- El autor puede modificar la propuesta durante esta etapa
-- Los cambios sustanciales reinician el contador de endorsements
-- La IA sintetiza los comentarios y los presenta al autor
-- Al finalizar: snapshot inmutable del texto va a IPFS
+```text
+propuesta
+   ↓
+preparación / deliberación
+   ↓
+transición a voting
+   ├── evaluar política de identidad cívica
+   ├── seleccionar electorado territorial elegible
+   ├── congelar proposal_voter_roll
+   └── fijar parámetros de votación
+   ↓
+ventana de voto
+   └── admisión contra el padrón congelado
+   ↓
+resultado
 ```
 
-### Etapa 3: DEBATE
-**Duración:** 72 horas  
-**Acciones:** Argumentos a favor y en contra, preguntas al autor
-
-```
-REGLAS:
-- Formato estructurado: argumento (max 500 palabras) + evidencia
-- Cada ciudadano: máximo 3 intervenciones
-- El autor responde con derecho a réplica
-- IA de gobernanza: síntesis en tiempo real, identificación de consenso
-- Moderación automática + revisión humana para casos complejos
-```
-
-### Etapa 4: VOTING
-**Duración:** Variable según alcance
-
-| Alcance | Duración Mínima | Duración Máxima |
-|---------|----------------|----------------|
-| Barrio | 24h | 72h |
-| Localidad | 48h | 96h |
-| Ciudad | 72h | 168h (7 días) |
-| Política Mayor | 120h | 240h (10 días) |
-
-```
-REGLAS:
-- Voto secreto: el ciudadano conoce su voto, nadie más
-- Conteo verificable: ZKP permite auditar sin revelar votos individuales
-- Delegaciones se resuelven automáticamente al cierre
-- No hay extensiones (previene manipulación de tiempo)
-```
-
-### Etapa 5: RESULTADO
-**Inmediato al cierre de votación**
-
-```
-REGISTRO:
-1. Resultado calculado y firmado criptográficamente
-2. Transacción en Polygon con hash del resultado
-3. Datos completos en IPFS (acceso público permanente)
-4. Notificación a todos los participantes
-5. Asignación automática de responsable si aprobada
-```
+La transición no debe abrir una votación sin padrón válido.
 
 ---
 
-## Quórum y Umbrales
+## 3. Identidad cívica y padrón
 
-### Quórum Dinámico
-El quórum mínimo se calcula sobre los **ciudadanos elegibles** para esa decisión (no sobre todos los ciudadanos de la plataforma):
+### 3.1 Separación de conceptos
 
-```
-Ciudadanos_Elegibles = Ciudadanos verificados en el territorio
-                       que tienen historial de participación
-                       (al menos 1 acción en los últimos 90 días)
-```
+VÉRTICE distingue:
 
-### Umbrales de Aprobación
+- **authentication:** control de una sesión;
+- **contact verification:** control del email/canal declarado;
+- **civic identity assurance:** proofing fuerte de identidad realizado por un provider aprobado.
 
-| Tipo | Quórum Mínimo | Umbral Aprobación |
-|------|--------------|------------------|
-| Propuesta de Barrio | 15% | 40% votos favor |
-| Propuesta de Localidad | 20% | 50% votos favor |
-| Propuesta Municipal | 25% | 55% votos favor |
-| Política Pública Mayor | 30% | 60% votos favor |
-| Reforma de Plataforma | 40% | 66% votos favor |
+El acceso mediante CTG One no concede automáticamente assurance cívica.
 
-**Si no se alcanza quórum:** la propuesta entra en estado `QUORUM_FAILED` y puede ser reformulada y reintentada después de 30 días.
+### 3.2 Allowlist de assurance
 
----
+`CIVIC_IDENTITY_ASSURANCE_PROVIDERS` define qué providers externos pueden servir como evidencia de identidad cívica para construir el electorado protegido.
 
-## Sistema de Delegación
+- allowlist vacía → fail-closed;
+- `ctg_one` no se acepta por defecto;
+- un provider solo debe añadirse después de auditar su proceso real de identity proofing.
 
-### Reglas de Delegación
-```
-1. Toda delegación es revocable instantáneamente hasta el cierre
-2. Máximo 3 niveles de re-delegación (A→B→C→D es el límite)
-3. La delegación circular es imposible (verificación de grafo)
-4. Las delegaciones son transparentes (visibles en perfil público)
-5. El delegado siempre puede votar en contra del delegante
-   (respeta la autonomía del representante)
-6. Delegaciones por dominio: "delego todo sobre movilidad a X"
-```
+### 3.3 Snapshot electoral
 
-### Tipos de Delegación
-```
-PUNTUAL:    Solo para propuesta específica #1234
-DOMINIO:    Todo sobre "infraestructura vial" → delegado Y
-TEMPORAL:   Por los próximos 30 días → delegado Z
-GENERAL:    Todas mis decisiones → delegado W (no recomendado)
-```
+La assurance se evalúa al construir el padrón para una propuesta. Durante la ventana de votación, `proposal_voter_roll` es la autoridad de admisión.
+
+Esto evita que una modificación posterior de configuración, provider o perfil altere retroactivamente quién podía votar en una elección ya abierta.
+
+Si una propuesta en `voting` no tiene padrón congelado, el sistema debe fallar cerrado.
 
 ---
 
-## Prevención de Manipulación
+## 4. Democracia líquida
 
-### Mecanismos Anti-Clientelismo
-```
-1. El voto ponderado NO considera dinero ni cargo político
-2. La reputación se gana con participación verificada, no se compra
-3. Las delegaciones son públicas → transparencia de redes de influencia
-4. El Agente de Integridad monitorea patrones sospechosos:
-   - Picos de delegación justo antes de una votación
-   - Grupos de cuentas que siempre votan idénticamente
-   - Endorsements masivos desde cuentas creadas recientemente
+VÉRTICE permite participación directa y delegada.
+
+### 4.1 Tipos de delegación
+
+Scopes implementados:
+
+- `general` — delegación general;
+- `domain` — delegación para una categoría/dominio;
+- `proposal` — delegación para una propuesta concreta.
+
+### 4.2 Precedencia
+
+Cuando un delegador tiene scopes superpuestos, la resolución debe ser determinística:
+
+```text
+proposal > domain > general
 ```
 
-### Mecanismos Anti-Bots
-```
-1. Verificación de identidad obligatoria (cédula + liveness)
-2. Análisis de comportamiento: timing, patrones, device fingerprint
-3. Graph analysis: la red de validaciones debe ser orgánica
-4. CAPTCHA adaptativo solo cuando hay señales de alerta
-5. Cooling periods para cuentas nuevas (no pueden votar en primeras 72h)
-```
+La delegación más específica prevalece.
+
+### 4.3 Validez
+
+Solo cuentan delegaciones:
+
+- activas;
+- con `valid_from <= now`;
+- sin expiración o con `valid_until > now`;
+- compatibles con categoría/propuesta;
+- cuyo delegador pertenece al padrón congelado.
+
+Una delegación no puede ampliar el electorado: únicamente puede trasladar la forma de participación de alguien ya elegible.
 
 ---
 
-## Gobernanza de la Plataforma
+## 5. Ledger canónico de participación
 
-### ¿Quién gobierna VÉRTICE OS?
-La plataforma tiene tres capas de gobernanza:
+La gobernanza actual usa un ledger durable para coordinar voto directo y participación delegada.
 
+### Objetivos
+
+- impedir doble influencia;
+- preservar privacidad mediante nullifiers opacos;
+- contabilizar participantes reales para quórum;
+- soportar concurrencia sin depender de contadores incrementales frágiles;
+- centralizar la admisión electoral en un único contrato de servicio.
+
+### 5.1 Voto directo
+
+El ciudadano debe:
+
+1. existir;
+2. pertenecer al `proposal_voter_roll`;
+3. votar dentro de una ventana activa;
+4. no haber consumido ya su participación directa de forma definitiva.
+
+El sentido del voto se registra separado de la identidad pública del ciudadano mediante un nullifier derivado.
+
+### 5.2 Participación delegada
+
+Cuando un delegado vota, el sistema resuelve delegaciones efectivas y reclama la participación de delegadores elegibles.
+
+Cada participación delegada debe quedar representada de forma durable y no solo como incremento transitorio de un agregado.
+
+### 5.3 Override directo
+
+Si un ciudadano fue contado previamente por delegación y luego decide votar directamente durante la ventana válida, el contrato canónico permite que su decisión directa sustituya la participación delegada **sin crear un segundo participante**.
+
+La regla conceptual es:
+
+```text
+1 ciudadano elegible = máximo 1 participación efectiva por propuesta
 ```
-CAPA 1 — Gobernanza Técnica (Fase I-II)
-  Equipo fundador toma decisiones técnicas
-  Con asesoría de un Consejo Técnico independiente
 
-CAPA 2 — Gobernanza de Contenido
-  Consejo Cívico: 7 miembros elegidos por la comunidad
-  Mandato: 6 meses, renovación parcial
-  Responsable: moderación, reglas de participación
+### 5.4 Tally
 
-CAPA 3 — Gobernanza Plena (Fase IV)
-  DAO con tokens de gobernanza no-financieros
-  Soulbound: no transferibles, no comprables
-  Una persona = máximo X tokens (límite duro)
-```
+Los agregados deben derivarse del ledger durable de participación/votos, no de simples contadores mutados por cada request.
 
-### Consejo Cívico
-**Composición:** 7 miembros  
-**Selección:** Elección directa en la plataforma (cada 6 meses)  
-**Requisitos para candidatos:**
-- Reputación cívica mínima: percentil 70
-- Mínimo 6 meses de participación activa
-- Sin cargos públicos actuales (independencia)
-- Declaración pública de conflictos de interés
-
-**Funciones:**
-- Aprobar o rechazar cambios a las reglas de gobernanza
-- Resolver disputas de moderación
-- Proponer mejoras al sistema
-- Transparencia: todas las sesiones son públicas y grabadas
+`total_votes` representa participantes efectivos, incluidos los delegados válidamente reclamados, y por ello debe permanecer coherente con el cálculo de quórum.
 
 ---
 
-## Transparencia Radical
+## 6. Peso de voto y reputación
 
-### Principio
-Todo lo que el sistema decide es auditable. No hay decisiones de caja negra.
+El código mantiene una función de peso para participación directa basada en reputación cívica, con límites definidos por la implementación.
 
-### Qué es público
-```
-✅ Todas las propuestas y su historial completo
-✅ El conteo agregado de votos (no los votos individuales)
-✅ Las delegaciones activas (quién delega a quién)
-✅ Las acciones del Consejo Cívico
-✅ Los smart contracts (código open-source)
-✅ Las decisiones del Agente de Integridad (sin datos de usuarios)
-✅ El algoritmo de reputación (documentado públicamente)
-```
+Reglas de política:
 
-### Qué es privado
-```
-🔒 El voto individual de cada ciudadano
-🔒 Los datos personales de verificación
-🔒 Las comunicaciones privadas entre ciudadanos
-🔒 Los reportes territoriales con datos personales del reportante
-```
+- la reputación **no** compra elegibilidad;
+- la reputación **no** sustituye proofing de identidad;
+- la reputación **no** puede convertir una cuenta fuera del padrón en votante;
+- cualquier modificación a la fórmula debe acompañarse de tests, documentación y evaluación de efectos distributivos.
+
+No debe asumirse que un modelo de reputación ponderada es jurídicamente equivalente a `una persona = un voto` en mecanismos electorales oficiales. En VÉRTICE se usa dentro de un sistema cívico consultivo.
 
 ---
 
-## Marco Legal (Colombia)
+## 7. Privacidad
 
-### Naturaleza jurídica de las votaciones
-Las decisiones en VÉRTICE OS son **consultas ciudadanas**, no actos administrativos vinculantes. Para que una decisión tenga fuerza legal, debe seguir el camino institucional correspondiente (Concejo, Alcaldía, etc.).
+### Público o auditable
 
-**Sin embargo**, el poder de VÉRTICE OS es la **presión cívica legítima y documentada**: una propuesta aprobada con quórum verificable es un mandato político real aunque no sea jurídicamente vinculante.
+- propuesta y su historial;
+- parámetros de votación;
+- tamaño del electorado cuando corresponda;
+- tally agregado;
+- reglas de delegación y admisión documentadas;
+- eventos administrativos/auditoría que no revelen PII.
 
-### Integración con instituciones
-```
-MODELO CONSULTIVO (Fase I-II):
-  La plataforma envía reportes estructurados a instituciones
-  Las instituciones responden públicamente
-  El incumplimiento queda registrado y es visible
+### Privado
 
-MODELO COLABORATIVO (Fase III):
-  Acuerdos formales con Alcaldía/Concejo
-  Las propuestas aprobadas entran al proceso institucional
-  VÉRTICE OS como canal oficial de participación ciudadana
+- sentido individual del voto;
+- cédula y datos de proofing;
+- secretos de providers;
+- asociación pública entre ciudadano y nullifier de voto;
+- evidencia biométrica o documental sensible.
 
-MODELO INSTITUCIONAL (Fase IV):
-  Posible reconocimiento legal como mecanismo de consulta
-  Integración con mecanismos de participación ciudadana
-  existentes (Ley 134/1994, Ley 1757/2015)
-```
+La existencia de blockchain no autoriza almacenar PII o votos individuales on-chain.
 
 ---
 
-*Marco de gobernanza vivo — toda modificación requiere aprobación del Consejo Cívico.*  
-*v0.1.0 — Cartagena de Indias, Colombia*
+## 8. Autoridad administrativa
+
+El gobierno operativo de la plataforma usa roles persistentes:
+
+- `citizen`
+- `moderator`
+- `admin`
+- `superadmin`
+
+El usuario puede cambiar su `active_role` únicamente dentro de los grants que posee.
+
+Los privilegios de alto nivel deben revalidarse contra la autoridad persistida y la sesión. No confiar exclusivamente en claims antiguos de JWT.
+
+### Superadmin
+
+- el primer superadmin se bootstrappea mediante autoridad federada server-managed de CTG One;
+- después del bootstrap, nuevos grants `superadmin` se administran desde VÉRTICE;
+- el último superadmin no puede eliminarse;
+- grants, bootstrap y cambios de rol deben dejar evidencia de auditoría.
+
+La federación CTG One es una autoridad de bootstrap controlada; no convierte a cualquier cuenta CTG One en administrador.
+
+---
+
+## 9. Deliberación, IA y neutralidad
+
+Los agentes de IA pueden:
+
+- sintetizar argumentos;
+- detectar temas y duplicados;
+- ayudar a convertir demandas en borradores;
+- analizar patrones territoriales;
+- asistir en control público/legal;
+- señalar patrones de integridad.
+
+No deben:
+
+- emitir votos;
+- inventar identidad o elegibilidad;
+- cambiar el padrón electoral;
+- conceder roles;
+- decidir por sí solos el resultado de una propuesta;
+- presentarse como autoridad pública.
+
+Toda automatización con efecto de gobernanza debe producir trazabilidad suficiente para revisión humana.
+
+---
+
+## 10. Relación con expedientes cívicos
+
+El workflow ciudadano conecta gobernanza con reportes y control público:
+
+```text
+Reporte territorial
+  ↓
+Análisis IA
+  ↓
+Borrador / propuesta
+  ↓
+Deliberación
+  ↓
+Votación y decisión
+  ↓
+Control público / acción legal
+```
+
+El expediente preserva provenance y ownership. La creación de un workflow no debe duplicar eventos de reputación que ya pertenecen al reporte o propuesta canónicos.
+
+---
+
+## 11. Estado de mecanismos avanzados
+
+Los siguientes conceptos pueden formar parte de la evolución de VÉRTICE, pero **no** deben documentarse como garantías productivas actuales sin implementación/certificación verificable:
+
+- ZKP completo para auditoría de cada voto;
+- identidad biométrica productiva;
+- integración certificada con Registraduría;
+- DAO de plataforma;
+- The Graph como indexador canónico;
+- ejecución automática vinculante de decisiones sobre instituciones públicas.
+
+---
+
+## 12. Marco legal colombiano
+
+VÉRTICE puede apoyar y documentar participación ciudadana, derecho de petición, tutela, acciones populares y otros mecanismos según el módulo correspondiente.
+
+Las votaciones internas son consultas cívicas y evidencia de voluntad agregada. Para producir efectos jurídicos propios de una elección, consulta popular, acto administrativo u otro mecanismo vinculante, deben cumplirse los procedimientos y autoridades establecidos por la Constitución y la legislación colombiana.
+
+---
+
+## 13. Invariantes para futuros cambios
+
+Antes de fusionar un cambio de gobernanza, comprobar:
+
+- [ ] ¿Preserva el padrón congelado durante la ventana de voto?
+- [ ] ¿Evita doble participación directa/delegada?
+- [ ] ¿Respeta precedencia y vigencia de delegaciones?
+- [ ] ¿No infiere assurance desde SSO/email/wallet/reputación?
+- [ ] ¿Mantiene privada la relación identidad ↔ voto individual?
+- [ ] ¿Mantiene coherentes `total_votes`, tally y quórum?
+- [ ] ¿Centraliza la admisión en el ledger/servicio canónico?
+- [ ] ¿Incluye tests de regresión para concurrencia y fail-closed?
+- [ ] ¿Actualiza este documento y `docs/CURRENT_STATE.md`?

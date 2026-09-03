@@ -1,554 +1,468 @@
 # VÉRTICE OS — CLAUDE.md
-# Memoria de Proyecto para Claude Code
+# Memoria de proyecto para agentes de desarrollo
 
-> Este archivo es la fuente de verdad para Claude Code al trabajar en VÉRTICE OS.
-> Claude Code lo lee automáticamente al iniciar en este directorio.
-> Actualizar tras cada decisión arquitectónica importante.
+> Este archivo es una guía operativa para trabajar en VÉRTICE OS.  
+> **Fuente de verdad de estado:** `README.md` + `docs/CURRENT_STATE.md` + código actual.  
+> Snapshot: **2 de septiembre de 2026**.
 
 ---
 
 ## IDENTIDAD DEL PROYECTO
 
 **Nombre:** VÉRTICE OS  
-**Tipo:** Sistema Operativo Cívico — infraestructura de participación ciudadana  
-**Ciudad Piloto:** Cartagena de Indias, Colombia  
+**Tipo:** Sistema Operativo Cívico / infraestructura de participación ciudadana  
+**Ciudad piloto:** Cartagena de Indias, Colombia  
 **Organización:** CTG One Corporation  
-**Repo:** https://github.com/VladPhil92/Vertice-OS  
-**Versión actual:** 0.1.0-alpha  
-**Fase actual:** FASE I — Fundación (Sprint 1-2)
+**Repo:** `VladPhil92/Vertice-OS`  
+**Versión de paquetes:** `0.1.0`  
+**Estado funcional:** desarrollo activo / convergencia pre-piloto
+
+No describir el producto como “Fase I / Sprint 1-2”. El repositorio ya incluye convergencia del dashboard ciudadano, workflows cross-module, federación CTG One, authority roles, civic identity assurance P0 y ledger canónico de democracia líquida.
 
 ---
 
-## ARQUITECTURA DEL MONOREPO
+## REGLA PRINCIPAL
 
-```
-vertice-os/
-├── CLAUDE.md                    ← Estás aquí
-├── .mcp.json                    ← Configuración GitHub MCP
-├── .claude/
-│   └── settings.json            ← Permisos y hooks de Claude Code
-├── package.json                 ← Monorepo root (pnpm workspaces)
-├── turbo.json                   ← Turborepo config
-├── docker-compose.yml           ← Dev local completo
-├── .env.example                 ← Variables de entorno documentadas
-│
-├── apps/
-│   ├── web/                     ← Frontend Next.js 14 (puerto 3000)
-│   │   ├── app/                 ← App Router
-│   │   ├── components/          ← Componentes React
-│   │   ├── lib/                 ← Utilidades y hooks
-│   │   └── public/
-│   │
-│   ├── api/                     ← API Gateway GraphQL (puerto 4000)
-│   │   ├── src/
-│   │   │   ├── modules/         ← Módulos por dominio
-│   │   │   ├── middleware/      ← Auth, rate limit, logging
-│   │   │   └── schema/          ← GraphQL schema
-│   │   └── prisma/              ← Schema Prisma ORM
-│   │
-│   └── ai/                      ← AI Orchestrator Python (puerto 8001)
-│       ├── orchestrator.py      ← Multi-agente LangGraph (YA EXISTE)
-│       ├── agents/              ← Agentes individuales
-│       ├── rag/                 ← Pipeline RAG
-│       └── requirements.txt     ← YA EXISTE
-│
-├── packages/
-│   ├── ui/                      ← Design system compartido
-│   ├── types/                   ← TypeScript types compartidos
-│   └── config/                  ← Configs compartidas (ESLint, TS)
-│
-├── infrastructure/
-│   ├── db/
-│   │   └── init.sql             ← Schema PostgreSQL+PostGIS (YA EXISTE)
-│   ├── terraform/               ← IaC AWS/GCP
-│   └── kubernetes/              ← Manifiestos K8s
-│
-├── contracts/                   ← Smart contracts Solidity (Polygon)
-│   ├── VotingRegistry.sol
-│   └── CivicSBT.sol
-│
-└── docs/
-    ├── architecture/
-    │   └── ARCHITECTURE.md      ← YA EXISTE — leer antes de tocar infra
-    └── governance/
-        └── GOVERNANCE.md        ← YA EXISTE — leer antes de tocar gobernanza
+**Documentar e implementar el sistema que existe, no una arquitectura aspiracional antigua.**
+
+Antes de introducir una tecnología o afirmar que una capa existe, comprobar el código actual.
+
+No asumir como runtime activo:
+
+- GraphQL/Apollo Federation;
+- un Governance Engine en Go;
+- MongoDB obligatorio;
+- Kafka obligatorio;
+- The Graph obligatorio;
+- Registraduría/KYC/liveness productivos;
+- DAO productiva;
+- ZKP productivo para cada voto.
+
+---
+
+## ARQUITECTURA ACTUAL
+
+```text
+apps/web — Next.js 15.5.23 / React 18 / Vercel
+   │
+   │ HTTPS / REST
+   ▼
+apps/api — Fastify 5.11.2 / TypeScript / Railway
+   ├── PostgreSQL + PostGIS
+   ├── Redis
+   ├── Neo4j (degradable)
+   └── apps/ai — FastAPI / LangGraph / Railway
+
+contracts — Solidity / Hardhat / Polygon
 ```
 
----
+### API
 
-## STACK TECNOLÓGICO DEFINITIVO
+La API canónica actual es **REST**. `apps/api/src/app.ts` registra:
 
-### Frontend (`apps/web/`)
-- **Framework:** Next.js 15 con App Router (NO Pages Router) — migrado desde
-  14.2.35 para cerrar 8 vulnerabilidades HIGH que solo se parchan en 15.5.21+.
-  Migración de superficie mínima: no hay uso de `next/headers` ni de
-  `params`/`searchParams` como props de Server Components (los 5 archivos que
-  los usan son componentes cliente con `useParams`/`URLSearchParams`), que son
-  los dos breaking changes grandes de Next 15. React sigue en 18 (Next 15 lo
-  acepta: `^18.2.0 || ^19.0.0`).
-- **`instrumentation.ts` es obligatorio para Sentry en Next 15.** Bajo 14,
-  `withSentryConfig` inyectaba `experimental.instrumentationHook` y cargaba
-  `sentry.server.config.ts` solo; en 15 ese hook desapareció y sin el archivo
-  el SDK **nunca se inicializa en el servidor** — el build pasa igual y los
-  errores de servidor dejan de reportarse en silencio.
-- **CSP: sin nonce, a propósito.** `script-src` usa `'self' 'unsafe-inline'`,
-  no `nonce`+`strict-dynamic`. Un nonce es por-request y 21 de las 25 páginas
-  son prerenderizadas en build, así que su HTML no puede llevarlo: Next
-  emitía sus `<script>` sin nonce y `'strict-dynamic'` hacía que el navegador
-  los bloqueara TODOS — el sitio renderizaba pero no ejecutaba nada de
-  JavaScript (sin hidratación, sin login, sin dashboard). Verificado en
-  Chromium real: con nonce, 18 violaciones de CSP y React sin hidratar; con
-  la política actual, 0 violaciones y las páginas hidratan. Era idéntico en
-  Next 14 — no lo causó la migración. Volver a nonce exige renderizado
-  dinámico en todas las páginas (perder la generación estática). El riesgo de
-  `'unsafe-inline'` aquí es bajo: no existe ningún `dangerouslySetInnerHTML`
-  y React escapa por defecto.
-- **Lenguaje:** TypeScript strict mode
-- **Estilos:** Tailwind CSS — usar SOLO clases de `tailwind.config.ts` existente
-- **Animaciones:** Framer Motion — cinematic, institucional
-- **Mapas:** Mapbox GL JS + react-map-gl
-- **Estado global:** Zustand (NO Redux, NO Context para estado global)
-- **Fetching:** TanStack Query + Apollo Client (GraphQL)
-- **Componentes base:** Radix UI primitives (NO instalar otras UI libs sin preguntar)
-- **Fonts:** Syne (display) + DM Mono (mono) + Fraunces (serif) — YA CONFIGURADAS
+- `/auth`
+- `/dashboard`
+- `/identity`
+- `/territorial`
+- `/governance`
+- `/reputation`
+- `/legal`
+- `/ai`
+- `/workflows`
+- `/notifications`
+- `/events` / SSE
 
-### Backend (`apps/api/`)
-- **Runtime:** Node.js 20+ con TypeScript
-- **Framework:** Fastify 5 (NO Express) — migrado desde 4.x para poder usar
-  `@fastify/jwt@10`, único que trae `fast-jwt >= 6.2.4` con los dos CVE
-  críticos parchados (confusión de algoritmo JWT y colisión de caché que podía
-  devolver claims de otro token). Los tests corren con
-  `NODE_OPTIONS=--experimental-vm-modules` porque `@fastify/cookie@11` carga
-  el paquete `cookie` con `import()` dinámico, que Jest en modo CJS no resuelve
-  sin esa bandera.
-- **API:** GraphQL con Apollo Federation
-- **ORM:** Prisma para PostgreSQL
-- **Auth:** JWT + PKCE, bcrypt para hashing
-- **Validación:** Zod (NO Joi, NO yup)
-
-### AI Service (`apps/ai/`)
-- **Lenguaje:** Python 3.12
-- **LLM:** Claude API — modelo `claude-sonnet-4-20250514` SIEMPRE
-- **Orquestación:** LangGraph (YA implementado en orchestrator.py)
-- **Framework API:** FastAPI
-- **Linting:** ruff, mypy strict
-
-### Bases de Datos
-- **Principal:** PostgreSQL 16 + PostGIS (schema YA existe en infrastructure/db/init.sql)
-- **Documentos:** MongoDB 7
-- **Grafo:** Neo4j 5 (para reputación y detección de manipulación)
-- **Vectores:** Pinecone (RAG pipeline)
-- **Caché:** Redis 7
-
-### Blockchain
-- **Red:** Polygon PoS (testnet Mumbai para dev, mainnet para prod)
-- **Lenguaje contratos:** Solidity ^0.8.24
-- **Framework:** Hardhat
-- **Indexación:** The Graph
+No introducir una segunda lógica de autorización o admisión en rutas si ya existe un servicio canónico de dominio.
 
 ---
 
-## DESIGN SYSTEM — REGLAS CRÍTICAS
+## FRONTEND — `apps/web`
 
-### Paleta de colores (NO cambiar sin autorización)
+### Stack
+
+- Next.js 15.5.23, App Router
+- React 18
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- Mapbox GL / react-map-gl
+- TanStack Query
+- Zustand
+- Radix UI primitives
+- Sentry
+- Playwright para E2E
+
+### Superficies del dashboard
+
+- `/dashboard` — `Mi VÉRTICE`
+- `/dashboard/identity`
+- `/dashboard/reports`
+- `/dashboard/proposals`
+- `/dashboard/governance`
+- `/dashboard/legal`
+- `/dashboard/ai`
+- `/dashboard/reputation`
+- `/dashboard/workflows`
+- `/dashboard/authority`
+- `/dashboard/admin`
+
+No volver a convertir `/dashboard` en una simple vista de analytics urbanos. Debe seguir siendo el centro operacional autenticado del ciudadano.
+
+### Design system
+
+Paleta base:
+
 ```css
---bg: #050508           /* Fondo principal */
---surface: #0c0c14      /* Superficies elevadas */
---gold: #C8A84B         /* Acento primario — VÉRTICE gold */
---red: #C0392B          /* Colombia rojo */
---navy: #1A2744         /* Colombia azul */
---cyan: #4ECDC4         /* Acento tecnológico */
+--bg: #050508
+--surface: #0c0c14
+--gold: #C8A84B
+--red: #C0392B
+--navy: #1A2744
+--cyan: #4ECDC4
 --text-primary: #F0EDE8
---text-secondary: rgba(240,237,232,0.45)
---text-tertiary: rgba(240,237,232,0.22)
 ```
 
-### Principios visuales
-- Dark mode SIEMPRE — no hay light mode en v1
-- Tipografía institucional: Syne para títulos, DM Mono para labels/código
-- Geometría limpia, sin bordes redondeados excesivos
-- Grid de fondo sutil (60px × 60px, rgba(255,255,255,0.025))
-- El oro (#C8A84B) es el color de valor — usarlo con intención
+Mantener el lenguaje visual institucional existente salvo solicitud explícita de rediseño.
 
-### Componentes — convenciones
-```tsx
-// CORRECTO — componente con variantes tipadas
-export interface ButtonProps {
-  variant: 'primary' | 'ghost' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
-}
+---
 
-// INCORRECTO — className strings sin sistema
-<button className="bg-yellow-500 text-black px-4 py-2">
+## BACKEND — `apps/api`
+
+### Stack
+
+- Node.js 20+
+- Fastify 5.11.2
+- Prisma 5
+- PostgreSQL/PostGIS
+- Redis / ioredis
+- Neo4j driver
+- Zod
+- JWT
+- bcrypt
+- Sentry
+- Jest
+
+### Readiness
+
+`/health/ready` debe mantener esta semántica:
+
+- PostgreSQL: requerido;
+- Redis: requerido;
+- Neo4j: opcional/degradable.
+
+No hacer que una caída de Neo4j impida todo el arranque de la API salvo cambio arquitectónico explícito.
+
+### Producción Railway
+
+El Dockerfile es la fuente de verdad del entrypoint productivo.
+
+Invariante de arranque:
+
+1. migraciones Prisma;
+2. drop de privilegios;
+3. proceso Node;
+4. readiness.
+
+No volver a añadir un `railway.json deploy.startCommand` que diverja del Docker CMD sin una razón explícita y tests del contrato de runtime.
+
+---
+
+## WORKFLOWS CÍVICOS
+
+Existe un dominio `civic_cases` / `/workflows` que conecta:
+
+```text
+Reporte territorial
+  → análisis IA
+  → propuesta
+  → deliberación/votación/decisión
+  → control público / legal
 ```
+
+Reglas:
+
+- preservar ownership del ciudadano;
+- preservar source report;
+- preservar AI result/audit IDs;
+- evitar duplicar propuesta/control por expediente;
+- derivar estados desde módulos canónicos downstream;
+- no duplicar reputation events si el módulo original ya los genera.
+
+---
+
+## CTG ONE FEDERATION
+
+Entrada de usuario: `Continuar con CTG One`.
+
+Flujo existente:
+
+```text
+/auth/ctgone/start
+→ CTG One
+→ /auth/ctgone/callback
+→ /auth/ctgone/exchange
+→ sesión propia VÉRTICE
+```
+
+Invariantes:
+
+- no compartir auth cookies con `Domain=.ctgone.com`;
+- no enviar tokens por query strings/fragments;
+- no leer storage de la otra app;
+- no vincular cuentas por mera coincidencia de email;
+- no exponer federation secrets al frontend;
+- CTG One federation **no** equivale a civic identity assurance.
+
+Ver `docs/integrations/CTG_ONE.md`.
+
+---
+
+## AUTORIDAD Y ROLES
+
+Modelo activo:
+
+```text
+persistent grants:
+  citizen | moderator | admin | superadmin
+
+session:
+  active_role
+  sid
+
+JWT:
+  ligado a sesión
+```
+
+Reglas críticas:
+
+- un usuario solo puede activar un rol que posea;
+- privilegios elevados se revalidan contra autoridad persistente;
+- una revocación debe invalidar privilegio efectivo sin depender de esperar expiración larga de un JWT;
+- el primer root superadmin se bootstrappea con autoridad federada server-managed de CTG One;
+- después del bootstrap, nuevos superadmins se conceden desde VÉRTICE;
+- nunca usar email como clave de autoridad raíz;
+- no codificar/exponer públicamente el root UUID;
+- impedir eliminar el último superadmin;
+- auditar bootstrap, grants y cambios de rol.
+
+El dashboard `/dashboard/authority` es parte del producto actual.
+
+---
+
+## CIVIC IDENTITY ASSURANCE
+
+Nunca confundir:
+
+```text
+authentication
+≠ contact verification
+≠ civic identity assurance
+```
+
+`CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es allowlist explícita y fail-closed.
+
+`ctg_one` no es assurance por defecto.
+
+### Votación
+
+Al abrir una propuesta en `voting`, se construye un `proposal_voter_roll` usando la política de assurance vigente y el alcance territorial.
+
+Durante la ventana electoral:
+
+- el padrón congelado es la autoridad de admisión;
+- no reevaluar providers ad hoc por cada request;
+- si no existe padrón, fallar cerrado.
+
+Ver `docs/security/CIVIC_IDENTITY_ASSURANCE.md`.
+
+---
+
+## GOBERNANZA Y LEDGER DE DEMOCRACIA LÍQUIDA
+
+No duplicar la lógica electoral entre ruta y servicio.
+
+### Delegaciones
+
+Scopes:
+
+- `general`
+- `domain`
+- `proposal`
+
+Precedencia:
+
+```text
+proposal > domain > general
+```
+
+Respetar `valid_from`, `valid_until` y pertenencia al padrón congelado.
+
+### Ledger
+
+Invariantes:
+
+- 1 ciudadano elegible = máximo 1 participación efectiva por propuesta;
+- no doble influencia directa + delegada;
+- nullifiers opacos;
+- participación delegada durable;
+- voto directo puede sustituir participación delegada previa sin crear una segunda voz;
+- `total_votes` y tallies deben reflejar registros durables;
+- el quórum debe ser coherente con el mismo universo electoral.
+
+Toda modificación de `castVote`, ledger, delegaciones o voter roll requiere tests de regresión de concurrencia/fail-closed.
+
+Ver `docs/governance/GOVERNANCE.md`.
+
+---
+
+## AI SERVICE — `apps/ai`
+
+### Stack
+
+- Python 3.12
+- FastAPI
+- LangGraph
+- Anthropic
+- Pinecone
+- Voyage AI
+
+### Agentes actuales
+
+1. CitizenAgent
+2. GovernanceAgent
+3. PolicyAgent
+4. TerritorialAgent
+5. IntegrityAgent
+6. CommsAgent
+7. LegalAgent
+
+`BaseAgent.MODEL` actual: `claude-sonnet-4-6`.
+
+No volver a documentar `claude-sonnet-4-20250514` como modelo actual salvo rollback explícito en código.
+
+### RAG
+
+- embeddings: Voyage AI `voyage-3`;
+- vector store: Pinecone;
+- fallback hash: solo resiliencia técnica, **no** equivalente semántico al RAG real.
+
+---
+
+## DATOS
+
+### PostgreSQL/PostGIS
+
+Autoridad primaria para estado transaccional y geoespacial.
+
+### Redis
+
+- cache;
+- sesiones/estado efímero;
+- rate limiting;
+- pub/sub.
+
+### Neo4j
+
+Reputación/grafo; no autoridad de identidad o votos.
+
+### MongoDB
+
+No tratar como dependencia activa hasta que exista integración real en código/configuración.
+
+---
+
+## BLOCKCHAIN
+
+`contracts/` usa:
+
+- Solidity ^0.8.24
+- Hardhat
+- OpenZeppelin 5
+- Polygon
+
+Scripts disponibles para local, Amoy y mainnet.
+
+No afirmar “deployed on-chain” sin evidencia del entorno.
+
+Nunca almacenar on-chain:
+
+- PII;
+- cédula;
+- email;
+- voto individual;
+- secretos.
+
+---
+
+## SEGURIDAD
+
+Reglas no negociables salvo decisión arquitectónica explícita:
+
+- no inferir civic identity assurance desde login, email, wallet o reputación;
+- no confiar solo en claims JWT antiguos para roles privilegiados;
+- no duplicar admisión electoral fuera del contrato canónico;
+- no exponer secretos de Anthropic, CTG One, blockchain o providers al frontend;
+- mantener separación entre identidad pública y sentido del voto;
+- aplicar fail-closed cuando falta voter roll en una propuesta abierta;
+- mantener rate limiting y headers de seguridad;
+- preservar audit trail para autoridad y acciones sensibles.
 
 ---
 
 ## CONVENCIONES DE CÓDIGO
 
 ### TypeScript
-- **Strict mode SIEMPRE** — no usar `any`, usar `unknown` si es necesario
-- **Interfaces sobre types** para objetos públicos
-- **Enums** para valores discretos conocidos
-- **Zod schemas** para validación en runtime
 
-### Nombrado
-```
-Archivos:         kebab-case.ts / kebab-case.tsx
-Componentes:      PascalCase
-Hooks:            useCamelCase
-Utilidades:       camelCase
-Constantes:       UPPER_SNAKE_CASE
-Tipos/Interfaces: PascalCase
-```
+- strict mode;
+- evitar `any`;
+- Zod para validación runtime;
+- no introducir Express;
+- no introducir Redux si Zustand resuelve el caso actual.
 
-### Estructura de componente React
-```tsx
-// 1. Imports (externos → internos → types)
-// 2. Types/interfaces
-// 3. Constantes del módulo
-// 4. Componente (function declaration, NO arrow function para componentes principales)
-// 5. Subcomponentes (si son pequeños y solo se usan aquí)
-// 6. Export default al final
+### Git
+
+Conventional Commits:
+
+```text
+feat(scope): ...
+fix(scope): ...
+docs(scope): ...
+test(scope): ...
+refactor(scope): ...
+chore(scope): ...
 ```
 
-### Git — mensajes de commit (Conventional Commits)
-```
-feat(module):   Nueva funcionalidad
-fix(module):    Corrección de bug
-docs:           Documentación
-style:          Formato sin lógica
-refactor:       Refactoring sin nueva funcionalidad
-test:           Tests
-infra:          Infraestructura, CI/CD
-chore:          Tareas de mantenimiento
-
-Ejemplos:
-  feat(identity): implement DID generation flow
-  fix(territorial): correct PostGIS spatial index query
-  docs(governance): add liquid democracy spec
-  infra(docker): add Neo4j service to compose
-```
-
-### Branches
-```
-main          → producción (protegida, solo merge via PR)
-develop       → integración (PR requerido)
-feature/XXX   → nuevas funcionalidades
-fix/XXX       → correcciones
-infra/XXX     → infraestructura
-docs/XXX      → documentación
-```
+Preferir PRs pequeños y coherentes; no mezclar refactors no relacionados con un hotfix de producción.
 
 ---
 
-## MÓDULOS — ESTADO Y PRIORIDADES
+## DOCUMENTACIÓN OBLIGATORIA
 
-### Módulo 01 — Identidad Cívica Digital
-- **Estado:** 🟢 Implementado (API completa — rutas, servicio, schema, tests)
-- **Archivos clave:** `apps/api/src/modules/identity/`
-- **Implementado:** DID generation (sin clave criptográfica falsa — `verificationMethod`
-  se omite hasta tener un método real), cédula protegida con HMAC-SHA256 +
-  `IDENTITY_PEPPER` (no SHA-256 sin sal), verificación de email, conexión de
-  wallet con firma (Sign-In-with-Ethereum simplificado, `POST
-  /identity/wallet/nonce` + verificación de firma), integración con reputación
-- **Niveles de verificación (nombres honestos, no prometen más de lo que prueban):**
-  `registrado` → `documento_declarado` (el ciudadano reintrodujo su propia
-  cédula; NO valida contra ninguna fuente externa) → `contacto_verificado`
-  (correo confirmado). `documento_declarado` habilita voto consultivo —
-  ver nota de integridad electoral en Módulo 03.
-- **Pendiente:** Verificación real de identidad (proveedor externo o revisión
-  manual) antes de habilitar votación vinculante; deploy contratos en Polygon
-  Amoy testnet
-- **Autenticación (`apps/api/src/modules/auth/`) — auditada:**
-  - **Sin canal de temporización en login.** `bcrypt.compare()` siempre
-    corre, incluso contra un hash de relleno cuando el email no existe —
-    antes se saltaba por completo en ese caso, y aunque el cuerpo de la
-    respuesta era idéntico, el tiempo no: permitía enumerar cuentas
-    registradas midiendo latencia. Misma protección en `changePassword()`.
-  - **Token de reset de contraseña, de un solo uso real.** `resetPassword()`
-    usa `redis.getdel()` (atómico) para consumir el token ANTES de tocar la
-    base de datos — antes era `GET` seguido de `DEL` después de la
-    transacción, dejando el token vigente durante toda esa ventana, y de
-    forma permanente si la transacción fallaba a mitad de camino.
-  - **Una sola política de contraseña**, compartida por registro, reset y
-    cambio (`PasswordSchema` en `auth.schema.ts`: 8-128 caracteres, mínimo
-    una mayúscula y un número). Antes `POST /auth/reset-password` validaba
-    a mano solo la longitud, sin las demás reglas — una contraseña más
-    débil que la exigida al registrarse podía colarse por ese camino.
-  - **`POST /auth/change-password`** (nuevo, requiere sesión activa +
-    contraseña actual): antes no existía ninguna forma de cambiar la
-    contraseña sin pasar por el flujo de correo de "olvidé mi contraseña".
-    Revoca todas las demás sesiones activas al cambiarla; conserva la
-    sesión actual si se le pasa el refresh token vigente.
+Cuando cambie un contrato importante, actualizar:
 
-### Módulo 02 — Motor Territorial
-- **Estado:** 🟢 Implementado (API + frontend completos)
-- **Archivos clave:** `apps/api/src/modules/territorial/`, `apps/web/app/dashboard/reports/`
-- **Implementado:** CRUD reportes, PostGIS nearby, filtros, estadísticas, mapa Mapbox, formulario con geolocalización, vista detalle
+1. `README.md` si afecta la superficie del producto;
+2. `docs/CURRENT_STATE.md` si cambia estado funcional;
+3. documento de dominio correspondiente;
+4. este `CLAUDE.md` si cambia una regla que futuros agentes deben obedecer.
 
-### Módulo 03 — Gobernanza y Decisión
-- **Estado:** 🟢 Implementado (API + frontend completos)
-- **Archivos clave:** `apps/api/src/modules/governance/`, `apps/web/app/dashboard/governance/`
-- **Implementado:** Propuestas, 5 etapas (idea→draft→debate→voting→resultado), democracia líquida, delegaciones
-- **Integridad electoral:**
-  - **Un ciudadano = un voto.** `computeVoteWeight()` siempre devuelve 1.0 —
-    ya no escala 1.0–1.5 según reputación. La reputación sigue existiendo
-    para moderación/insignias, nunca para multiplicar el valor de un voto.
-  - **Quórum territorial real.** Cada propuesta guarda un snapshot del
-    barrio/localidad de su autor al crearse (`proposals.locality_id`,
-    `proposals.neighborhood`). El universo de votantes elegibles se filtra
-    por ese territorio cuando `scope = neighborhood/locality`; antes se
-    contaba siempre a toda la ciudad sin importar el scope.
-  - **Avales con fuente de verdad en Postgres.** `proposal_endorsements`
-    (PK compuesta `proposal_id, citizen_id`) es la restricción real que
-    impide el doble aval. Redis sigue usándose como caché, pero ya no es la
-    guarda de duplicados — antes, si Redis perdía datos, un ciudadano podía
-    volver a avalar sin límite.
-  - **Nulificador de voto con clave propia** (`VOTE_NULLIFIER_SECRET`,
-    distinta de `JWT_SECRET`) — rotar el secreto de sesión ya no invalida
-    silenciosamente el historial de nulificadores.
-  - **Aval + contador + avance de etapa son una sola transacción.**
-    `endorseProposal()` usa `prisma.$transaction()` — antes eran 3 sentencias
-    sueltas y una caída del proceso entre el INSERT y el UPDATE del contador
-    desincronizaba el número mostrado del real.
-  - **Cierre de votación idempotente.** El `UPDATE` que cierra una votación
-    filtra por `WHERE status = 'voting'`; solo la solicitud que gana esa
-    condición encola el registro on-chain y notifica — dos finalizaciones
-    concurrentes ya no disparan el job ni la notificación por duplicado.
-  - **Padrón congelado por consulta.** `proposal_voter_roll` guarda, en la
-    misma transacción que el paso debate→voting, la lista nominal de
-    ciudadanos elegibles (territorio, nivel de verificación, motivo). El
-    `eligible_voters` de la propuesta es literalmente el número de filas
-    insertadas ahí — no puede desincronizarse del padrón, y ahora se puede
-    responder "¿quién podía votar?" después de los hechos.
-  - **Auditoría de acciones de moderador.** `admin_audit_log` (solo INSERT)
-    registra quién, qué acción, sobre qué propuesta, cuándo y con qué
-    resultado para `adminAdvanceProposal`/`adminArchiveProposal` — ver
-    `lib/audit.ts`.
+Los estados deben marcarse explícitamente como:
 
-### Módulo 04 — Capa IA Multi-Agente
-- **Estado:** 🟢 Implementado
-- **Archivos existentes:** `apps/ai/orchestrator.py` (LangGraph, 6 agentes), `apps/ai/rag/pipeline.py`, `apps/ai/main.py` (FastAPI)
-- **Implementado:** RAG pipeline con Pinecone, rutas REST /ai/query y /rag/*, 28 tests de cobertura
+- `✅ Implementado`
+- `🟡 Integrado / pendiente de certificación`
+- `🧭 Planeado`
+- `⛔ No activo / retirado`
 
-### Módulo 05 — Blockchain
-- **Estado:** 🟡 Contratos escritos y testeados, pendiente deploy
-- **Contratos:** `contracts/contracts/CivicSBT.sol`, `contracts/contracts/VotingRegistry.sol`
-- **Implementado:** 53 tests en Hardhat (26 CivicSBT + 27 VotingRegistry), todos pasan
-- **Privacidad:** el DID **nunca** se escribe on-chain. El contrato guarda
-  `didCommitment = keccak256(DID_COMMITMENT_PEPPER : did)`; el pepper es un
-  secreto del backend y permanente por despliegue (rotarlo rompe el vínculo con
-  los badges emitidos). Aplica también al `tokenURI`, que es público on-chain.
-- **Pendiente:** Deploy en Polygon Amoy testnet, configurar secrets DEPLOYER_PRIVATE_KEY
-  y DID_COMMITMENT_PEPPER. Antes de mainnet: multisig para `DEFAULT_ADMIN_ROLE`.
-- **Mint y registro on-chain vía cola durable, no fire-and-forget.** El mint
-  del badge de identidad y el registro de resultados de votación en
-  `VotingRegistry` se encolan en la tabla `jobs` (Postgres) y los procesa un
-  worker en el propio proceso de la API con reintentos y backoff exponencial
-  (`apps/api/src/lib/jobs.ts`). Antes eran `.catch(() => null)`: si el proceso
-  caía a mitad de camino, el mint o el registro se perdían en silencio, sin
-  reintento ni rastro. `mintCitizenBadge()`/`recordProposalVoting()` ahora
-  lanzan en error real (antes lo devoraban) — el job necesita distinguir un
-  fallo real de un no-op legítimo (badge/registro ya existente) para saber
-  cuándo reintentar.
-
-### Módulo 06 — Reputación
-- **Estado:** 🟢 Implementado (API + frontend completos)
-- **Archivos clave:** `apps/api/src/modules/reputation/`, `apps/web/app/dashboard/reputation/`
-- **Implementado:** Score acumulativo, eventos de reputación, Neo4j para grafo, UI con ring SVG, tabs Resumen/Actividad/Logros, badges
-
-### Módulo 07 — Eventos en Tiempo Real (SSE)
-- **Estado:** 🟢 Implementado y testeado
-- **Archivos clave:** `apps/api/src/modules/events/`, `apps/api/src/lib/pubsub.ts`, `apps/web/lib/useServerEvents.ts`
-- **Implementado:** SSE endpoint `/events`, Redis pub/sub, heartbeat 25s, reconexión exponencial frontend, publishers integrados en territorial y governance, 21 tests
-
-### Frontend Landing
-- **Estado:** 🟢 Implementado en Next.js App Router
-- **Archivos:** `apps/web/app/page.tsx`, `apps/web/components/sections/` (Hero, HowItWorks, Modules, AI, Roadmap), Footer
-
-### Dashboard Web
-- **Estado:** 🟢 Implementado (diseño completo desde mockups)
-- **Archivos:** `apps/web/app/dashboard/` (layout, panel, reputation, reports, governance, legal, admin, ai)
-- **Implementado:** Sidebar desktop, bottom nav mobile con FAB dorado, datos reales de API, diseño dark gold
-
-### Despliegue — Railway + Vercel
-- **Estado:** 🟡 Configuración lista, sin desplegar todavía
-- **Guía completa:** `docs/deployment/railway-vercel.md`
-- **Servicios:** Railway para `apps/api` (Fastify + worker de jobs embebido),
-  `apps/ai` (FastAPI) y Postgres+PostGIS/Redis; Vercel para `apps/web`.
-  `railway.json` (raíz, para `api`) y `apps/ai/railway.json` apuntan cada uno
-  a su Dockerfile y healthcheck (`/health/ready`).
-- **`apps/api/Dockerfile` tenía 3 bugs reales, corregidos y verificados de
-  punta a punta** (sin Docker daemon disponible en el entorno de desarrollo,
-  pero replicando cada stage a mano): el stage `deps` fallaba siempre
-  (`postinstall` de Prisma sin `schema.prisma` copiado), `@vertice/types` no
-  se compilaba antes de `@vertice/api`, y la imagen final aplanaba
-  `dist`+`node_modules` rompiendo los symlinks relativos de pnpm hacia
-  `apps/api/node_modules` y `packages/types` — el contenedor habría muerto en
-  el primer `require()`. `apps/ai/Dockerfile` también fijaba el puerto 8001
-  en el `CMD`, incompatible con el `$PORT` que inyecta Railway.
-- **Postgres necesita PostGIS explícito** — el plugin "PostgreSQL" por
-  defecto de Railway no lo trae; usar la plantilla de extensiones o la
-  dedicada de PostGIS (enlaces en la guía). Verificado contra un Postgres 16
-  real: sin PostGIS la primera migración aborta con `0A000`.
-- **`/health/ready` distingue dependencias requeridas de opcionales.**
-  Postgres y Redis caídos → 503 (`status: "unavailable"`). Neo4j caído → 200
-  con `status: "degraded"`. Antes Neo4j contaba como requerido, así que el
-  healthcheck del despliegue devolvía 503 para siempre en el piloto (que
-  excluye Neo4j a propósito) y la plataforma mataba el contenedor por
-  "1/1 replicas never became healthy" — era imposible desplegar.
-
-### CI/CD (`.github/workflows/ci.yml`)
-- **Estado:** 🟢 Corriendo de verdad por primera vez desde que existe el repo
-- **El workflow llevaba semanas sin ejecutar ni un solo job — no era un
-  problema de GitHub, era el propio YAML.** `if: ${{ secrets.SEMGREP_APP_TOKEN != '' }}`
-  a nivel de step: el contexto `secrets` no puede leerse dentro de una
-  expresión `if:` de step, y esa validación es de todo el archivo — invalidaba
-  el workflow completo, así que ningún job (ni `quality` ni `test`) llegaba a
-  crearse en ninguna corrida. Confirmado contra la API real: las 10 corridas
-  por push a `main` desde el merge del PR #4 terminaban con `conclusion:
-  failure` y 0 jobs, todas instantáneas. Corregido pasando el secreto por
-  `env:` a nivel de job y condicionando contra `env.SEMGREP_APP_TOKEN`.
-  Validar workflows con `actionlint` (no solo YAML sintáctico) antes de asumir
-  que un `if:` con `secrets.*` es válido.
-- **El override de `undici` de la auditoría de seguridad rompía la descarga
-  del compilador de Hardhat.** `"undici": ">=6.28.0"` sin techo resolvía 8.x
-  para la cadena de Hardhat, que usa una opción (`maxRedirections`) que
-  undici 8 eliminó. Invisible en local porque el compilador ya estaba en
-  caché (`~/.cache/hardhat-nodejs`); en un runner de CI limpio, sin caché, el
-  download se ejecuta de verdad y falla. Acotado a `>=6.28.0 <7.0.0` — sigue
-  parchando el CVE sin saltar de major. Para reproducir localmente lo que ve
-  CI: `rm -rf ~/.cache/hardhat-nodejs` antes de correr `pnpm test`.
-- **Pendiente:** Playwright (E2E) no corre en CI todavía — solo existe el
-  script `apps/web` `"e2e": "playwright test"`, sin job dedicado. Tampoco hay
-  smoke test de las imágenes Docker de `api`/`ai` en cada merge a `main` — el
-  job `build` solo compila Next.js y solo construye la imagen de `ai` en
-  `develop`.
+No describir como producción una integración únicamente porque el código compila o existe IaC.
 
 ---
 
-## REGLAS DE SEGURIDAD — NUNCA VIOLAR
+## LECTURA RECOMENDADA ANTES DE CAMBIOS SENSIBLES
 
-1. **NUNCA** commitear archivos `.env` — solo `.env.example`
-2. **NUNCA** almacenar cédulas en texto plano — solo HMAC-SHA256 con `IDENTITY_PEPPER`
-   (SHA-256 sin sal es enumerable por fuerza bruta dado el espacio pequeño de
-   cédulas colombianas; ver `apps/api/src/lib/identity-hash.ts`)
-3. **NUNCA** exponer `ANTHROPIC_API_KEY` en el frontend (solo backend/AI service)
-4. **NUNCA** usar `eval()` o inputs sin sanitizar en SQL
-5. **NUNCA** hardcodear private keys de blockchain
-6. **SIEMPRE** usar Prisma para queries SQL (no SQL raw salvo excepciones PostGIS)
-7. **SIEMPRE** validar con Zod antes de procesar input externo
-8. **SIEMPRE** usar HTTPS/WSS en producción
+- `docs/CURRENT_STATE.md`
+- `docs/architecture/ARCHITECTURE.md`
+- `docs/governance/GOVERNANCE.md`
+- `docs/security/CIVIC_IDENTITY_ASSURANCE.md`
+- `docs/integrations/CTG_ONE.md`
+- `docs/deployment/railway-vercel.md`
 
----
-
-## COMANDOS FRECUENTES
-
-```bash
-# Desarrollo local completo
-docker-compose up -d          # Levantar todos los servicios
-pnpm dev                       # Levantar apps en paralelo (Turborepo)
-
-# Solo frontend
-cd apps/web && pnpm dev
-
-# Solo AI service
-cd apps/ai && uvicorn main:app --reload --port 8001
-
-# Base de datos
-psql postgresql://vertice:vertice@localhost:5432/vertice_os
-
-# Tests
-pnpm test                      # Todos los workspaces
-pnpm --filter @vertice/web test
-
-# Lint y typecheck
-pnpm lint
-pnpm typecheck
-
-# Build
-pnpm build
-```
-
----
-
-## WORKFLOW DE DESARROLLO CON GITHUB
-
-### Para cada tarea nueva:
-```bash
-# 1. Crear branch desde develop
-git checkout develop
-git pull origin develop
-git checkout -b feature/nombre-descriptivo
-
-# 2. Desarrollar con commits frecuentes
-git add .
-git commit -m "feat(module): descripción clara"
-
-# 3. Push y crear PR
-git push origin feature/nombre-descriptivo
-# → Crear PR en GitHub apuntando a develop
-# → El CI/CD (GitHub Actions) corre automáticamente
-
-# 4. Merge solo cuando CI pasa
-```
-
-### GitHub Issues — cómo trabajarlos:
-- Leer el issue completo antes de empezar
-- Crear branch con el número del issue: `feature/007-did-generation`
-- Linkear el PR al issue: "Closes #007" en la descripción del PR
-
----
-
-## CONTEXTO DE NEGOCIO (leer para entender el propósito)
-
-VÉRTICE OS no es una app política más. Es **infraestructura cívica** —
-la diferencia es que una app política depende de un ciclo electoral y 
-VÉRTICE opera permanentemente, acumula inteligencia territorial y 
-se convierte en el substrato de la vida democrática de Cartagena.
-
-**Ciudad piloto:** Cartagena de Indias, Bolívar, Colombia  
-**Problema central:** Desconexión entre ciudadanos e instituciones  
-**Solución:** Participación continua + IA + transparencia radical  
-
-**Filosofía fundacional:**  
-> "La política no debería ocurrir solo cada cuatro años."
-
-**Usuarios objetivo (Fase I):**
-- Ciudadanos de Cartagena con cédula verificada
-- Líderes comunitarios de JACs y organizaciones civiles
-- Concejales y funcionarios que quieran canales directos
-
----
-
-## DECISIONES ARQUITECTÓNICAS TOMADAS
-
-| Decisión | Alternativa descartada | Razón |
-|----------|----------------------|-------|
-| Next.js App Router | Pages Router | Server Components para performance |
-| Fastify | Express | 2-3x más rápido, mejor TypeScript support |
-| Zustand | Redux | Mucho más simple para este caso |
-| LangGraph | LangChain básico | Necesitamos grafos de agentes con estado |
-| Polygon PoS | Ethereum mainnet | Gas fees inaccesibles para usuarios colombianos |
-| Soulbound Tokens | Governance tokens transferibles | Anti-clientelismo: la reputación no se vende |
-| PostGIS | MongoDB geoespacial | Queries espaciales complejos requieren PostGIS |
-| Pinecone | pgvector | Escala sin configurar infraestructura GPU propia |
-
----
-
-## CONTACTO Y REFERENCIAS
-
-- **Arquitecto del producto:** Juan Pablo Valderrama Pino (CTG One Corporation)
-- **Documentación arquitectura:** `docs/architecture/ARCHITECTURE.md`
-- **Marco de gobernanza:** `docs/governance/GOVERNANCE.md`
-- **Roadmap completo:** `README.md`
-- **Stack de IA:** `apps/ai/orchestrator.py` + `apps/ai/requirements.txt`
-- **Schema DB:** `infrastructure/db/init.sql`
-
----
-
-*Este archivo debe actualizarse cada vez que se toma una decisión que afecta
-la arquitectura, el stack, o las convenciones del proyecto.*
-
-*Última actualización: v0.1.0 — Fase I Sprint 1*
+Para cambios en auth, governance, authority o producción, leer también los tests del módulo antes de modificar el contrato.

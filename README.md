@@ -1,118 +1,156 @@
 # VÉRTICE OS
 
 > **Sistema Operativo Cívico — Cartagena de Indias, Colombia**  
-> *Infraestructura permanente para la democracia continua.*
+> Infraestructura digital para participación, deliberación, decisión y control ciudadano continuo.
 
-[![Estado](https://img.shields.io/badge/Estado-Alpha%20v0.1.0-C8A84B?style=flat-square)](https://github.com/VladPhil92/Vertice-OS)
+[![Estado](https://img.shields.io/badge/Estado-Desarrollo%20activo-C8A84B?style=flat-square)](https://github.com/VladPhil92/Vertice-OS)
 [![CI](https://img.shields.io/github/actions/workflow/status/VladPhil92/Vertice-OS/ci.yml?style=flat-square&label=CI)](https://github.com/VladPhil92/Vertice-OS/actions)
 [![Licencia](https://img.shields.io/badge/Licencia-Propietaria-1A2744?style=flat-square)](./LICENSE)
-[![Ciudad Piloto](https://img.shields.io/badge/Piloto-Cartagena%20de%20Indias-C0392B?style=flat-square)](https://es.wikipedia.org/wiki/Cartagena_de_Indias)
+[![Piloto](https://img.shields.io/badge/Piloto-Cartagena%20de%20Indias-C0392B?style=flat-square)](https://es.wikipedia.org/wiki/Cartagena_de_Indias)
+
+> **Snapshot documental:** 2 de septiembre de 2026. El paquete raíz conserva la versión técnica `0.1.0`; el estado funcional del producto ha avanzado sustancialmente respecto de la documentación original de la Fase I.
 
 ---
 
 ## ¿Qué es VÉRTICE OS?
 
-VÉRTICE OS es infraestructura cívica de nueva generación — no una aplicación política, sino el **substrato permanente** de la vida democrática de una ciudad. Los ciudadanos reportan problemas en su territorio, proponen y votan políticas públicas, delegan su voto en quien confían, y acumulan reputación cívica verificada on-chain. La IA sirve de mediadora y sintetizadora; la blockchain garantiza la inmutabilidad de cada decisión.
+VÉRTICE OS es una plataforma de infraestructura cívica conectada al ecosistema CTG One. Su objetivo es convertir la participación ciudadana en un flujo continuo y trazable:
 
-> *"La política no debería ocurrir solo cada cuatro años."*
+`Identidad → Reporte territorial → IA cívica → Propuesta → Deliberación → Votación → Decisión → Control público → Reputación`
 
----
-
-## Estado de implementación
-
-| # | Módulo | Estado | Descripción |
-|---|--------|--------|-------------|
-| 01 | **Identidad Cívica Digital** | ✅ Implementado | DID W3C, verificación cédula/email, niveles 0–3 |
-| 02 | **Motor Territorial** | ✅ Implementado | Reportes PostGIS, clustering, mapa Mapbox, análisis IA |
-| 03 | **Gobernanza y Decisión** | ✅ Implementado | Propuestas 5 etapas, votación ponderada, delegación líquida |
-| 04 | **Capa IA Multi-Agente** | ✅ Implementado | LangGraph 7 agentes, RAG Pinecone + Voyage AI, FastAPI |
-| 05 | **Blockchain & Confianza** | 🟡 Contratos listos | CivicSBT (ERC-5192) + VotingRegistry — 53 tests ✓ — deploy Amoy pendiente |
-| 06 | **Reputación Cívica** | ✅ Implementado | Score acumulativo, Neo4j, 5 niveles, badges on-chain |
-| 07 | **Legal Ciudadano** | ✅ Implementado | Generador IA de derechos de petición, tutelas, acciones populares |
-| 08 | **Eventos en Tiempo Real** | ✅ Implementado | SSE + Redis pub/sub, heartbeat 25s, reconexión exponencial |
+El sistema combina un dashboard ciudadano, una API modular, un servicio de IA multiagente, datos geoespaciales, reputación cívica, eventos en tiempo real y contratos inteligentes. La blockchain se reserva para evidencias que realmente necesitan inmutabilidad; los datos personales y la lógica operacional permanecen fuera de cadena.
 
 ---
 
-## Arquitectura
+## Estado funcional actual
 
-```
+| Área | Estado | Implementación actual |
+|---|---|---|
+| **Dashboard ciudadano** | ✅ Implementado | `Mi VÉRTICE`, atención pendiente, actividad personal, reportes, propuestas, votos, control público, IA, reputación y expedientes cívicos |
+| **Workflows cívicos** | ✅ Implementado | Expediente durable que conecta reporte → análisis IA → propuesta → gobernanza → acción legal/control público |
+| **Identidad y autenticación** | ✅ Implementado / P0 activo | Login local + federación CTG One; separación explícita entre autenticación, contacto verificado y civic identity assurance |
+| **Roles y autoridad** | ✅ Implementado | Grants persistentes `citizen/moderator/admin/superadmin`, `active_role` por sesión, JWT ligado a sesión, panel de autoridad y bootstrap controlado del superadmin raíz |
+| **Motor territorial** | ✅ Implementado | Reportes georreferenciados, mapa, PostGIS, análisis y escalamiento desde el dashboard |
+| **Gobernanza** | ✅ Implementado | Propuestas, padrón electoral congelado, delegaciones y ledger canónico de participación para democracia líquida |
+| **Ledger de voto** | ✅ Implementado | Previene doble influencia directa/delegada, admite override directo de voto previamente delegado y reconstruye tallies desde registros durables |
+| **Reputación cívica** | ✅ Implementado | Eventos de reputación, score y soporte Neo4j sin convertir reputación en credencial de identidad |
+| **Control público / Legal** | ✅ Implementado | Generación y gestión de documentos de control ciudadano y acciones legales asistidas por IA |
+| **IA multiagente** | ✅ Implementado | 7 agentes LangGraph + RAG Pinecone/Voyage AI + fallback seguro cuando RAG externo no está configurado |
+| **Tiempo real** | ✅ Implementado | Eventos SSE + Redis pub/sub y notificaciones |
+| **Blockchain** | 🟡 Código disponible | Contratos Hardhat para Polygon; el despliegue/registro on-chain depende de configuración y certificación del entorno |
+| **Producción** | 🟡 En convergencia | Web en Vercel; API y servicio AI en Railway. El runtime usa health/readiness y Docker como contrato canónico de arranque |
+
+### Lo que **no** debe darse por implementado todavía
+
+- Integración directa con Registraduría Nacional o un proveedor KYC/liveness productivo no está certificada por defecto.
+- `CTG One SSO` no equivale a `civic identity assurance`.
+- MongoDB, Kafka, The Graph, DAO y otros componentes descritos en documentos tempranos son arquitectura potencial, no dependencias obligatorias del runtime actual.
+- Las votaciones de VÉRTICE son mecanismos cívicos/consultivos; no sustituyen por sí mismas los procedimientos administrativos o electorales legalmente vinculantes.
+
+---
+
+## Arquitectura actual
+
+```text
 ┌──────────────────────────────────────────────────────────────┐
-│                  apps/web  (Next.js 14 — :3000)              │
-│  Landing · Dashboard · Identidad · Reportes · Gobernanza     │
-│           Reputación · Legal · Design System                 │
-└───────────────────────────┬──────────────────────────────────┘
-                            │ GraphQL / REST
-┌───────────────────────────▼──────────────────────────────────┐
-│                  apps/api  (Fastify — :4000)                  │
-│  auth · identity · territorial · governance · reputation     │
-│  legal ── Prisma ORM ── PostgreSQL 16 + PostGIS              │
-└──────┬────────────────────┬───────────────────┬──────────────┘
-       │                    │                   │
-   Redis 7            Neo4j 5.21         apps/ai (FastAPI — :8001)
-  (caché/sessions)    (reputación)       LangGraph · 6 agentes
-                                         RAG Pinecone + Voyage AI
+│                  apps/web — Next.js 15                      │
+│  Dashboard · Identity · Reports · Governance · Legal · AI   │
+│  Workflows · Reputation · Authority · PWA                   │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ HTTPS / REST
+┌──────────────────────────▼───────────────────────────────────┐
+│                  apps/api — Fastify 5                       │
+│ auth · dashboard · identity · territorial · governance      │
+│ reputation · legal · ai · workflows · notifications · SSE   │
+│ Prisma ORM · PostgreSQL/PostGIS · Redis · Neo4j             │
+└────────────────────┬──────────────────────┬──────────────────┘
+                     │                      │
+                     │                      └── Redis pub/sub / cache / sessions
+                     │
+                     └──────────────► apps/ai — FastAPI + LangGraph
+                                      7 agentes · Claude · RAG
+                                      Pinecone + Voyage AI
+
 ┌──────────────────────────────────────────────────────────────┐
-│              contracts/  (Polygon PoS — Amoy testnet)        │
-│        CivicSBT (ERC-5192 Soulbound) · VotingRegistry       │
+│ contracts/ — Solidity + Hardhat · Polygon PoS / Amoy        │
+│ CivicSBT · VotingRegistry                                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
+La API productiva es actualmente **REST sobre Fastify**. No se debe documentar Apollo Federation/GraphQL como gateway operativo salvo que vuelva a introducirse explícitamente en el código.
+
 ---
 
-## Stack
+## Stack verificado en el repositorio
 
 | Capa | Tecnología |
-|------|-----------|
-| **Frontend** | Next.js 14 App Router, TypeScript strict, Tailwind CSS, Framer Motion, Mapbox GL |
-| **Backend** | Fastify 4, TypeScript, Prisma ORM, Zod validation, JWT + bcrypt |
-| **IA** | Claude claude-sonnet-4-20250514, LangGraph, FastAPI, Voyage AI voyage-3, Pinecone |
-| **DB principal** | PostgreSQL 16 + PostGIS 3.4 |
-| **Caché** | Redis 7 |
-| **Grafo** | Neo4j 5.21 (reputación y detección de manipulación) |
-| **Blockchain** | Polygon PoS, Solidity ^0.8.24, Hardhat, OpenZeppelin 5 |
-| **Infra** | Docker Compose (dev), Kubernetes (prod), Terraform (AWS EKS + RDS) |
-| **CI/CD** | GitHub Actions: lint → typecheck → test → build → deploy |
+|---|---|
+| **Frontend** | Next.js `15.5.23`, React 18, TypeScript, Tailwind CSS, Framer Motion, Mapbox, TanStack Query, Zustand |
+| **Backend** | Fastify `5.11.2`, TypeScript, Prisma 5, Zod, JWT, bcrypt |
+| **IA** | Python 3.12, FastAPI, LangGraph, Anthropic (`claude-sonnet-4-6` en el orquestador), Pinecone, Voyage AI `voyage-3` |
+| **Datos** | PostgreSQL + PostGIS, Redis, Neo4j |
+| **Blockchain** | Solidity `^0.8.24`, Hardhat, OpenZeppelin 5, Polygon |
+| **Monorepo** | pnpm `10.34.5`, Turborepo 2 |
+| **Observabilidad** | Sentry + health/readiness probes |
+| **Deploy** | Vercel (web) + Railway (API/AI) |
 
 ---
 
-## Inicio rápido (desarrollo local)
+## Capacidades recientes incorporadas
 
-### Prerequisitos
-- Node.js ≥ 20, pnpm ≥ 10
+### Dashboard Functional Convergence
+
+El dashboard dejó de ser una vista principalmente urbana y ahora funciona como centro de comando autenticado del ciudadano. Expone actividad personal, acciones pendientes y acceso operativo a los módulos principales.
+
+### Expedientes cívicos
+
+`/dashboard/workflows` mantiene el contexto de un caso cívico a través de los distintos módulos. Un reporte territorial puede analizarse con IA, convertirse en propuesta y/o escalarse a control público sin perder procedencia, ownership ni auditoría.
+
+### Federación CTG One
+
+VÉRTICE dispone de entrada `Continuar con CTG One` reutilizando el intercambio federado con PKCE. La sesión final sigue siendo propia de VÉRTICE y la vinculación no se realiza por mera coincidencia de correo.
+
+### Autoridad por roles
+
+Los privilegios ya no dependen de un rol estático embebido. Existen grants persistentes y un `active_role` de sesión; los roles privilegiados se validan contra la autoridad persistida. El dashboard incluye selector de rol y un panel `/dashboard/authority` reservado a superadmin.
+
+### Gobernanza y democracia líquida
+
+El padrón electoral se congela para cada propuesta al entrar en votación. El ledger canónico de participación evita doble influencia, preserva nullifiers opacos y coordina participación directa y delegada. La admisión electoral no se recalcula a partir de identidad mutable durante la ventana de voto.
+
+---
+
+## Inicio rápido
+
+### Requisitos
+
+- Node.js `>=20`
+- pnpm `>=9` (lockfile actual generado con pnpm 10)
 - Docker + Docker Compose
-- Python 3.12 (para el servicio AI)
+- Python 3.12 para `apps/ai`
 
-### 1. Clonar e instalar
+### Instalación
 
 ```bash
 git clone https://github.com/VladPhil92/Vertice-OS.git
 cd Vertice-OS
 pnpm install
-```
-
-### 2. Configurar variables de entorno
-
-```bash
 cp .env.example .env
-# Editar .env con tus valores (ver secciones comentadas)
-# Mínimo requerido para desarrollo:
-#   POSTGRES_PASSWORD, JWT_SECRET, ANTHROPIC_API_KEY
 ```
 
-### 3. Levantar infraestructura
+### Infraestructura local
 
 ```bash
-docker-compose up -d   # PostgreSQL + PostGIS, Redis, Neo4j
+docker compose up -d
+pnpm --filter @vertice/api db:deploy
+pnpm dev
 ```
 
-### 4. Aplicar migraciones y arrancar
+Web: `http://localhost:3000`  
+API: `http://localhost:4000`  
+AI: `http://localhost:8001` cuando se ejecuta el servicio Python.
 
-```bash
-pnpm --filter @vertice/api db:deploy    # Crea las 9 tablas + seed de localidades
-pnpm dev                                # Arranca web (:3000), api (:4000) en paralelo
-```
-
-### 5. Servicio IA (opcional)
+### Servicio IA
 
 ```bash
 cd apps/ai
@@ -122,129 +160,55 @@ uvicorn main:app --reload --port 8001
 
 ---
 
-## Estructura del monorepo
-
-```
-vertice-os/
-├── apps/
-│   ├── web/                    # Next.js 14 — App Router
-│   │   └── app/dashboard/      # 9 páginas del panel ciudadano
-│   ├── api/                    # Fastify — 6 módulos con tests
-│   │   ├── src/modules/        # auth · identity · territorial · governance · reputation · legal
-│   │   └── prisma/             # Schema + migración inicial
-│   └── ai/                     # FastAPI — orquestador LangGraph
-│       ├── orchestrator.py     # 6 agentes IA
-│       ├── rag.py              # Pipeline RAG Pinecone + Voyage AI
-│       └── scripts/            # index_documents.py para Cartagena
-├── packages/
-│   ├── types/                  # @vertice/types — interfaces TypeScript compartidas
-│   ├── ui/                     # @vertice/ui — 8 componentes design system
-│   └── config/                 # @vertice/config — TSConfig + ESLint bases
-├── contracts/                  # Solidity ^0.8.24 — Polygon PoS
-│   ├── contracts/              # CivicSBT.sol · VotingRegistry.sol
-│   ├── test/                   # Tests Hardhat/Chai
-│   └── scripts/deploy.ts       # Deploy + verificación Polygonscan
-├── infrastructure/
-│   ├── db/                     # init_extensions.sql (PostGIS)
-│   ├── kubernetes/             # Manifiestos K8s por servicio
-│   └── terraform/              # IaC AWS: EKS · RDS · ElastiCache · VPC
-├── docs/
-│   ├── architecture/ARCHITECTURE.md
-│   └── governance/GOVERNANCE.md
-├── docker-compose.yml          # Dev local completo
-├── turbo.json                  # Turborepo pipeline
-└── .github/workflows/ci.yml   # CI/CD: calidad → tests → build → deploy
-```
-
----
-
-## Comandos frecuentes
+## Comandos principales
 
 ```bash
-# Desarrollo
-pnpm dev                                    # Todos los apps en paralelo
-pnpm --filter @vertice/web dev              # Solo frontend
-pnpm --filter @vertice/api dev              # Solo API
+pnpm dev
+pnpm build
+pnpm test
+pnpm lint
+pnpm typecheck
 
-# Base de datos
-pnpm --filter @vertice/api db:generate      # Regenerar Prisma client
-pnpm --filter @vertice/api db:migrate       # Crear nueva migración
-pnpm --filter @vertice/api db:deploy        # Aplicar migraciones
-pnpm --filter @vertice/api db:studio        # Prisma Studio
+pnpm --filter @vertice/api db:generate
+pnpm --filter @vertice/api db:migrate
+pnpm --filter @vertice/api db:deploy
 
-# Tests
-pnpm test                                   # Todos los workspaces
-pnpm --filter @vertice/api test             # Solo API (Jest, ~231 tests)
-
-# Smart contracts
-pnpm --filter @vertice/contracts compile    # Compilar + typechain
-pnpm --filter @vertice/contracts test       # Tests Hardhat
-pnpm --filter @vertice/contracts deploy:amoy  # Deploy a Polygon Amoy
-
-# Indexar documentos cívicos (RAG)
-cd apps/ai
-python scripts/index_documents.py \
-  --source docs/plan-desarrollo.txt \
-  --doc-type plan \
-  --locality CTG-01
-
-# Infraestructura
-cd infrastructure/terraform
-terraform init -backend-config=backend.tfvars
-terraform plan
-terraform apply
-
-kubectl apply -k infrastructure/kubernetes/
+pnpm --filter @vertice/contracts compile
+pnpm --filter @vertice/contracts test
+pnpm --filter @vertice/contracts deploy:amoy
 ```
 
 ---
 
-## Pipeline CI/CD
+## Documentación
 
-```
-push → quality (lint + typecheck TypeScript/Python)
-     → test (Jest + pytest con PostgreSQL + Redis + Neo4j)
-     → security (semgrep + audit)
-     → build (Next.js + Docker)
-     → deploy:staging (rama develop)
-     → deploy:production (rama main, aprobación manual)
-```
+- [`docs/CURRENT_STATE.md`](./docs/CURRENT_STATE.md) — snapshot funcional y límites conocidos.
+- [`docs/architecture/ARCHITECTURE.md`](./docs/architecture/ARCHITECTURE.md) — arquitectura implementada y componentes opcionales.
+- [`docs/governance/GOVERNANCE.md`](./docs/governance/GOVERNANCE.md) — reglas de gobernanza y contrato del ledger de participación.
+- [`docs/security/CIVIC_IDENTITY_ASSURANCE.md`](./docs/security/CIVIC_IDENTITY_ASSURANCE.md) — frontera de confianza de identidad cívica.
+- [`docs/integrations/CTG_ONE.md`](./docs/integrations/CTG_ONE.md) — federación VÉRTICE ↔ CTG One.
+- [`docs/deployment/railway-vercel.md`](./docs/deployment/railway-vercel.md) — runtime y despliegue.
 
 ---
 
-## Agentes IA
+## Seguridad — invariantes actuales
 
-| Agente | Función |
-|--------|---------|
-| **Router** | Orquestador — clasifica la intención y delega al agente correcto |
-| **Ciudadano** | Responde preguntas cívicas, guía participación |
-| **Gobernanza** | Sintetiza debates, identifica consenso en propuestas |
-| **Política** | Convierte demandas ciudadanas en borradores de política pública |
-| **Territorial** | Analiza patrones en reportes por barrio/localidad |
-| **Integridad** | Detecta bots, coordinación inauténtica y desinformación |
-| **Legal** | Genera documentos jurídicos (tutelas, derechos de petición, etc.) |
-
----
-
-## Seguridad
-
-- Cédulas almacenadas **solo como hash SHA-256** — nunca en texto plano
-- JWT de corta vida (15 min) + refresh tokens con rotación
-- Rate limiting por Redis en todos los endpoints
-- `ANTHROPIC_API_KEY` solo en el backend/AI — nunca expuesta al frontend
-- Semgrep SAST en CI (TypeScript + Python + secrets)
-- Votos con nullifier hash — privacidad ante correlación on-chain
-- Soulbound Tokens no transferibles — la reputación no se vende
+- CTG One federation/SSO **no** constituye por sí sola assurance de identidad cívica.
+- La allowlist `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es explícita y fail-closed.
+- El padrón congelado es la autoridad de admisión durante la ventana de votación.
+- Los votos usan nullifiers; el sistema no debe enlazar públicamente identidad y sentido del voto.
+- Los roles privilegiados deben validarse contra grants persistentes y sesión activa.
+- El último superadmin no puede eliminarse.
+- Secretos de CTG One, Anthropic, blockchain y otros proveedores nunca deben exponerse al browser.
+- PostgreSQL y Redis son dependencias requeridas para readiness; Neo4j puede degradarse sin bloquear el arranque completo de la API.
 
 ---
 
-## Contexto legal (Colombia)
+## Contexto legal
 
-- **Art. 23 CP** — Derecho de petición (Módulo Legal)
-- **Art. 86 CP** — Acción de tutela (Módulo Legal)
-- **Ley 1581/2012** — Habeas data / protección de datos personales
-- **Ley 472/1998** — Acciones populares (Módulo Legal)
-- Los procesos de votación son **consultas ciudadanas**, no actos administrativos vinculantes
+VÉRTICE OS está diseñado como infraestructura de participación y control ciudadano. El módulo legal se apoya en mecanismos como derecho de petición, tutela y acciones populares, pero los documentos generados por IA requieren revisión del usuario y no constituyen representación jurídica automática.
+
+Las decisiones agregadas de la plataforma son evidencia cívica y mecanismos consultivos; su fuerza jurídica depende del procedimiento institucional aplicable en Colombia.
 
 ---
 
@@ -252,8 +216,8 @@ push → quality (lint + typecheck TypeScript/Python)
 
 **Fundador y Arquitecto de Producto:** Juan Pablo Valderrama Pino  
 **Organización:** CTG One Corporation  
-**Ciudad Piloto:** Cartagena de Indias, Bolívar, Colombia
+**Ciudad piloto:** Cartagena de Indias, Bolívar, Colombia
 
 ---
 
-*VÉRTICE OS — Infraestructura para la democracia continua.*
+*VÉRTICE OS — infraestructura para la democracia continua.*

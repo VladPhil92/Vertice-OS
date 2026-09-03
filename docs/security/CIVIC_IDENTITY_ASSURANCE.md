@@ -1,53 +1,116 @@
-# P0 — Civic Identity Assurance
+# Civic Identity Assurance — VÉRTICE OS
 
-## Objective
+> Estado P0 implementado · snapshot 2 de septiembre de 2026
 
-Separate three concepts that must never be treated as equivalent in VÉRTICE OS:
+## Objetivo
 
-1. **Authentication** — the user controls a VÉRTICE/CTG One session.
-2. **Contact verification** — the user controls the declared email/contact channel.
-3. **Civic identity assurance** — an independently trusted provider has performed identity proofing strong enough for a civic-governance action.
+VÉRTICE separa tres conceptos que no pueden tratarse como equivalentes:
 
-The legacy `verification_level` remains useful for onboarding, but it is not proof that the declared Colombian identity belongs to the person operating the account.
+1. **Authentication** — el usuario controla una sesión VÉRTICE/CTG One aceptada.
+2. **Contact verification** — el usuario controla el canal/contacto declarado.
+3. **Civic identity assurance** — un proveedor independiente y aprobado realizó identity proofing suficientemente fuerte para una acción cívica protegida.
 
-## P0.1 trust contract
+`verification_level` sigue siendo útil para onboarding/contacto, pero no prueba por sí solo que la identidad civil declarada pertenece a la persona que opera la cuenta.
 
-VÉRTICE reuses the durable `external_identities` mapping as the attachment point for identity providers, with one additional policy boundary:
+---
 
-- only provider identifiers listed in `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` are accepted as civic identity evidence;
-- the allowlist is empty by default;
-- empty allowlist means **fail-closed** for protected governance actions;
-- `ctgone` federation is **not** implicitly an assurance provider;
-- a citizen also needs `verification_level >= 2` so contact verification remains a prerequisite;
-- `/identity/assurance` exposes the actual state without relabeling declared-document or email checks as KYC.
+## Contrato P0 actual
 
-The first protected high-impact action is **casting a vote**. A frozen voter-roll entry alone is no longer sufficient: the vote path also checks current civic identity assurance.
+VÉRTICE reutiliza `external_identities` como punto de vinculación de proveedores externos y aplica una frontera de política adicional:
 
-## Provider onboarding rule
+- solo providers incluidos en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` cuentan como evidencia de assurance;
+- la allowlist está vacía por defecto;
+- allowlist vacía significa **fail-closed** para construir el electorado protegido;
+- `ctg_one` federation no es un provider de assurance por defecto;
+- el ciudadano debe cumplir también las reglas de verificación/contacto exigidas por el proceso electoral;
+- `/identity/assurance` expone el estado real sin relabeling engañoso de email o cédula declarada como KYC.
 
-A provider must not be added to the allowlist until the integration guarantees that its `external_identities` row is created only after a successful identity-proofing result. SSO, email matching, wallet ownership, account age, civic reputation, or possession of a CTG One account are insufficient by themselves.
+---
 
-For a Cartagena pilot, the selected provider should be evaluated for, at minimum:
+## Assurance y padrón electoral congelado
 
-- government-issued document verification appropriate to Colombia;
-- anti-spoofing / liveness or an equivalent person-presence control where applicable;
-- duplicate-person resistance;
-- auditable verification outcome and provider reference;
-- revocation/review path;
-- data-minimization and retention controls compatible with Colombian data-protection obligations;
-- operational availability and incident response.
+El modelo actual protege la votación en dos momentos distintos:
 
-## Deliberate limitations of P0.1
+### 1. Apertura de votación
 
-This phase establishes the trust boundary and closes the vote path, but does not claim full identity maturity yet. Follow-up phases must:
+Al pasar una propuesta a `voting`, VÉRTICE construye un `proposal_voter_roll` con los ciudadanos que satisfacen la política vigente de identidad cívica y alcance territorial.
 
-1. integrate the selected production identity provider and signed callback/webhook contract;
-2. persist assurance lifecycle metadata (verified/revoked/expired/review) independently from generic federation links;
-3. rebuild frozen voter-roll membership so quorum denominators include only assured identities;
-4. extend assurance requirements to proposal creation, endorsement and vote delegation according to the governance policy;
-5. add administrative review, revocation, reconciliation and audit evidence;
-6. expose actionable assurance onboarding in the citizen dashboard.
+Ese snapshot fija el universo electoral y, por tanto, el denominador de quórum.
 
-## Security invariant
+### 2. Ventana de voto
 
-**No code path may infer civic identity assurance merely from a login, matching email, CTG One federation, self-declared cédula, wallet signature, reputation score, or prior voter-roll membership.**
+Una vez congelado el padrón, la admisión de votos directos y participación delegada se realiza contra `proposal_voter_roll`.
+
+**No se vuelve a inferir elegibilidad desde una configuración mutable de providers en cada request.**
+
+Esto evita que:
+
+- una modificación de allowlist cambie retroactivamente el electorado de una votación abierta;
+- la revocación/configuración de un provider produzca quórums inconsistentes a mitad de proceso;
+- rutas HTTP distintas apliquen políticas divergentes.
+
+Si la propuesta está en votación y no existe padrón congelado, el sistema debe fallar cerrado.
+
+---
+
+## Federación CTG One
+
+CTG One puede autenticar y federar una cuenta, pero:
+
+```text
+CTG One SSO ≠ Civic Identity Assurance
+```
+
+No se debe añadir `ctg_one` a la allowlist salvo que el operador haya auditado y certificado que el flujo concreto de CTG One realiza identity proofing suficiente para el piloto.
+
+Login, matching de email, wallet ownership, account age o reputación no sustituyen proofing de identidad.
+
+---
+
+## Regla de onboarding de providers
+
+Un provider solo puede añadirse a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` cuando la integración garantice que su evidencia externa se crea después de un resultado válido de identity proofing.
+
+Para el piloto de Cartagena deben evaluarse al menos:
+
+- documento oficial aplicable en Colombia;
+- anti-spoofing / liveness o control equivalente cuando corresponda;
+- resistencia a duplicidad de persona;
+- referencia de verificación auditable;
+- estados de revisión/revocación/expiración;
+- minimización y retención de datos;
+- cumplimiento de obligaciones colombianas de protección de datos;
+- disponibilidad operativa e incident response.
+
+---
+
+## Delegaciones
+
+La delegación no puede ampliar el electorado.
+
+Un delegador solo puede aportar participación a un delegado si el delegador pertenece al padrón congelado de esa propuesta y la delegación está activa, vigente y dentro del scope aplicable.
+
+La assurance no se hereda desde el delegado: la pertenencia al padrón ya representa la evaluación del delegador realizada al abrir la votación.
+
+---
+
+## Limitaciones actuales
+
+P0 establece la frontera de confianza y la usa para congelar el electorado, pero no implica identidad productiva completa.
+
+Pendientes de evolución:
+
+1. integrar y certificar un provider productivo de identity proofing;
+2. persistir lifecycle de assurance (`verified/revoked/expired/review`) con semántica independiente de links de federación genéricos;
+3. definir política explícita de assurance para creación de propuestas, endorsements y otras acciones de alto impacto;
+4. añadir revisión administrativa, revocación, reconciliación y evidencia operacional;
+5. exponer onboarding accionable de assurance en el dashboard ciudadano;
+6. definir tratamiento de revocaciones posteriores al snapshot para futuras votaciones sin alterar retrospectivamente elecciones ya abiertas.
+
+---
+
+## Invariante de seguridad
+
+**Ningún código puede inferir civic identity assurance únicamente desde login, email, CTG One federation, cédula autodeclarada, firma de wallet, reputación o antigüedad de cuenta.**
+
+Para votaciones abiertas, **ningún código puede sustituir el padrón congelado por una reevaluación ad hoc de providers**.

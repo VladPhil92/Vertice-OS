@@ -1,38 +1,162 @@
-# CTG One ↔ VÉRTICE OS integration
+# CTG One ↔ VÉRTICE OS
 
-## Canonical origins
+> Integración federada actual · snapshot 2 de septiembre de 2026
+
+## 1. Orígenes canónicos
 
 - CTG One: `https://ctgone.com`
 - VÉRTICE OS: `https://vertice.ctgone.com`
 
-VÉRTICE is a connected application in the CTG One ecosystem. Its web experience remains deployed independently so release cadence, observability and failure domains stay isolated.
+VÉRTICE es una aplicación conectada al ecosistema CTG One, pero conserva despliegue, sesión, observabilidad y ciclo de release propios.
 
-## Phase 1 — domain and navigation
+---
 
-- CTG One exposes VÉRTICE from its product catalog and authenticated service hub.
-- VÉRTICE exposes a return path to CTG One.
-- `https://vertice.ctgone.com` is the canonical public origin for VÉRTICE metadata and links.
-- The VÉRTICE API production CORS origin must be `https://vertice.ctgone.com` when the public API is promoted.
+## 2. Estado actual
 
-## Authentication boundary
+La integración ya superó la fase puramente navegacional. El punto de entrada de VÉRTICE expone `Continuar con CTG One` y reutiliza el flujo federado existente.
 
-Phase 1 does **not** share browser sessions across subdomains.
+Flujo conceptual:
 
-Do not:
+```text
+VÉRTICE /auth/login
+   ↓
+/auth/ctgone/start
+   ↓
+CTG One authorization / federation
+   ↓
+/auth/ctgone/callback
+   ↓
+server-side validation
+   ↓
+/auth/ctgone/exchange
+   ↓
+sesión propia de VÉRTICE
+```
 
-- set VÉRTICE or CTG One auth cookies to `Domain=.ctgone.com` merely to share sessions;
-- copy access tokens through query strings or URL fragments;
-- read CTG One localStorage from VÉRTICE (or vice versa);
-- treat the shared parent domain as proof of identity.
+El mismo entrypoint sirve para:
 
-## Phase 2 — identity federation
+- iniciar sesión en una cuenta VÉRTICE ya vinculada;
+- crear/vincular una cuenta VÉRTICE en el primer acceso cuando el contrato lo permite.
 
-Single sign-on must use an explicit, short-lived federation exchange. The intended direction is:
+El login local por correo/contraseña permanece disponible como alternativa.
 
-1. user authenticates with CTG One;
-2. CTG One issues or brokers a short-lived, audience-bound assertion for VÉRTICE;
-3. VÉRTICE validates issuer, audience, expiry, nonce/state and subject mapping server-side;
-4. VÉRTICE creates its own first-party session;
-5. account-link evidence is recorded without exposing wallet credentials or Privy secrets to the browser.
+---
 
-The concrete protocol (OIDC authorization-code/PKCE or signed JWT exchange) must be selected only after both production origins and the VÉRTICE API runtime are certified.
+## 3. Límites de seguridad
+
+### VÉRTICE mantiene sesión propia
+
+La federación no significa compartir sesión de navegador entre subdominios.
+
+No:
+
+- establecer cookies de auth con `Domain=.ctgone.com` únicamente para compartir sesión;
+- copiar access tokens en query strings o URL fragments;
+- intentar leer `localStorage` de otra aplicación;
+- considerar el dominio padre compartido como prueba de identidad;
+- exponer secretos de federación al browser.
+
+### No vinculación por email
+
+Una coincidencia de correo entre CTG One y una cuenta local VÉRTICE **no** es suficiente para enlazar identidades automáticamente.
+
+Ante colisión con una cuenta local, el sistema debe exigir evidencia explícita del flujo de vinculación definido por auth.
+
+---
+
+## 4. Federación ≠ civic identity assurance
+
+Este es un invariante crítico.
+
+Una sesión CTG One demuestra que el usuario controla una identidad/sesión aceptada por CTG One. No demuestra por sí sola que exista proofing fuerte suficiente para acciones de gobernanza protegida.
+
+Por tanto:
+
+```text
+CTG One authentication
+        ≠
+email/contact verification
+        ≠
+civic identity assurance
+```
+
+El provider federado persistido como `ctg_one` no debe añadirse automáticamente a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
+
+Solo podría convertirse en provider de assurance después de una auditoría explícita que confirme un proceso de identity proofing compatible con la política cívica de VÉRTICE.
+
+---
+
+## 5. Bootstrap del superadmin
+
+CTG One también funciona como autoridad externa controlada para el **bootstrap inicial** del root superadmin de VÉRTICE.
+
+Esto no implica que CTG One administre permanentemente los roles de VÉRTICE.
+
+Contrato:
+
+1. el primer superadmin puede bootstrappearse mediante evidencia federada server-managed prevista por VÉRTICE;
+2. una vez existe la autoridad raíz, nuevos grants `superadmin` se conceden desde VÉRTICE;
+3. el root identifier no debe codificarse públicamente ni derivarse del email;
+4. el último superadmin no puede eliminarse;
+5. bootstrap, grants y cambios de rol generan auditoría.
+
+Una cuenta CTG One normal nunca debe obtener privilegios administrativos simplemente por federarse.
+
+---
+
+## 6. Responsabilidades por sistema
+
+### CTG One
+
+- autenticar dentro de su propio dominio;
+- producir la evidencia/assertion federada acordada;
+- mantener sus secretos y credenciales fuera de VÉRTICE cliente;
+- actuar como autoridad de bootstrap únicamente donde el contrato server-side lo autoriza.
+
+### VÉRTICE
+
+- validar issuer/audience/expiry/state/nonce según el protocolo vigente;
+- mapear el subject externo sin usar email como identidad canónica;
+- crear su propia sesión;
+- persistir vínculo externo/audit evidence;
+- mantener grants y `active_role` en su propia autoridad;
+- aplicar su propia política de civic identity assurance.
+
+---
+
+## 7. Fallos que deben cerrarse de forma segura
+
+El intercambio debe fallar sin crear sesión privilegiada cuando ocurra cualquiera de estos casos:
+
+- state/nonce inválido;
+- assertion expirada;
+- issuer o audience incorrectos;
+- subject ausente/no válido;
+- secreto o firma inválidos;
+- colisión con cuenta local no resuelta;
+- intento de elevar rol a partir de datos federados no autorizados.
+
+La disponibilidad temporal de CTG One no debe transformar errores de federación en bypass de autenticación local o de autorización.
+
+---
+
+## 8. Producción
+
+La integración debe evaluarse por separado en cuatro capas:
+
+1. **UI:** CTA y redirección correctos;
+2. **protocolo:** intercambio federado válido;
+3. **cuenta:** linkage consistente y sin colisiones inseguras;
+4. **sesión/autoridad:** sesión VÉRTICE emitida con grants correctos.
+
+No marcar la integración como “completa” basándose únicamente en que la redirección vuelve a VÉRTICE.
+
+---
+
+## 9. Referencias internas
+
+- `apps/api/src/modules/auth/`
+- `apps/web/app/auth/`
+- `docs/security/CIVIC_IDENTITY_ASSURANCE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/architecture/ARCHITECTURE.md`
