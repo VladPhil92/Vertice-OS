@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { createHmac } from 'crypto'
-import { config } from '../../config'
 import { delCache } from '../../lib/cache'
+import { getVoteNullifierSecret } from '../../lib/feature-secrets'
 import { logger } from '../../lib/logger'
 import { prisma } from '../../lib/prisma'
 import { publish } from '../../lib/pubsub'
@@ -34,8 +34,7 @@ function makeError(message: string, statusCode: number, code: string): Error {
 }
 
 function voteNullifier(citizenId: string, proposalId: string): string {
-  const key = config.VOTE_NULLIFIER_SECRET ?? config.JWT_SECRET
-  return createHmac('sha256', key)
+  return createHmac('sha256', getVoteNullifierSecret())
     .update(`${citizenId}:${proposalId}`)
     .digest('hex')
 }
