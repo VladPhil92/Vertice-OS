@@ -3,6 +3,9 @@ const mockGetActiveProof = jest.fn()
 jest.mock('../../../config', () => ({
   config: {
     CIVIC_IDENTITY_ASSURANCE_PROVIDERS: ['trusted_kyc'],
+    CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: JSON.stringify({
+      trusted_kyc: { primary: 'test-proofing-adapter-secret-32-chars!!' },
+    }),
   },
 }))
 
@@ -29,6 +32,9 @@ beforeEach(() => {
     config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length,
     'trusted_kyc',
   )
+  config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
+    trusted_kyc: { primary: 'test-proofing-adapter-secret-32-chars!!' },
+  })
 })
 
 describe('getCivicIdentityAssurance', () => {
@@ -44,7 +50,22 @@ describe('getCivicIdentityAssurance', () => {
     expect(status.assured).toBe(false)
     expect(status.governance_eligible).toBe(false)
     expect(status.requirements.contact_verified).toBe(true)
+    expect(status.requirements.provider_ingress_operational).toBe(false)
     expect(status.requirements.active_identity_proof).toBe(false)
+    expect(mockGetActiveProof).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the trusted provider has no authenticated ingress channel', async () => {
+    config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = '{}'
+    ;(prisma.citizen.findUnique as jest.Mock).mockResolvedValueOnce({
+      id: CITIZEN_ID,
+      verificationLevel: 2,
+    })
+
+    const status = await getCivicIdentityAssurance(CITIZEN_ID)
+
+    expect(status.governance_eligible).toBe(false)
+    expect(status.requirements.provider_ingress_operational).toBe(false)
     expect(mockGetActiveProof).not.toHaveBeenCalled()
   })
 
@@ -63,6 +84,7 @@ describe('getCivicIdentityAssurance', () => {
 
     expect(status.assured).toBe(false)
     expect(status.requirements.contact_verified).toBe(false)
+    expect(status.requirements.provider_ingress_operational).toBe(true)
     expect(status.requirements.active_identity_proof).toBe(true)
   })
 
@@ -77,10 +99,11 @@ describe('getCivicIdentityAssurance', () => {
 
     expect(status.assured).toBe(false)
     expect(status.provider).toBeNull()
+    expect(status.requirements.provider_ingress_operational).toBe(true)
     expect(status.requirements.active_identity_proof).toBe(false)
   })
 
-  it('marks a contact-verified citizen with an active trusted proof as governance eligible', async () => {
+  it('marks a contact-verified citizen with an active proof from an operational provider as governance eligible', async () => {
     ;(prisma.citizen.findUnique as jest.Mock).mockResolvedValueOnce({
       id: CITIZEN_ID,
       verificationLevel: 2,
@@ -104,6 +127,7 @@ describe('getCivicIdentityAssurance', () => {
       provider_expires_at: '2027-09-02T20:00:00.000Z',
       requirements: {
         contact_verified: true,
+        provider_ingress_operational: true,
         active_identity_proof: true,
       },
     })

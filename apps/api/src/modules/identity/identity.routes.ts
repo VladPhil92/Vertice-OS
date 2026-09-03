@@ -33,6 +33,10 @@ const WalletNonceSchema = z.object({
 
 const DID_CONTENT_TYPE = 'application/did+ld+json'
 
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
 export async function identityRoutes(app: FastifyInstance): Promise<void> {
   // ── Resolución pública ────────────────────────────────────────────────────
 
@@ -67,8 +71,8 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // GET /identity/assurance — frontera explícita entre login/contacto e
-  // identidad cívica apta para acciones de gobernanza. P0.2 exige un proof
-  // vigente; un ExternalIdentity/SSO aislado ya no eleva este estado.
+  // identidad cívica apta para acciones de gobernanza. Un ExternalIdentity/SSO
+  // aislado nunca eleva este estado.
   app.get('/assurance', { preHandler: requireAuth }, async (request, reply) => {
     const assurance = await getCivicIdentityAssurance(request.citizen.sub)
     return reply.send(assurance)
@@ -93,9 +97,11 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     })
   })
 
-  // POST /identity/proofing/events — ingress server-to-server para eventos
-  // normalizados por adaptadores KYC. No usa JWT ciudadano: la autenticación
-  // es HMAC con CIVIC_IDENTITY_PROOFING_EVENT_SECRET y cada evento es idempotente.
+  // POST /identity/proofing/events — ingress server-to-server para eventos ya
+  // normalizados por un adaptador que validó primero la firma nativa del KYC.
+  // P0.4 autentica después ese salto interno con una llave aislada por provider
+  // + key-id y un timestamp firmado de cinco minutos, evitando secreto global,
+  // replay indefinido y activación de proveedores sin canal de revocación.
   app.post('/proofing/events', {
     config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
   }, async (request, reply) => {
@@ -107,9 +113,11 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
       })
     }
 
-    const rawSignature = request.headers['x-vertice-proofing-signature']
-    const signature = Array.isArray(rawSignature) ? rawSignature[0] : rawSignature
-    const result = await ingestCivicProofingEvent(parsed.data, signature)
+    const result = await ingestCivicProofingEvent(parsed.data, {
+      signature: firstHeader(request.headers['x-vertice-proofing-signature']),
+      timestamp: firstHeader(request.headers['x-vertice-proofing-timestamp']),
+      key_id: firstHeader(request.headers['x-vertice-proofing-key-id']),
+    })
 
     return reply.status(result.duplicate ? 200 : 202).send({
       accepted: true,
@@ -149,7 +157,7 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /identity/verify/email — solicitar token de verificación
   app.post('/verify/email', {
-    preHandler: requireVerified, // requiere lvl >= 1 (cédula confirmada)
+    preHandler: requireVerified,
     config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const result = await requestEmailVerification(request.citizen.sub)
