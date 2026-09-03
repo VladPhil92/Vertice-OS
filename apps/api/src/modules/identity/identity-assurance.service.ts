@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma'
-import { config } from '../../config'
 import { getActiveCivicIdentityProof } from './identity-proofing.service'
+import { getOperationalCivicIdentityProviders } from './identity-proofing-provider-config'
 
 export interface CivicIdentityAssuranceStatus {
   citizen_id: string
@@ -13,6 +13,7 @@ export interface CivicIdentityAssuranceStatus {
   provider_expires_at: string | null
   requirements: {
     contact_verified: boolean
+    provider_ingress_operational: boolean
     active_identity_proof: boolean
   }
 }
@@ -20,11 +21,11 @@ export interface CivicIdentityAssuranceStatus {
 /**
  * Identity assurance is deliberately separate from authentication/federation.
  *
- * P0.2: an ExternalIdentity link is no longer sufficient evidence. The
- * citizen must have contact verification plus an ACTIVE, VERIFIED proofing
- * record from a provider in CIVIC_IDENTITY_ASSURANCE_PROVIDERS. Proofs that
- * are rejected, expired, revoked or below assurance level 2 never authorize
- * civic governance.
+ * P0.4 requires three independent conditions for governance eligibility:
+ * verified contact, an active proof, and a trusted provider whose authenticated
+ * ingress is operational. This last condition is a revocation-safety interlock:
+ * a previously verified proof cannot keep authorizing governance if VÉRTICE can
+ * no longer authenticate that provider's future revocation/expiry events.
  */
 export async function getCivicIdentityAssurance(
   citizenId: string,
@@ -42,8 +43,10 @@ export async function getCivicIdentityAssurance(
   }
 
   const contactVerified = citizen.verificationLevel >= 2
+  const operationalProviders = getOperationalCivicIdentityProviders()
+  const providerIngressOperational = operationalProviders.length > 0
 
-  if (config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length === 0) {
+  if (!providerIngressOperational) {
     return {
       citizen_id: citizen.id,
       assured: false,
@@ -55,6 +58,7 @@ export async function getCivicIdentityAssurance(
       provider_expires_at: null,
       requirements: {
         contact_verified: contactVerified,
+        provider_ingress_operational: false,
         active_identity_proof: false,
       },
     }
@@ -75,6 +79,7 @@ export async function getCivicIdentityAssurance(
     provider_expires_at: activeProof?.expires_at?.toISOString() ?? null,
     requirements: {
       contact_verified: contactVerified,
+      provider_ingress_operational: true,
       active_identity_proof: proofActive,
     },
   }
