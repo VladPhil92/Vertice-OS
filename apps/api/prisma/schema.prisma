@@ -48,6 +48,8 @@ model Citizen {
   locality           Locality?           @relation(fields: [localityId], references: [id])
   sessions           Session[]
   externalIdentities ExternalIdentity[]
+  roleGrants         CitizenRoleGrant[]   @relation("CitizenRoleGrants")
+  roleGrantsGranted  CitizenRoleGrant[]   @relation("GrantedCitizenRoles")
   reports            TerritorialReport[]
   proposals          Proposal[]
   delegationsGiven   Delegation[]        @relation("Delegator")
@@ -70,6 +72,7 @@ model Session {
   id               String    @id @default(uuid()) @db.Uuid
   citizenId        String    @map("citizen_id") @db.Uuid
   refreshTokenHash String    @unique @map("refresh_token_hash")
+  activeRole       String    @default("citizen") @map("active_role")
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
@@ -81,6 +84,28 @@ model Session {
   @@index([citizenId], map: "idx_sessions_citizen_id")
   @@index([expiresAt], map: "idx_sessions_expires_at")
   @@map("sessions")
+}
+
+// ── Grants de autoridad ────────────────────────────────────────────────────────
+// Fuente de verdad para roles asignados. El campo citizens.role se mantiene
+// únicamente como rol legado/preferido; la autorización privilegiada consulta
+// grants activos y el active_role de la sesión.
+model CitizenRoleGrant {
+  id                 String    @id @default(uuid()) @db.Uuid
+  citizenId          String    @map("citizen_id") @db.Uuid
+  role               String
+  grantedByCitizenId String?   @map("granted_by_citizen_id") @db.Uuid
+  source             String    @default("system")
+  grantedAt          DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  citizen   Citizen  @relation("CitizenRoleGrants", fields: [citizenId], references: [id], onDelete: Cascade)
+  grantedBy Citizen? @relation("GrantedCitizenRoles", fields: [grantedByCitizenId], references: [id], onDelete: SetNull)
+
+  @@unique([citizenId, role], map: "citizen_role_grants_citizen_role_key")
+  // Los índices parciales sobre grants activos permanecen administrados por
+  // migración SQL porque Prisma no modela predicados WHERE en @@index.
+  @@map("citizen_role_grants")
 }
 
 // ── Identidades externas ───────────────────────────────────────────────────────

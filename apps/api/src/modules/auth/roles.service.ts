@@ -8,6 +8,9 @@ import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt'
 
 export const CITIZEN_ROLES = ['citizen', 'moderator', 'admin', 'superadmin'] as const
 const BOOTSTRAP_AUTHORITY = 'bootstrap_superadmin'
+const SUPERADMIN_AUTHORITY_LOCK = 'vertice-superadmin-authority'
+
+type RoleStore = Pick<Prisma.TransactionClient, '$queryRaw' | '$executeRaw'>
 
 function isCitizenRole(value: unknown): value is CitizenRole {
   return typeof value === 'string' && CITIZEN_ROLES.includes(value as CitizenRole)
@@ -20,8 +23,14 @@ function highestRole(roles: CitizenRole[]): CitizenRole {
   return 'citizen'
 }
 
-export async function getAssignedRoles(citizenId: string): Promise<CitizenRole[]> {
-  const rows = await prisma.$queryRaw<Array<{ role: string }>>(Prisma.sql`
+async function lockSuperadminAuthority(tx: Prisma.TransactionClient): Promise<void> {
+  await tx.$queryRaw(Prisma.sql`
+    SELECT pg_advisory_xact_lock(hashtext(${SUPERADMIN_AUTHORITY_LOCK}))
+  `)
+}
+
+async function getAssignedRolesWithStore(store: RoleStore, citizenId: string): Promise<CitizenRole[]> {
+  const rows = await store.$queryRaw<Array<{ role: string }>>(Prisma.sql`
     SELECT role
     FROM citizen_role_grants
     WHERE citizen_id = ${citizenId}::uuid
@@ -31,13 +40,14 @@ export async function getAssignedRoles(citizenId: string): Promise<CitizenRole[]
   return CITIZEN_ROLES.filter((role) => assigned.includes(role))
 }
 
-export async function ensureRoleGrant(
+async function ensureRoleGrantWithStore(
+  store: RoleStore,
   citizenId: string,
   role: CitizenRole,
   source: string,
   grantedByCitizenId?: string | null,
 ): Promise<void> {
-  await prisma.$executeRaw(Prisma.sql`
+  await store.$executeRaw(Prisma.sql`
     INSERT INTO citizen_role_grants
       (citizen_id, role, source, granted_by_citizen_id, granted_at, revoked_at)
     VALUES
@@ -49,6 +59,19 @@ export async function ensureRoleGrant(
       granted_at = NOW(),
       revoked_at = NULL
   `)
+}
+
+export async function getAssignedRoles(citizenId: string): Promise<CitizenRole[]> {
+  return getAssignedRolesWithStore(prisma, citizenId)
+}
+
+export async function ensureRoleGrant(
+  citizenId: string,
+  role: CitizenRole,
+  source: string,
+  grantedByCitizenId?: string | null,
+): Promise<void> {
+  await ensureRoleGrantWithStore(prisma, citizenId, role, source, grantedByCitizenId)
 }
 
 export async function ensureBaselineRoleGrants(citizenId: string, preferredRole: CitizenRole): Promise<CitizenRole> {
@@ -66,28 +89,40 @@ export async function bootstrapFederatedSuperadmin(
   await ensureRoleGrant(citizenId, 'citizen', 'ctg_one')
   if (!authorities.includes(BOOTSTRAP_AUTHORITY)) return null
 
-  const [existing] = await prisma.$queryRaw<Array<{ has_grant: boolean; total_superadmins: bigint }>>(Prisma.sql`
-    SELECT
-      EXISTS(
-        SELECT 1 FROM citizen_role_grants
-        WHERE citizen_id = ${citizenId}::uuid
-          AND role = 'superadmin'
-          AND revoked_at IS NULL
-      ) AS has_grant,
-      (
-        SELECT COUNT(*) FROM citizen_role_grants
-        WHERE role = 'superadmin' AND revoked_at IS NULL
-      ) AS total_superadmins
-  `)
+  const outcome = await prisma.$transaction(async (tx) => {
+    // Serialize bootstrap with dashboard mutations so two concurrent requests
+    // can never establish two first superadmins from a stale count.
+    await lockSuperadminAuthority(tx)
 
-  // CTG One may only establish the very first VERTICE superadmin. Once a
-  // superadmin exists, all future grants are controlled from VERTICE itself.
-  if (!existing?.has_grant && Number(existing?.total_superadmins ?? 0) > 0) return null
+    const [existing] = await tx.$queryRaw<Array<{ has_grant: boolean; total_superadmins: bigint }>>(Prisma.sql`
+      SELECT
+        EXISTS(
+          SELECT 1 FROM citizen_role_grants
+          WHERE citizen_id = ${citizenId}::uuid
+            AND role = 'superadmin'
+            AND revoked_at IS NULL
+        ) AS has_grant,
+        (
+          SELECT COUNT(*) FROM citizen_role_grants
+          WHERE role = 'superadmin' AND revoked_at IS NULL
+        ) AS total_superadmins
+    `)
 
-  for (const role of CITIZEN_ROLES) {
-    await ensureRoleGrant(citizenId, role, 'ctg_one_bootstrap')
-  }
-  await prisma.citizen.update({ where: { id: citizenId }, data: { role: 'superadmin' } })
+    if (existing?.has_grant) return 'existing' as const
+
+    // CTG One may only establish the very first VERTICE superadmin. Once a
+    // superadmin exists, all future grants are controlled from VERTICE itself.
+    if (Number(existing?.total_superadmins ?? 0) > 0) return 'blocked' as const
+
+    for (const role of CITIZEN_ROLES) {
+      await ensureRoleGrantWithStore(tx, citizenId, role, 'ctg_one_bootstrap')
+    }
+    await tx.citizen.update({ where: { id: citizenId }, data: { role: 'superadmin' } })
+    return 'granted' as const
+  })
+
+  if (outcome === 'blocked') return null
+  if (outcome === 'existing') return 'superadmin'
 
   await recordAuditEvent({
     actorId: citizenId,
@@ -249,40 +284,38 @@ export async function replaceCitizenRoles(
   }
 
   const requested = Array.from(new Set<CitizenRole>(['citizen', ...requestedRolesRaw]))
-  const current = await getAssignedRoles(targetCitizenId)
-  if (current.length === 0) {
-    const exists = await prisma.citizen.findUnique({ where: { id: targetCitizenId }, select: { id: true } })
-    if (!exists) throw Object.assign(new Error('Usuario no encontrado'), { statusCode: 404, code: 'USER_NOT_FOUND' })
-  }
-
-  if (current.includes('superadmin') && !requested.includes('superadmin')) {
-    const [row] = await prisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`
-      SELECT COUNT(*) AS total
-      FROM citizen_role_grants
-      WHERE role = 'superadmin' AND revoked_at IS NULL
-    `)
-    if (Number(row?.total ?? 0) <= 1) {
-      throw Object.assign(new Error('No puedes eliminar al último superadmin de VÉRTICE'), {
-        statusCode: 409,
-        code: 'LAST_SUPERADMIN_PROTECTED',
-      })
-    }
-  }
+  let currentBefore: CitizenRole[] = []
 
   await prisma.$transaction(async (tx) => {
-    for (const role of requested) {
-      await tx.$executeRaw(Prisma.sql`
-        INSERT INTO citizen_role_grants
-          (citizen_id, role, source, granted_by_citizen_id, granted_at, revoked_at)
-        VALUES
-          (${targetCitizenId}::uuid, ${role}, 'superadmin_dashboard', ${actorId}::uuid, NOW(), NULL)
-        ON CONFLICT (citizen_id, role)
-        DO UPDATE SET
-          source = EXCLUDED.source,
-          granted_by_citizen_id = EXCLUDED.granted_by_citizen_id,
-          granted_at = NOW(),
-          revoked_at = NULL
+    // This lock is shared with bootstrapFederatedSuperadmin and closes the
+    // check-then-act race around creation/removal of superadmin authority.
+    await lockSuperadminAuthority(tx)
+
+    const current = await getAssignedRolesWithStore(tx, targetCitizenId)
+    currentBefore = current
+    if (current.length === 0) {
+      const exists = await tx.citizen.findUnique({ where: { id: targetCitizenId }, select: { id: true } })
+      if (!exists) {
+        throw Object.assign(new Error('Usuario no encontrado'), { statusCode: 404, code: 'USER_NOT_FOUND' })
+      }
+    }
+
+    if (current.includes('superadmin') && !requested.includes('superadmin')) {
+      const [row] = await tx.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`
+        SELECT COUNT(*) AS total
+        FROM citizen_role_grants
+        WHERE role = 'superadmin' AND revoked_at IS NULL
       `)
+      if (Number(row?.total ?? 0) <= 1) {
+        throw Object.assign(new Error('No puedes eliminar al último superadmin de VÉRTICE'), {
+          statusCode: 409,
+          code: 'LAST_SUPERADMIN_PROTECTED',
+        })
+      }
+    }
+
+    for (const role of requested) {
+      await ensureRoleGrantWithStore(tx, targetCitizenId, role, 'superadmin_dashboard', actorId)
     }
 
     const roleList = Prisma.join(requested.map((role) => Prisma.sql`${role}`))
@@ -312,7 +345,7 @@ export async function replaceCitizenRoles(
     targetType: 'citizen',
     targetId: targetCitizenId,
     result: 'success',
-    metadata: { before: current, after: requested },
+    metadata: { before: currentBefore, after: requested },
   })
   return requested
 }
