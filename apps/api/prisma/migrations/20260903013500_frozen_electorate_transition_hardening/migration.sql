@@ -70,11 +70,10 @@ UPDATE proposal_voter_roll pvr
  WHERE pvr.proposal_id = ed.proposal_id
    AND pvr.citizen_id = ed.delegator_id;
 
--- Every transition into `voting` must arrive with the canonical voter-roll
--- denominator already computed by the application transaction. This prevents
--- direct SQL/admin paths from opening a vote without a frozen electorate.
--- The same trigger resolves one effective delegation per delegator using the
--- precedence contract proposal > domain > general, newest wins within a tie.
+-- Every transition into `voting` must arrive with the complete canonical
+-- election contract already computed by the application transaction. The DB
+-- independently validates that contract so direct SQL/admin code cannot create
+-- an under-specified voting window.
 CREATE OR REPLACE FUNCTION freeze_governance_electorate_transition()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -85,6 +84,25 @@ BEGIN
       RAISE EXCEPTION USING
         ERRCODE = '23514',
         MESSAGE = 'cannot enter voting without a frozen voter-roll denominator';
+    END IF;
+
+    IF NEW.voting_starts_at IS NULL
+       OR NEW.voting_ends_at IS NULL
+       OR NEW.voting_ends_at <= NEW.voting_starts_at THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514',
+        MESSAGE = 'cannot enter voting without a valid voting window';
+    END IF;
+
+    IF NEW.quorum_required IS NULL
+       OR NEW.approval_threshold IS NULL
+       OR NEW.quorum_required < 0
+       OR NEW.quorum_required > 1
+       OR NEW.approval_threshold < 0
+       OR NEW.approval_threshold > 1 THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514',
+        MESSAGE = 'cannot enter voting without valid quorum and approval thresholds';
     END IF;
 
     SELECT COUNT(*)::INTEGER
@@ -174,36 +192,61 @@ BEFORE UPDATE OF "status" ON "proposals"
 FOR EACH ROW
 EXECUTE FUNCTION freeze_governance_electorate_transition();
 
--- After the proposal has entered voting, the frozen liquid-democracy mapping
--- is immutable. This preserves the audit trail even if users later revoke or
--- replace their live delegation for future proposals.
-CREATE OR REPLACE FUNCTION protect_frozen_delegation_snapshot()
+-- The entire voter-roll snapshot becomes immutable once a proposal has ever
+-- opened voting. This covers membership, eligibility metadata and frozen
+-- delegation data, and also blocks later INSERT/DELETE operations. Checking
+-- voting_starts_at rather than today's status keeps the guarantee intact even
+-- after the proposal is approved, rejected, archived or executed.
+CREATE OR REPLACE FUNCTION protect_frozen_voter_roll()
 RETURNS TRIGGER AS $$
 DECLARE
-  proposal_status TEXT;
+  target_proposal_id UUID;
+  vote_opened_at TIMESTAMPTZ;
 BEGIN
-  SELECT status INTO proposal_status FROM proposals WHERE id = OLD.proposal_id;
-
-  IF proposal_status IN (
-    'voting', 'approved', 'rejected', 'quorum_failed',
-    'executed', 'failed_execution'
-  ) AND (
-    NEW.effective_delegate_id IS DISTINCT FROM OLD.effective_delegate_id
-    OR NEW.source_delegation_id IS DISTINCT FROM OLD.source_delegation_id
-    OR NEW.effective_delegation_type IS DISTINCT FROM OLD.effective_delegation_type
-    OR NEW.delegation_frozen_at IS DISTINCT FROM OLD.delegation_frozen_at
-  ) THEN
-    RAISE EXCEPTION USING
-      ERRCODE = '23514',
-      MESSAGE = 'delegation snapshot is immutable after voting opens';
+  IF TG_OP = 'INSERT' THEN
+    target_proposal_id := NEW.proposal_id;
+  ELSE
+    target_proposal_id := OLD.proposal_id;
   END IF;
 
+  SELECT voting_starts_at
+    INTO vote_opened_at
+    FROM proposals
+   WHERE id = target_proposal_id;
+
+  IF vote_opened_at IS NOT NULL THEN
+    IF TG_OP = 'INSERT' OR TG_OP = 'DELETE' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514',
+        MESSAGE = 'voter roll is immutable after voting opens';
+    END IF;
+
+    IF NEW.proposal_id IS DISTINCT FROM OLD.proposal_id
+       OR NEW.citizen_id IS DISTINCT FROM OLD.citizen_id
+       OR NEW.neighborhood IS DISTINCT FROM OLD.neighborhood
+       OR NEW.locality_id IS DISTINCT FROM OLD.locality_id
+       OR NEW.verification_level IS DISTINCT FROM OLD.verification_level
+       OR NEW.eligibility_reason IS DISTINCT FROM OLD.eligibility_reason
+       OR NEW.frozen_at IS DISTINCT FROM OLD.frozen_at
+       OR NEW.effective_delegate_id IS DISTINCT FROM OLD.effective_delegate_id
+       OR NEW.source_delegation_id IS DISTINCT FROM OLD.source_delegation_id
+       OR NEW.effective_delegation_type IS DISTINCT FROM OLD.effective_delegation_type
+       OR NEW.delegation_frozen_at IS DISTINCT FROM OLD.delegation_frozen_at THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514',
+        MESSAGE = 'voter roll is immutable after voting opens';
+    END IF;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS "trg_protect_frozen_delegation_snapshot" ON "proposal_voter_roll";
-CREATE TRIGGER "trg_protect_frozen_delegation_snapshot"
-BEFORE UPDATE ON "proposal_voter_roll"
+DROP TRIGGER IF EXISTS "trg_protect_frozen_voter_roll" ON "proposal_voter_roll";
+CREATE TRIGGER "trg_protect_frozen_voter_roll"
+BEFORE INSERT OR UPDATE OR DELETE ON "proposal_voter_roll"
 FOR EACH ROW
-EXECUTE FUNCTION protect_frozen_delegation_snapshot();
+EXECUTE FUNCTION protect_frozen_voter_roll();
