@@ -51,32 +51,22 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Identidad propia ──────────────────────────────────────────────────────
 
-  // GET /identity/me — DID Document completo del ciudadano autenticado
   app.get('/me', { preHandler: requireAuth }, async (request, reply) => {
     const doc = await getOwnDIDDocument(request.citizen.sub)
     reply.header('Content-Type', DID_CONTENT_TYPE)
     return reply.send(doc)
   })
 
-  // GET /identity/status — nivel de verificación y capacidades legacy.
-  // `verification_level` sigue describiendo controles internos (documento
-  // declarado/contacto), no prueba externa de identidad.
   app.get('/status', { preHandler: requireAuth }, async (request, reply) => {
     const status = await getVerificationStatus(request.citizen.sub)
     return reply.send(status)
   })
 
-  // GET /identity/assurance — frontera explícita entre login/contacto e
-  // identidad cívica apta para acciones de gobernanza. P0.2 exige un proof
-  // vigente; un ExternalIdentity/SSO aislado ya no eleva este estado.
   app.get('/assurance', { preHandler: requireAuth }, async (request, reply) => {
     const assurance = await getCivicIdentityAssurance(request.citizen.sub)
     return reply.send(assurance)
   })
 
-  // GET /identity/proofing — historial resumido del proofing del ciudadano.
-  // No devuelve provider_reference para evitar exponer identificadores internos
-  // de terceros al frontend.
   app.get('/proofing', { preHandler: requireAuth }, async (request, reply) => {
     const proofs = await getCivicIdentityProofs(request.citizen.sub)
     return reply.send({
@@ -93,9 +83,9 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     })
   })
 
-  // POST /identity/proofing/events — ingress server-to-server para eventos
-  // normalizados por adaptadores KYC. No usa JWT ciudadano: la autenticación
-  // es HMAC con CIVIC_IDENTITY_PROOFING_EVENT_SECRET y cada evento es idempotente.
+  // Server-to-server normalized adapter ingress. Each provider/key-id has its
+  // own HMAC key, allowing independent rotation and preventing one adapter key
+  // from authenticating events for another provider.
   app.post('/proofing/events', {
     config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
   }, async (request, reply) => {
@@ -109,7 +99,9 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
     const rawSignature = request.headers['x-vertice-proofing-signature']
     const signature = Array.isArray(rawSignature) ? rawSignature[0] : rawSignature
-    const result = await ingestCivicProofingEvent(parsed.data, signature)
+    const rawKeyId = request.headers['x-vertice-proofing-key-id']
+    const keyId = Array.isArray(rawKeyId) ? rawKeyId[0] : rawKeyId
+    const result = await ingestCivicProofingEvent(parsed.data, signature, keyId)
 
     return reply.status(result.duplicate ? 200 : 202).send({
       accepted: true,
@@ -128,7 +120,6 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Verificación de cédula (nivel 0 → 1) ─────────────────────────────────
 
-  // POST /identity/verify/cedula — re-ingresar cédula para confirmar identidad
   app.post('/verify/cedula', {
     preHandler: requireAuth,
     config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
@@ -147,16 +138,14 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Verificación de email (nivel 1 → 2) ──────────────────────────────────
 
-  // POST /identity/verify/email — solicitar token de verificación
   app.post('/verify/email', {
-    preHandler: requireVerified, // requiere lvl >= 1 (cédula confirmada)
+    preHandler: requireVerified,
     config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const result = await requestEmailVerification(request.citizen.sub)
     return reply.send(result)
   })
 
-  // POST /identity/verify/email/confirm — confirmar token recibido
   app.post('/verify/email/confirm', {
     preHandler: requireVerified,
     config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
@@ -175,7 +164,6 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Perfil territorial ────────────────────────────────────────────────────
 
-  // PUT /identity/profile — actualizar barrio y/o localidad
   app.put('/profile', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = UpdateProfileSchema.safeParse(request.body)
     if (!parsed.success) {
@@ -188,7 +176,6 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Wallet Polygon ────────────────────────────────────────────────────────
 
-  // POST /identity/wallet/nonce — obtiene el mensaje a firmar antes de conectar
   app.post('/wallet/nonce', {
     preHandler: requireAuth,
     config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
@@ -202,8 +189,6 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(result)
   })
 
-  // POST /identity/wallet — conectar billetera Polygon para recibir SBT.
-  // Requiere `signature` del mensaje devuelto por POST /identity/wallet/nonce.
   app.post('/wallet', {
     preHandler: requireAuth,
     config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
