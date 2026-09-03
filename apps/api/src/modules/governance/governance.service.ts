@@ -189,13 +189,15 @@ export async function advanceProposalStage(
   await delCache('stats', 'global')
 
   const advanced = normalizeProposal(updatedRows[0])
-  createNotification(
-    advanced.author_id,
-    'proposal_stage',
-    'Propuesta avanzó a: En votación',
-    `"${advanced.title}" cambió de etapa a En votación.`,
-    `/dashboard/governance/${advanced.id}`,
-  ).catch(() => null)
+  if (advanced.author_id) {
+    createNotification(
+      advanced.author_id,
+      'proposal_stage',
+      'Propuesta avanzó a: En votación',
+      `"${advanced.title}" cambió de etapa a En votación.`,
+      `/dashboard/governance/${advanced.id}`,
+    ).catch(() => null)
+  }
 
   return advanced
 }
