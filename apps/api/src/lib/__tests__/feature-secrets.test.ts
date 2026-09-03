@@ -12,6 +12,7 @@ type MutableConfig = {
   IDENTITY_PEPPER?: string
   AI_SERVICE_SECRET: string
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: string[]
+  CIVIC_IDENTITY_PROOFING_EVENT_SECRET?: string
   POLYGON_RPC_URL?: string
   POLYGON_PRIVATE_KEY?: string
   CIVIC_SBT_ADDRESS?: string
@@ -27,6 +28,7 @@ const original = {
   IDENTITY_PEPPER: mutableConfig.IDENTITY_PEPPER,
   AI_SERVICE_SECRET: mutableConfig.AI_SERVICE_SECRET,
   CIVIC_IDENTITY_ASSURANCE_PROVIDERS: [...mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS],
+  CIVIC_IDENTITY_PROOFING_EVENT_SECRET: mutableConfig.CIVIC_IDENTITY_PROOFING_EVENT_SECRET,
   POLYGON_RPC_URL: mutableConfig.POLYGON_RPC_URL,
   POLYGON_PRIVATE_KEY: mutableConfig.POLYGON_PRIVATE_KEY,
   CIVIC_SBT_ADDRESS: mutableConfig.CIVIC_SBT_ADDRESS,
@@ -41,6 +43,7 @@ beforeEach(() => {
   mutableConfig.IDENTITY_PEPPER = undefined
   mutableConfig.AI_SERVICE_SECRET = ''
   mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS = []
+  mutableConfig.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = undefined
   mutableConfig.POLYGON_RPC_URL = undefined
   mutableConfig.POLYGON_PRIVATE_KEY = undefined
   mutableConfig.CIVIC_SBT_ADDRESS = undefined
@@ -76,9 +79,19 @@ describe('feature-scoped production configuration', () => {
       voting_crypto: 'disabled',
       identity_crypto: 'disabled',
       civic_identity_assurance: 'disabled',
+      civic_identity_proofing_ingress: 'disabled',
       civic_sbt: 'disabled',
       voting_registry: 'disabled',
     })
+  })
+
+  it('reports a configured provider without a production adapter as misconfigured', () => {
+    mutableConfig.CIVIC_IDENTITY_ASSURANCE_PROVIDERS = ['unregistered_provider']
+    mutableConfig.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = 'proofing-ingress-secret-with-32-characters!!'
+
+    const capabilities = getFeatureCapabilities()
+    expect(capabilities.civic_identity_assurance).toBe('misconfigured')
+    expect(capabilities.civic_identity_proofing_ingress).toBe('misconfigured')
   })
 
   it('reports a partially configured CivicSBT capability as misconfigured', () => {
