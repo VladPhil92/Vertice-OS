@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { createHmac } from 'crypto'
-import { config } from '../../config'
 import { delCache } from '../../lib/cache'
+import { getVoteNullifierSecret } from '../../lib/feature-secrets'
 import { logger } from '../../lib/logger'
 import { prisma } from '../../lib/prisma'
 import { publish } from '../../lib/pubsub'
@@ -34,8 +34,7 @@ function makeError(message: string, statusCode: number, code: string): Error {
 }
 
 function voteNullifier(citizenId: string, proposalId: string): string {
-  const key = config.VOTE_NULLIFIER_SECRET ?? config.JWT_SECRET
-  return createHmac('sha256', key)
+  return createHmac('sha256', getVoteNullifierSecret())
     .update(`${citizenId}:${proposalId}`)
     .digest('hex')
 }
@@ -184,25 +183,42 @@ export async function castVoteLedger(
       directVote = inserted[0]
     }
 
-    // Only delegators in the same frozen electorate can be claimed. DISTINCT
-    // prevents multiple active scopes pointing to the same delegate from
-    // multiplying one citizen's participation.
+    // Resolve the delegator's effective delegation BEFORE filtering by the
+    // current delegate. Otherwise a broad/general delegate voting first could
+    // claim a citizen who had a more specific proposal/domain delegation to
+    // somebody else. Specificity is deterministic: proposal > domain > general;
+    // newest wins inside the same specificity level.
     const delegatorRows = await tx.$queryRaw<DelegatorRow[]>(Prisma.sql`
-      SELECT DISTINCT d.delegator_id
-      FROM delegations d
-      INNER JOIN proposal_voter_roll pvr
-        ON pvr.proposal_id = ${proposalId}::uuid
-       AND pvr.citizen_id = d.delegator_id
-      WHERE d.delegate_id = ${citizenId}::uuid
-        AND d.delegator_id <> ${citizenId}::uuid
-        AND d.is_active = true
-        AND d.valid_from <= NOW()
-        AND (d.valid_until IS NULL OR d.valid_until > NOW())
-        AND (
-          d.delegation_type = 'general'
-          OR (d.delegation_type = 'domain' AND d.domain = ${proposal.category})
-          OR (d.delegation_type = 'proposal' AND d.proposal_id = ${proposalId}::uuid)
-        )
+      WITH effective_delegations AS (
+        SELECT DISTINCT ON (d.delegator_id)
+          d.delegator_id,
+          d.delegate_id
+        FROM delegations d
+        INNER JOIN proposal_voter_roll pvr
+          ON pvr.proposal_id = ${proposalId}::uuid
+         AND pvr.citizen_id = d.delegator_id
+        WHERE d.is_active = true
+          AND d.valid_from <= NOW()
+          AND (d.valid_until IS NULL OR d.valid_until > NOW())
+          AND (
+            d.delegation_type = 'general'
+            OR (d.delegation_type = 'domain' AND d.domain = ${proposal.category})
+            OR (d.delegation_type = 'proposal' AND d.proposal_id = ${proposalId}::uuid)
+          )
+        ORDER BY
+          d.delegator_id,
+          CASE d.delegation_type
+            WHEN 'proposal' THEN 3
+            WHEN 'domain' THEN 2
+            ELSE 1
+          END DESC,
+          d.created_at DESC,
+          d.id DESC
+      )
+      SELECT ed.delegator_id
+      FROM effective_delegations ed
+      WHERE ed.delegate_id = ${citizenId}::uuid
+        AND ed.delegator_id <> ${citizenId}::uuid
     `)
 
     const delegatedValues = delegatorRows.map(({ delegator_id }) => Prisma.sql`

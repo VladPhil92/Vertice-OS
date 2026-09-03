@@ -1,5 +1,5 @@
 import { createHmac } from 'crypto'
-import { config } from '../config'
+import { getIdentityPepper } from './feature-secrets'
 
 /**
  * Hash de la cédula para deduplicación, NUNCA como prueba de identidad.
@@ -13,13 +13,11 @@ import { config } from '../config'
  * HMAC con un pepper fuera de la base de datos cierra esa vía: sin el
  * pepper, un atacante con la base filtrada no puede probar candidatos.
  *
- * En producción IDENTITY_PEPPER es obligatorio (ver config.ts). El fallback a
- * JWT_SECRET solo cubre desarrollo local — nunca debe usarse así en producción,
- * porque reutilizar JWT_SECRET aquí anula la separación de dominios
- * criptográficos que el pepper dedicado existe para dar.
+ * En producción nunca se reutiliza JWT_SECRET: si IDENTITY_PEPPER falta, solo
+ * las operaciones que necesitan hash de documento fallan cerradas con 503,
+ * mientras el resto del API puede seguir disponible.
  */
 export function hashCedula(cedula: string): string {
-  const pepper = config.IDENTITY_PEPPER ?? config.JWT_SECRET
   const normalized = cedula.trim()
-  return createHmac('sha256', pepper).update(normalized).digest('hex')
+  return createHmac('sha256', getIdentityPepper()).update(normalized).digest('hex')
 }

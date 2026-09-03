@@ -77,7 +77,7 @@ if (!parsed.success) {
     .map(([field, errors]) => `  - ${field}: ${(errors ?? []).join('; ') || 'invalid value'}`)
     .join('\n')
   process.stdout.write(
-    '[config] FATAL: invalid environment variables. The process will exit now.\n' +
+    '[config] FATAL: invalid core environment variables. The process will exit now.\n' +
     'The following variable(s) are missing or fail validation:\n' +
     `${details}\n` +
     'Set the required value(s) in the Railway service Variables tab and redeploy.\n',
@@ -85,48 +85,31 @@ if (!parsed.success) {
   process.exit(1)
 }
 
-// El servicio de IA rechaza llamadas internas sin X-Service-Key. Sin este
-// secreto la API arrancaría "bien" y solo fallaría al primer uso de IA, así
-// que se comprueba aquí para que el error salga en el despliegue.
-if (parsed.data.NODE_ENV === 'production' && !parsed.data.AI_SERVICE_SECRET) {
-  process.stdout.write(
-    '[config] FATAL: AI_SERVICE_SECRET is missing. The process will exit now.\n' +
-    'Requirement: AI_SERVICE_SECRET must be a non-empty string when NODE_ENV=production.\n' +
-    'Current value: unset (defaults to an empty string, which fails this check).\n' +
-    'Without it, every call from the API to the AI service will be rejected ' +
-    '(missing X-Service-Key).\n' +
-    'Fix: set AI_SERVICE_SECRET in the Railway service Variables tab and redeploy.\n',
-  )
-  process.exit(1)
-}
-
-// Sin estas dos, el código cae a derivar la clave desde JWT_SECRET — aceptable
-// para desarrollo local, pero en producción reutilizar JWT_SECRET colapsa
-// dominios criptográficos distintos (sesiones, nulificadores de voto,
-// protección de cédulas) en un único secreto.
+// Feature-scoped secrets do not decide whether the entire API can boot.
+// In production their consumers fail closed with 503 (see feature-secrets.ts)
+// instead of silently falling back to JWT_SECRET or taking unrelated modules
+// offline. This keeps the platform available while preserving crypto-domain
+// separation and makes missing feature configuration visible at the exact
+// capability boundary that needs it.
 if (parsed.data.NODE_ENV === 'production') {
-  const missing: string[] = []
-  if (!parsed.data.VOTE_NULLIFIER_SECRET) missing.push('VOTE_NULLIFIER_SECRET')
-  if (!parsed.data.IDENTITY_PEPPER)       missing.push('IDENTITY_PEPPER')
-  if (missing.length > 0) {
+  const degraded: string[] = []
+  if (!parsed.data.AI_SERVICE_SECRET)      degraded.push('AI_SERVICE_SECRET → civic AI disabled')
+  if (!parsed.data.VOTE_NULLIFIER_SECRET) degraded.push('VOTE_NULLIFIER_SECRET → voting disabled')
+  if (!parsed.data.IDENTITY_PEPPER)       degraded.push('IDENTITY_PEPPER → document identity disabled')
+
+  if (degraded.length > 0) {
     process.stdout.write(
-      `[config] FATAL: ${missing.join(', ')} missing. The process will exit now.\n` +
-      `Requirement: ${missing.join(' and ')} must be a string of at least 32 ` +
-      'characters when NODE_ENV=production.\n' +
-      `Current value: unset for ${missing.join(', ')}.\n` +
-      'Without them, the API would silently fall back to reusing JWT_SECRET for ' +
-      'these purposes, collapsing cryptographic domains that must stay separate ' +
-      '(sessions, vote nullifiers, ID document protection).\n' +
-      `Fix: set ${missing.join(' and ')} in the Railway service Variables tab and ` +
-      'redeploy.\n',
+      '[config] WARNING: API booting with degraded feature capabilities.\n' +
+      degraded.map((item) => `  - ${item}`).join('\n') + '\n' +
+      'Affected endpoints fail closed with HTTP 503; no feature secret falls back to JWT_SECRET in production.\n' +
+      'Set the missing value(s) in Railway Variables and redeploy to restore full capability.\n',
     )
-    process.exit(1)
   }
 }
 
 // El compromiso del DID es lo único que se escribe on-chain en lugar del DID
-// en claro. Si hay blockchain configurada pero falta el pepper, el minting
-// fallaría en caliente; mejor detectarlo al arrancar.
+// en claro. Si blockchain está explícitamente configurada pero falta el pepper,
+// esa configuración es internamente inválida y debe impedir el arranque.
 if (parsed.data.CIVIC_SBT_ADDRESS && !parsed.data.DID_COMMITMENT_PEPPER) {
   process.stdout.write(
     '[config] FATAL: DID_COMMITMENT_PEPPER is missing. The process will exit now.\n' +

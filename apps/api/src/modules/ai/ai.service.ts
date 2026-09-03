@@ -1,15 +1,17 @@
 import { config } from '../../config'
+import { getAIServiceSecret } from '../../lib/feature-secrets'
 
 // ── Generic HTTP bridge to the Python AI service ──────────────────────────────
 
 async function callAI<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
   const url = `${config.AI_SERVICE_URL}${path}`
+  const serviceSecret = getAIServiceSecret()
 
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(config.AI_SERVICE_SECRET ? { 'X-Service-Key': config.AI_SERVICE_SECRET } : {}),
+      ...(serviceSecret ? { 'X-Service-Key': serviceSecret } : {}),
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30_000),
