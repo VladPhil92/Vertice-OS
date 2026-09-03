@@ -26,6 +26,13 @@ export const AdvanceStageSchema = z.object({
   voting_duration_hours: z.number().int().min(24).max(240).optional(),
 })
 
+export const AdminArchiveSchema = z.object({
+  reason: z.string()
+    .trim()
+    .min(3, 'Debes registrar una razón de moderación')
+    .max(1000, 'La razón de moderación es demasiado extensa'),
+})
+
 export const CreateDelegationSchema = z.object({
   delegate_id: z.string().uuid(),
   delegation_type: z.enum(DELEGATION_TYPES),
@@ -48,4 +55,5 @@ export type CreateProposalInput = z.infer<typeof CreateProposalSchema>
 export type ListProposalsInput = z.infer<typeof ListProposalsSchema>
 export type CastVoteInput = z.infer<typeof CastVoteSchema>
 export type AdvanceStageInput = z.infer<typeof AdvanceStageSchema>
+export type AdminArchiveInput = z.infer<typeof AdminArchiveSchema>
 export type CreateDelegationInput = z.infer<typeof CreateDelegationSchema>
