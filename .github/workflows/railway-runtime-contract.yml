@@ -71,10 +71,13 @@ jobs:
           const config = JSON.parse(fs.readFileSync('railway.json', 'utf8'));
           if (config.build?.builder !== 'DOCKERFILE') throw new Error('Railway must use the API Dockerfile');
           if (config.build?.dockerfilePath !== 'apps/api/Dockerfile') throw new Error('Unexpected Railway Dockerfile path');
-          if (config.deploy?.healthcheckPath !== '/health/ready') throw new Error('Unexpected Railway readiness path');
-          if ('startCommand' in (config.deploy ?? {})) {
-            throw new Error('Railway must not override the Dockerfile CMD; production and runtime-contract entrypoints must be identical');
+          if (config.build?.buildCommand !== null) {
+            throw new Error('Railway buildCommand must be explicitly null so stale dashboard overrides cannot replace the Dockerfile build');
           }
+          if (config.deploy?.startCommand !== null) {
+            throw new Error('Railway startCommand must be explicitly null so the image Docker CMD remains authoritative');
+          }
+          if (config.deploy?.healthcheckPath !== '/health/ready') throw new Error('Unexpected Railway readiness path');
           NODE
 
       - name: Build canonical API production image
