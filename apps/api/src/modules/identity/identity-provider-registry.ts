@@ -15,13 +15,12 @@ interface CivicIdentityProviderAdapterRegistration {
  * eligible after its native webhook/signature adapter is implemented, audited
  * and explicitly registered here with productionEligible=true.
  *
- * `trusted_kyc` exists exclusively so the test suite can exercise the complete
- * proof-ledger/governance path without pretending a real vendor is deployed.
+ * `trusted_kyc` is a synthetic adapter used by tests/local development to
+ * exercise the complete proof-ledger/governance path. It is permanently
+ * excluded when NODE_ENV=production.
  */
 const REGISTERED_ADAPTERS: readonly CivicIdentityProviderAdapterRegistration[] = [
-  ...(config.NODE_ENV === 'test'
-    ? [{ provider: 'trusted_kyc', productionEligible: false } as const]
-    : []),
+  { provider: 'trusted_kyc', productionEligible: false },
 ]
 
 function normalizeProvider(provider: string): string {
@@ -46,9 +45,7 @@ export function isActivatedCivicIdentityProvider(provider: string): boolean {
   return getActivatedCivicIdentityProviders().includes(normalized)
 }
 
-/**
- * Coarse operational state only; never exposes provider identifiers.
- */
+/** Coarse operational state only; never exposes provider identifiers. */
 export function getCivicIdentityProviderActivationState(): CivicIdentityProviderActivationState {
   const configured = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
   if (configured.length === 0) return 'disabled'
