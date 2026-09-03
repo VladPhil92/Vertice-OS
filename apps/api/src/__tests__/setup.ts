@@ -18,5 +18,10 @@ process.env.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
 })
 // Contrato legacy, conservado sólo para certificar compatibilidad de config.
 process.env.CIVIC_IDENTITY_PROOFING_EVENT_SECRET = 'test-proofing-event-secret-32-chars!!'
+// P0.4: un proveedor trusted solo es operacional si también existe una llave
+// de ingress provider-scoped. Este secreto es exclusivamente de fixtures.
+process.env.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = JSON.stringify({
+  trusted_kyc: { test: 'test-proofing-adapter-secret-32-chars!!' },
+})
 // Pepper del compromiso del DID — el contrato nunca recibe el DID en claro
 process.env.DID_COMMITMENT_PEPPER = 'test-pepper-with-at-least-32-characters!!'

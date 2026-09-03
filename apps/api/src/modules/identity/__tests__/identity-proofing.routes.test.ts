@@ -60,7 +60,11 @@ describe('GET /identity/assurance', () => {
       provider: 'trusted_kyc',
       provider_verified_at: '2026-09-03T01:00:00.000Z',
       provider_expires_at: null,
-      requirements: { contact_verified: true, active_identity_proof: true },
+      requirements: {
+        contact_verified: true,
+        provider_ingress_operational: true,
+        active_identity_proof: true,
+      },
     })
 
     const res = await app.inject({
@@ -141,6 +145,7 @@ describe('POST /identity/proofing/events', () => {
   })
 
   it('passes signature and provider key id to the normalized ingress service', async () => {
+  it('forwards the complete provider-isolated authentication envelope', async () => {
     mockIngestEvent.mockResolvedValueOnce({
       duplicate: false,
       proof: {
@@ -161,6 +166,9 @@ describe('POST /identity/proofing/events', () => {
       headers: {
         'x-vertice-proofing-signature': signature,
         'x-vertice-proofing-key-id': 'test-key',
+        'x-vertice-proofing-signature': `v1=${'a'.repeat(64)}`,
+        'x-vertice-proofing-timestamp': '1788404400',
+        'x-vertice-proofing-key-id': 'primary',
       },
       payload,
     })
@@ -168,6 +176,11 @@ describe('POST /identity/proofing/events', () => {
     expect(res.statusCode).toBe(202)
     expect(JSON.parse(res.payload).duplicate).toBe(false)
     expect(mockIngestEvent).toHaveBeenCalledWith(payload, signature, 'test-key')
+    expect(mockIngestEvent).toHaveBeenCalledWith(payload, {
+      signature: `v1=${'a'.repeat(64)}`,
+      timestamp: '1788404400',
+      key_id: 'primary',
+    })
   })
 
   it('returns 200 for an idempotent provider retry', async () => {
@@ -190,6 +203,9 @@ describe('POST /identity/proofing/events', () => {
       headers: {
         'x-vertice-proofing-signature': `sha256=${'b'.repeat(64)}`,
         'x-vertice-proofing-key-id': 'test-key',
+        'x-vertice-proofing-signature': `v1=${'b'.repeat(64)}`,
+        'x-vertice-proofing-timestamp': '1788404400',
+        'x-vertice-proofing-key-id': 'primary',
       },
       payload,
     })

@@ -33,6 +33,10 @@ const WalletNonceSchema = z.object({
 
 const DID_CONTENT_TYPE = 'application/did+ld+json'
 
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
 export async function identityRoutes(app: FastifyInstance): Promise<void> {
   // ── Resolución pública ────────────────────────────────────────────────────
 
@@ -62,6 +66,9 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(status)
   })
 
+  // GET /identity/assurance — frontera explícita entre login/contacto e
+  // identidad cívica apta para acciones de gobernanza. Un ExternalIdentity/SSO
+  // aislado nunca eleva este estado.
   app.get('/assurance', { preHandler: requireAuth }, async (request, reply) => {
     const assurance = await getCivicIdentityAssurance(request.citizen.sub)
     return reply.send(assurance)
@@ -86,6 +93,11 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
   // Server-to-server normalized adapter ingress. Each provider/key-id has its
   // own HMAC key, allowing independent rotation and preventing one adapter key
   // from authenticating events for another provider.
+  // POST /identity/proofing/events — ingress server-to-server para eventos ya
+  // normalizados por un adaptador que validó primero la firma nativa del KYC.
+  // P0.4 autentica después ese salto interno con una llave aislada por provider
+  // + key-id y un timestamp firmado de cinco minutos, evitando secreto global,
+  // replay indefinido y activación de proveedores sin canal de revocación.
   app.post('/proofing/events', {
     config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
   }, async (request, reply) => {
@@ -102,6 +114,11 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     const rawKeyId = request.headers['x-vertice-proofing-key-id']
     const keyId = Array.isArray(rawKeyId) ? rawKeyId[0] : rawKeyId
     const result = await ingestCivicProofingEvent(parsed.data, signature, keyId)
+    const result = await ingestCivicProofingEvent(parsed.data, {
+      signature: firstHeader(request.headers['x-vertice-proofing-signature']),
+      timestamp: firstHeader(request.headers['x-vertice-proofing-timestamp']),
+      key_id: firstHeader(request.headers['x-vertice-proofing-key-id']),
+    })
 
     return reply.status(result.duplicate ? 200 : 202).send({
       accepted: true,

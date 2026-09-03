@@ -4,6 +4,7 @@ import { delCache } from '../../lib/cache'
 import { enqueueJob } from '../../lib/jobs'
 import { getActivatedCivicIdentityProviders } from '../identity/identity-provider-registry'
 import { createNotification } from '../notifications/notifications.service'
+import { getOperationalCivicIdentityProviders } from '../identity/identity-proofing-provider-config'
 import type { Proposal, ProposalRow, ProposalScope, ProposalStatus } from './governance.types'
 import type { AdvanceStageInput } from './governance.schema'
 
@@ -69,6 +70,13 @@ function normalizeProposal(row: ProposalRow): Proposal {
  * activation boundary: a provider must be configured AND backed by a compiled
  * provider-adapter registration. Environment configuration alone can never
  * make an arbitrary identity source authoritative for voting.
+ * P0.4 voter-roll activation interlock.
+ *
+ * The frozen electorate is derived from durable civic proofs only for providers
+ * that are both explicitly trusted and operationally configured to receive
+ * authenticated updates/revocations. Federation/account linkage cannot create
+ * governance eligibility. If no provider satisfies both conditions the vote
+ * does not open at all; this avoids freezing an artificial empty electorate.
  */
 async function freezeProofBackedVoterRoll(
   tx: Prisma.TransactionClient,
@@ -77,6 +85,14 @@ async function freezeProofBackedVoterRoll(
 ): Promise<number> {
   const trustedProviders = getActivatedCivicIdentityProviders()
   if (trustedProviders.length === 0) return 0
+  const operationalProviders = getOperationalCivicIdentityProviders()
+  if (operationalProviders.length === 0) {
+    throw makeError(
+      'La infraestructura de identity assurance cívica no está operacional',
+      503,
+      'CIVIC_IDENTITY_ASSURANCE_UNAVAILABLE',
+    )
+  }
 
   const assuredIdentity = Prisma.sql`
     c.verification_level >= 2
@@ -84,7 +100,7 @@ async function freezeProofBackedVoterRoll(
       SELECT 1
       FROM civic_identity_proofs cip
       WHERE cip.citizen_id = c.id
-        AND cip.provider IN (${Prisma.join(trustedProviders)})
+        AND cip.provider IN (${Prisma.join(operationalProviders)})
         AND cip.status = 'verified'
         AND cip.assurance_level >= 2
         AND cip.verified_at IS NOT NULL
@@ -148,6 +164,11 @@ function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quo
   return approvalRate >= cfg.approval ? 'approved' : 'rejected'
 }
 
+/**
+ * Canonical proposal lifecycle. P0.3 changed the debate→voting electorate
+ * source; P0.4 additionally requires the proof provider ingress to be
+ * operational before the vote can open.
+ */
 export async function advanceProposalStage(
   proposalId: string,
   citizenId: string,

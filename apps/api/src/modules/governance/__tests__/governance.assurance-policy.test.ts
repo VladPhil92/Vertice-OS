@@ -15,6 +15,9 @@ jest.mock('../../../config', () => ({
         approvedBy: 'governance-assurance-policy-test',
       },
     ]),
+    CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: JSON.stringify({
+      trusted_kyc: { test: 'test-proofing-adapter-secret-32-chars!!' },
+    }),
     VOTE_NULLIFIER_SECRET: 'test-nullifier-secret-32-chars-min!!',
     JWT_SECRET: 'test-secret-with-at-least-32-characters-ok',
   },
