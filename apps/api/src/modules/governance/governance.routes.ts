@@ -5,6 +5,7 @@ import {
   ListProposalsSchema,
   CastVoteSchema,
   AdvanceStageSchema,
+  AdminArchiveSchema,
   CreateDelegationSchema,
 } from './governance.schema'
 import {
@@ -12,22 +13,20 @@ import {
   listProposals,
   getProposalById,
   endorseProposal,
-  advanceProposalStage,
   getVoteTally,
   createDelegation,
   revokeDelegation,
   getMyDelegations,
   getGovernanceStats,
-  adminArchiveProposal,
-  adminListProposals,
 } from './governance.service'
 import { adminAdvanceProposalSafely } from './governance.admin-transition'
+import { adminArchiveProposalSafely } from './governance.admin-security'
+import { advanceProposalStageSafely } from './governance.lifecycle'
 import { castVoteLedger } from './governance.vote-ledger'
 
 export async function governanceRoutes(app: FastifyInstance): Promise<void> {
   // ── Públicos ──────────────────────────────────────────────────────────────
 
-  // GET /governance/proposals — listado con filtros
   app.get('/proposals', async (request, reply) => {
     const parsed = ListProposalsSchema.safeParse(request.query)
     if (!parsed.success) {
@@ -37,29 +36,25 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: proposals, count: proposals.length })
   })
 
-  // GET /governance/proposals/stats — estadísticas agregadas
   app.get('/proposals/stats', async (_request, reply) => {
     const stats = await getGovernanceStats()
     return reply.send(stats)
   })
 
-  // GET /governance/proposals/:id — detalle completo
   app.get('/proposals/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const proposal = await getProposalById(id)
     return reply.send(proposal)
   })
 
-  // GET /governance/proposals/:id/tally — conteo de votos en tiempo real
   app.get('/proposals/:id/tally', async (request, reply) => {
     const { id } = request.params as { id: string }
     const tally = await getVoteTally(id)
     return reply.send(tally)
   })
 
-  // ── Requieren identidad verificada (lvl ≥ 1) ──────────────────────────────
+  // ── Requieren identidad verificada ──────────────────────────────────────
 
-  // POST /governance/proposals — crear propuesta
   app.post('/proposals', {
     preHandler: requireVerified,
     config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
@@ -72,7 +67,6 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send(proposal)
   })
 
-  // POST /governance/proposals/:id/endorse — avalar una propuesta
   app.post('/proposals/:id/endorse', {
     preHandler: requireVerified,
     config: { rateLimit: { max: 50, timeWindow: '1 hour' } },
@@ -82,7 +76,6 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(result)
   })
 
-  // POST /governance/proposals/:id/vote — votar en una propuesta
   app.post('/proposals/:id/vote', {
     preHandler: requireVerified,
     config: { rateLimit: { max: 100, timeWindow: '1 day' } },
@@ -93,31 +86,28 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
 
-    // Toda la política de admisión, delegación congelada, override directo y
-    // tally vive en una única transacción del ledger. La ruta solo autentica y
-    // valida el contrato HTTP, evitando duplicar reglas electorales en dos capas.
     const receipt = await castVoteLedger(id, request.citizen.sub, parsed.data.vote_value)
     return reply.status(201).send(receipt)
   })
 
-  // PATCH /governance/proposals/:id/advance — avanzar ciclo de vida
   app.patch('/proposals/:id/advance', {
     preHandler: requireVerified,
+    config: { rateLimit: { max: 30, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const parsed = AdvanceStageSchema.safeParse(request.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const proposal = await advanceProposalStage(id, request.citizen.sub, parsed.data)
+    const proposal = await advanceProposalStageSafely(id, request.citizen.sub, parsed.data)
     return reply.send(proposal)
   })
 
   // ── Delegaciones ──────────────────────────────────────────────────────────
 
-  // POST /governance/delegations — crear delegación
   app.post('/delegations', {
     preHandler: requireVerified,
+    config: { rateLimit: { max: 30, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const parsed = CreateDelegationSchema.safeParse(request.body)
     if (!parsed.success) {
@@ -127,7 +117,6 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send(delegation)
   })
 
-  // GET /governance/delegations/me — mis delegaciones activas
   app.get('/delegations/me', {
     preHandler: requireVerified,
   }, async (request, reply) => {
@@ -135,9 +124,9 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: delegations, count: delegations.length })
   })
 
-  // DELETE /governance/delegations/:id — revocar delegación
   app.delete('/delegations/:id', {
     preHandler: requireVerified,
+    config: { rateLimit: { max: 30, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
     await revokeDelegation(id, request.citizen.sub)
@@ -146,33 +135,41 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Admin / Moderación ────────────────────────────────────────────────────
 
-  // GET /governance/admin/proposals — listar todas las propuestas (con filtro opcional de estado)
+  // Admin listing reuses the validated public query contract instead of the
+  // legacy raw query that referenced non-existent proposal columns.
   app.get('/admin/proposals', {
     preHandler: requireModerator,
+    config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
   }, async (request, reply) => {
-    const { status } = request.query as { status?: string }
-    const proposals = await adminListProposals(status)
+    const parsed = ListProposalsSchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
+    }
+    const proposals = await listProposals(parsed.data)
     return reply.send({ data: proposals, count: proposals.length })
   })
 
-  // POST /governance/admin/proposals/:id/advance — iniciar el mismo avance
-  // canónico que usa el ciclo ciudadano. La autoridad administrativa queda en
-  // audit logs, pero no puede saltarse padrón, quórum ni ventana de votación.
   app.post('/admin/proposals/:id/advance', {
     preHandler: requireModerator,
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const proposal = await adminAdvanceProposalSafely(id, request.citizen.sub)
     return reply.send(proposal)
   })
 
-  // POST /governance/admin/proposals/:id/archive — archivar / rechazar propuesta
+  // Archival is moderation only before a civic vote opens. Successful state
+  // mutation and its actor/reason audit row are committed atomically.
   app.post('/admin/proposals/:id/archive', {
     preHandler: requireModerator,
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { reason } = (request.body ?? {}) as { reason?: string }
-    const proposal = await adminArchiveProposal(id, request.citizen.sub, reason ?? 'Archivada por moderador')
+    const parsed = AdminArchiveSchema.safeParse(request.body ?? {})
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
+    }
+    const proposal = await adminArchiveProposalSafely(id, request.citizen.sub, parsed.data.reason)
     return reply.send(proposal)
   })
 }
