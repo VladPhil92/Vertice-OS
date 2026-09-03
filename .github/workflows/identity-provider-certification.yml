@@ -6,8 +6,11 @@ on:
     paths:
       - 'apps/api/src/modules/identity/identity-provider-adapter.ts'
       - 'apps/api/src/modules/identity/identity-provider-adapter-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-lifecycle-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-replay.ts'
       - 'apps/api/src/modules/identity/identity-provider-registry.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-adapter.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-production-onboarding.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
       - '.github/workflows/identity-provider-certification.yml'
   push:
@@ -15,8 +18,11 @@ on:
     paths:
       - 'apps/api/src/modules/identity/identity-provider-adapter.ts'
       - 'apps/api/src/modules/identity/identity-provider-adapter-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-lifecycle-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-replay.ts'
       - 'apps/api/src/modules/identity/identity-provider-registry.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-adapter.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-production-onboarding.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
       - '.github/workflows/identity-provider-certification.yml'
 
@@ -28,7 +34,7 @@ env:
 
 jobs:
   native-adapter-certification:
-    name: Native adapter certification contract
+    name: Native adapter + production onboarding certification
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -57,4 +63,5 @@ jobs:
         run: >-
           pnpm --filter @vertice/api exec jest --runInBand
           src/modules/identity/__tests__/identity-provider-adapter.test.ts
+          src/modules/identity/__tests__/identity-provider-production-onboarding.test.ts
           src/modules/identity/__tests__/identity-provider-registry.test.ts
