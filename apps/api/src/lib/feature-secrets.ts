@@ -1,4 +1,8 @@
 import { config } from '../config'
+import {
+  getCivicIdentityProviderActivationState,
+  getCivicIdentityProofingIngressState,
+} from '../modules/identity/identity-provider-registry'
 
 function unavailable(message: string, code: string): Error {
   return Object.assign(new Error(message), { statusCode: 503, code })
@@ -61,6 +65,7 @@ export interface FeatureCapabilities {
   voting_crypto: CapabilityState
   identity_crypto: CapabilityState
   civic_identity_assurance: CapabilityState
+  civic_identity_proofing_ingress: CapabilityState
   civic_sbt: CapabilityState
   voting_registry: CapabilityState
 }
@@ -85,7 +90,8 @@ export function getFeatureCapabilities(): FeatureCapabilities {
     civic_ai: config.AI_SERVICE_SECRET ? 'ready' : 'disabled',
     voting_crypto: config.VOTE_NULLIFIER_SECRET ? 'ready' : 'disabled',
     identity_crypto: config.IDENTITY_PEPPER ? 'ready' : 'disabled',
-    civic_identity_assurance: config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS.length > 0 ? 'ready' : 'disabled',
+    civic_identity_assurance: getCivicIdentityProviderActivationState(),
+    civic_identity_proofing_ingress: getCivicIdentityProofingIngressState(),
     civic_sbt: contractCapability(config.CIVIC_SBT_ADDRESS, true),
     voting_registry: contractCapability(config.VOTING_REGISTRY_ADDRESS, false),
   }
