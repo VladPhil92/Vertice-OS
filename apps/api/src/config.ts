@@ -51,10 +51,12 @@ const schema = z.object({
         .filter(Boolean),
     )),
   ),
-  // Secreto del contrato normalizado entre adaptadores KYC y la API. Los
-  // adaptadores validan primero la firma nativa del proveedor y luego firman
-  // el evento canónico. Ausente = ingress deshabilitado.
+  // Contrato legacy P0.2. Se conserva durante la transición de configuración,
+  // pero P0.4 autentica el ingress con llaves aisladas por proveedor/key-id.
   CIVIC_IDENTITY_PROOFING_EVENT_SECRET: z.string().min(32).optional(),
+  // JSON feature-scoped: {"provider":{"key-id":"secret>=32"}}. Un JSON
+  // inválido degrada sólo identity proofing; no impide arrancar la API base.
+  CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: z.string().default(''),
 
   // ── Blockchain (Polygon) — capacidades opcionales ─────────────────
   POLYGON_RPC_URL:          z.string().url().optional(),
