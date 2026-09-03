@@ -74,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           # A development fallback literal may remain in shared client code even
-          # when the production branch evaluates to /_api. What must never be
+          # when the production branch evaluates to /api. What must never be
           # shipped to the browser is the Railway upstream itself, and the
           # canonical same-origin gateway must be present. The following step
           # exercises that production behavior end-to-end.
@@ -82,11 +82,11 @@ jobs:
             echo '::error::Railway upstream leaked into a browser bundle; production must be same-origin.'
             exit 1
           fi
-          if ! grep -R -q '/_api' apps/web/.next/static 2>/dev/null; then
-            echo '::error::Browser bundles do not contain the canonical /_api gateway.'
+          if ! grep -R -q '"/api"' apps/web/.next/static 2>/dev/null; then
+            echo '::error::Browser bundles do not contain the canonical /api gateway.'
             exit 1
           fi
-          echo 'Browser bundles expose /_api and do not expose the Railway upstream.'
+          echo 'Browser bundles expose /api and do not expose the Railway upstream.'
 
       - name: Exercise same-origin proxy and refresh-cookie path
         shell: bash
@@ -127,10 +127,10 @@ jobs:
           fi
           WEB_PID=$!
 
-          pnpm --filter @vertice/web exec wait-on http://127.0.0.1:3000/_api/health
+          pnpm --filter @vertice/web exec wait-on http://127.0.0.1:3000/api/health
 
           curl --fail --silent --show-error \
-            'http://127.0.0.1:3000/_api/health?probe=same-origin' \
+            'http://127.0.0.1:3000/api/health?probe=same-origin' \
             | tee /tmp/proxy-health.json
           node -e "const b=require('/tmp/proxy-health.json'); if(b.path!=='/health?probe=same-origin') process.exit(1)"
 
@@ -140,9 +140,9 @@ jobs:
             -X POST \
             -H 'content-type: application/json' \
             --data '{"code":"mock","code_verifier":"mock"}' \
-            http://127.0.0.1:3000/_api/auth/ctgone/exchange
+            http://127.0.0.1:3000/api/auth/ctgone/exchange
 
-          grep -Eiq '^set-cookie: vertice_refresh=mock-refresh;.*Path=/_api/auth' /tmp/proxy-auth.headers
+          grep -Eiq '^set-cookie: vertice_refresh=mock-refresh;.*Path=/api/auth' /tmp/proxy-auth.headers
           if grep -Eiq '^set-cookie:.*Domain=' /tmp/proxy-auth.headers; then
             echo '::error::Proxy must not expose an upstream cookie Domain attribute.'
             exit 1
