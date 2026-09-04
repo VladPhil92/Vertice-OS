@@ -15,6 +15,7 @@ import { authRoutes } from './modules/auth/auth.routes'
 import { probeCtgOneFederation } from './modules/auth/federation.service'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
+import { identityProviderWebhookRoutes } from './modules/identity/identity-provider-webhook.routes'
 import { territorialRoutes } from './modules/territorial/territorial.routes'
 import { governanceRoutes } from './modules/governance/governance.routes'
 import { reputationRoutes } from './modules/reputation/reputation.routes'
@@ -182,6 +183,9 @@ export function buildApp() {
 
   app.register(authRoutes, { prefix: '/auth' })
   app.register(dashboardRoutes, { prefix: '/dashboard' })
+  // P0.7 keeps the native-provider raw-body parser encapsulated under this
+  // prefix so ordinary /identity JSON routes remain unchanged.
+  app.register(identityProviderWebhookRoutes, { prefix: '/identity/providers' })
   app.register(identityRoutes, { prefix: '/identity' })
   app.register(territorialRoutes, { prefix: '/territorial' })
   app.register(governanceRoutes, { prefix: '/governance' })
