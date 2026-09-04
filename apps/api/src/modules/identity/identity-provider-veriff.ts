@@ -4,7 +4,6 @@ import { config } from '../../config'
 import {
   defineNativeCivicIdentityProviderAdapter,
   type NativeProviderWebhookHeaders,
-  type NativeProviderWebhookRequest,
   type VerifiedNativeProviderWebhook,
 } from './identity-provider-adapter'
 import { claimNativeProviderReplay } from './identity-provider-replay'
