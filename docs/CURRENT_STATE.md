@@ -1,7 +1,7 @@
 # VÉRTICE OS — Current State
 
-> Snapshot técnico-funcional: **2 de septiembre de 2026**  
-> Basado en `main` después de los PR #30–#37.
+> Snapshot técnico-funcional: **4 de septiembre de 2026**  
+> Basado en `main` después de la frontera de identity proofing P0.7.
 
 Este documento existe para separar tres categorías que en versiones anteriores de la documentación aparecían mezcladas:
 
@@ -63,7 +63,7 @@ Modelo activo:
 - protección contra eliminación del último superadmin;
 - auditoría append-only de bootstrap, grants y cambios de rol.
 
-### 1.5 Civic identity assurance P0
+### 1.5 Civic identity assurance P0.7
 
 VÉRTICE distingue:
 
@@ -74,6 +74,21 @@ VÉRTICE distingue:
 `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es una allowlist explícita. Vacía significa fail-closed para el padrón de votación protegido.
 
 El provider `ctg_one` no entra en la allowlist por defecto.
+
+La frontera técnica de identity proofing implementada hasta P0.7 incluye:
+
+- lifecycle durable `pending → review → verified / rejected / expired / revoked`;
+- ingress normalizado HMAC aislado por provider y key-id;
+- registry compile-time que impide activar autoridad únicamente mediante variables de entorno;
+- contrato de adapter nativo que valida la firma del proveedor sobre los bytes crudos;
+- replay distribuido y atómico respaldado por Redis;
+- harness adversarial P0.5;
+- canary de lifecycle P0.6;
+- ingress nativo P0.7 bajo `POST /identity/providers/:provider/webhook` con raw body encapsulado;
+- procedencia auditable diferenciada entre hop HMAC interno y webhook nativo;
+- readiness administrativo bajo `GET /identity/providers/readiness`.
+
+**Estado externo:** todavía no existe un proveedor KYC/identity proofing real registrado y certificado. `trusted_kyc` sigue siendo sintético y producción permanece fail-closed para identity assurance hasta completar una integración vendor-specific real.
 
 ### 1.6 Gobernanza
 
@@ -112,7 +127,7 @@ Módulos actuales bajo `apps/api/src/modules`:
 Dependencias de datos:
 
 - PostgreSQL + PostGIS: canónico para estado relacional/territorial;
-- Redis: sesiones, cache, rate limiting y pub/sub;
+- Redis: sesiones, cache, rate limiting, pub/sub y replay distribuido de identity proofing;
 - Neo4j: grafo de reputación; degradable en readiness.
 
 ### 1.8 IA
@@ -177,6 +192,8 @@ El repositorio contiene controles y convergencia de runtime, pero cada release d
 - dependencias externas certificadas.
 
 No documentar `deployed` únicamente porque exista código o configuración IaC.
+
+Para identity proofing, P0.7 significa que el runtime ya puede recibir y auditar un webhook nativo certificado; **no** significa que un proveedor KYC real esté activo. La activación exige adapter vendor-specific, fixtures reproducibles, credenciales, webhook real y canary productivo.
 
 ---
 

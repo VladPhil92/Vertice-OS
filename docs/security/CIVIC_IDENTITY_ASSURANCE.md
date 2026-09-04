@@ -1,6 +1,6 @@
 # Civic Identity Assurance — VÉRTICE OS
 
-> Estado P0.5 · snapshot 3 de septiembre de 2026
+> Estado P0.7 · snapshot 4 de septiembre de 2026
 
 ## Objetivo
 
@@ -54,16 +54,16 @@ Un nombre configurado en variables de entorno no puede crear autoridad cívica p
 
 1. allowlist de política;
 2. adapter compilado en el registry;
-3. keyset aislado del ingress interno;
+3. keyset aislado del ingress interno cuando ese deployment topology lo utiliza;
 4. elegibilidad del adapter para el runtime actual.
 
 `trusted_kyc` es sintético y no puede activarse en producción.
 
 ### P0.5 — Native Provider Adapter Certification Boundary
 
-P0.5 elimina la bandera declarativa `productionEligible`. La elegibilidad productiva ahora deriva de un **adapter nativo ejecutable** creado mediante el contrato de `identity-provider-adapter.ts`.
+P0.5 elimina la bandera declarativa `productionEligible`. La elegibilidad productiva deriva de un **adapter nativo ejecutable** creado mediante el contrato de `identity-provider-adapter.ts`.
 
-Todo futuro adapter nativo debe proporcionar código ejecutable para:
+Todo adapter nativo debe proporcionar código ejecutable para:
 
 - verificar criptográficamente el webhook nativo sobre los **bytes crudos** recibidos;
 - devolver un `event_id` y `signed_at` autenticados por ese protocolo;
@@ -88,7 +88,32 @@ Existe un harness de certificación adversarial reutilizable que exige que cada 
 4. rechazo de webhook obsoleto;
 5. rechazo de replay.
 
-Los cambios a esta frontera disparan un workflow dedicado `Identity Provider Certification` además del CI general.
+### P0.6 — Distributed replay + lifecycle canary
+
+P0.6 conecta el claim de replay a Redis mediante una operación atómica `SET ... NX ... EX`. El fallo de Redis cierra el ingress del proofing en vez de continuar sin protección distribuida.
+
+El lifecycle canary exige entregas nativas autenticadas `verified`, `revoked` y `expired` para el mismo subject estable, con tiempo monotónico y assurance suficiente en el estado verificado.
+
+El workflow `Identity Provider Certification` ejecuta estas garantías además del CI general.
+
+### P0.7 — Native Provider Webhook Ingress
+
+P0.7 añade el boundary HTTP productivo para adapters nativos compilados:
+
+`POST /identity/providers/:provider/webhook`
+
+El parser JSON de esta ruta está encapsulado en su propio scope Fastify y entrega un `Buffer` al adapter. El payload no se parsea ni reserializa antes de la verificación vendor-native.
+
+El adapter devuelve además un receipt autenticado con `event_id` y `signed_at`. Después de validar y normalizar, VÉRTICE persiste el evento con procedencia diferenciada:
+
+- `ingress_signature_version = 1`: hop HMAC interno adapter → VÉRTICE;
+- `ingress_signature_version = 2`: webhook nativo verificado directamente por un adapter compilado.
+
+No se persisten la firma nativa, secretos ni raw payloads. Para procedencia nativa se conserva únicamente el timestamp autenticado requerido para auditoría.
+
+Los replays verificados no se procesan dos veces. La ruta puede reconocer el retry como duplicado para evitar un retry storm del vendor sin debilitar el rechazo de replay en el adapter.
+
+`GET /identity/providers/readiness` permite al superadmin inspeccionar el estado operacional sin exponer secretos.
 
 ---
 
@@ -135,10 +160,12 @@ Un provider productivo solo puede incorporarse cuando cumpla **todas** estas cap
 3. normalización PII-minimized al contrato VÉRTICE;
 4. replay store compartido y atómico para producción;
 5. ejecución satisfactoria del harness P0.5 con fixtures oficiales o reproducibles;
-6. registro compilado del adapter nativo;
-7. allowlist de política;
-8. keyset del salto interno adapter → VÉRTICE;
-9. canary y evidencia de revocación/expiración en producción antes de usar el provider para gobernanza real.
+6. lifecycle canary P0.6;
+7. registro compilado del adapter nativo;
+8. configuración de credenciales y webhook del vendor;
+9. uso del ingress nativo P0.7 o del hop HMAC interno, según el deployment topology;
+10. allowlist de política;
+11. canary productivo acotado antes de usar el provider para gobernanza real.
 
 Para un piloto en Colombia deben evaluarse además documento oficial aplicable, anti-spoofing/liveness cuando corresponda, duplicidad de persona, referencias auditables, minimización y retención de datos, obligaciones de protección de datos, disponibilidad e incident response.
 
@@ -156,16 +183,17 @@ La assurance no se hereda desde el delegado: la pertenencia al padrón ya repres
 
 ## Limitaciones actuales
 
-P0.5 deja preparada y fail-closed la frontera para integrar un proveedor real, pero **no activa por sí sola un KYC productivo**.
+P0.7 deja preparada, observable y fail-closed la frontera para integrar un proveedor real, pero **no activa por sí sola un KYC productivo**.
 
 Pendientes externos/siguiente evolución:
 
-1. seleccionar un proveedor de identity proofing adecuado al piloto;
-2. implementar su adapter nativo concreto y su endpoint de webhook sin perder el raw body;
-3. conectar `claim_replay` a un store compartido y atómico de producción;
-4. ejecutar los vectores de certificación con el protocolo/fixtures reales del proveedor;
-5. realizar canary de verified/revoked/expired y evidencia operacional antes de habilitarlo en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`;
-6. continuar mejorando onboarding y revisión administrativa en el dashboard ciudadano.
+1. seleccionar un proveedor de identity proofing adecuado al piloto colombiano;
+2. implementar su adapter nativo concreto con el protocolo oficial de firma;
+3. aportar fixtures oficiales o reproducibles y credenciales sandbox;
+4. configurar el webhook real del proveedor;
+5. ejecutar P0.5/P0.6 contra el protocolo vendor-specific;
+6. realizar canary `verified/revoked/expired` y evidencia operacional antes de habilitarlo en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`;
+7. continuar mejorando onboarding y revisión administrativa en el dashboard ciudadano.
 
 ---
 
@@ -176,5 +204,7 @@ Pendientes externos/siguiente evolución:
 **Ninguna variable de entorno puede convertir por sí sola un provider en adapter productivo.**
 
 **Ningún adapter debe normalizar o confiar en un webhook antes de autenticar el payload nativo exacto recibido.**
+
+**Ninguna ruta de webhook nativo puede utilizar el JSON ya parseado por Fastify como material de verificación criptográfica.**
 
 Para votaciones abiertas, **ningún código puede sustituir el padrón congelado por una reevaluación ad hoc de providers**.

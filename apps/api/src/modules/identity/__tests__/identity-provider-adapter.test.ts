@@ -141,6 +141,17 @@ describe('native civic identity provider adapter certification boundary', () => 
     })
   })
 
+  it('preserves authenticated native receipt metadata for production persistence', async () => {
+    const adapter = createFixtureAdapter()
+    const result = await adapter.verifyAndNormalizeWithReceipt(
+      signedRequest(fixturePayload(), 'evt-receipt'),
+    )
+
+    expect(result.event.event_id).toBe('evt-receipt')
+    expect(result.receipt.event_id).toBe('evt-receipt')
+    expect(result.receipt.signed_at.toISOString()).toBe(NOW.toISOString())
+  })
+
   it('rejects stale and replayed native webhooks before they reach normalized ingress', async () => {
     const adapter = createFixtureAdapter()
     const valid = signedRequest(fixturePayload(), 'evt-replay')

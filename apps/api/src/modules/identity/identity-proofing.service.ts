@@ -5,6 +5,7 @@ import {
   getOperationalCivicIdentityProviders,
   resolveProofingAdapterSecret,
 } from './identity-proofing-provider-config'
+import { getNativeCivicIdentityProviderAdapter } from './identity-provider-registry'
 
 export type CivicProofingStatus =
   | 'pending'
@@ -32,6 +33,10 @@ export interface CivicProofingIngressAuth {
   key_id?: string
 }
 
+export interface NativeCivicProofingIngressReceipt {
+  signed_at: Date
+}
+
 export interface CivicIdentityProof {
   id: string
   citizen_id: string
@@ -56,6 +61,12 @@ type StoredProofingEvent = {
   evidence_hash: string | null
   occurred_at: Date
   expires_at: Date | null
+}
+
+type CivicProofingIngressProvenance = {
+  signatureVersion: 1 | 2
+  keyId: string | null
+  signedAt: Date
 }
 
 const MAX_FUTURE_EVENT_SKEW_MS = 5 * 60 * 1000
@@ -208,13 +219,13 @@ export async function getActiveCivicIdentityProof(
   return rows[0] ?? null
 }
 
-export async function ingestCivicProofingEvent(
-  input: CivicProofingEventInput,
-  auth: CivicProofingIngressAuth,
-): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
+function validateNormalizedProofingEvent(input: CivicProofingEventInput): {
+  normalized: CivicProofingEventInput
+  occurredAt: Date
+  expiresAt: Date | null
+} {
   const provider = normalizedProvider(input.provider)
   const normalized: CivicProofingEventInput = { ...input, provider }
-  const ingress = verifyProofingEventSignature(normalized, auth)
 
   if (normalized.status === 'verified' && normalized.assurance_level < 2) {
     throw makeError(
@@ -226,6 +237,9 @@ export async function ingestCivicProofingEvent(
 
   const occurredAt = new Date(normalized.occurred_at)
   const expiresAt = normalized.expires_at ? new Date(normalized.expires_at) : null
+  if (Number.isNaN(occurredAt.valueOf()) || (expiresAt && Number.isNaN(expiresAt.valueOf()))) {
+    throw makeError('Timestamp de proofing inválido', 400, 'INVALID_PROOFING_TIMESTAMP')
+  }
   if (occurredAt.getTime() > Date.now() + MAX_FUTURE_EVENT_SKEW_MS) {
     throw makeError(
       'El evento de identity proofing está fechado demasiado lejos en el futuro',
@@ -233,6 +247,16 @@ export async function ingestCivicProofingEvent(
       'FUTURE_PROOFING_EVENT',
     )
   }
+
+  return { normalized, occurredAt, expiresAt }
+}
+
+async function persistCivicProofingEvent(
+  input: CivicProofingEventInput,
+  ingress: CivicProofingIngressProvenance,
+): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
+  const { normalized, occurredAt, expiresAt } = validateNormalizedProofingEvent(input)
+  const provider = normalized.provider
 
   return prisma.$transaction(async (tx) => {
     const citizen = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -373,5 +397,53 @@ export async function ingestCivicProofingEvent(
     }
 
     return { proof: proofRows[0], duplicate: false }
+  })
+}
+
+export async function ingestCivicProofingEvent(
+  input: CivicProofingEventInput,
+  auth: CivicProofingIngressAuth,
+): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
+  const provider = normalizedProvider(input.provider)
+  const normalized: CivicProofingEventInput = { ...input, provider }
+  const ingress = verifyProofingEventSignature(normalized, auth)
+
+  return persistCivicProofingEvent(normalized, {
+    signatureVersion: ingress.signatureVersion,
+    keyId: ingress.keyId,
+    signedAt: ingress.signedAt,
+  })
+}
+
+/**
+ * Persistence boundary for a webhook that has already passed a compiled native
+ * provider adapter. The native signature itself and raw payload are deliberately
+ * not persisted; only the authenticated signed timestamp is retained as
+ * provenance version 2.
+ */
+export async function ingestNativeCivicProofingEvent(
+  input: CivicProofingEventInput,
+  receipt: NativeCivicProofingIngressReceipt,
+): Promise<{ proof: CivicIdentityProof; duplicate: boolean }> {
+  const provider = normalizedProvider(input.provider)
+  if (!getNativeCivicIdentityProviderAdapter(provider)) {
+    throw makeError(
+      'El adaptador nativo de identity proofing no está disponible',
+      503,
+      'NATIVE_PROVIDER_ADAPTER_UNAVAILABLE',
+    )
+  }
+  if (!(receipt.signed_at instanceof Date) || Number.isNaN(receipt.signed_at.valueOf())) {
+    throw makeError(
+      'Timestamp nativo firmado inválido',
+      400,
+      'INVALID_NATIVE_WEBHOOK_SIGNED_AT',
+    )
+  }
+
+  return persistCivicProofingEvent({ ...input, provider }, {
+    signatureVersion: 2,
+    keyId: null,
+    signedAt: receipt.signed_at,
   })
 }
