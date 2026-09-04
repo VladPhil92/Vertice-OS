@@ -1,93 +1,117 @@
-# Identity Provider Production Onboarding — P0.7
+# Identity Provider Production Onboarding — P0.8
 
 ## Purpose
 
-P0.6 converted provider onboarding requirements into executable certification infrastructure without pretending that an uncontracted KYC vendor was supported. P0.7 closes the next application-owned gap: a real provider can now deliver its native webhook directly to VÉRTICE while the API preserves the exact raw bytes for cryptographic verification and retains auditable native provenance.
+P0.8 moves VÉRTICE from a vendor-neutral native ingress boundary to the first concrete Colombia provider integration: **Veriff**. The adapter is compiled and testable, but production authority remains fail-closed until real credentials, webhook configuration and canary evidence exist.
 
-A provider is not production-ready merely because it has credentials, a webhook URL or an allowlist entry. Production onboarding requires cryptographic adapter certification, distributed replay protection, native webhook ingress, lifecycle canary evidence and a bounded production canary.
+A provider is not production-ready merely because it has credentials, a webhook URL, compiled code or an allowlist entry. Production onboarding requires cryptographic adapter certification, distributed replay protection, lifecycle evidence, runtime readiness and a bounded production canary.
 
 ## Required sequence
 
 A real provider integration must progress in this order:
 
-1. Select and review the provider for the target jurisdiction and assurance policy.
-2. Implement its native adapter using exact raw webhook bytes.
-3. Verify the provider-native signature before parsing/normalizing authority-bearing fields.
-4. Use `claimNativeProviderReplay` for distributed atomic replay claims backed by Redis.
-5. Pass the P0.5 adversarial adapter certification with provider fixtures.
-6. Pass the P0.6 lifecycle canary with distinct `verified`, `revoked` and `expired` events for one stable provider subject.
-7. Register the native adapter in the compile-time provider registry.
-8. Configure any provider credentials and the isolated internal adapter-to-VÉRTICE keyset required by the chosen deployment topology.
-9. Deliver provider webhooks through `POST /identity/providers/:provider/webhook` when the adapter runs in-process, or through the signed normalized ingress when an external adapter service is used.
-10. Add the provider to `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` only after steps 1–9 are evidenced.
-11. Run a bounded production canary before relying on the provider for a new governance electorate.
+1. Select/review the provider for jurisdiction and assurance policy.
+2. Implement native signature verification over exact raw webhook bytes.
+3. Normalize only after authentication.
+4. Use `claimNativeProviderReplay` with Redis atomic replay claims.
+5. Pass P0.5 adversarial certification.
+6. Pass P0.6 lifecycle canary.
+7. Register the adapter at compile time.
+8. Configure feature-scoped vendor credentials.
+9. Configure vendor webhooks against `POST /identity/providers/:provider/webhook`.
+10. Verify runtime readiness independently from policy activation.
+11. Run sandbox/bounded production canary while the provider remains outside `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
+12. Add the provider to the assurance allowlist only after evidence is satisfactory.
+
+## P0.8 Veriff contract
+
+Adapter: `identity-provider-veriff.ts`.
+
+### Authentication
+
+Inbound webhooks require:
+
+- `x-auth-client` matching the configured Veriff API key;
+- `x-hmac-signature` matching HMAC-SHA256 of the exact raw body using the Veriff shared secret.
+
+The body is parsed only after both checks pass.
+
+Session creation uses `POST <VERIFF_BASE_URL>/v1/sessions`. VÉRTICE signs the request and verifies Veriff response headers `vrf-auth-client` and `vrf-hmac-signature` before accepting the response body.
+
+### Data minimization
+
+VÉRTICE sends only:
+
+- callback URL;
+- opaque `vendorData = citizen UUID`;
+- opaque `endUserId = citizen UUID`.
+
+The API returns to the VÉRTICE client only the hosted verification URL and session id. Raw provider payloads, document images, selfies, signatures and shared secrets are not persisted in the civic proof ledger.
+
+### Lifecycle mapping
+
+Decision webhook:
+
+- `approved` → `verified`, assurance 2;
+- `declined` → `rejected`;
+- `resubmission_requested` / `review` → `review`;
+- `expired` / `abandoned` → `expired`.
+
+User-defined status webhook:
+
+- configured `VERIFF_REVOCATION_STATUS_CODE` → `revoked`;
+- unknown custom status → `review` (fail closed).
+
+The durable reference is `end-user:<citizen UUID>` so lifecycle events remain bound to the explicit signed VÉRTICE account reference without storing personal document data.
 
 ## Distributed replay contract
 
-`identity-provider-replay.ts` provides the production replay primitive.
+`identity-provider-replay.ts` stores an atomic claim via Redis `SET ... EX ... NX`. The operational key hashes `provider + event_id`; raw vendor event ids are not copied verbatim into Redis keys. Redis failure remains fail-closed.
 
-The claim is stored with Redis `SET ... EX ... NX`, so only the first writer for a provider event succeeds during the replay window. The operational key contains a SHA-256 digest of `provider + event_id`; the raw vendor event id is not copied into Redis key names.
+## Runtime readiness vs governance authority
 
-Redis failure is fail-closed. Identity proofing ingress must not continue if distributed replay protection cannot be established.
+P0.8 exposes three distinct states:
 
-## Native webhook ingress contract — P0.7
+1. `registered_native_providers` — adapter compiled;
+2. `runtime_ready_native_providers` — feature credentials complete;
+3. `activated_providers` — provider also explicitly permitted by assurance policy.
 
-`identity-provider-webhook.routes.ts` owns the provider-native HTTP boundary.
+For Veriff, runtime readiness requires:
 
-The route installs a Fastify content parser only inside `/identity/providers`, preserving the original request body as a `Buffer`. Normal API JSON parsing remains unchanged outside that encapsulated scope.
+- `VERIFF_BASE_URL`;
+- `VERIFF_API_KEY`;
+- `VERIFF_SHARED_SECRET`.
 
-For a request to be accepted:
-
-1. the provider must resolve to a compiled `NativeCivicIdentityProviderAdapter`;
-2. the adapter must authenticate the exact raw payload using the vendor-native protocol;
-3. freshness and replay protection must pass;
-4. normalization must satisfy `CivicProofingEventSchema`;
-5. normalized `provider` and `event_id` must remain bound to authenticated native metadata;
-6. persistence records native provenance without storing the raw signature or vendor payload.
-
-`civic_identity_proof_events.ingress_signature_version` now distinguishes:
-
-- `0` — legacy P0.2 event;
-- `1` — provider-isolated internal HMAC envelope;
-- `2` — direct provider-native webhook authenticated by a compiled adapter.
-
-For version `2`, `ingress_signed_at` stores the provider-authenticated timestamp while `ingress_key_id` remains null because vendor secret/key material is never copied into the event ledger.
-
-Verified replay deliveries are not processed twice. The HTTP route acknowledges them as duplicates to avoid an infinite vendor retry loop while preserving the adapter's fail-closed replay semantics.
-
-## Lifecycle canary contract
-
-`certifyNativeProviderLifecycleCanary` requires three independently authenticated native deliveries:
-
-- `verified` with assurance level at least 2;
-- `revoked` for the same provider/citizen/provider_reference;
-- `expired` for the same provider/citizen/provider_reference.
-
-The canary also requires monotonic event time. A provider that changes subject binding across lifecycle events, downgrades verified assurance below the civic minimum, or emits a non-monotonic lifecycle does not pass onboarding.
-
-## Operational readiness
-
-A superadmin can inspect coarse provider readiness through:
-
-`GET /identity/providers/readiness`
-
-The endpoint exposes registered and activated provider identifiers and readiness booleans, but never provider secrets, raw webhook material or signatures.
+This permits sandbox/canary execution without creating governance authority.
 
 ## CI enforcement
 
-The `Identity Provider Certification` workflow runs:
+`Identity Provider Certification` now includes the Veriff adapter and vendor-specific tests in addition to the P0.5/P0.6/P0.7 boundary tests. It must cover at minimum:
 
-- shared type build;
-- API typecheck;
-- P0.5 cryptographic/adversarial adapter tests;
-- P0.6 distributed replay and lifecycle canary tests;
-- provider registry tests;
-- P0.7 native ingress regression coverage when the identity provider boundary changes.
+- typecheck;
+- valid approved decision;
+- rejected/tampered authentication;
+- wrong client id;
+- replay rejection;
+- lifecycle terminal mapping;
+- explicit `endUserId` binding;
+- signed session creation response validation.
 
-This gate runs both for pull requests and for pushes to `main` when the provider boundary changes.
+## External activation checklist
+
+Before `veriff` can enter `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`:
+
+1. obtain integration Base URL/API key/shared secret from Veriff;
+2. configure Decision webhook;
+3. configure User-defined statuses webhook and revocation status code if used;
+4. complete one successful hosted verification flow bound to a controlled canary account;
+5. observe an authenticated `approved` event and durable `verified` proof;
+6. exercise a signed revocation and confirm assurance is removed;
+7. exercise an `expired` or `abandoned` terminal case;
+8. verify replay retries are acknowledged without double-processing;
+9. document provider privacy/retention and duplicate-person controls for the contracted flow;
+10. only then enable policy allowlisting.
 
 ## Current production state
 
-The P0.7 native ingress boundary is implemented, but no real KYC provider is registered by this phase. `trusted_kyc` remains synthetic and production remains fail-closed.
-
-The first vendor-specific integration must still supply the vendor's documented signature protocol, official/reproducible fixtures, sandbox credentials and webhook configuration. Those external artifacts are prerequisites for activating a production provider; they are not replaced by application configuration or synthetic tests.
+The P0.8 code integration can be deployed without Veriff credentials and will remain fail-closed. Until real credentials and canary evidence are supplied, Veriff must be described as **integrated / pending external certification**, not as an active KYC authority for governance.
