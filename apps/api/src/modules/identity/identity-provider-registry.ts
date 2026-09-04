@@ -82,6 +82,13 @@ export function getRegisteredCivicIdentityProviders(): string[] {
   return [...registeredProviderSet()]
 }
 
+/** Native adapters only; synthetic fixtures never make native ingress ready. */
+export function getRegisteredNativeCivicIdentityProviders(): string[] {
+  return REGISTERED_ADAPTERS
+    .filter(isProductionCivicIdentityProviderAdapter)
+    .map((adapter) => adapter.provider)
+}
+
 /**
  * Returns only a compiled native adapter. This is intentionally distinct from
  * the policy/key activation check: future provider webhook routes must obtain
