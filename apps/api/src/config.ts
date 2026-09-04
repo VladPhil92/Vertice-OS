@@ -66,7 +66,7 @@ const schema = z.object({
   VERIFF_API_KEY: z.string().min(8).optional(),
   VERIFF_SHARED_SECRET: z.string().min(16).optional(),
   VERIFF_CALLBACK_URL: z.string().url().optional(),
-  VERIFF_REVOCATION_STATUS_CODE: z.string().regex(/^[a-z0-9][a-z0-9_\-]{0,99}$/).default('vertice_revoked'),
+  VERIFF_REVOCATION_STATUS_CODE: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,99}$/).default('vertice_revoked'),
 
   // ── Blockchain (Polygon) — capacidades opcionales ─────────────────
   POLYGON_RPC_URL:          z.string().url().optional(),
