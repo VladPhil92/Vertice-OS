@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth } from '../../middleware/auth'
-import { createVeriffVerificationSession } from './identity-provider-veriff'
+import {
+  createVeriffVerificationSession,
+  isVeriffRuntimeReady,
+} from './identity-provider-veriff'
 
 /**
  * Citizen-facing provider bootstrap routes.
@@ -10,6 +13,17 @@ import { createVeriffVerificationSession } from './identity-provider-veriff'
  * never proxied through the VÉRTICE web application.
  */
 export async function identityProviderSessionRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/availability', { preHandler: requireAuth }, async (_request, reply) => {
+    return reply.send({
+      providers: [
+        {
+          provider: 'veriff',
+          session_bootstrap_available: isVeriffRuntimeReady(),
+        },
+      ],
+    })
+  })
+
   app.post('/veriff/session', {
     preHandler: requireAuth,
     config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
