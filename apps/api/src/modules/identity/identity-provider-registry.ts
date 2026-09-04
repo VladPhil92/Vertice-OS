@@ -19,9 +19,9 @@ const MIN_SECRET_LENGTH = 32
  * Compile-time trust boundary.
  *
  * Production providers are executable native adapters, never names invented by
- * environment variables. P0.8 registers Veriff here, but civic authority still
- * requires explicit policy allowlisting plus runtime credential readiness.
- * `trusted_kyc` remains synthetic and test-only.
+ * environment variables. P0.8 registers Veriff here, while P0.9 additionally
+ * requires explicit external-certification promotion before governance can
+ * trust a native provider. `trusted_kyc` remains synthetic and test-only.
  */
 const REGISTERED_ADAPTERS: readonly CivicIdentityProviderAdapterRegistration[] = [
   defineSyntheticCivicIdentityProviderAdapter('trusted_kyc'),
@@ -96,6 +96,23 @@ export function getRuntimeReadyNativeCivicIdentityProviders(): string[] {
 }
 
 /**
+ * Providers explicitly promoted after an external sandbox/limited-production
+ * certification. This list does not itself grant authority; P0.9 intersects it
+ * with compile-time registration, runtime readiness, and the assurance allowlist.
+ *
+ * `?? []` is intentional: older isolated tests and downstream consumers may
+ * mock only the pre-P0.9 config surface. Absence of this new field must remain
+ * fail-closed rather than crashing the process or manufacturing certification.
+ */
+export function getCertifiedCivicIdentityProviders(): string[] {
+  const registeredNative = new Set(getRegisteredNativeCivicIdentityProviders())
+  const configuredCertifiedProviders = config.CIVIC_IDENTITY_CERTIFIED_PROVIDERS ?? []
+  return configuredCertifiedProviders
+    .map(normalizeProvider)
+    .filter((provider) => registeredNative.has(provider))
+}
+
+/**
  * Returns only a compiled native adapter. This is intentionally distinct from
  * policy activation: webhook authentication may be deployed before governance
  * is permitted to trust the provider.
@@ -112,11 +129,12 @@ export function getNativeCivicIdentityProviderAdapter(
 /**
  * Operational provider contract.
  *
- * Native P0.7+ adapters require:
- *   policy allowlist + compiled adapter + feature-scoped runtime credentials.
+ * Native P0.9 adapters require four independent conditions:
+ *   policy allowlist + compiled adapter + feature-scoped runtime credentials
+ *   + explicit external-certification promotion.
  * Synthetic/legacy normalized adapters continue to require their isolated
- * internal HMAC keyset. This removes an obsolete HMAC dependency from direct
- * vendor-native ingress without weakening fail-closed activation.
+ * internal HMAC keyset. This preserves tests while production native authority
+ * remains fail-closed until the external canary has been certified.
  */
 export function getActivatedCivicIdentityProviders(): string[] {
   let keyRegistry: ProviderKeyRegistry | null = null
@@ -128,13 +146,14 @@ export function getActivatedCivicIdentityProviders(): string[] {
   }
 
   const registered = runtimeRegisteredAdapters()
+  const certified = new Set(getCertifiedCivicIdentityProviders())
   return config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
     .map(normalizeProvider)
     .filter((provider) => {
       const registration = registered.find((adapter) => adapter.provider === provider)
       if (!registration) return false
       if (isProductionCivicIdentityProviderAdapter(registration)) {
-        return registration.isRuntimeReady()
+        return registration.isRuntimeReady() && certified.has(provider)
       }
       return keyRegistry !== null && Object.keys(keyRegistry[provider] ?? {}).length > 0
     })

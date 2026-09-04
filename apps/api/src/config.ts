@@ -51,6 +51,17 @@ const schema = z.object({
         .filter(Boolean),
     )),
   ),
+  // P0.9: promoción explícita de providers que ya completaron certificación
+  // externa. Para adapters nativos, estar compilado + credentialed + allowlisted
+  // NO basta para otorgar autoridad de gobernanza hasta aparecer aquí.
+  CIVIC_IDENTITY_CERTIFIED_PROVIDERS: z.string().default('').transform((value) =>
+    Array.from(new Set(
+      value
+        .split(',')
+        .map((provider) => provider.trim().toLowerCase())
+        .filter(Boolean),
+    )),
+  ),
   // Contrato legacy P0.2. Se conserva temporalmente para una migración de
   // configuración sin ruptura, pero P0.4 ya no lo usa para autenticar ingress.
   CIVIC_IDENTITY_PROOFING_EVENT_SECRET: z.string().min(32).optional(),
