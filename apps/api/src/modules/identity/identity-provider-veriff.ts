@@ -63,6 +63,12 @@ const VeriffSessionResponseSchema = z.object({
 type VeriffDecision = z.infer<typeof VeriffDecisionSchema>
 type VeriffUserStatus = z.infer<typeof VeriffUserStatusSchema>
 
+function isVeriffUserStatus(
+  payload: VeriffDecision | VeriffUserStatus,
+): payload is VeriffUserStatus {
+  return (payload as { eventType?: unknown }).eventType === 'user-status.created'
+}
+
 type VeriffCredentials = {
   baseUrl: string
   apiKey: string
@@ -283,7 +289,7 @@ export function createVeriffIdentityProviderAdapter(options?: {
 
       // Parse only after authenticating the exact raw bytes.
       const payload = parseAuthenticatedWebhook(request.raw_body)
-      if ('eventType' in payload) {
+      if (isVeriffUserStatus(payload)) {
         return {
           event_id: eventIdForUserStatus(payload),
           signed_at: new Date(payload.time),
@@ -305,7 +311,7 @@ export function createVeriffIdentityProviderAdapter(options?: {
     },
     async normalize(request, verified) {
       const payload = parseAuthenticatedWebhook(request.raw_body)
-      return 'eventType' in payload
+      return isVeriffUserStatus(payload)
         ? normalizeUserStatus(payload, verified)
         : normalizeDecision(payload, verified)
     },
