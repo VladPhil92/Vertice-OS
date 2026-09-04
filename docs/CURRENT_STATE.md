@@ -1,9 +1,9 @@
 # VÉRTICE OS — Current State
 
 > Snapshot técnico-funcional: **4 de septiembre de 2026**  
-> Basado en `main` después de la frontera de identity proofing P0.7.
+> Basado en `main` P0.7 + integración vendor-specific Veriff P0.8 en proceso de certificación.
 
-Este documento existe para separar tres categorías que en versiones anteriores de la documentación aparecían mezcladas:
+Este documento separa tres categorías:
 
 1. **Implementado:** existe en el código actual y forma parte del contrato activo del producto.
 2. **Integrado / pendiente de certificación:** existe código o integración, pero depende de proveedor, credenciales, infraestructura o validación productiva externa.
@@ -63,7 +63,7 @@ Modelo activo:
 - protección contra eliminación del último superadmin;
 - auditoría append-only de bootstrap, grants y cambios de rol.
 
-### 1.5 Civic identity assurance P0.7
+### 1.5 Civic identity assurance P0.8
 
 VÉRTICE distingue:
 
@@ -71,24 +71,37 @@ VÉRTICE distingue:
 - verificación de canal/contacto;
 - prueba fuerte de identidad cívica.
 
-`CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es una allowlist explícita. Vacía significa fail-closed para el padrón de votación protegido.
+`CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es una allowlist explícita. Vacía significa fail-closed para el padrón de votación protegido. `ctg_one` no entra en la allowlist por defecto.
 
-El provider `ctg_one` no entra en la allowlist por defecto.
-
-La frontera técnica de identity proofing implementada hasta P0.7 incluye:
+La frontera técnica implementada incluye:
 
 - lifecycle durable `pending → review → verified / rejected / expired / revoked`;
-- ingress normalizado HMAC aislado por provider y key-id;
-- registry compile-time que impide activar autoridad únicamente mediante variables de entorno;
-- contrato de adapter nativo que valida la firma del proveedor sobre los bytes crudos;
+- ingress normalizado HMAC aislado por provider y key-id para adapters internos;
+- registry compile-time;
+- contrato de adapter nativo sobre bytes crudos;
 - replay distribuido y atómico respaldado por Redis;
 - harness adversarial P0.5;
 - canary de lifecycle P0.6;
-- ingress nativo P0.7 bajo `POST /identity/providers/:provider/webhook` con raw body encapsulado;
-- procedencia auditable diferenciada entre hop HMAC interno y webhook nativo;
-- readiness administrativo bajo `GET /identity/providers/readiness`.
+- ingress nativo P0.7 en `POST /identity/providers/:provider/webhook`;
+- procedencia auditable entre hop HMAC interno y webhook nativo;
+- readiness administrativo en `GET /identity/providers/readiness`;
+- **adapter vendor-specific `veriff` P0.8**;
+- verificación Veriff `x-auth-client` + HMAC-SHA256 sobre raw body;
+- normalización de decision webhook y user-defined status;
+- runtime readiness independiente de compile-time registration y policy allowlist;
+- bootstrap ciudadano de sesión Veriff en `POST /identity/providers/veriff/session`;
+- verificación criptográfica de request/response al crear sesión;
+- `GET /identity/providers/availability` para exponer disponibilidad sin secretos.
 
-**Estado externo:** todavía no existe un proveedor KYC/identity proofing real registrado y certificado. `trusted_kyc` sigue siendo sintético y producción permanece fail-closed para identity assurance hasta completar una integración vendor-specific real.
+### Estado Veriff
+
+`🟡 Integrado / pendiente de certificación externa`.
+
+El código Veriff está preparado para Colombia, pero la autoridad sigue fail-closed mientras no existan las credenciales reales de una integración Veriff y no se ejecute el canary. Las credenciales pueden configurarse sin añadir `veriff` a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`, permitiendo sandbox sin habilitar gobernanza.
+
+VÉRTICE no persiste payloads documentales/biométricos de Veriff. El flujo ciudadano alojado recibe únicamente un UUID opaco como `vendorData/endUserId`; el webhook se reduce a estado normalizado, referencias no-PII, timestamps y hash de evidencia mínima.
+
+Runbook: `docs/integrations/VERIFF.md`.
 
 ### 1.6 Gobernanza
 
@@ -100,10 +113,10 @@ El ledger canónico de democracia líquida coordina:
 - participación delegada;
 - nullifiers opacos;
 - prevención de doble influencia;
-- scopes de delegación `general`, `domain` y `proposal`;
-- precedencia determinística de scopes;
+- scopes `general`, `domain` y `proposal`;
+- precedencia determinística;
 - ventanas de validez;
-- override directo cuando el ciudadano había participado previamente por delegación;
+- override directo;
 - tally reconstruido desde registros durables.
 
 ### 1.7 API y datos
@@ -126,7 +139,7 @@ Módulos actuales bajo `apps/api/src/modules`:
 
 Dependencias de datos:
 
-- PostgreSQL + PostGIS: canónico para estado relacional/territorial;
+- PostgreSQL + PostGIS: estado canónico relacional/territorial;
 - Redis: sesiones, cache, rate limiting, pub/sub y replay distribuido de identity proofing;
 - Neo4j: grafo de reputación; degradable en readiness.
 
@@ -152,13 +165,14 @@ RAG:
 
 ### 1.9 Tiempo real y observabilidad
 
-- SSE para eventos al cliente;
+- SSE;
 - Redis pub/sub;
 - notificaciones internas;
 - Sentry;
 - `/health` y `/health/ready`;
-- PostgreSQL y Redis son requeridos para readiness;
-- Neo4j puede reportar degradación sin marcar toda la API como indisponible.
+- PostgreSQL y Redis requeridos para readiness;
+- Neo4j degradable;
+- readiness de identity providers separa `registered`, `runtime_ready` y `activated`.
 
 ---
 
@@ -173,9 +187,9 @@ RAG:
 
 - Fastify 5.11.2
 - Railway
-- Dockerfile como fuente de verdad del entrypoint productivo
+- Dockerfile como fuente de verdad
 - migraciones Prisma antes del arranque de Node
-- proceso de aplicación ejecutado sin privilegios después de la migración
+- proceso ejecutado sin privilegios después de migración
 
 ### AI
 
@@ -184,7 +198,7 @@ RAG:
 
 ### Estado de certificación
 
-El repositorio contiene controles y convergencia de runtime, pero cada release debe distinguir entre:
+Cada release debe distinguir:
 
 - build/test verde;
 - deployment iniciado;
@@ -193,13 +207,13 @@ El repositorio contiene controles y convergencia de runtime, pero cada release d
 
 No documentar `deployed` únicamente porque exista código o configuración IaC.
 
-Para identity proofing, P0.7 significa que el runtime ya puede recibir y auditar un webhook nativo certificado; **no** significa que un proveedor KYC real esté activo. La activación exige adapter vendor-specific, fixtures reproducibles, credenciales, webhook real y canary productivo.
+Para Veriff P0.8, **integrado** significa que el adapter, sesión, firma, replay y lifecycle existen en código. **Activo para gobernanza** exige además credenciales reales, webhooks configurados, canary satisfactorio y allowlist explícita.
 
 ---
 
 ## 3. Blockchain
 
-El repositorio contiene contratos Solidity/Hardhat para Polygon, incluidos `CivicSBT` y `VotingRegistry`, junto con scripts de despliegue para local, Amoy y Polygon.
+El repositorio contiene contratos Solidity/Hardhat para Polygon, incluidos `CivicSBT` y `VotingRegistry`, junto con scripts para local, Amoy y Polygon.
 
 Clasificación actual: **código implementado; despliegue on-chain dependiente del entorno**.
 
@@ -209,35 +223,32 @@ No almacenar PII on-chain. Los datos personales y el sentido individual del voto
 
 ## 4. Componentes que NO son contrato operativo actual
 
-Los siguientes elementos aparecieron en documentos tempranos o diseños de referencia, pero no deben describirse como runtime obligatorio sin código nuevo que los active:
-
 - API Gateway GraphQL/Apollo Federation;
-- Governance Engine separado escrito en Go;
-- MongoDB como base documental obligatoria;
-- Kafka como event bus obligatorio;
-- The Graph como indexador productivo obligatorio;
+- Governance Engine separado en Go;
+- MongoDB obligatorio;
+- Kafka obligatorio;
+- The Graph obligatorio;
 - integración productiva certificada con Registraduría;
-- liveness/biometría productiva certificada;
 - DAO de gobierno de plataforma;
 - ZKP productivo para cada voto;
-- wallet de Verifiable Credentials como requisito activo de onboarding.
+- wallet de Verifiable Credentials como requisito activo.
+
+La liveness/biometría deja de describirse como mera intención arquitectónica en P0.8 porque Veriff está integrado como provider de IDV, pero **su uso productivo real continúa pendiente de la integración contratada/certificada**.
 
 ---
 
 ## 5. Convenciones para documentación futura
-
-Toda documentación de estado debe usar una de estas etiquetas:
 
 - `✅ Implementado`
 - `🟡 Integrado / pendiente de certificación`
 - `🧭 Planeado`
 - `⛔ No activo / retirado`
 
-No usar expresiones como “implementado” o “producción” para describir únicamente intención arquitectónica.
+No usar “implementado” o “producción” para describir únicamente intención arquitectónica.
 
-Cuando un PR cambie alguno de estos contratos, actualizar como mínimo:
+Cuando un PR cambie estos contratos, actualizar como mínimo:
 
-1. `README.md` si afecta la superficie del producto;
-2. `docs/CURRENT_STATE.md` si cambia el estado funcional;
-3. el documento de dominio correspondiente;
-4. `CLAUDE.md` si cambia una regla que futuros agentes deben respetar.
+1. `README.md` si afecta superficie del producto;
+2. `docs/CURRENT_STATE.md`;
+3. documento de dominio/integración;
+4. `CLAUDE.md` si cambia una regla para futuros agentes.
