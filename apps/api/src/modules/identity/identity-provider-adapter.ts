@@ -38,6 +38,12 @@ export interface NativeCivicIdentityProviderAdapterDefinition {
     request: NativeProviderWebhookRequest,
     verified: VerifiedNativeProviderWebhook,
   ) => Promise<unknown>
+  /**
+   * Runtime credential/configuration readiness. Compile-time registration alone
+   * must never create civic authority. Defaults to true for certified fixtures;
+   * real providers should bind this to their feature-scoped credentials.
+   */
+  runtime_ready?: () => boolean
   max_webhook_skew_ms?: number
   replay_ttl_seconds?: number
 }
@@ -53,6 +59,7 @@ export interface NativeCivicIdentityProviderAdapter {
   provider: string
   kind: 'native'
   certification_contract_version: 1
+  isRuntimeReady: () => boolean
   verifyAndNormalize: (
     request: NativeProviderWebhookRequest,
   ) => Promise<CivicProofingEventInput>
@@ -186,6 +193,13 @@ export function defineNativeCivicIdentityProviderAdapter(
     kind: 'native',
     certification_contract_version: 1,
     [NATIVE_ADAPTER_MARK]: true,
+    isRuntimeReady(): boolean {
+      try {
+        return definition.runtime_ready?.() ?? true
+      } catch {
+        return false
+      }
+    },
     async verifyAndNormalize(request): Promise<CivicProofingEventInput> {
       const delivery = await verifyAndNormalizeWithReceipt(request)
       return delivery.event
