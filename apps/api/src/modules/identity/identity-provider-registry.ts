@@ -233,6 +233,6 @@ export function getCivicIdentityProviderActivationState(): CivicIdentityProvider
   return 'ready'
 }
 
-export function getCivicIdentityProofingIngressState(): CivicIdentityIdentityProviderActivationState {
+export function getCivicIdentityProofingIngressState(): CivicIdentityProviderActivationState {
   return getCivicIdentityProviderActivationState()
 }
