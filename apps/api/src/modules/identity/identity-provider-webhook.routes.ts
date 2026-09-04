@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireSuperadmin } from '../../middleware/auth'
 import {
   getActivatedCivicIdentityProviders,
+  getCertifiedCivicIdentityProviders,
   getCivicIdentityProviderActivationState,
   getNativeCivicIdentityProviderAdapter,
   getRegisteredNativeCivicIdentityProviders,
@@ -35,15 +36,18 @@ export async function identityProviderWebhookRoutes(app: FastifyInstance): Promi
   app.get('/readiness', { preHandler: requireSuperadmin }, async (_request, reply) => {
     const registeredNative = getRegisteredNativeCivicIdentityProviders()
     const runtimeReady = getRuntimeReadyNativeCivicIdentityProviders()
+    const certified = getCertifiedCivicIdentityProviders()
     const activated = getActivatedCivicIdentityProviders()
 
     return reply.send({
       state: getCivicIdentityProviderActivationState(),
       registered_native_providers: registeredNative,
       runtime_ready_native_providers: runtimeReady,
+      certified_native_providers: certified,
       activated_providers: activated,
       native_ingress_available: registeredNative.length > 0,
       credentialed_native_ingress_available: runtimeReady.length > 0,
+      externally_certified_native_ingress_available: certified.length > 0,
       governance_assurance_enabled: activated.length > 0,
     })
   })
