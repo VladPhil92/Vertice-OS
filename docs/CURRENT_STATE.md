@@ -1,7 +1,7 @@
 # VÉRTICE OS — Current State
 
 > Snapshot técnico-funcional: **4 de septiembre de 2026**  
-> Basado en `main` P0.7 + integración vendor-specific Veriff P0.8 en proceso de certificación.
+> Basado en `main` P0.8 + certification interlock P0.9 en proceso de validación.
 
 Este documento separa tres categorías:
 
@@ -63,7 +63,7 @@ Modelo activo:
 - protección contra eliminación del último superadmin;
 - auditoría append-only de bootstrap, grants y cambios de rol.
 
-### 1.5 Civic identity assurance P0.8
+### 1.5 Civic identity assurance P0.9
 
 VÉRTICE distingue:
 
@@ -91,13 +91,18 @@ La frontera técnica implementada incluye:
 - runtime readiness independiente de compile-time registration y policy allowlist;
 - bootstrap ciudadano de sesión Veriff en `POST /identity/providers/veriff/session`;
 - verificación criptográfica de request/response al crear sesión;
-- `GET /identity/providers/availability` para exponer disponibilidad sin secretos.
+- `GET /identity/providers/availability` para exponer disponibilidad sin secretos;
+- **certification interlock P0.9** mediante `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`;
+- activación nativa efectiva solo cuando coinciden adapter compilado, runtime credentials, certificación externa y governance allowlist;
+- readiness administrativo separado para `registered`, `runtime_ready`, `certified` y `activated`.
 
 ### Estado Veriff
 
 `🟡 Integrado / pendiente de certificación externa`.
 
-El código Veriff está preparado para Colombia, pero la autoridad sigue fail-closed mientras no existan las credenciales reales de una integración Veriff y no se ejecute el canary. Las credenciales pueden configurarse sin añadir `veriff` a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`, permitiendo sandbox sin habilitar gobernanza.
+El código Veriff está preparado para Colombia, pero la autoridad sigue fail-closed mientras no existan las credenciales reales de una integración Veriff y no se ejecute el canary. Incluso con credenciales y allowlist, P0.9 impide que Veriff otorgue elegibilidad electoral hasta que el provider haya sido promovido explícitamente como certificado.
+
+Las credenciales pueden configurarse sin añadir `veriff` a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` ni a `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`, permitiendo sandbox y recepción de webhooks sin habilitar gobernanza.
 
 VÉRTICE no persiste payloads documentales/biométricos de Veriff. El flujo ciudadano alojado recibe únicamente un UUID opaco como `vendorData/endUserId`; el webhook se reduce a estado normalizado, referencias no-PII, timestamps y hash de evidencia mínima.
 
@@ -172,7 +177,7 @@ RAG:
 - `/health` y `/health/ready`;
 - PostgreSQL y Redis requeridos para readiness;
 - Neo4j degradable;
-- readiness de identity providers separa `registered`, `runtime_ready` y `activated`.
+- readiness de identity providers separa `registered`, `runtime_ready`, `certified` y `activated`.
 
 ---
 
@@ -207,7 +212,7 @@ Cada release debe distinguir:
 
 No documentar `deployed` únicamente porque exista código o configuración IaC.
 
-Para Veriff P0.8, **integrado** significa que el adapter, sesión, firma, replay y lifecycle existen en código. **Activo para gobernanza** exige además credenciales reales, webhooks configurados, canary satisfactorio y allowlist explícita.
+Para Veriff P0.8/P0.9, **integrado** significa que el adapter, sesión, firma, replay, lifecycle e interlock de certificación existen en código. **Activo para gobernanza** exige además credenciales reales, webhooks configurados, canary satisfactorio, promoción en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` y allowlist explícita en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
 
 ---
 
@@ -233,7 +238,7 @@ No almacenar PII on-chain. Los datos personales y el sentido individual del voto
 - ZKP productivo para cada voto;
 - wallet de Verifiable Credentials como requisito activo.
 
-La liveness/biometría deja de describirse como mera intención arquitectónica en P0.8 porque Veriff está integrado como provider de IDV, pero **su uso productivo real continúa pendiente de la integración contratada/certificada**.
+La liveness/biometría deja de describirse como mera intención arquitectónica desde P0.8 porque Veriff está integrado como provider de IDV, pero **su uso productivo real continúa pendiente de la integración contratada/certificada y del interlock P0.9**.
 
 ---
 
