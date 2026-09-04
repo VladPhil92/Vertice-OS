@@ -1,6 +1,7 @@
 import { config } from '../../../config'
 import {
   getActivatedCivicIdentityProviders,
+  getCertifiedCivicIdentityProviders,
   getCivicIdentityProviderActivationState,
   getCivicIdentityProofingIngressState,
   isActivatedCivicIdentityProvider,
@@ -8,7 +9,11 @@ import {
 
 const savedNodeEnv = config.NODE_ENV
 const savedProviders = [...config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS]
+const savedCertifiedProviders = [...config.CIVIC_IDENTITY_CERTIFIED_PROVIDERS]
 const savedKeys = config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON
+const savedVeriffBaseUrl = config.VERIFF_BASE_URL
+const savedVeriffApiKey = config.VERIFF_API_KEY
+const savedVeriffSharedSecret = config.VERIFF_SHARED_SECRET
 const VALID_KEYS = JSON.stringify({
   trusted_kyc: { 'test-key': 'test-proofing-provider-key-32-characters!!' },
 })
@@ -21,10 +26,28 @@ function replaceProviders(...providers: string[]): void {
   )
 }
 
+function replaceCertifiedProviders(...providers: string[]): void {
+  config.CIVIC_IDENTITY_CERTIFIED_PROVIDERS.splice(
+    0,
+    config.CIVIC_IDENTITY_CERTIFIED_PROVIDERS.length,
+    ...providers,
+  )
+}
+
+function configureVeriffRuntime(): void {
+  config.VERIFF_BASE_URL = 'https://example.veriff.test'
+  config.VERIFF_API_KEY = 'test-api-key'
+  config.VERIFF_SHARED_SECRET = 'test-shared-secret-32-characters!!'
+}
+
 afterEach(() => {
   config.NODE_ENV = savedNodeEnv
   replaceProviders(...savedProviders)
+  replaceCertifiedProviders(...savedCertifiedProviders)
   config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON = savedKeys
+  config.VERIFF_BASE_URL = savedVeriffBaseUrl
+  config.VERIFF_API_KEY = savedVeriffApiKey
+  config.VERIFF_SHARED_SECRET = savedVeriffSharedSecret
 })
 
 describe('civic identity provider activation registry', () => {
@@ -86,5 +109,35 @@ describe('civic identity provider activation registry', () => {
 
     expect(getCivicIdentityProviderActivationState()).toBe('disabled')
     expect(getCivicIdentityProofingIngressState()).toBe('disabled')
+  })
+
+  it('keeps a credentialed native provider fail-closed until external certification is promoted', () => {
+    config.NODE_ENV = 'production'
+    replaceProviders('veriff')
+    replaceCertifiedProviders()
+    configureVeriffRuntime()
+
+    expect(getCertifiedCivicIdentityProviders()).toEqual([])
+    expect(getActivatedCivicIdentityProviders()).toEqual([])
+    expect(isActivatedCivicIdentityProvider('veriff')).toBe(false)
+    expect(getCivicIdentityProviderActivationState()).toBe('misconfigured')
+  })
+
+  it('activates a native provider only after compile-time registration, credentials, allowlist and certification all agree', () => {
+    config.NODE_ENV = 'production'
+    replaceProviders('veriff')
+    replaceCertifiedProviders('veriff')
+    configureVeriffRuntime()
+
+    expect(getCertifiedCivicIdentityProviders()).toEqual(['veriff'])
+    expect(getActivatedCivicIdentityProviders()).toEqual(['veriff'])
+    expect(isActivatedCivicIdentityProvider(' VERIFF ')).toBe(true)
+    expect(getCivicIdentityProviderActivationState()).toBe('ready')
+  })
+
+  it('ignores certification claims for providers without a native compiled adapter', () => {
+    replaceCertifiedProviders('unregistered_provider', 'trusted_kyc')
+
+    expect(getCertifiedCivicIdentityProviders()).toEqual([])
   })
 })
