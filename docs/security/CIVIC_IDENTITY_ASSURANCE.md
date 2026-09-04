@@ -1,6 +1,6 @@
 # Civic Identity Assurance — VÉRTICE OS
 
-> Estado P0.7 · snapshot 4 de septiembre de 2026
+> Estado P0.8 · snapshot 4 de septiembre de 2026
 
 ## Objetivo
 
@@ -37,163 +37,121 @@ La referencia del proveedor queda ligada a un único ciudadano y los eventos son
 
 `POST /identity/proofing/events` es un salto **interno server-to-server** para eventos que ya fueron verificados por un adapter de proveedor.
 
-El ingress exige:
-
-- firma HMAC versionada;
-- timestamp firmado con ventana limitada;
-- `key-id` firmado;
-- secreto aislado por provider y key-id;
-- canonicalización determinística del evento;
-- rotación sin secreto global compartido entre proveedores.
-
-Este contrato autentica el salto adapter → VÉRTICE. **No sustituye la firma nativa del proveedor KYC.**
+El ingress exige firma HMAC versionada, timestamp limitado, `key-id` firmado, secreto aislado por provider/key-id y canonicalización determinística. Este contrato autentica adapter → VÉRTICE; **no sustituye la firma nativa del proveedor**.
 
 ### P0.4 — Provider activation boundary
 
 Un nombre configurado en variables de entorno no puede crear autoridad cívica por sí solo. Un provider queda operacional únicamente si coinciden:
 
 1. allowlist de política;
-2. adapter compilado en el registry;
-3. keyset aislado del ingress interno cuando ese deployment topology lo utiliza;
+2. adapter compilado;
+3. credenciales/runtime readiness del adapter nativo o keyset interno cuando aplique;
 4. elegibilidad del adapter para el runtime actual.
 
 `trusted_kyc` es sintético y no puede activarse en producción.
 
 ### P0.5 — Native Provider Adapter Certification Boundary
 
-P0.5 elimina la bandera declarativa `productionEligible`. La elegibilidad productiva deriva de un **adapter nativo ejecutable** creado mediante el contrato de `identity-provider-adapter.ts`.
+La elegibilidad productiva deriva de un **adapter nativo ejecutable**, no de una bandera declarativa. Todo adapter debe autenticar bytes crudos, devolver `event_id`/`signed_at` autenticados, reclamar replay atómico y normalizar solo después de autenticar.
 
-Todo adapter nativo debe proporcionar código ejecutable para:
-
-- verificar criptográficamente el webhook nativo sobre los **bytes crudos** recibidos;
-- devolver un `event_id` y `signed_at` autenticados por ese protocolo;
-- realizar un claim atómico de replay para `provider + event_id`;
-- normalizar únicamente después de verificar la autenticidad nativa.
-
-El wrapper común de VÉRTICE aplica además:
-
-- límite de tamaño del payload;
-- validación del timestamp de recepción;
-- ventana máxima de frescura;
-- rechazo explícito de replay;
-- validación contra `CivicProofingEventSchema`;
-- binding del provider normalizado al adapter compilado;
-- binding de `event_id` al identificador autenticado del webhook.
-
-Existe un harness de certificación adversarial reutilizable que exige que cada adapter futuro demuestre, con fixtures del protocolo del proveedor:
-
-1. aceptación y normalización exacta de un webhook válido;
-2. rechazo de payload manipulado;
-3. rechazo de webhook sin autenticación nativa;
-4. rechazo de webhook obsoleto;
-5. rechazo de replay.
+El harness adversarial exige: webhook válido, payload manipulado rechazado, ausencia de autenticación rechazada, stale rechazado y replay rechazado.
 
 ### P0.6 — Distributed replay + lifecycle canary
 
-P0.6 conecta el claim de replay a Redis mediante una operación atómica `SET ... NX ... EX`. El fallo de Redis cierra el ingress del proofing en vez de continuar sin protección distribuida.
-
-El lifecycle canary exige entregas nativas autenticadas `verified`, `revoked` y `expired` para el mismo subject estable, con tiempo monotónico y assurance suficiente en el estado verificado.
-
-El workflow `Identity Provider Certification` ejecuta estas garantías además del CI general.
+Redis implementa `SET ... NX ... EX` para el replay distribuido. Fallo de Redis = fail-closed. El lifecycle canary exige `verified`, `revoked` y `expired` para el mismo subject estable con tiempos monotónicos.
 
 ### P0.7 — Native Provider Webhook Ingress
 
-P0.7 añade el boundary HTTP productivo para adapters nativos compilados:
+`POST /identity/providers/:provider/webhook` preserva el body exacto como `Buffer` dentro de un scope Fastify encapsulado. La procedencia durable distingue:
 
-`POST /identity/providers/:provider/webhook`
+- `ingress_signature_version = 1`: hop HMAC interno;
+- `ingress_signature_version = 2`: webhook nativo autenticado por adapter compilado.
 
-El parser JSON de esta ruta está encapsulado en su propio scope Fastify y entrega un `Buffer` al adapter. El payload no se parsea ni reserializa antes de la verificación vendor-native.
+No se persisten firmas, secretos ni raw payloads del vendor.
 
-El adapter devuelve además un receipt autenticado con `event_id` y `signed_at`. Después de validar y normalizar, VÉRTICE persiste el evento con procedencia diferenciada:
+### P0.8 — Veriff Colombia Integration
 
-- `ingress_signature_version = 1`: hop HMAC interno adapter → VÉRTICE;
-- `ingress_signature_version = 2`: webhook nativo verificado directamente por un adapter compilado.
+P0.8 introduce el primer adapter vendor-specific: `veriff`.
 
-No se persisten la firma nativa, secretos ni raw payloads. Para procedencia nativa se conserva únicamente el timestamp autenticado requerido para auditoría.
+La integración implementa:
 
-Los replays verificados no se procesan dos veces. La ruta puede reconocer el retry como duplicado para evitar un retry storm del vendor sin debilitar el rechazo de replay en el adapter.
+- `x-auth-client` ligado a la API key de Veriff;
+- HMAC-SHA256 sobre los bytes crudos mediante `x-hmac-signature`;
+- validación antes de cualquier parsing/normalización;
+- decision lifecycle `approved / declined / resubmission_requested / review / expired / abandoned`;
+- user-defined status para revocación autenticada;
+- replay Redis compartido;
+- binding del ciudadano exclusivamente mediante el `endUserId` firmado;
+- referencia durable PII-free `end-user:<citizen UUID>`;
+- creación de sesión alojada por Veriff mediante `POST /identity/providers/veriff/session`;
+- HMAC de request y verificación de `vrf-auth-client` + `vrf-hmac-signature` en la respuesta;
+- retorno al frontend únicamente de `session_id` y URL alojada, sin exponer `sessionToken`;
+- separación explícita entre `registered`, `runtime_ready` y `activated`.
 
-`GET /identity/providers/readiness` permite al superadmin inspeccionar el estado operacional sin exponer secretos.
+La creación de sesión envía únicamente `callback`, `vendorData` y `endUserId`, usando el UUID interno como valor opaco. VÉRTICE no debe enviar ni persistir desde este flujo número de documento, nombre, selfie, foto de documento o payload biométrico del proveedor.
+
+#### Activación P0.8
+
+`veriff` puede estar **compilado** sin estar habilitado para gobernanza.
+
+- `registered`: adapter incluido en código;
+- `runtime_ready`: `VERIFF_BASE_URL`, `VERIFF_API_KEY` y `VERIFF_SHARED_SECRET` presentes;
+- `activated`: además `veriff` está explícitamente en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
+
+Las credenciales pueden configurarse primero para sandbox/canary manteniendo `veriff` fuera de la allowlist. Esa es la secuencia requerida.
 
 ---
 
 ## Assurance y padrón electoral congelado
 
-El modelo protege la votación en dos momentos distintos.
+Al pasar una propuesta a `voting`, VÉRTICE construye `proposal_voter_roll` con ciudadanos que satisfacen la política vigente de identidad cívica y alcance territorial. Ese snapshot fija el universo electoral y el denominador de quórum.
 
-### 1. Apertura de votación
-
-Al pasar una propuesta a `voting`, VÉRTICE construye `proposal_voter_roll` con ciudadanos que satisfacen la política vigente de identidad cívica y alcance territorial.
-
-Ese snapshot fija el universo electoral y, por tanto, el denominador de quórum.
-
-### 2. Ventana de voto
-
-Una vez congelado el padrón, la admisión de votos directos y participación delegada se realiza contra `proposal_voter_roll`.
-
-**No se vuelve a inferir elegibilidad desde una configuración mutable de providers en cada request.**
-
-Esto evita que una modificación de allowlist cambie retroactivamente el electorado, que una revocación/configuración produzca quórums inconsistentes a mitad del proceso o que rutas distintas apliquen políticas divergentes.
-
-Si la propuesta está en votación y no existe padrón congelado, el sistema debe fallar cerrado.
+Durante la ventana de voto, la admisión usa el padrón congelado. **No se vuelve a inferir elegibilidad desde una configuración mutable de providers en cada request.**
 
 ---
 
 ## Federación CTG One
 
-CTG One puede autenticar y federar una cuenta, pero:
-
 ```text
 CTG One SSO ≠ Civic Identity Assurance
 ```
 
-Login, matching de email, wallet ownership, account age o reputación no sustituyen proofing de identidad.
+Login, email, wallet ownership, antigüedad o reputación no sustituyen proofing de identidad.
 
 ---
 
 ## Regla de onboarding de providers
 
-Un provider productivo solo puede incorporarse cuando cumpla **todas** estas capas:
+Un provider productivo solo puede incorporarse cuando cumpla todas estas capas:
 
-1. selección y evaluación del proveedor real;
-2. implementación del protocolo nativo de firma/webhook usando `raw_body`;
-3. normalización PII-minimized al contrato VÉRTICE;
-4. replay store compartido y atómico para producción;
-5. ejecución satisfactoria del harness P0.5 con fixtures oficiales o reproducibles;
-6. lifecycle canary P0.6;
-7. registro compilado del adapter nativo;
-8. configuración de credenciales y webhook del vendor;
-9. uso del ingress nativo P0.7 o del hop HMAC interno, según el deployment topology;
-10. allowlist de política;
-11. canary productivo acotado antes de usar el provider para gobernanza real.
+1. evaluación de jurisdicción/política;
+2. protocolo nativo sobre raw body;
+3. normalización PII-minimized;
+4. replay distribuido;
+5. P0.5 adversarial certification;
+6. P0.6 lifecycle canary;
+7. adapter compilado;
+8. credenciales y webhook real;
+9. runtime readiness verificable;
+10. allowlist explícita;
+11. bounded production canary antes de construir un nuevo electorado real.
 
-Para un piloto en Colombia deben evaluarse además documento oficial aplicable, anti-spoofing/liveness cuando corresponda, duplicidad de persona, referencias auditables, minimización y retención de datos, obligaciones de protección de datos, disponibilidad e incident response.
-
----
-
-## Delegaciones
-
-La delegación no puede ampliar el electorado.
-
-Un delegador solo puede aportar participación a un delegado si el delegador pertenece al padrón congelado de esa propuesta y la delegación está activa, vigente y dentro del scope aplicable.
-
-La assurance no se hereda desde el delegado: la pertenencia al padrón ya representa la evaluación del delegador realizada al abrir la votación.
+Para Colombia deben evaluarse además documento aplicable, liveness/anti-spoofing según el flujo contratado, prevención de duplicidad de persona, minimización/retención, obligaciones de protección de datos, disponibilidad e incident response.
 
 ---
 
 ## Limitaciones actuales
 
-P0.7 deja preparada, observable y fail-closed la frontera para integrar un proveedor real, pero **no activa por sí sola un KYC productivo**.
+P0.8 integra Veriff en código, pero **no equivale a provider real certificado** mientras falten credenciales y evidencia sandbox/productiva limitada.
 
-Pendientes externos/siguiente evolución:
+Pendientes externos:
 
-1. seleccionar un proveedor de identity proofing adecuado al piloto colombiano;
-2. implementar su adapter nativo concreto con el protocolo oficial de firma;
-3. aportar fixtures oficiales o reproducibles y credenciales sandbox;
-4. configurar el webhook real del proveedor;
-5. ejecutar P0.5/P0.6 contra el protocolo vendor-specific;
-6. realizar canary `verified/revoked/expired` y evidencia operacional antes de habilitarlo en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`;
-7. continuar mejorando onboarding y revisión administrativa en el dashboard ciudadano.
+1. obtener Base URL, API key y shared secret de la integración Veriff;
+2. configurar Decision webhook;
+3. configurar User-defined statuses webhook/status code para revocación si se usa ese mecanismo;
+4. ejecutar canary real `approved → revoked` y un caso `expired/abandoned`;
+5. certificar controles de duplicidad de persona y política de retención/privacidad del producto contratado;
+6. añadir `veriff` a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` únicamente después de evidencia satisfactoria.
 
 ---
 
@@ -201,10 +159,12 @@ Pendientes externos/siguiente evolución:
 
 **Ningún código puede inferir civic identity assurance únicamente desde login, email, CTG One federation, cédula autodeclarada, firma de wallet, reputación o antigüedad de cuenta.**
 
-**Ninguna variable de entorno puede convertir por sí sola un provider en adapter productivo.**
+**Ninguna variable de entorno puede convertir por sí sola un provider en autoridad cívica.**
 
-**Ningún adapter debe normalizar o confiar en un webhook antes de autenticar el payload nativo exacto recibido.**
+**Ningún adapter debe normalizar un webhook antes de autenticar el payload nativo exacto.**
 
-**Ninguna ruta de webhook nativo puede utilizar el JSON ya parseado por Fastify como material de verificación criptográfica.**
+**Ninguna ruta de webhook nativo puede utilizar JSON reserializado como material de verificación.**
+
+**Las credenciales Veriff no deben exponerse al frontend ni almacenarse en `NEXT_PUBLIC_*`.**
 
 Para votaciones abiertas, **ningún código puede sustituir el padrón congelado por una reevaluación ad hoc de providers**.
