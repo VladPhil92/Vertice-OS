@@ -5,6 +5,7 @@ import {
   getCivicIdentityProviderActivationState,
   getNativeCivicIdentityProviderAdapter,
   getRegisteredNativeCivicIdentityProviders,
+  getRuntimeReadyNativeCivicIdentityProviders,
 } from './identity-provider-registry'
 import { ingestNativeCivicProofingEvent } from './identity-proofing.service'
 
@@ -33,13 +34,16 @@ export async function identityProviderWebhookRoutes(app: FastifyInstance): Promi
 
   app.get('/readiness', { preHandler: requireSuperadmin }, async (_request, reply) => {
     const registeredNative = getRegisteredNativeCivicIdentityProviders()
+    const runtimeReady = getRuntimeReadyNativeCivicIdentityProviders()
     const activated = getActivatedCivicIdentityProviders()
 
     return reply.send({
       state: getCivicIdentityProviderActivationState(),
       registered_native_providers: registeredNative,
+      runtime_ready_native_providers: runtimeReady,
       activated_providers: activated,
       native_ingress_available: registeredNative.length > 0,
+      credentialed_native_ingress_available: runtimeReady.length > 0,
       governance_assurance_enabled: activated.length > 0,
     })
   })

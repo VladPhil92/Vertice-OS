@@ -5,6 +5,7 @@ import {
   type CivicIdentityProviderAdapterRegistration,
   type NativeCivicIdentityProviderAdapter,
 } from './identity-provider-adapter'
+import { veriffIdentityProviderAdapter } from './identity-provider-veriff'
 
 export type CivicIdentityProviderActivationState = 'ready' | 'disabled' | 'misconfigured'
 
@@ -17,16 +18,14 @@ const MIN_SECRET_LENGTH = 32
 /**
  * Compile-time trust boundary.
  *
- * P0.5 removes declarative `productionEligible` flags. A production provider
- * must now be represented by a NativeCivicIdentityProviderAdapter created by
- * the executable certification contract in identity-provider-adapter.ts.
- * Environment variables can request policy and keys, but cannot manufacture
- * a production-capable adapter.
- *
- * `trusted_kyc` remains a synthetic test-only provider.
+ * Production providers are executable native adapters, never names invented by
+ * environment variables. P0.8 registers Veriff here, but civic authority still
+ * requires explicit policy allowlisting plus runtime credential readiness.
+ * `trusted_kyc` remains synthetic and test-only.
  */
 const REGISTERED_ADAPTERS: readonly CivicIdentityProviderAdapterRegistration[] = [
   defineSyntheticCivicIdentityProviderAdapter('trusted_kyc'),
+  veriffIdentityProviderAdapter,
 ]
 
 function normalizeProvider(provider: string): string {
@@ -89,11 +88,17 @@ export function getRegisteredNativeCivicIdentityProviders(): string[] {
     .map((adapter) => adapter.provider)
 }
 
+export function getRuntimeReadyNativeCivicIdentityProviders(): string[] {
+  return REGISTERED_ADAPTERS
+    .filter(isProductionCivicIdentityProviderAdapter)
+    .filter((adapter) => adapter.isRuntimeReady())
+    .map((adapter) => adapter.provider)
+}
+
 /**
  * Returns only a compiled native adapter. This is intentionally distinct from
- * the policy/key activation check: future provider webhook routes must obtain
- * their verifier from this function rather than trust a provider name supplied
- * by configuration or request data.
+ * policy activation: webhook authentication may be deployed before governance
+ * is permitted to trust the provider.
  */
 export function getNativeCivicIdentityProviderAdapter(
   providerInput: string,
@@ -105,24 +110,34 @@ export function getNativeCivicIdentityProviderAdapter(
 }
 
 /**
- * A provider is operational only when policy, compiled adapter and at least one
- * provider-scoped ingress key all exist. This also prevents stale verified
- * proofs from authorizing governance while revocation ingress is unavailable.
+ * Operational provider contract.
+ *
+ * Native P0.7+ adapters require:
+ *   policy allowlist + compiled adapter + feature-scoped runtime credentials.
+ * Synthetic/legacy normalized adapters continue to require their isolated
+ * internal HMAC keyset. This removes an obsolete HMAC dependency from direct
+ * vendor-native ingress without weakening fail-closed activation.
  */
 export function getActivatedCivicIdentityProviders(): string[] {
-  let keyRegistry: ProviderKeyRegistry
+  let keyRegistry: ProviderKeyRegistry | null = null
   try {
     keyRegistry = parseKeyRegistry()
   } catch {
-    return []
+    // Invalid legacy/internal ingress configuration must not manufacture trust.
+    keyRegistry = null
   }
 
-  const registered = registeredProviderSet()
+  const registered = runtimeRegisteredAdapters()
   return config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
     .map(normalizeProvider)
-    .filter((provider) =>
-      registered.has(provider) && Object.keys(keyRegistry[provider] ?? {}).length > 0,
-    )
+    .filter((provider) => {
+      const registration = registered.find((adapter) => adapter.provider === provider)
+      if (!registration) return false
+      if (isProductionCivicIdentityProviderAdapter(registration)) {
+        return registration.isRuntimeReady()
+      }
+      return keyRegistry !== null && Object.keys(keyRegistry[provider] ?? {}).length > 0
+    })
 }
 
 export function isActivatedCivicIdentityProvider(provider: string): boolean {
@@ -186,12 +201,12 @@ export function resolveProofingAdapterSecret(
   return { provider, keyId, secret }
 }
 
-/** Coarse operational state only; never exposes provider identifiers or keys. */
+/** Coarse operational state only; never exposes secrets. */
 export function getCivicIdentityProviderActivationState(): CivicIdentityProviderActivationState {
   const configured = config.CIVIC_IDENTITY_ASSURANCE_PROVIDERS
-  const hasKeyConfig = Boolean(config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON?.trim())
+  const hasInternalKeyConfig = Boolean(config.CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON?.trim())
 
-  if (configured.length === 0 && !hasKeyConfig) return 'disabled'
+  if (configured.length === 0 && !hasInternalKeyConfig) return 'disabled'
   if (configured.length === 0) return 'misconfigured'
 
   const active = getActivatedCivicIdentityProviders()
