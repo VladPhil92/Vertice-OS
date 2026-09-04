@@ -99,10 +99,15 @@ export function getRuntimeReadyNativeCivicIdentityProviders(): string[] {
  * Providers explicitly promoted after an external sandbox/limited-production
  * certification. This list does not itself grant authority; P0.9 intersects it
  * with compile-time registration, runtime readiness, and the assurance allowlist.
+ *
+ * `?? []` is intentional: older isolated tests and downstream consumers may
+ * mock only the pre-P0.9 config surface. Absence of this new field must remain
+ * fail-closed rather than crashing the process or manufacturing certification.
  */
 export function getCertifiedCivicIdentityProviders(): string[] {
   const registeredNative = new Set(getRegisteredNativeCivicIdentityProviders())
-  return config.CIVIC_IDENTITY_CERTIFIED_PROVIDERS
+  const configuredCertifiedProviders = config.CIVIC_IDENTITY_CERTIFIED_PROVIDERS ?? []
+  return configuredCertifiedProviders
     .map(normalizeProvider)
     .filter((provider) => registeredNative.has(provider))
 }
@@ -228,6 +233,6 @@ export function getCivicIdentityProviderActivationState(): CivicIdentityProvider
   return 'ready'
 }
 
-export function getCivicIdentityProofingIngressState(): CivicIdentityProviderActivationState {
+export function getCivicIdentityProofingIngressState(): CivicIdentityIdentityProviderActivationState {
   return getCivicIdentityProviderActivationState()
 }
