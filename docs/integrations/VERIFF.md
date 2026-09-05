@@ -1,4 +1,4 @@
-# Veriff — Colombia Civic Identity Provider (P0.8 / P0.9)
+# Veriff — Colombia Civic Identity Provider (P0.8 → P1.0)
 
 > Estado: **Integrado en código / pendiente de credenciales sandbox y canary real**  
 > Snapshot: 4 de septiembre de 2026
@@ -44,10 +44,10 @@ El adapter valida antes de parsear:
 
 1. `x-auth-client` coincide con la API key configurada;
 2. `x-hmac-signature` es HMAC-SHA256 válido sobre los bytes crudos;
-3. timestamp autenticado está dentro de la ventana P0.7;
+3. timestamp autenticado está dentro de la ventana permitida;
 4. `provider + event_id` obtiene un claim Redis `NX`;
 5. `endUserId` es UUID y existe como binding explícito del ciudadano;
-6. solo entonces se normaliza el evento.
+6. solo entonces se normaliza y persiste el evento con `ingress_signature_version=2`.
 
 ## Mapeo de lifecycle
 
@@ -67,7 +67,7 @@ User-defined status webhook:
 - si `statusCode === VERIFF_REVOCATION_STATUS_CODE` → `revoked`;
 - cualquier otro status personalizado → `review` para fallar cerrado.
 
-La referencia durable es `end-user:<citizen UUID>`, estable entre sesiones y libre de PII. La detección de una misma persona física intentando usar varias cuentas sigue siendo un control separado que debe certificarse con las capacidades/política contratadas del provider antes del piloto real.
+La referencia durable es `end-user:<citizen UUID>`, estable entre sesiones y libre de datos documentales. La detección de una misma persona física intentando usar varias cuentas sigue siendo un control separado que debe certificarse con las capacidades/política contratadas del provider antes del piloto real.
 
 ## Variables
 
@@ -84,50 +84,89 @@ Opcionales:
 
 `VERIFF_BASE_URL` debe copiarse del Customer Portal; no se debe asumir un dominio por defecto.
 
-## Separación entre readiness, certificación y autoridad
+## Separación entre readiness, promoción, evidencia y autoridad
 
-P0.9 separa cuatro estados distintos:
+P1.0 separa cinco estados:
 
 1. **Registered**: adapter `veriff` compilado en el registry.
 2. **Runtime ready**: Base URL + API key + shared secret presentes.
-3. **Externally certified**: `veriff` fue promovido explícitamente en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` después de completar el canary real.
-4. **Activated for governance**: además `veriff` pertenece a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
+3. **Promoted**: `veriff` aparece en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` después de revisión operativa.
+4. **Evidence certified**: existe un registro activo en `civic_identity_provider_certifications`, creado únicamente desde webhooks nativos autenticados y persistidos.
+5. **Governance ready**: además `veriff` pertenece a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` y existe evidencia P1.0 activa.
 
-La activación nativa efectiva es una intersección estricta:
+La autoridad efectiva para un provider nativo requiere:
 
-`compiled adapter ∩ runtime credentials ∩ external certification ∩ governance allowlist`
+`compiled adapter ∩ runtime credentials ∩ P0.9 promotion ∩ governance allowlist ∩ P1.0 durable evidence`
 
-Esto permite probar sandbox, recibir webhooks y ejecutar canaries sin que una configuración incompleta pueda otorgar elegibilidad electoral.
+Por tanto, una variable de entorno mal configurada no puede convertir por sí sola un proof Veriff en elegibilidad electoral.
 
-El endpoint administrativo `GET /identity/providers/readiness` expone sin secretos:
+`GET /identity/providers/readiness` expone sin secretos:
 
 - `registered_native_providers`;
 - `runtime_ready_native_providers`;
-- `certified_native_providers`;
+- `certified_native_providers` (promoción P0.9);
+- `evidence_certified_native_providers`;
 - `activated_providers`;
-- flags independientes de ingress credentialed, certificación externa y governance assurance.
+- `governance_ready_providers`.
 
-## Activación sandbox manual pendiente
+## Ledger de certificación P1.0
+
+El ledger `civic_identity_provider_certifications` almacena únicamente:
+
+- provider;
+- versión del contrato;
+- `evidence_digest` SHA-256;
+- `subject_binding_hash` SHA-256;
+- event IDs `verified`, `revoked`, `expired`;
+- actor y timestamp de certificación;
+- revocación y razón, si aplica.
+
+No almacena raw webhooks, firmas, número de documento, imágenes ni biometría.
+
+Para crear una certificación, los tres event IDs deben existir previamente en `civic_identity_proof_events` y cumplir simultáneamente:
+
+- `ingress_signature_version = 2`;
+- exactamente un estado `verified`, uno `revoked` y uno `expired`;
+- mismo `citizen_id` y `provider_reference`;
+- `assurance_level >= 2` en `verified`;
+- tiempos monotónicos `verified <= revoked <= expired`.
+
+## Controles superadmin
+
+Base:
+
+`/identity/provider-certifications`
+
+Endpoints:
+
+- `GET /` — historial de certificaciones;
+- `POST /:provider/certify` — crea certificación desde event IDs persistidos;
+- `POST /:provider/revoke` — revoca inmediatamente la certificación activa con razón auditada.
+
+La certificación y su revocación se registran también en `admin_audit_log`.
+
+## Activación sandbox pendiente
 
 En Veriff Customer Portal:
 
 1. crear/abrir la integración de prueba;
 2. copiar Base URL, API key y shared secret;
 3. configurar Decision webhook en `https://<api-publica>/identity/providers/veriff/webhook`;
-4. configurar User-defined statuses webhook en la misma URL si se utilizará revocación;
+4. configurar User-defined statuses webhook en la misma URL;
 5. crear el status personalizado cuyo código coincida con `VERIFF_REVOCATION_STATUS_CODE`;
-6. mantener `veriff` fuera de `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` y de `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`;
-7. ejecutar canary `approved → revoked` y un caso `expired/abandoned`;
-8. verificar receipts, replay e historial de proofing;
-9. después de aprobar la evidencia, añadir `veriff` a `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`;
-10. solo entonces añadir `veriff` a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` para habilitar autoridad de gobernanza.
+6. mantener `veriff` fuera de `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` durante el canary;
+7. ejecutar evidencia real que produzca `approved`, revocación y `expired/abandoned` para el mismo binding opaco;
+8. tomar los tres event IDs persistidos;
+9. ejecutar `POST /identity/provider-certifications/veriff/certify` como superadmin;
+10. verificar `evidence_certified_native_providers` en readiness;
+11. promover `veriff` en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` y añadirlo a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` únicamente después de la revisión final.
 
 ## Definition of Done externa
 
-P0.8 queda plenamente certificada cuando:
+P1.0 queda externamente cerrada cuando:
 
-`citizen → create session → hosted Veriff flow → signed decision webhook → Redis replay claim → verified proof → assurance visible → revocation/expiry signed → proof no longer active`
+`citizen → hosted Veriff flow → signed native webhook → persisted native receipt → verified → revoked → expired → evidence certification ledger → governance-ready`
 
-con evidencia real de sandbox/producción limitada y sin PII de Veriff persistida en VÉRTICE.
+con evidencia real de sandbox/producción limitada, auditoría durable y sin PII documental/biométrica persistida en VÉRTICE.
 
-P0.9 queda operacionalmente cerrada cuando esa evidencia se aprueba y se realiza una promoción deliberada de `veriff` primero a `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` y luego, separadamente, a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`. Ninguna de esas variables sustituye la evidencia externa: el interlock existe para impedir activaciones accidentales y dejar explícita la transición de certificación a autoridad.
+Mientras no existan credenciales y eventos reales, el ledger permanece vacío y VÉRTICE continúa fail-closed por diseño.
