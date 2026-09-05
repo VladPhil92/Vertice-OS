@@ -20,6 +20,7 @@ on:
       - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-veriff.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-external-certification.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-assurance-native-certification.test.ts'
       - 'apps/api/prisma/migrations/**/migration.sql'
       - '.github/workflows/identity-provider-certification.yml'
   push:
@@ -41,6 +42,7 @@ on:
       - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-veriff.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-external-certification.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-assurance-native-certification.test.ts'
       - 'apps/api/prisma/migrations/**/migration.sql'
       - '.github/workflows/identity-provider-certification.yml'
 
@@ -85,3 +87,4 @@ jobs:
           src/modules/identity/__tests__/identity-provider-registry.test.ts
           src/modules/identity/__tests__/identity-provider-veriff.test.ts
           src/modules/identity/__tests__/identity-provider-external-certification.test.ts
+          src/modules/identity/__tests__/identity-assurance-native-certification.test.ts
