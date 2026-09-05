@@ -7,15 +7,20 @@ on:
       - 'apps/api/src/modules/identity/identity-provider-adapter.ts'
       - 'apps/api/src/modules/identity/identity-provider-adapter-certification.ts'
       - 'apps/api/src/modules/identity/identity-provider-lifecycle-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-external-certification.service.ts'
+      - 'apps/api/src/modules/identity/identity-provider-certification.routes.ts'
       - 'apps/api/src/modules/identity/identity-provider-replay.ts'
       - 'apps/api/src/modules/identity/identity-provider-registry.ts'
       - 'apps/api/src/modules/identity/identity-provider-veriff.ts'
       - 'apps/api/src/modules/identity/identity-provider-session.routes.ts'
       - 'apps/api/src/modules/identity/identity-provider-webhook.routes.ts'
+      - 'apps/api/src/modules/identity/identity-assurance.service.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-adapter.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-production-onboarding.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-veriff.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-external-certification.test.ts'
+      - 'apps/api/prisma/migrations/**/migration.sql'
       - '.github/workflows/identity-provider-certification.yml'
   push:
     branches: [main]
@@ -23,15 +28,20 @@ on:
       - 'apps/api/src/modules/identity/identity-provider-adapter.ts'
       - 'apps/api/src/modules/identity/identity-provider-adapter-certification.ts'
       - 'apps/api/src/modules/identity/identity-provider-lifecycle-certification.ts'
+      - 'apps/api/src/modules/identity/identity-provider-external-certification.service.ts'
+      - 'apps/api/src/modules/identity/identity-provider-certification.routes.ts'
       - 'apps/api/src/modules/identity/identity-provider-replay.ts'
       - 'apps/api/src/modules/identity/identity-provider-registry.ts'
       - 'apps/api/src/modules/identity/identity-provider-veriff.ts'
       - 'apps/api/src/modules/identity/identity-provider-session.routes.ts'
       - 'apps/api/src/modules/identity/identity-provider-webhook.routes.ts'
+      - 'apps/api/src/modules/identity/identity-assurance.service.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-adapter.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-production-onboarding.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-registry.test.ts'
       - 'apps/api/src/modules/identity/__tests__/identity-provider-veriff.test.ts'
+      - 'apps/api/src/modules/identity/__tests__/identity-provider-external-certification.test.ts'
+      - 'apps/api/prisma/migrations/**/migration.sql'
       - '.github/workflows/identity-provider-certification.yml'
 
 permissions:
@@ -74,3 +84,4 @@ jobs:
           src/modules/identity/__tests__/identity-provider-production-onboarding.test.ts
           src/modules/identity/__tests__/identity-provider-registry.test.ts
           src/modules/identity/__tests__/identity-provider-veriff.test.ts
+          src/modules/identity/__tests__/identity-provider-external-certification.test.ts
