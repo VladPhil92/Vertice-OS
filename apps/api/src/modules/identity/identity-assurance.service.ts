@@ -1,6 +1,8 @@
 import { prisma } from '../../lib/prisma'
 import { getActiveCivicIdentityProof } from './identity-proofing.service'
 import { getOperationalCivicIdentityProviders } from './identity-proofing-provider-config'
+import { getRegisteredNativeCivicIdentityProviders } from './identity-provider-registry'
+import { getActiveEvidenceCertifiedProviders } from './identity-provider-external-certification.service'
 
 export interface CivicIdentityAssuranceStatus {
   citizen_id: string
@@ -15,17 +17,18 @@ export interface CivicIdentityAssuranceStatus {
     contact_verified: boolean
     provider_ingress_operational: boolean
     active_identity_proof: boolean
+    provider_external_certified: boolean
   }
 }
 
 /**
  * Identity assurance is deliberately separate from authentication/federation.
  *
- * P0.4 requires three independent conditions for governance eligibility:
- * verified contact, an active proof, and a trusted provider whose authenticated
- * ingress is operational. This last condition is a revocation-safety interlock:
- * a previously verified proof cannot keep authorizing governance if VÉRTICE can
- * no longer authenticate that provider's future revocation/expiry events.
+ * P1.0 requires four independent conditions for governance eligibility:
+ * verified contact, an active proof, operational authenticated ingress, and —
+ * for native providers — a durable external-canary certification backed by
+ * authenticated persisted lifecycle events. Synthetic test adapters retain the
+ * legacy contract and can never become production authority.
  */
 export async function getCivicIdentityAssurance(
   citizenId: string,
@@ -60,13 +63,24 @@ export async function getCivicIdentityAssurance(
         contact_verified: contactVerified,
         provider_ingress_operational: false,
         active_identity_proof: false,
+        provider_external_certified: false,
       },
     }
   }
 
   const activeProof = await getActiveCivicIdentityProof(citizenId)
   const proofActive = Boolean(activeProof)
-  const assured = contactVerified && proofActive
+  const nativeProviders = new Set(getRegisteredNativeCivicIdentityProviders())
+  let providerExternalCertified = proofActive && activeProof
+    ? !nativeProviders.has(activeProof.provider)
+    : false
+
+  if (proofActive && activeProof && nativeProviders.has(activeProof.provider)) {
+    const evidenceCertifiedProviders = await getActiveEvidenceCertifiedProviders()
+    providerExternalCertified = evidenceCertifiedProviders.includes(activeProof.provider)
+  }
+
+  const assured = contactVerified && proofActive && providerExternalCertified
 
   return {
     citizen_id: citizen.id,
@@ -81,6 +95,7 @@ export async function getCivicIdentityAssurance(
       contact_verified: contactVerified,
       provider_ingress_operational: true,
       active_identity_proof: proofActive,
+      provider_external_certified: providerExternalCertified,
     },
   }
 }

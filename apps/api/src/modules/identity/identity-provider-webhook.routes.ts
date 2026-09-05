@@ -8,6 +8,7 @@ import {
   getRegisteredNativeCivicIdentityProviders,
   getRuntimeReadyNativeCivicIdentityProviders,
 } from './identity-provider-registry'
+import { getActiveEvidenceCertifiedProviders } from './identity-provider-external-certification.service'
 import { ingestNativeCivicProofingEvent } from './identity-proofing.service'
 
 const MAX_NATIVE_WEBHOOK_BYTES = 1024 * 1024
@@ -36,19 +37,28 @@ export async function identityProviderWebhookRoutes(app: FastifyInstance): Promi
   app.get('/readiness', { preHandler: requireSuperadmin }, async (_request, reply) => {
     const registeredNative = getRegisteredNativeCivicIdentityProviders()
     const runtimeReady = getRuntimeReadyNativeCivicIdentityProviders()
-    const certified = getCertifiedCivicIdentityProviders()
+    const promoted = getCertifiedCivicIdentityProviders()
+    const evidenceCertified = await getActiveEvidenceCertifiedProviders()
     const activated = getActivatedCivicIdentityProviders()
+    const nativeSet = new Set(registeredNative)
+    const evidenceSet = new Set(evidenceCertified)
+    const governanceReady = activated.filter((provider) =>
+      !nativeSet.has(provider) || evidenceSet.has(provider),
+    )
 
     return reply.send({
       state: getCivicIdentityProviderActivationState(),
       registered_native_providers: registeredNative,
       runtime_ready_native_providers: runtimeReady,
-      certified_native_providers: certified,
+      certified_native_providers: promoted,
+      evidence_certified_native_providers: evidenceCertified,
       activated_providers: activated,
+      governance_ready_providers: governanceReady,
       native_ingress_available: registeredNative.length > 0,
       credentialed_native_ingress_available: runtimeReady.length > 0,
-      externally_certified_native_ingress_available: certified.length > 0,
-      governance_assurance_enabled: activated.length > 0,
+      externally_promoted_native_ingress_available: promoted.length > 0,
+      evidence_certified_native_ingress_available: evidenceCertified.length > 0,
+      governance_assurance_enabled: governanceReady.length > 0,
     })
   })
 

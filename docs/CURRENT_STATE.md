@@ -1,7 +1,7 @@
 # VÉRTICE OS — Current State
 
 > Snapshot técnico-funcional: **4 de septiembre de 2026**  
-> Basado en `main` P0.8 + certification interlock P0.9 en proceso de validación.
+> Basado en `main` P0.9 + evidence-backed external certification P1.0 en validación.
 
 Este documento separa tres categorías:
 
@@ -63,13 +63,15 @@ Modelo activo:
 - protección contra eliminación del último superadmin;
 - auditoría append-only de bootstrap, grants y cambios de rol.
 
-### 1.5 Civic identity assurance P0.9
+### 1.5 Civic identity assurance P1.0
 
 VÉRTICE distingue:
 
 - autenticación;
 - verificación de canal/contacto;
-- prueba fuerte de identidad cívica.
+- prueba fuerte de identidad cívica;
+- certificación operativa de provider;
+- evidencia durable del canary externo.
 
 `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es una allowlist explícita. Vacía significa fail-closed para el padrón de votación protegido. `ctg_one` no entra en la allowlist por defecto.
 
@@ -84,27 +86,33 @@ La frontera técnica implementada incluye:
 - canary de lifecycle P0.6;
 - ingress nativo P0.7 en `POST /identity/providers/:provider/webhook`;
 - procedencia auditable entre hop HMAC interno y webhook nativo;
-- readiness administrativo en `GET /identity/providers/readiness`;
-- **adapter vendor-specific `veriff` P0.8**;
+- adapter vendor-specific `veriff` P0.8;
 - verificación Veriff `x-auth-client` + HMAC-SHA256 sobre raw body;
 - normalización de decision webhook y user-defined status;
 - runtime readiness independiente de compile-time registration y policy allowlist;
 - bootstrap ciudadano de sesión Veriff en `POST /identity/providers/veriff/session`;
-- verificación criptográfica de request/response al crear sesión;
 - `GET /identity/providers/availability` para exponer disponibilidad sin secretos;
-- **certification interlock P0.9** mediante `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`;
-- activación nativa efectiva solo cuando coinciden adapter compilado, runtime credentials, certificación externa y governance allowlist;
-- readiness administrativo separado para `registered`, `runtime_ready`, `certified` y `activated`.
+- certification interlock P0.9 mediante `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`;
+- **ledger durable P1.0 `civic_identity_provider_certifications`**;
+- certificación P1.0 construida solo desde receipts persistidos con `ingress_signature_version=2`;
+- validación `verified → revoked → expired`, subject binding, assurance y monotonicidad;
+- `evidence_digest` y `subject_binding_hash` SHA-256 sin persistir raw payloads;
+- controles superadmin para certificar/listar/revocar en `/identity/provider-certifications`;
+- auditoría administrativa de certificación y revocación;
+- `governance_eligible` para providers nativos exige certificación durable activa además de P0.9;
+- readiness administrativo separado para `registered`, `runtime_ready`, `promoted`, `evidence_certified`, `activated` y `governance_ready`.
 
 ### Estado Veriff
 
-`🟡 Integrado / pendiente de certificación externa`.
+`🟡 Integrado / pendiente de certificación externa real`.
 
-El código Veriff está preparado para Colombia, pero la autoridad sigue fail-closed mientras no existan las credenciales reales de una integración Veriff y no se ejecute el canary. Incluso con credenciales y allowlist, P0.9 impide que Veriff otorgue elegibilidad electoral hasta que el provider haya sido promovido explícitamente como certificado.
+El código Veriff está preparado para Colombia, pero la autoridad sigue fail-closed mientras no existan las credenciales reales de una integración Veriff y no se ejecute el canary.
 
-Las credenciales pueden configurarse sin añadir `veriff` a `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` ni a `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`, permitiendo sandbox y recepción de webhooks sin habilitar gobernanza.
+P1.0 añade una garantía adicional: incluso si `veriff` aparece por error en las variables de promoción y governance allowlist, un proof nativo no puede producir `governance_eligible=true` sin una certificación durable construida desde eventos nativos autenticados ya persistidos.
 
-VÉRTICE no persiste payloads documentales/biométricos de Veriff. El flujo ciudadano alojado recibe únicamente un UUID opaco como `vendorData/endUserId`; el webhook se reduce a estado normalizado, referencias no-PII, timestamps y hash de evidencia mínima.
+Las credenciales pueden configurarse sin añadir `veriff` a las allowlists, permitiendo sandbox y recepción de webhooks sin habilitar gobernanza.
+
+VÉRTICE no persiste payloads documentales/biométricos de Veriff. La certificación conserva solamente commitments criptográficos, event IDs, timestamps y metadata operativa mínima.
 
 Runbook: `docs/integrations/VERIFF.md`.
 
@@ -144,7 +152,7 @@ Módulos actuales bajo `apps/api/src/modules`:
 
 Dependencias de datos:
 
-- PostgreSQL + PostGIS: estado canónico relacional/territorial;
+- PostgreSQL + PostGIS: estado canónico relacional/territorial y evidencia durable de certificación de providers;
 - Redis: sesiones, cache, rate limiting, pub/sub y replay distribuido de identity proofing;
 - Neo4j: grafo de reputación; degradable en readiness.
 
@@ -177,7 +185,7 @@ RAG:
 - `/health` y `/health/ready`;
 - PostgreSQL y Redis requeridos para readiness;
 - Neo4j degradable;
-- readiness de identity providers separa `registered`, `runtime_ready`, `certified` y `activated`.
+- readiness de identity providers separa estado de adapter, credenciales, promoción, evidencia y autoridad final.
 
 ---
 
@@ -212,7 +220,7 @@ Cada release debe distinguir:
 
 No documentar `deployed` únicamente porque exista código o configuración IaC.
 
-Para Veriff P0.8/P0.9, **integrado** significa que el adapter, sesión, firma, replay, lifecycle e interlock de certificación existen en código. **Activo para gobernanza** exige además credenciales reales, webhooks configurados, canary satisfactorio, promoción en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` y allowlist explícita en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
+Para Veriff, **integrado** significa que el adapter, sesión, firma, replay, lifecycle, interlock P0.9 y ledger P1.0 existen en código. **Activo para gobernanza** exige además credenciales reales, webhooks configurados, canary satisfactorio, registro durable P1.0 activo, promoción en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` y allowlist explícita en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
 
 ---
 
@@ -238,7 +246,7 @@ No almacenar PII on-chain. Los datos personales y el sentido individual del voto
 - ZKP productivo para cada voto;
 - wallet de Verifiable Credentials como requisito activo.
 
-La liveness/biometría deja de describirse como mera intención arquitectónica desde P0.8 porque Veriff está integrado como provider de IDV, pero **su uso productivo real continúa pendiente de la integración contratada/certificada y del interlock P0.9**.
+La liveness/biometría deja de describirse como mera intención arquitectónica desde P0.8 porque Veriff está integrado como provider de IDV, pero **su uso productivo real continúa pendiente de integración contratada, credenciales reales y evidencia externa certificada P1.0**.
 
 ---
 

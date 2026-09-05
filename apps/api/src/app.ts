@@ -15,6 +15,7 @@ import { authRoutes } from './modules/auth/auth.routes'
 import { probeCtgOneFederation } from './modules/auth/federation.service'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
+import { identityProviderCertificationRoutes } from './modules/identity/identity-provider-certification.routes'
 import { identityProviderWebhookRoutes } from './modules/identity/identity-provider-webhook.routes'
 import { identityProviderSessionRoutes } from './modules/identity/identity-provider-session.routes'
 import { territorialRoutes } from './modules/territorial/territorial.routes'
@@ -184,8 +185,9 @@ export function buildApp() {
 
   app.register(authRoutes, { prefix: '/auth' })
   app.register(dashboardRoutes, { prefix: '/dashboard' })
-  // P0.8 keeps citizen session bootstrap and the raw-body webhook listener in
-  // separate Fastify encapsulation scopes under the same provider namespace.
+  // P1.0 keeps JSON certification administration outside the raw-body webhook
+  // parser while preserving the common identity provider namespace.
+  app.register(identityProviderCertificationRoutes, { prefix: '/identity/provider-certifications' })
   app.register(identityProviderSessionRoutes, { prefix: '/identity/providers' })
   app.register(identityProviderWebhookRoutes, { prefix: '/identity/providers' })
   app.register(identityRoutes, { prefix: '/identity' })
