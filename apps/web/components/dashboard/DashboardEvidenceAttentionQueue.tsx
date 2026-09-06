@@ -59,7 +59,7 @@ export default function DashboardEvidenceAttentionQueue() {
     void load()
   }, [load])
 
-  if (loading || (queue?.total ?? 0) === 0) return null
+  if (loading) return null
 
   if (error) {
     return (
@@ -77,7 +77,7 @@ export default function DashboardEvidenceAttentionQueue() {
     )
   }
 
-  if (!queue || queue.items.length === 0) return null
+  if (!queue || queue.total === 0 || queue.items.length === 0) return null
 
   const remaining = Math.max(0, queue.total - queue.items.length)
 
