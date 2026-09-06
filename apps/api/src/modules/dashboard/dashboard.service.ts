@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { config } from '../../config'
 import { prisma } from '../../lib/prisma'
 import { getCitizenProfile } from '../auth/auth.service'
+import { listMyCivicActions } from '../civic-actions/civic-actions.service'
 import { getGovernanceStats } from '../governance/governance.service'
 import { getReputationProfile } from '../reputation/reputation.service'
 import { getTerritorialStats } from '../territorial/territorial.service'
@@ -53,6 +54,14 @@ interface WorkflowMetricsRow {
   active: bigint
 }
 
+interface CivicActionMetricsRow {
+  total: bigint
+  active: bigint
+  verified: bigint
+  needs_evidence: bigint
+  awaiting_verification: bigint
+}
+
 function voteNullifier(citizenId: string, proposalId: string): string {
   const key = config.VOTE_NULLIFIER_SECRET ?? config.JWT_SECRET
   return createHmac('sha256', key)
@@ -79,7 +88,9 @@ export async function getCitizenCommandCenter(citizenId: string) {
     eligibleVotingRows,
     endorsementRows,
     workflowMetricsRows,
+    civicActionMetricsRows,
     civicCases,
+    recentCivicActions,
   ] = await Promise.all([
     getCitizenProfile(citizenId),
     getReputationProfile(citizenId),
@@ -155,7 +166,30 @@ export async function getCitizenCommandCenter(citizenId: string) {
       LEFT JOIN legal_documents l ON l.id = c.legal_document_id
       WHERE c.citizen_id = ${citizenId}::uuid
     `),
+    prisma.$queryRaw<CivicActionMetricsRow[]>(Prisma.sql`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (
+          WHERE a.status NOT IN ('verified', 'not_completed', 'cancelled')
+        ) AS active,
+        COUNT(*) FILTER (WHERE a.status = 'verified') AS verified,
+        COUNT(*) FILTER (
+          WHERE a.status IN ('in_progress', 'result_declared', 'under_verification', 'no_evidence', 'disputed')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM civic_action_evidence e
+              WHERE e.action_id = a.id
+                AND e.review_status <> 'rejected'
+            )
+        ) AS needs_evidence,
+        COUNT(*) FILTER (
+          WHERE a.status IN ('result_declared', 'under_verification')
+        ) AS awaiting_verification
+      FROM civic_actions a
+      WHERE a.actor_id = ${citizenId}::uuid
+    `),
     listCivicCases(citizenId, 5),
+    listMyCivicActions(citizenId, { limit: 5 }),
   ])
 
   const reportByStatus = countByStatus(reportStatusRows)
@@ -194,6 +228,11 @@ export async function getCitizenCommandCenter(citizenId: string) {
   const reportInProgress = reportByStatus.in_progress ?? 0
   const workflowTotal = Number(workflowMetricsRows[0]?.total ?? 0)
   const workflowActive = Number(workflowMetricsRows[0]?.active ?? 0)
+  const civicActionTotal = Number(civicActionMetricsRows[0]?.total ?? 0)
+  const civicActionActive = Number(civicActionMetricsRows[0]?.active ?? 0)
+  const civicActionVerified = Number(civicActionMetricsRows[0]?.verified ?? 0)
+  const civicActionNeedsEvidence = Number(civicActionMetricsRows[0]?.needs_evidence ?? 0)
+  const civicActionAwaitingVerification = Number(civicActionMetricsRows[0]?.awaiting_verification ?? 0)
 
   return {
     profile: {
@@ -218,13 +257,23 @@ export async function getCitizenCommandCenter(citizenId: string) {
       pending_votes: pendingVotes,
       legal_needs_action: legalNeedsAction,
       reports_in_progress: reportInProgress,
+      civic_actions_needing_evidence: civicActionNeedsEvidence,
       total_items:
         (profile.verification_level < 1 ? 1 : 0) +
         pendingVotes.length +
         legalNeedsAction +
-        reportInProgress,
+        reportInProgress +
+        civicActionNeedsEvidence,
     },
     mine: {
+      civic_actions: {
+        total: civicActionTotal,
+        active: civicActionActive,
+        verified: civicActionVerified,
+        needs_evidence: civicActionNeedsEvidence,
+        awaiting_verification: civicActionAwaitingVerification,
+        recent: recentCivicActions,
+      },
       reports: {
         total: reportTotal,
         by_status: reportByStatus,
