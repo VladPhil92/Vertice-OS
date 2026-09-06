@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -45,7 +45,13 @@ interface ScoreExplanation {
 
 interface CivicAction {
   id: string
-  actor: { id: string; display_name: string; neighborhood: string | null; actor_kind: string; organization: string | null }
+  actor: {
+    id: string
+    display_name: string
+    neighborhood: string | null
+    actor_kind: string
+    organization: string | null
+  }
   title: string
   problem: string
   objective: string
@@ -55,11 +61,8 @@ interface CivicAction {
   status: CivicActionStatus
   result_summary: string | null
   target_date: string | null
-  created_at: string
   updated_at: string
   evidence_count: number
-  external_evidence_count: number
-  collaborators_count: number
   community_validation: { corroborations: number; disputes: number; total: number }
   civic_score: number
   score_version: string
@@ -81,7 +84,13 @@ interface Evidence {
 }
 
 interface EvidenceResponse { data: Evidence[] }
-interface ValidationResponse { corroborations: number; disputes: number; total: number; my_stance: ValidationStance | null; my_note: string | null }
+interface ValidationResponse {
+  corroborations: number
+  disputes: number
+  total: number
+  my_stance: ValidationStance | null
+  my_note: string | null
+}
 
 const STATUS_LABEL: Record<CivicActionStatus, string> = {
   proposed: 'Propuesta',
@@ -104,7 +113,11 @@ const EVIDENCE_LEVEL_LABEL = [
   'L4 · Verificación VÉRTICE',
 ]
 
-const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = { low: 'Baja', medium: 'Media', high: 'Alta' }
+const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
+  low: 'Baja',
+  medium: 'Media',
+  high: 'Alta',
+}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-CO', {
@@ -118,6 +131,7 @@ function formatDate(value: string) {
 export default function CivicActionDetailPage() {
   const params = useParams<{ actionId: string }>()
   const actionId = params.actionId
+  const [viewerId, setViewerId] = useState<string | null>(null)
   const [action, setAction] = useState<CivicAction | null>(null)
   const [evidence, setEvidence] = useState<Evidence[]>([])
   const [loading, setLoading] = useState(true)
@@ -131,8 +145,7 @@ export default function CivicActionDetailPage() {
     content_hash: '',
   })
 
-  const citizenId = typeof window === 'undefined' ? null : localStorage.getItem('citizen_id')
-  const isOwner = Boolean(action && citizenId === action.actor.id)
+  const isOwner = Boolean(action && viewerId && viewerId === action.actor.id)
 
   async function load() {
     setError(null)
@@ -150,13 +163,22 @@ export default function CivicActionDetailPage() {
     }
   }
 
-  useEffect(() => { load() }, [actionId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setViewerId(localStorage.getItem('citizen_id'))
+  }, [])
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionId])
 
   const nextOwnerAction = useMemo(() => {
     if (!action || !isOwner) return null
     if (action.status === 'proposed') return { status: 'preparing', label: 'Pasar a preparación' }
     if (action.status === 'preparing') return { status: 'in_progress', label: 'Iniciar ejecución' }
-    if (['not_completed', 'disputed', 'no_evidence'].includes(action.status)) return { status: 'in_progress', label: 'Reabrir ejecución' }
+    if (['not_completed', 'disputed', 'no_evidence'].includes(action.status)) {
+      return { status: 'in_progress', label: 'Reabrir ejecución' }
+    }
     return null
   }, [action, isOwner])
 
@@ -166,7 +188,10 @@ export default function CivicActionDetailPage() {
     try {
       const updated = await apiFetch<CivicAction>(`/civic-actions/${actionId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, ...(resultSummary ? { result_summary: resultSummary } : {}) }),
+        body: JSON.stringify({
+          status,
+          ...(resultSummary ? { result_summary: resultSummary } : {}),
+        }),
       })
       setAction(updated)
     } catch (err) {
@@ -182,7 +207,7 @@ export default function CivicActionDetailPage() {
     await changeStatus('result_declared', summary.trim())
   }
 
-  async function submitEvidence(event: FormEvent) {
+  async function submitEvidence(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setWorking(true)
     setError(null)
@@ -197,7 +222,13 @@ export default function CivicActionDetailPage() {
           content_hash: evidenceForm.content_hash || null,
         }),
       })
-      setEvidenceForm({ evidence_type: 'photo', evidence_url: '', description: '', source_url: '', content_hash: '' })
+      setEvidenceForm({
+        evidence_type: 'photo',
+        evidence_url: '',
+        description: '',
+        source_url: '',
+        content_hash: '',
+      })
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No fue posible adjuntar la evidencia.')
@@ -212,6 +243,7 @@ export default function CivicActionDetailPage() {
       note = window.prompt('Explica qué parte de la evidencia debe revisarse:')
       if (!note || note.trim().length < 10) return
     }
+
     setWorking(true)
     setError(null)
     try {
@@ -227,13 +259,21 @@ export default function CivicActionDetailPage() {
     }
   }
 
-  if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="animate-spin text-[#4A90E2]" /></div>
-  if (error && !action) return <div className="mx-auto max-w-4xl px-4 py-10"><div className="rounded-3xl border border-[#F1C8CE] bg-[#FCEBED] p-6 text-sm font-semibold text-[#A91D2E]">{error}</div></div>
+  if (loading) {
+    return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="animate-spin text-[#4A90E2]" /></div>
+  }
+
+  if (error && !action) {
+    return <div className="mx-auto max-w-4xl px-4 py-10"><div className="rounded-3xl border border-[#F1C8CE] bg-[#FCEBED] p-6 text-sm font-semibold text-[#A91D2E]">{error}</div></div>
+  }
+
   if (!action) return null
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-      <Link href="/dashboard/community/actions" className="inline-flex items-center gap-2 text-xs font-extrabold text-[#607087] hover:text-[#0A2A66]"><ArrowLeft size={14} /> Volver a acciones</Link>
+      <Link href="/dashboard/community/actions" className="inline-flex items-center gap-2 text-xs font-extrabold text-[#607087] hover:text-[#0A2A66]">
+        <ArrowLeft size={14} /> Volver a acciones
+      </Link>
 
       {error && <div className="mt-4 rounded-2xl border border-[#F1C8CE] bg-[#FCEBED] p-4 text-sm font-semibold text-[#A91D2E]">{error}</div>}
 
@@ -255,21 +295,38 @@ export default function CivicActionDetailPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:flex">
-              <div className="rounded-2xl bg-[#EDF3FA] px-5 py-3 text-center"><div className="text-2xl font-extrabold text-[#0A2A66]">{action.civic_score}</div><div className="text-[8px] font-extrabold uppercase text-[#7B8799]">VÉRTICE score</div></div>
-              <div className="rounded-2xl bg-[#F7F9FC] px-5 py-3 text-center"><div className="text-2xl font-extrabold text-[#0A2A66]">{action.confidence_score}</div><div className="text-[8px] font-extrabold uppercase text-[#7B8799]">Confianza {CONFIDENCE_LABEL[action.confidence_level]}</div></div>
+              <div className="rounded-2xl bg-[#EDF3FA] px-5 py-3 text-center">
+                <div className="text-2xl font-extrabold text-[#0A2A66]">{action.civic_score}</div>
+                <div className="text-[8px] font-extrabold uppercase text-[#7B8799]">VÉRTICE score</div>
+              </div>
+              <div className="rounded-2xl bg-[#F7F9FC] px-5 py-3 text-center">
+                <div className="text-2xl font-extrabold text-[#0A2A66]">{action.confidence_score}</div>
+                <div className="text-[8px] font-extrabold uppercase text-[#7B8799]">Confianza {CONFIDENCE_LABEL[action.confidence_level]}</div>
+              </div>
             </div>
           </div>
 
           <div className="mt-7 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl bg-[#F7F9FC] p-5"><div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">Problema</div><p className="mt-2 text-sm font-medium leading-7 text-[#526176]">{action.problem}</p></div>
-            <div className="rounded-2xl bg-[#EDF3FA] p-5"><div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#246CB6]">Objetivo verificable</div><p className="mt-2 text-sm font-medium leading-7 text-[#526176]">{action.objective}</p></div>
+            <div className="rounded-2xl bg-[#F7F9FC] p-5">
+              <div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">Problema</div>
+              <p className="mt-2 text-sm font-medium leading-7 text-[#526176]">{action.problem}</p>
+            </div>
+            <div className="rounded-2xl bg-[#EDF3FA] p-5">
+              <div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#246CB6]">Objetivo verificable</div>
+              <p className="mt-2 text-sm font-medium leading-7 text-[#526176]">{action.objective}</p>
+            </div>
           </div>
 
-          {action.result_summary && <div className="mt-4 rounded-2xl border border-[#CBE9D1] bg-[#EAF6ED] p-5"><div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[.1em] text-[#237D36]"><BadgeCheck size={14} /> Resultado declarado</div><p className="mt-2 text-sm font-medium leading-7 text-[#3E6847]">{action.result_summary}</p></div>}
+          {action.result_summary && (
+            <div className="mt-4 rounded-2xl border border-[#CBE9D1] bg-[#EAF6ED] p-5">
+              <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[.1em] text-[#237D36]"><BadgeCheck size={14} /> Resultado declarado</div>
+              <p className="mt-2 text-sm font-medium leading-7 text-[#3E6847]">{action.result_summary}</p>
+            </div>
+          )}
 
           <div className="mt-5 flex flex-wrap gap-2">
             {action.target_date && <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F7F9FC] px-3 py-2 text-[9px] font-extrabold text-[#607087]"><Target size={12} /> Meta {action.target_date}</span>}
-            {action.beneficiaries_estimate != null && <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F7F9FC] px-3 py-2 text-[9px] font-extrabold text-[#607087]"><Users size={12} /> {action.beneficiaries_estimate} beneficiarios estimados</span>}
+            {action.beneficiaries_estimate !== null && <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F7F9FC] px-3 py-2 text-[9px] font-extrabold text-[#607087]"><Users size={12} /> {action.beneficiaries_estimate} beneficiarios estimados</span>}
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF4D1] px-3 py-2 text-[9px] font-extrabold text-[#8A6500]"><ShieldCheck size={12} /> {EVIDENCE_LEVEL_LABEL[action.evidence_level]}</span>
           </div>
 
@@ -284,36 +341,42 @@ export default function CivicActionDetailPage() {
       </section>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_360px]">
-        <section className="space-y-5">
-          <div className="rounded-[24px] border border-[#E1E7EF] bg-white p-5 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:p-6">
-            <div className="flex items-center justify-between gap-3"><div><div className="text-[9px] font-extrabold uppercase tracking-[.12em] text-[#7B8799]">Evidence ledger</div><h2 className="mt-1 text-lg font-extrabold text-[#0A2A66]">Evidencia trazable</h2></div><ShieldCheck size={20} className="text-[#D98B00]" /></div>
-            <div className="mt-4 space-y-3">
-              {evidence.length === 0 && <div className="rounded-2xl bg-[#F7F9FC] p-5 text-sm font-medium text-[#607087]">Aún no hay evidencia adjunta.</div>}
-              {evidence.map((item) => (
-                <a key={item.id} href={item.evidence_url} target="_blank" rel="noreferrer" className="flex gap-3 rounded-2xl border border-[#E1E7EF] p-4 transition hover:bg-[#F7F9FC]">
-                  <ShieldCheck size={16} className="mt-0.5 shrink-0 text-[#246CB6]" />
-                  <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-[9px] font-extrabold uppercase text-[#246CB6]">{item.evidence_type.replace('_', ' ')}</span><span className="text-[8px] font-bold uppercase text-[#7B8799]">{item.review_status}</span></div><div className="mt-1 truncate text-xs font-extrabold text-[#0A2A66]">{item.description || item.evidence_url}</div>{item.content_hash && <div className="mt-1 truncate font-mono text-[8px] text-[#94A0B0]">sha256:{item.content_hash}</div>}</div>
-                  <ExternalLink size={13} className="shrink-0 text-[#94A0B0]" />
-                </a>
-              ))}
-            </div>
-
-            {isOwner && (
-              <form onSubmit={submitEvidence} className="mt-5 rounded-2xl bg-[#F7F9FC] p-4">
-                <div className="text-[10px] font-extrabold uppercase tracking-[.1em] text-[#0A2A66]">Adjuntar evidencia</div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <select value={evidenceForm.evidence_type} onChange={(event) => setEvidenceForm((current) => ({ ...current, evidence_type: event.target.value as EvidenceType }))} className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]">
-                    <option value="photo">Foto</option><option value="video">Video</option><option value="document">Documento</option><option value="location">Ubicación</option><option value="external_record">Registro externo</option>
-                  </select>
-                  <input required type="url" value={evidenceForm.evidence_url} onChange={(event) => setEvidenceForm((current) => ({ ...current, evidence_url: event.target.value }))} placeholder="URL de la evidencia" className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]" />
-                  <input value={evidenceForm.description} onChange={(event) => setEvidenceForm((current) => ({ ...current, description: event.target.value }))} placeholder="Descripción" className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]" />
-                  <input type="url" value={evidenceForm.source_url} onChange={(event) => setEvidenceForm((current) => ({ ...current, source_url: event.target.value }))} placeholder="URL fuente externa (si aplica)" className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]" />
-                </div>
-                <input value={evidenceForm.content_hash} onChange={(event) => setEvidenceForm((current) => ({ ...current, content_hash: event.target.value }))} placeholder="SHA-256 opcional para prevenir reutilización" className="mt-3 min-h-11 w-full rounded-xl border border-[#DCE5EF] bg-white px-3 font-mono text-[10px] text-[#0A2A66]" />
-                <button disabled={working} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#0A2A66] px-4 text-[10px] font-extrabold text-white disabled:opacity-50">{working && <Loader2 size={13} className="animate-spin" />} Añadir evidencia</button>
-              </form>
-            )}
+        <section className="rounded-[24px] border border-[#E1E7EF] bg-white p-5 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div><div className="text-[9px] font-extrabold uppercase tracking-[.12em] text-[#7B8799]">Evidence ledger</div><h2 className="mt-1 text-lg font-extrabold text-[#0A2A66]">Evidencia trazable</h2></div>
+            <ShieldCheck size={20} className="text-[#D98B00]" />
           </div>
+
+          <div className="mt-4 space-y-3">
+            {evidence.length === 0 && <div className="rounded-2xl bg-[#F7F9FC] p-5 text-sm font-medium text-[#607087]">Aún no hay evidencia adjunta.</div>}
+            {evidence.map((item) => (
+              <a key={item.id} href={item.evidence_url} target="_blank" rel="noreferrer" className="flex gap-3 rounded-2xl border border-[#E1E7EF] p-4 transition hover:bg-[#F7F9FC]">
+                <ShieldCheck size={16} className="mt-0.5 shrink-0 text-[#246CB6]" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2"><span className="text-[9px] font-extrabold uppercase text-[#246CB6]">{item.evidence_type.replace('_', ' ')}</span><span className="text-[8px] font-bold uppercase text-[#7B8799]">{item.review_status}</span></div>
+                  <div className="mt-1 truncate text-xs font-extrabold text-[#0A2A66]">{item.description || item.evidence_url}</div>
+                  {item.content_hash && <div className="mt-1 truncate font-mono text-[8px] text-[#94A0B0]">sha256:{item.content_hash}</div>}
+                </div>
+                <ExternalLink size={13} className="shrink-0 text-[#94A0B0]" />
+              </a>
+            ))}
+          </div>
+
+          {isOwner && (
+            <form onSubmit={submitEvidence} className="mt-5 rounded-2xl bg-[#F7F9FC] p-4">
+              <div className="text-[10px] font-extrabold uppercase tracking-[.1em] text-[#0A2A66]">Adjuntar evidencia</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <select value={evidenceForm.evidence_type} onChange={(event) => setEvidenceForm((current) => ({ ...current, evidence_type: event.target.value as EvidenceType }))} className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]">
+                  <option value="photo">Foto</option><option value="video">Video</option><option value="document">Documento</option><option value="location">Ubicación</option><option value="external_record">Registro externo</option>
+                </select>
+                <input required type="url" value={evidenceForm.evidence_url} onChange={(event) => setEvidenceForm((current) => ({ ...current, evidence_url: event.target.value }))} placeholder="URL de la evidencia" className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]" />
+                <input value={evidenceForm.description} onChange={(event) => setEvidenceForm((current) => ({ ...current, description: event.target.value }))} placeholder="Descripción" className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]" />
+                <input type="url" required={evidenceForm.evidence_type === 'external_record'} value={evidenceForm.source_url} onChange={(event) => setEvidenceForm((current) => ({ ...current, source_url: event.target.value }))} placeholder="URL fuente externa (si aplica)" className="min-h-11 rounded-xl border border-[#DCE5EF] bg-white px-3 text-xs text-[#0A2A66]" />
+              </div>
+              <input value={evidenceForm.content_hash} onChange={(event) => setEvidenceForm((current) => ({ ...current, content_hash: event.target.value }))} placeholder="SHA-256 opcional para prevenir reutilización" className="mt-3 min-h-11 w-full rounded-xl border border-[#DCE5EF] bg-white px-3 font-mono text-[10px] text-[#0A2A66]" />
+              <button disabled={working} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#0A2A66] px-4 text-[10px] font-extrabold text-white disabled:opacity-50">{working && <Loader2 size={13} className="animate-spin" />} Añadir evidencia</button>
+            </form>
+          )}
         </section>
 
         <aside className="space-y-5">
@@ -329,8 +392,16 @@ export default function CivicActionDetailPage() {
 
           <section className="rounded-[24px] border border-[#E1E7EF] bg-white p-5 shadow-[0_10px_35px_rgba(10,42,102,.05)]">
             <div className="text-[9px] font-extrabold uppercase tracking-[.12em] text-[#7B8799]">Validación comunitaria</div>
-            <div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-xl bg-[#EAF6ED] p-3 text-center"><div className="text-xl font-extrabold text-[#237D36]">{action.community_validation.corroborations}</div><div className="text-[8px] font-bold uppercase text-[#5D8064]">Corroboran</div></div><div className="rounded-xl bg-[#FCEBED] p-3 text-center"><div className="text-xl font-extrabold text-[#A91D2E]">{action.community_validation.disputes}</div><div className="text-[8px] font-bold uppercase text-[#8A5A61]">Disputan</div></div></div>
-            {!isOwner && <div className="mt-3 grid grid-cols-2 gap-2"><button disabled={working} onClick={() => validate('corroborate')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#EAF6ED] px-3 text-[9px] font-extrabold text-[#237D36]"><ThumbsUp size={12} /> Corroborar</button><button disabled={working} onClick={() => validate('dispute')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#FCEBED] px-3 text-[9px] font-extrabold text-[#A91D2E]"><MessageSquareWarning size={12} /> Disputar</button></div>}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-[#EAF6ED] p-3 text-center"><div className="text-xl font-extrabold text-[#237D36]">{action.community_validation.corroborations}</div><div className="text-[8px] font-bold uppercase text-[#5D8064]">Corroboran</div></div>
+              <div className="rounded-xl bg-[#FCEBED] p-3 text-center"><div className="text-xl font-extrabold text-[#A91D2E]">{action.community_validation.disputes}</div><div className="text-[8px] font-bold uppercase text-[#8A5A61]">Disputan</div></div>
+            </div>
+            {!isOwner && viewerId && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button disabled={working} onClick={() => validate('corroborate')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#EAF6ED] px-3 text-[9px] font-extrabold text-[#237D36]"><ThumbsUp size={12} /> Corroborar</button>
+                <button disabled={working} onClick={() => validate('dispute')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#FCEBED] px-3 text-[9px] font-extrabold text-[#A91D2E]"><MessageSquareWarning size={12} /> Disputar</button>
+              </div>
+            )}
             <p className="mt-3 text-[9px] font-semibold leading-5 text-[#7B8799]">Solo identidades verificadas pueden validar. Una persona aporta una sola señal y el responsable no puede auto-validarse.</p>
           </section>
         </aside>
