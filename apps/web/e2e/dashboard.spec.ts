@@ -210,9 +210,9 @@ test.describe('Citizen command center', () => {
 
     await expect(page.getByTestId('action-resolution-plan')).toBeVisible()
     await expect(page.getByRole('heading', { name: /completa el siguiente paso de 3 acciones/i })).toBeVisible()
-    await expect(page.getByText('Reabrir ejecución')).toBeVisible()
-    await expect(page.getByText('Adjuntar evidencia del resultado')).toBeVisible()
-    await expect(page.getByText('Declarar resultado')).toBeVisible()
+    await expect(page.getByText('Reabrir ejecución', { exact: true })).toBeVisible()
+    await expect(page.getByText('Adjuntar evidencia del resultado', { exact: true })).toBeVisible()
+    await expect(page.getByText('Declarar resultado', { exact: true })).toBeVisible()
     await expect(page.getByText(/después: incorpora evidencia nueva o corregida/i)).toBeVisible()
 
     await expect(page.getByRole('button', { name: /reabrir ahora/i })).toBeVisible()
@@ -268,7 +268,7 @@ test.describe('Citizen command center', () => {
     await card.getByRole('button', { name: /confirmar reabrir/i }).click()
 
     await expect.poll(() => patchBody).toEqual({ status: 'in_progress' })
-    await expect(card.getByText('Declarar resultado')).toBeVisible()
+    await expect(card.getByText('Declarar resultado', { exact: true })).toBeVisible()
     await expect(page).toHaveURL(/\/dashboard$/)
     await expect(page.getByText(/volvió a ejecución. el plan fue recalculado/i)).toBeVisible()
   })
