@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import {
   Activity,
@@ -70,6 +71,7 @@ interface LeaderEntry {
 }
 
 interface ListResponse<T> { data: T[]; count: number }
+interface MetricCard { label: string; value: number; icon: LucideIcon }
 
 const STATUS_META: Record<CivicActionStatus, { label: string; className: string }> = {
   proposed: { label: 'Propuesta', className: 'bg-[#EDF3FA] text-[#246CB6]' },
@@ -118,14 +120,20 @@ export default function CivicActionsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const metrics = useMemo(() => ({
-    active: actions.filter((action) => ['preparing', 'in_progress', 'result_declared', 'under_verification'].includes(action.status)).length,
-    verified: actions.filter((action) => action.status === 'verified').length,
-    evidence: actions.reduce((sum, action) => sum + action.evidence_count, 0),
-    avgScore: actions.length
+  const metricCards = useMemo<MetricCard[]>(() => {
+    const active = actions.filter((action) => ['preparing', 'in_progress', 'result_declared', 'under_verification'].includes(action.status)).length
+    const verified = actions.filter((action) => action.status === 'verified').length
+    const evidence = actions.reduce((sum, action) => sum + action.evidence_count, 0)
+    const avgScore = actions.length
       ? Math.round(actions.reduce((sum, action) => sum + action.civic_score, 0) / actions.length)
-      : 0,
-  }), [actions])
+      : 0
+    return [
+      { label: 'En gestión', value: active, icon: Activity },
+      { label: 'Verificadas', value: verified, icon: BadgeCheck },
+      { label: 'Evidencias', value: evidence, icon: ShieldCheck },
+      { label: 'Score medio', value: avgScore, icon: Target },
+    ]
+  }, [actions])
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
@@ -146,18 +154,13 @@ export default function CivicActionsPage() {
       </section>
 
       <section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          ['En gestión', metrics.active, Activity],
-          ['Verificadas', metrics.verified, BadgeCheck],
-          ['Evidencias', metrics.evidence, ShieldCheck],
-          ['Score medio', metrics.avgScore, Target],
-        ].map(([label, value, Icon]) => (
-          <div key={String(label)} className="rounded-2xl border border-[#E1E7EF] bg-white p-4 shadow-[0_8px_28px_rgba(10,42,102,.04)]">
+        {metricCards.map(({ label, value, icon: Icon }) => (
+          <div key={label} className="rounded-2xl border border-[#E1E7EF] bg-white p-4 shadow-[0_8px_28px_rgba(10,42,102,.04)]">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">{String(label)}</span>
+              <span className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">{label}</span>
               <Icon size={15} className="text-[#4A90E2]" />
             </div>
-            <div className="mt-3 text-2xl font-extrabold text-[#0A2A66]">{Number(value)}</div>
+            <div className="mt-3 text-2xl font-extrabold text-[#0A2A66]">{value}</div>
           </div>
         ))}
       </section>
