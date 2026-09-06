@@ -1,0 +1,106 @@
+name: CTG One Federation Release Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/app/auth/**'
+      - 'apps/web/e2e/**'
+      - 'apps/web/lib/api.ts'
+      - 'apps/web/middleware.ts'
+      - 'apps/web/package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/federation-release-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/app/auth/**'
+      - 'apps/web/e2e/**'
+      - 'apps/web/lib/api.ts'
+      - 'apps/web/middleware.ts'
+      - 'apps/web/package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/federation-release-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  browser-federation-contract:
+    name: Browser federation contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @vertice/web exec playwright install --with-deps chromium
+
+      - name: Build production web
+        env:
+          # Poison the historical public API variable deliberately. Production
+          # browser traffic must remain same-origin through /api.
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4999
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+        run: pnpm --filter @vertice/web build
+
+      - name: Start production web
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERTICE_API_UPSTREAM=http://127.0.0.1:4100 \
+          PORT=3000 HOSTNAME=127.0.0.1 \
+            pnpm --filter @vertice/web start >/tmp/vertice-federation-web.log 2>&1 &
+          echo $! > /tmp/vertice-federation-web.pid
+          pnpm --filter @vertice/web exec wait-on http://127.0.0.1:3000/auth/login
+
+      - name: Run federation release smoke
+        env:
+          BASE_URL: http://127.0.0.1:3000
+        run: >-
+          pnpm --filter @vertice/web exec playwright test
+          e2e/landing.spec.ts
+          e2e/ctgone-auth.spec.ts
+          --project=chromium
+
+      - name: Print web log on failure
+        if: failure()
+        run: cat /tmp/vertice-federation-web.log || true
+
+      - name: Upload Playwright failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: federation-release-gate-${{ github.sha }}
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+            /tmp/vertice-federation-web.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop production web
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/vertice-federation-web.pid ]; then
+            kill "$(cat /tmp/vertice-federation-web.pid)" >/dev/null 2>&1 || true
+          fi
