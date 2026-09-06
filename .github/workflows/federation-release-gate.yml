@@ -62,13 +62,13 @@ jobs:
           NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
         run: pnpm --filter @vertice/web build
 
-      - name: Start production web
+      - name: Start production standalone web
         shell: bash
         run: |
           set -euo pipefail
           VERTICE_API_UPSTREAM=http://127.0.0.1:4100 \
           PORT=3000 HOSTNAME=127.0.0.1 \
-            pnpm --filter @vertice/web start >/tmp/vertice-federation-web.log 2>&1 &
+            node apps/web/.next/standalone/apps/web/server.js >/tmp/vertice-federation-web.log 2>&1 &
           echo $! > /tmp/vertice-federation-web.pid
           pnpm --filter @vertice/web exec wait-on http://127.0.0.1:3000/auth/login
 
