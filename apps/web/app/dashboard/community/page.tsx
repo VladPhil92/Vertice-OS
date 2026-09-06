@@ -12,28 +12,35 @@ import {
   Loader2,
   MapPin,
   Medal,
+  MessageSquareWarning,
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  ThumbsUp,
   Trophy,
+  UserRound,
   Users,
 } from 'lucide-react'
 import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 type ActivityType = 'report' | 'proposal'
+type FeedFilter = 'all' | 'following' | ActivityType
 type VerificationState = 'declared' | 'evidence_backed' | 'verified'
-type ActorKind = 'citizen' | 'social_leader' | 'candidate' | 'public_official'
+type ActorKind = 'citizen' | 'social_leader' | 'candidate' | 'organization_rep' | 'public_official'
+type ValidationStance = 'corroborate' | 'dispute'
 
 interface CivicActivity {
   id: string
   type: ActivityType
   actor: {
-    id: string
+    id: string | null
     display_name: string
     neighborhood: string | null
     actor_kind: ActorKind
-    platform_reputation_score: number
+    organization: string | null
+    public_profile: boolean
+    platform_reputation_score: number | null
   }
   title: string
   summary: string
@@ -53,6 +60,11 @@ interface CivicActivity {
     continuity: number
     confidence: number
   }
+  community_validation: {
+    corroborations: number
+    disputes: number
+    total: number
+  }
   created_at: string
   updated_at: string
   href: string
@@ -63,6 +75,7 @@ interface LeaderEntry {
   display_name: string
   neighborhood: string | null
   actor_kind: ActorKind
+  organization: string | null
   leader_score: number
   platform_reputation_score: number
   actions_count: number
@@ -83,6 +96,14 @@ interface LeaderboardResponse {
   count: number
 }
 
+interface ValidationResponse {
+  corroborations: number
+  disputes: number
+  total: number
+  my_stance: ValidationStance | null
+  my_note: string | null
+}
+
 interface SummaryCard {
   label: string
   value: number
@@ -93,6 +114,7 @@ const ACTOR_LABEL: Record<ActorKind, string> = {
   citizen: 'Ciudadanía',
   social_leader: 'Liderazgo social',
   candidate: 'Candidatura',
+  organization_rep: 'Organización',
   public_official: 'Gestión pública',
 }
 
@@ -124,17 +146,22 @@ function ScoreBadge({ score }: { score: number }) {
 export default function CommunityPage() {
   const [feed, setFeed] = useState<CivicActivity[]>([])
   const [leaders, setLeaders] = useState<LeaderEntry[]>([])
-  const [filter, setFilter] = useState<'all' | ActivityType>('all')
+  const [filter, setFilter] = useState<FeedFilter>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [validationState, setValidationState] = useState<Record<string, ValidationStance | null>>({})
+  const [workingValidation, setWorkingValidation] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
     setError(null)
     try {
-      const suffix = filter === 'all' ? '' : `&type=${filter}`
+      const isTypedFilter = filter === 'report' || filter === 'proposal'
+      const endpoint = filter === 'following'
+        ? '/community/following/feed?limit=40'
+        : `/community/feed?limit=40${isTypedFilter ? `&type=${filter}` : ''}`
       const [feedResponse, leaderboardResponse] = await Promise.all([
-        apiFetch<FeedResponse>(`/community/feed?limit=40${suffix}`, { public: true }),
+        apiFetch<FeedResponse>(endpoint, filter === 'following' ? {} : { public: true }),
         apiFetch<LeaderboardResponse>('/community/leaderboard?limit=10', { public: true }),
       ])
       setFeed(feedResponse.data)
@@ -150,12 +177,52 @@ export default function CommunityPage() {
     load()
   }, [filter]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function setValidation(item: CivicActivity, stance: ValidationStance) {
+    const key = `${item.type}:${item.id}`
+    setWorkingValidation(key)
+    try {
+      const current = validationState[key]
+      let response: ValidationResponse
+      if (current === stance) {
+        response = await apiFetch<ValidationResponse>(`/community/activities/${item.type}/${item.id}/validation`, { method: 'DELETE' })
+        setValidationState((state) => ({ ...state, [key]: null }))
+      } else {
+        let note: string | null = null
+        if (stance === 'dispute') {
+          note = window.prompt('Explica brevemente qué parte de la evidencia requiere revisión:')
+          if (!note) return
+        }
+        response = await apiFetch<ValidationResponse>(`/community/activities/${item.type}/${item.id}/validation`, {
+          method: 'PUT',
+          body: JSON.stringify({ stance, note }),
+        })
+        setValidationState((state) => ({ ...state, [key]: response.my_stance }))
+      }
+      setFeed((items) => items.map((activity) => (
+        activity.id === item.id && activity.type === item.type
+          ? {
+              ...activity,
+              community_validation: {
+                corroborations: response.corroborations,
+                disputes: response.disputes,
+                total: response.total,
+              },
+            }
+          : activity
+      )))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible registrar la validación comunitaria.')
+    } finally {
+      setWorkingValidation(null)
+    }
+  }
+
   const summaryCards = useMemo<SummaryCard[]>(() => [
     { label: 'Actividad visible', value: feed.length, icon: Activity },
     { label: 'Resultados verificados', value: feed.filter((item) => item.verification_state === 'verified').length, icon: BadgeCheck },
     { label: 'Evidencias', value: feed.reduce((sum, item) => sum + item.evidence_count, 0), icon: ShieldCheck },
-    { label: 'Liderazgos activos', value: leaders.length, icon: Users },
-  ], [feed, leaders])
+    { label: 'Corroboraciones', value: feed.reduce((sum, item) => sum + item.community_validation.corroborations, 0), icon: ThumbsUp },
+  ], [feed])
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
@@ -166,17 +233,17 @@ export default function CommunityPage() {
         <div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-center lg:p-9">
           <div>
             <div className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#F5B700]">Red cívica de gestión</div>
-            <h1 className="mt-3 font-display text-2xl font-extrabold tracking-[-.04em] sm:text-4xl">Lo que haces pesa más que lo que publicas.</h1>
+            <h1 className="mt-3 font-display text-2xl font-extrabold tracking-[-.04em] sm:text-4xl">Sigue gestión, no popularidad.</h1>
             <p className="mt-3 max-w-3xl text-xs font-medium leading-6 text-white/75 sm:mt-4 sm:text-sm sm:leading-7">
-              Sigue acciones comunitarias, evidencia, resultados y trayectorias. VÉRTICE ordena la gestión por evidencia verificable; seguidores, likes e impresiones no elevan el ranking.
+              Conecta con perfiles públicos, sigue su trabajo y contrasta evidencia. Las corroboraciones y disputas son señales comunitarias: no equivalen a verificación oficial y no alteran el VÉRTICE Score v1.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 lg:max-w-[290px] lg:justify-end">
+          <div className="flex flex-wrap gap-2 lg:max-w-[320px] lg:justify-end">
+            <Link href="/dashboard/community/profile" className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-extrabold text-white sm:flex-none">
+              <UserRound size={16} /> Mi perfil público
+            </Link>
             <Link href="/dashboard/reports/new" className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#F5B700] px-4 py-2.5 text-xs font-extrabold text-[#0A2A66] sm:flex-none">
               <FilePlus2 size={16} /> Registrar gestión
-            </Link>
-            <Link href="/dashboard/proposals/new" className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-extrabold text-white sm:flex-none">
-              <FileText size={16} /> Crear iniciativa
             </Link>
           </div>
         </div>
@@ -199,10 +266,10 @@ export default function CommunityPage() {
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3 sm:mb-4">
             <div>
               <div className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#7B8799]">Actividad comunitaria</div>
-              <h2 className="mt-1 text-lg font-extrabold text-[#0A2A66] sm:text-xl">Feed de acciones y resultados</h2>
+              <h2 className="mt-1 text-lg font-extrabold text-[#0A2A66] sm:text-xl">Feed de gestión y evidencia</h2>
             </div>
-            <div className="flex items-center gap-1.5">
-              {(['all', 'report', 'proposal'] as const).map((value) => (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(['all', 'following', 'report', 'proposal'] as const).map((value) => (
                 <button
                   key={value}
                   onClick={() => setFilter(value)}
@@ -210,7 +277,7 @@ export default function CommunityPage() {
                     ? 'rounded-full bg-[#0A2A66] px-3 py-2 text-[9px] font-extrabold text-white sm:text-[10px]'
                     : 'rounded-full border border-[#DCE5EF] bg-white px-3 py-2 text-[9px] font-extrabold text-[#607087] sm:text-[10px]'}
                 >
-                  {value === 'all' ? 'Todo' : value === 'report' ? 'Gestiones' : 'Iniciativas'}
+                  {value === 'all' ? 'Todo' : value === 'following' ? 'Siguiendo' : value === 'report' ? 'Gestiones' : 'Iniciativas'}
                 </button>
               ))}
               <button onClick={load} className="flex h-9 w-9 items-center justify-center rounded-full border border-[#DCE5EF] bg-white text-[#607087]" aria-label="Actualizar">
@@ -226,26 +293,33 @@ export default function CommunityPage() {
           )}
 
           {!loading && error && (
-            <div className="rounded-3xl border border-[#F1C8CE] bg-[#FCEBED] p-5 text-sm font-semibold text-[#A91D2E]">{error}</div>
+            <div className="mb-4 rounded-3xl border border-[#F1C8CE] bg-[#FCEBED] p-5 text-sm font-semibold text-[#A91D2E]">{error}</div>
           )}
 
           {!loading && !error && feed.length === 0 && (
             <div className="rounded-3xl border border-[#E1E7EF] bg-white p-8 text-center">
               <Sparkles className="mx-auto text-[#F5B700]" />
-              <div className="mt-3 text-lg font-extrabold text-[#0A2A66]">Aún no hay actividad para este filtro.</div>
-              <p className="mt-2 text-sm text-[#607087]">La primera gestión documentada aparecerá aquí con su evidencia y score.</p>
+              <div className="mt-3 text-lg font-extrabold text-[#0A2A66]">{filter === 'following' ? 'Aún no sigues perfiles con actividad visible.' : 'Aún no hay actividad para este filtro.'}</div>
+              <p className="mt-2 text-sm text-[#607087]">{filter === 'following' ? 'Abre un perfil público y selecciona “Seguir gestión”.' : 'La primera gestión documentada aparecerá aquí con su evidencia y score.'}</p>
             </div>
           )}
 
           <div className="space-y-3 sm:space-y-4">
             {!loading && !error && feed.map((item) => {
               const verification = VERIFICATION_META[item.verification_state]
+              const validationKey = `${item.type}:${item.id}`
+              const currentValidation = validationState[validationKey]
+              const validationBusy = workingValidation === validationKey
               return (
-                <article key={`${item.type}-${item.id}`} className="rounded-[22px] border border-[#E1E7EF] bg-white p-4 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:rounded-[24px] sm:p-6">
+                <article key={validationKey} className="rounded-[22px] border border-[#E1E7EF] bg-white p-4 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:rounded-[24px] sm:p-6">
                   <div className="flex gap-3 sm:gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        <span className="text-xs font-extrabold text-[#0A2A66]">{item.actor.display_name}</span>
+                        {item.actor.id ? (
+                          <Link href={`/dashboard/community/profiles/${item.actor.id}`} className="text-xs font-extrabold text-[#0A2A66] hover:text-[#246CB6]">{item.actor.display_name}</Link>
+                        ) : (
+                          <span className="text-xs font-extrabold text-[#0A2A66]">{item.actor.display_name}</span>
+                        )}
                         <span className="rounded-full bg-[#EDF3FA] px-2 py-1 text-[8px] font-extrabold text-[#246CB6] sm:px-2.5 sm:text-[9px]">{ACTOR_LABEL[item.actor.actor_kind]}</span>
                         <span className={`rounded-full px-2 py-1 text-[8px] font-extrabold sm:px-2.5 sm:text-[9px] ${verification.className}`}>
                           {verification.label}
@@ -253,6 +327,7 @@ export default function CommunityPage() {
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[9px] font-semibold text-[#7B8799] sm:text-[10px]">
                         {item.neighborhood && <span className="inline-flex items-center gap-1"><MapPin size={11} /> {item.neighborhood}</span>}
+                        {item.actor.organization && <><span>·</span><span>{item.actor.organization}</span></>}
                         <span>·</span><span>{formatDate(item.updated_at)}</span>
                       </div>
                       <Link href={item.href} className="mt-3 block text-base font-extrabold leading-6 text-[#0A2A66] hover:text-[#246CB6] sm:mt-4 sm:text-lg">{item.title}</Link>
@@ -263,8 +338,30 @@ export default function CommunityPage() {
 
                   <div className="mt-4 grid grid-cols-3 gap-1.5 border-t border-[#E9EDF3] pt-3 text-center sm:mt-5 sm:gap-2 sm:pt-4">
                     <div className="rounded-xl bg-[#F7F9FC] p-2"><div className="text-sm font-extrabold text-[#0A2A66]">{item.evidence_count}</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#7B8799] sm:text-[8px]">Evidencias</div></div>
-                    <div className="rounded-xl bg-[#F7F9FC] p-2"><div className="text-sm font-extrabold text-[#0A2A66]">{item.score_dimensions.results}/20</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#7B8799] sm:text-[8px]">Resultado</div></div>
-                    <div className="rounded-xl bg-[#F7F9FC] p-2"><div className="text-sm font-extrabold text-[#0A2A66]">{item.score_dimensions.confidence}/15</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#7B8799] sm:text-[8px]">Confianza</div></div>
+                    <div className="rounded-xl bg-[#EAF6ED] p-2"><div className="text-sm font-extrabold text-[#237D36]">{item.community_validation.corroborations}</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#5D8064] sm:text-[8px]">Corroboran</div></div>
+                    <div className={item.community_validation.disputes > 0 ? 'rounded-xl bg-[#FCEBED] p-2' : 'rounded-xl bg-[#F7F9FC] p-2'}><div className={item.community_validation.disputes > 0 ? 'text-sm font-extrabold text-[#A91D2E]' : 'text-sm font-extrabold text-[#0A2A66]'}>{item.community_validation.disputes}</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#7B8799] sm:text-[8px]">Disputas</div></div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setValidation(item, 'corroborate')}
+                      disabled={validationBusy}
+                      className={currentValidation === 'corroborate'
+                        ? 'inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#EAF6ED] px-3 text-[9px] font-extrabold text-[#237D36] disabled:opacity-50'
+                        : 'inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#DCE5EF] bg-white px-3 text-[9px] font-extrabold text-[#526176] disabled:opacity-50'}
+                    >
+                      {validationBusy ? <Loader2 size={12} className="animate-spin" /> : <ThumbsUp size={12} />} Corroborar
+                    </button>
+                    <button
+                      onClick={() => setValidation(item, 'dispute')}
+                      disabled={validationBusy}
+                      className={currentValidation === 'dispute'
+                        ? 'inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#FCEBED] px-3 text-[9px] font-extrabold text-[#A91D2E] disabled:opacity-50'
+                        : 'inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#DCE5EF] bg-white px-3 text-[9px] font-extrabold text-[#526176] disabled:opacity-50'}
+                    >
+                      <MessageSquareWarning size={12} /> Cuestionar evidencia
+                    </button>
+                    <span className="text-[8px] font-semibold leading-4 text-[#94A0B0]">Señal comunitaria; no cambia el score v1.</span>
                   </div>
                 </article>
               )
@@ -283,7 +380,7 @@ export default function CommunityPage() {
             </div>
             <div className="mt-4 space-y-2.5 sm:mt-5 sm:space-y-3">
               {leaders.map((leader) => (
-                <div key={leader.citizen_id} className="flex items-center gap-3 rounded-2xl bg-[#F7F9FC] p-3">
+                <Link href={`/dashboard/community/profiles/${leader.citizen_id}`} key={leader.citizen_id} className="flex items-center gap-3 rounded-2xl bg-[#F7F9FC] p-3 transition hover:bg-[#EDF3FA]">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-extrabold text-[#0A2A66] shadow-sm">
                     {leader.rank <= 3 ? <Medal size={16} className="text-[#D98B00]" /> : leader.rank}
                   </div>
@@ -292,21 +389,26 @@ export default function CommunityPage() {
                     <div className="mt-1 text-[9px] font-semibold text-[#7B8799]">{leader.verified_actions} verificadas · {leader.evidence_count} evidencias</div>
                   </div>
                   <div className="text-right"><div className="text-lg font-extrabold text-[#0A2A66]">{leader.leader_score}</div><div className="text-[8px] font-bold uppercase text-[#7B8799]">impacto</div></div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>
 
           <section className="rounded-[22px] border border-[#C9D8EA] bg-[#EDF3FA] p-4 sm:rounded-[24px] sm:p-5">
-            <div className="flex items-center gap-2 text-[#0A2A66]"><BarChart3 size={17} /><span className="text-[10px] font-extrabold uppercase tracking-[.12em]">Cómo se calcula</span></div>
+            <div className="flex items-center gap-2 text-[#0A2A66]"><BarChart3 size={17} /><span className="text-[10px] font-extrabold uppercase tracking-[.12em]">Regla de confianza</span></div>
             <div className="mt-4 space-y-2 text-[11px] font-semibold text-[#526176]">
-              {([['Evidencia', 25], ['Resultados', 20], ['Impacto', 15], ['Validación', 10], ['Confianza', 15]] as const).map(([label, points]) => (
+              {([['Evidencia', 25], ['Resultados', 20], ['Impacto', 15], ['Validación estructural', 10], ['Confianza', 15]] as const).map(([label, points]) => (
                 <div key={label} className="flex items-center justify-between"><span>{label}</span><strong className="text-[#0A2A66]">{points} pts</strong></div>
               ))}
               <div className="flex items-center justify-between gap-4"><span>Transparencia + colaboración + continuidad</span><strong className="shrink-0 text-[#0A2A66]">15 pts</strong></div>
             </div>
-            <div className="mt-4 flex gap-2 rounded-xl bg-white/70 p-3 text-[10px] font-semibold leading-5 text-[#526176]"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-[#2BA745]" />Popularidad y seguidores no suman puntos.</div>
+            <div className="mt-4 flex gap-2 rounded-xl bg-white/70 p-3 text-[10px] font-semibold leading-5 text-[#526176]"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-[#2BA745]" />Seguidores, likes y corroboraciones comunitarias no suman puntos al score v1.</div>
           </section>
+
+          <Link href="/dashboard/community/profile" className="flex items-center justify-between rounded-[22px] border border-[#E1E7EF] bg-white p-4 text-[#0A2A66] shadow-[0_8px_30px_rgba(10,42,102,.04)]">
+            <div><div className="text-[9px] font-extrabold uppercase tracking-[.11em] text-[#7B8799]">Identidad pública</div><div className="mt-1 text-sm font-extrabold">Configura tu perfil cívico</div></div>
+            <Users size={18} />
+          </Link>
         </aside>
       </div>
     </div>

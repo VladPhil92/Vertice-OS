@@ -1,4 +1,7 @@
 import {
+  CivicActivityParamsSchema,
+  CivicActivityValidationSchema,
+  CivicProfileParamsSchema,
   CommunityFeedQuerySchema,
   CommunityLeaderboardQuerySchema,
   UpdateCivicProfileSchema,
@@ -38,5 +41,27 @@ describe('community query schemas', () => {
       profile_type: 'admin',
       public_profile: true,
     })).toThrow()
+  })
+
+  it('requires UUID profile and activity identifiers', () => {
+    const citizenId = '550e8400-e29b-41d4-a716-446655440000'
+    expect(CivicProfileParamsSchema.parse({ citizenId })).toEqual({ citizenId })
+    expect(CivicActivityParamsSchema.parse({ type: 'report', activityId: citizenId })).toEqual({
+      type: 'report',
+      activityId: citizenId,
+    })
+    expect(() => CivicProfileParamsSchema.parse({ citizenId: 'not-a-uuid' })).toThrow()
+  })
+
+  it('allows one-click corroboration without turning it into verified evidence', () => {
+    expect(CivicActivityValidationSchema.parse({ stance: 'corroborate' })).toEqual({ stance: 'corroborate' })
+  })
+
+  it('requires an explanation when disputing evidence', () => {
+    expect(() => CivicActivityValidationSchema.parse({ stance: 'dispute', note: 'no' })).toThrow()
+    expect(CivicActivityValidationSchema.parse({
+      stance: 'dispute',
+      note: 'La ubicación de la evidencia no coincide con el hecho reportado.',
+    }).stance).toBe('dispute')
   })
 })

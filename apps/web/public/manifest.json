@@ -34,6 +34,13 @@
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
+      "name": "Mi perfil cívico",
+      "short_name": "Perfil",
+      "description": "Configurar identidad pública y trayectoria de gestión",
+      "url": "/dashboard/community/profile",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Registrar gestión",
       "short_name": "Gestionar",
       "description": "Documentar una acción o situación del territorio",
