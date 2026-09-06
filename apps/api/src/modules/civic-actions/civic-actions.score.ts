@@ -97,7 +97,7 @@ function fulfillmentPoints(status: CivicActionStatus, targetDate: string | null)
 }
 
 function impactPoints(beneficiaries: number | null): number {
-  if (beneficiaries == null) return 2
+  if (beneficiaries === null) return 2
   if (beneficiaries >= 500) return 15
   if (beneficiaries >= 200) return 13
   if (beneficiaries >= 50) return 11
