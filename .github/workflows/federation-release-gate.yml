@@ -75,15 +75,22 @@ jobs:
       - name: Run federation release smoke
         env:
           BASE_URL: http://127.0.0.1:3000
-        run: >-
-          pnpm --filter @vertice/web exec playwright test
-          e2e/landing.spec.ts
-          e2e/ctgone-auth.spec.ts
-          --project=chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @vertice/web exec playwright test \
+            e2e/landing.spec.ts \
+            e2e/ctgone-auth.spec.ts \
+            --project=chromium 2>&1 | tee /tmp/vertice-federation-playwright.log
 
-      - name: Print web log on failure
+      - name: Print diagnostics on failure
         if: failure()
-        run: cat /tmp/vertice-federation-web.log || true
+        shell: bash
+        run: |
+          echo '--- Playwright ---'
+          cat /tmp/vertice-federation-playwright.log || true
+          echo '--- Next.js ---'
+          cat /tmp/vertice-federation-web.log || true
 
       - name: Upload Playwright failure evidence
         if: failure()
@@ -93,6 +100,7 @@ jobs:
           path: |
             apps/web/test-results
             apps/web/playwright-report
+            /tmp/vertice-federation-playwright.log
             /tmp/vertice-federation-web.log
           if-no-files-found: ignore
           retention-days: 14
