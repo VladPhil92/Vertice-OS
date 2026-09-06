@@ -32,20 +32,22 @@ const canonicalOrigin = new URL('https://vertice.ctgone.com')
 export const metadata: Metadata = {
   metadataBase: canonicalOrigin,
   title: {
-    default: 'VÉRTICE — Inteligencia Ciudadana',
+    default: 'VÉRTICE — Red Cívica de Gestión',
     template: '%s | VÉRTICE',
   },
   description:
-    'Plataforma ciudadana para informar, conectar, participar, vigilar y transformar el territorio con datos, deliberación y seguimiento.',
+    'Red cívica para convertir gestión social y comunitaria en acciones, evidencia, resultados y reputación verificable.',
   keywords: [
-    'participación ciudadana',
+    'gestión comunitaria',
+    'liderazgo social',
     'Cartagena',
     'Colombia',
-    'inteligencia ciudadana',
+    'reputación cívica',
+    'evidencia verificable',
+    'participación ciudadana',
     'control público',
-    'gobernanza',
-    'reportes ciudadanos',
-    'propuestas ciudadanas',
+    'iniciativas ciudadanas',
+    'impacto comunitario',
   ],
   authors: [{ name: 'VÉRTICE' }, { name: 'CTG One' }],
   alternates: {
@@ -66,9 +68,9 @@ export const metadata: Metadata = {
     url: '/',
     locale: 'es_CO',
     siteName: 'VÉRTICE',
-    title: 'VÉRTICE — Inteligencia Ciudadana',
+    title: 'VÉRTICE — Red Cívica de Gestión',
     description:
-      'La ciudadanía es el vértice del cambio: reporta, propone, participa, vigila y sigue resultados.',
+      'Lo que haces pesa más que lo que publicas: gestión, evidencia, resultados y reputación cívica en un mismo lugar.',
   },
 }
 
