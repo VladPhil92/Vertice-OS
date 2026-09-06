@@ -2,7 +2,7 @@
   "name": "VÉRTICE — Red Cívica de Gestión",
   "short_name": "VÉRTICE",
   "description": "Red cívica para convertir gestión social y comunitaria en acciones, evidencia, resultados y reputación verificable.",
-  "start_url": "/dashboard/community",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#F7F9FC",
   "theme_color": "#0A2A66",
@@ -27,6 +27,20 @@
   "screenshots": [],
   "shortcuts": [
     {
+      "name": "Centro ciudadano",
+      "short_name": "Inicio",
+      "description": "Abrir el centro de gestión de tu cuenta",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Crear acción cívica",
+      "short_name": "Acción",
+      "description": "Documentar una gestión con evidencia y resultados",
+      "url": "/dashboard/community/actions/new",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Abrir red cívica",
       "short_name": "Red",
       "description": "Ver acciones, evidencias y liderazgos del territorio",
@@ -41,17 +55,10 @@
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Registrar gestión",
-      "short_name": "Gestionar",
-      "description": "Documentar una acción o situación del territorio",
+      "name": "Reportar situación",
+      "short_name": "Reporte",
+      "description": "Registrar una situación del territorio para seguimiento",
       "url": "/dashboard/reports/new",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Crear iniciativa",
-      "short_name": "Iniciativa",
-      "description": "Convertir una idea en una iniciativa comunitaria",
-      "url": "/dashboard/proposals/new",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
