@@ -62,6 +62,18 @@ jobs:
           NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
         run: pnpm --filter @vertice/web build
 
+      - name: Package standalone static assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          STANDALONE_WEB=apps/web/.next/standalone/apps/web
+          test -f "$STANDALONE_WEB/server.js"
+          mkdir -p "$STANDALONE_WEB/.next"
+          rm -rf "$STANDALONE_WEB/.next/static" "$STANDALONE_WEB/public"
+          cp -R apps/web/.next/static "$STANDALONE_WEB/.next/static"
+          cp -R apps/web/public "$STANDALONE_WEB/public"
+          test -f "$STANDALONE_WEB/public/brand/vertice-wordmark.webp"
+
       - name: Start production standalone web
         shell: bash
         run: |
