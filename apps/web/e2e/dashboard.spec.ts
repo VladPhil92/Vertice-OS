@@ -204,7 +204,7 @@ test.describe('Citizen command center', () => {
     )
   })
 
-  test('renders the exact next lifecycle step for civic actions that need resolution', async ({ page }) => {
+  test('renders exact lifecycle steps and keeps evidence upload in the traceable workspace', async ({ page }) => {
     await mockDashboard(page)
     await page.goto('/dashboard')
 
@@ -215,18 +215,119 @@ test.describe('Citizen command center', () => {
     await expect(page.getByText('Declarar resultado')).toBeVisible()
     await expect(page.getByText(/después: incorpora evidencia nueva o corregida/i)).toBeVisible()
 
+    await expect(page.getByRole('button', { name: /reabrir ahora/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /declarar resultado ahora/i })).toBeVisible()
     await expect(page.getByRole('link', {
-      name: /reabrir ejecución: recuperación del parque disputada/i,
+      name: /adjuntar evidencia en workspace: resultado comunitario pendiente de soporte/i,
+    })).toHaveAttribute(
+      'href',
+      '/dashboard/community/actions/55555555-5555-4555-8555-555555555555',
+    )
+    await expect(page.getByRole('link', {
+      name: /abrir workspace: recuperación del parque disputada/i,
     })).toHaveAttribute(
       'href',
       '/dashboard/community/actions/44444444-4444-4444-8444-444444444444',
     )
-    await expect(page.getByRole('link', {
-      name: /declarar resultado: jornada documentada lista para cierre/i,
-    })).toHaveAttribute(
-      'href',
-      '/dashboard/community/actions/66666666-6666-4666-8666-666666666666',
-    )
+  })
+
+  test('reopens a disputed action only after explicit confirmation and recalculates its next step', async ({ page }) => {
+    let currentPlan = resolutionPlanPayload
+    let patchBody: unknown = null
+
+    await page.route('**/dashboard/me/resolution', (route) => route.fulfill({ status: 200, json: currentPlan }))
+    await page.route('**/civic-actions/44444444-4444-4444-8444-444444444444', async (route) => {
+      patchBody = route.request().postDataJSON()
+      currentPlan = {
+        total: 3,
+        items: [
+          {
+            ...resolutionPlanPayload.items[0],
+            status: 'in_progress',
+            next_step: 'declare_result',
+            next_step_label: 'Declarar resultado',
+            detail: 'La acción ya tiene evidencia admisible y puede avanzar desde ejecución hacia un resultado observable.',
+            follow_up_label: 'Después: el resultado y su evidencia podrán pasar a revisión.',
+            priority: 'normal',
+          },
+          resolutionPlanPayload.items[1],
+          resolutionPlanPayload.items[2],
+        ],
+      }
+      await route.fulfill({ status: 200, json: { id: resolutionPlanPayload.items[0].id, status: 'in_progress' } })
+    })
+    await page.route('**/dashboard/me', (route) => route.fulfill({ status: 200, json: dashboardPayload }))
+
+    await page.goto('/dashboard')
+    const card = page.getByTestId('resolution-item-44444444-4444-4444-8444-444444444444')
+    await card.getByRole('button', { name: /reabrir ahora/i }).click()
+
+    await expect(card.getByText(/confirma que quieres devolver esta acción a ejecución/i)).toBeVisible()
+    expect(patchBody).toBeNull()
+
+    await card.getByRole('button', { name: /confirmar reabrir/i }).click()
+
+    await expect.poll(() => patchBody).toEqual({ status: 'in_progress' })
+    await expect(card.getByText('Declarar resultado')).toBeVisible()
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByText(/volvió a ejecución. el plan fue recalculado/i)).toBeVisible()
+  })
+
+  test('declares an observable result inline and validates the minimum summary before mutation', async ({ page }) => {
+    let currentPlan = resolutionPlanPayload
+    let patchBody: unknown = null
+    let patchCalls = 0
+
+    await page.route('**/dashboard/me/resolution', (route) => route.fulfill({ status: 200, json: currentPlan }))
+    await page.route('**/civic-actions/66666666-6666-4666-8666-666666666666', async (route) => {
+      patchCalls += 1
+      patchBody = route.request().postDataJSON()
+      currentPlan = {
+        total: 2,
+        items: [resolutionPlanPayload.items[0], resolutionPlanPayload.items[1]],
+      }
+      await route.fulfill({ status: 200, json: { id: resolutionPlanPayload.items[2].id, status: 'result_declared' } })
+    })
+    await page.route('**/dashboard/me', (route) => route.fulfill({ status: 200, json: dashboardPayload }))
+
+    await page.goto('/dashboard')
+    const card = page.getByTestId('resolution-item-66666666-6666-4666-8666-666666666666')
+    await card.getByRole('button', { name: /declarar resultado ahora/i }).click()
+
+    const resultInput = card.getByLabel(/resultado observable/i)
+    await resultInput.fill('corto')
+    await card.getByRole('button', { name: /confirmar resultado/i }).click()
+    await expect(card.getByRole('alert')).toContainText(/al menos 10 caracteres/i)
+    expect(patchCalls).toBe(0)
+
+    const summary = 'Se recuperó el parque y quedó habilitado para uso comunitario.'
+    await resultInput.fill(summary)
+    await card.getByRole('button', { name: /confirmar resultado/i }).click()
+
+    await expect.poll(() => patchBody).toEqual({
+      status: 'result_declared',
+      result_summary: summary,
+    })
+    await expect(page.getByTestId('resolution-item-66666666-6666-4666-8666-666666666666')).toHaveCount(0)
+    await expect(page.getByText(/resultado declarado para/i)).toBeVisible()
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
+
+  test('isolates a rejected quick execution without breaking the citizen command center', async ({ page }) => {
+    await mockDashboard(page)
+    await page.route('**/civic-actions/44444444-4444-4444-8444-444444444444', (route) => route.fulfill({
+      status: 409,
+      json: { error: 'Transición no permitida en el estado actual' },
+    }))
+    await page.goto('/dashboard')
+
+    const card = page.getByTestId('resolution-item-44444444-4444-4444-8444-444444444444')
+    await card.getByRole('button', { name: /reabrir ahora/i }).click()
+    await card.getByRole('button', { name: /confirmar reabrir/i }).click()
+
+    await expect(card.getByRole('alert')).toContainText(/transición no permitida/i)
+    await expect(page.getByRole('heading', { name: /convierte gestión en evidencia pública/i })).toBeVisible()
+    await expect(card).toBeVisible()
   })
 
   test('keeps civic action creation distinct from territorial reporting', async ({ page }) => {
