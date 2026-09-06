@@ -102,8 +102,9 @@ const dashboardPayload = {
 }
 
 async function setupAuth(page: Page) {
+  const baseURL = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
   await page.context().addCookies([
-    { name: 'vertice_auth', value: '1', domain: 'localhost', path: '/' },
+    { name: 'vertice_auth', value: '1', url: baseURL },
   ])
   await page.addInitScript(() => {
     localStorage.setItem('access_token', 'test-jwt-token')
