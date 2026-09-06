@@ -90,4 +90,46 @@ describe('citizen dashboard command center', () => {
     expect(result.attention.civic_actions_needing_evidence).toBe(1)
     expect(result.attention.total_items).toBe(2)
   })
+
+  it('fails closed to zero metrics when aggregate rows are absent', async () => {
+    mockGetCitizenProfile.mockResolvedValueOnce({
+      id: CITIZEN_ID,
+      email: 'new-citizen@example.com',
+      neighborhood: null,
+      locality_id: null,
+      verification_level: 0,
+      created_at: new Date('2026-09-06T10:00:00.000Z'),
+    })
+    mockGetReputationProfile.mockResolvedValueOnce({
+      reputation_score: 0,
+      level: 'nuevo',
+      total_votes: 0,
+      total_proposals: 0,
+      total_reports: 0,
+      badges_count: 0,
+    })
+    mockGetTerritorialStats.mockResolvedValueOnce({ total_reports: 0, open_reports: 0, by_category: [] })
+    mockGetGovernanceStats.mockResolvedValueOnce({ total_proposals: 0, by_status: [] })
+    mockQueryRaw.mockResolvedValue([])
+    mockListCivicCases.mockResolvedValueOnce([])
+    mockListMyCivicActions.mockResolvedValueOnce([])
+
+    const result = await getCitizenCommandCenter(CITIZEN_ID)
+
+    expect(result.mine.civic_actions).toEqual({
+      total: 0,
+      active: 0,
+      verified: 0,
+      needs_evidence: 0,
+      awaiting_verification: 0,
+      recent: [],
+    })
+    expect(result.mine.workflows).toEqual({ total: 0, active: 0, recent: [] })
+    expect(result.reputation.endorsements_given).toBe(0)
+    expect(result.attention).toMatchObject({
+      verification_required: true,
+      civic_actions_needing_evidence: 0,
+      total_items: 1,
+    })
+  })
 })
