@@ -1,10 +1,20 @@
 import type { FastifyInstance } from 'fastify'
-import { CommunityFeedQuerySchema, CommunityLeaderboardQuerySchema } from './community.schema'
-import { getCommunityLeaderboard, listCommunityFeed } from './community.service'
+import { requireAuth } from '../../middleware/auth'
+import {
+  CommunityFeedQuerySchema,
+  CommunityLeaderboardQuerySchema,
+  UpdateCivicProfileSchema,
+} from './community.schema'
+import {
+  getCivicProfile,
+  getCommunityLeaderboard,
+  listCommunityFeed,
+  updateCivicProfile,
+} from './community.service'
 
 export async function communityRoutes(app: FastifyInstance): Promise<void> {
-  // Public-by-design civic activity surface. It only exposes already-public
-  // report/proposal content plus deterministic, explainable derived scores.
+  // Public activity is privacy-safe: actors that have not opted into a public
+  // civic profile remain anonymous and never appear in the leaderboard.
   app.get('/feed', async (request, reply) => {
     const parsed = CommunityFeedQuerySchema.safeParse(request.query)
     if (!parsed.success) {
@@ -52,6 +62,25 @@ export async function communityRoutes(app: FastifyInstance): Promise<void> {
       ranking_basis: 'acciones + evidencia + resultados verificados',
       excludes: ['seguidores', 'likes', 'impresiones'],
       scoring_version: 'civic-action-v1',
+      visibility: 'solo perfiles cívicos publicados voluntariamente',
     })
+  })
+
+  app.get('/profile/me', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getCivicProfile(request.citizen.sub))
+  })
+
+  app.patch('/profile/me', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = UpdateCivicProfileSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Perfil cívico inválido',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+    return reply.send(await updateCivicProfile(request.citizen.sub, parsed.data))
   })
 }
