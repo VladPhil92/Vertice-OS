@@ -1,0 +1,123 @@
+name: Dashboard Browser Release Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/app/dashboard/**'
+      - 'apps/web/components/dashboard/**'
+      - 'apps/web/e2e/dashboard.spec.ts'
+      - 'apps/web/lib/api.ts'
+      - 'apps/web/public/manifest.json'
+      - 'apps/api/src/modules/dashboard/**'
+      - '.github/workflows/dashboard-release-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/app/dashboard/**'
+      - 'apps/web/components/dashboard/**'
+      - 'apps/web/e2e/dashboard.spec.ts'
+      - 'apps/web/lib/api.ts'
+      - 'apps/web/public/manifest.json'
+      - 'apps/api/src/modules/dashboard/**'
+      - '.github/workflows/dashboard-release-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  citizen-dashboard-browser-contract:
+    name: Citizen dashboard browser contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @vertice/web exec playwright install --with-deps chromium
+
+      - name: Build production web
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4999
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+        run: pnpm --filter @vertice/web build
+
+      - name: Package standalone static assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          STANDALONE_WEB=apps/web/.next/standalone/apps/web
+          test -f "$STANDALONE_WEB/server.js"
+          mkdir -p "$STANDALONE_WEB/.next"
+          rm -rf "$STANDALONE_WEB/.next/static" "$STANDALONE_WEB/public"
+          cp -R apps/web/.next/static "$STANDALONE_WEB/.next/static"
+          cp -R apps/web/public "$STANDALONE_WEB/public"
+          test -f "$STANDALONE_WEB/public/brand/vertice-wordmark.webp"
+
+      - name: Start production standalone web
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERTICE_API_UPSTREAM=http://127.0.0.1:4100 \
+          PORT=3000 HOSTNAME=127.0.0.1 \
+            node apps/web/.next/standalone/apps/web/server.js >/tmp/vertice-dashboard-web.log 2>&1 &
+          echo $! > /tmp/vertice-dashboard-web.pid
+          pnpm --filter @vertice/web exec wait-on http://127.0.0.1:3000/auth/login
+
+      - name: Run dashboard browser contract
+        env:
+          BASE_URL: http://127.0.0.1:3000
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @vertice/web exec playwright test \
+            e2e/dashboard.spec.ts \
+            --project=chromium 2>&1 | tee /tmp/vertice-dashboard-playwright.log
+
+      - name: Print diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo '--- Playwright ---'
+          cat /tmp/vertice-dashboard-playwright.log || true
+          echo '--- Next.js ---'
+          cat /tmp/vertice-dashboard-web.log || true
+
+      - name: Upload Playwright failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-release-gate-${{ github.sha }}
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+            /tmp/vertice-dashboard-playwright.log
+            /tmp/vertice-dashboard-web.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop production web
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/vertice-dashboard-web.pid ]; then
+            kill "$(cat /tmp/vertice-dashboard-web.pid)" >/dev/null 2>&1 || true
+          fi
