@@ -7,7 +7,7 @@ test.describe('Public landing', () => {
     const headline = page.getByRole('heading', { name: /haz que tu gestión pueda demostrarse/i })
     await expect(headline).toBeVisible()
 
-    const brand = page.getByAltText(/vértice — inteligencia ciudadana/i).first()
+    const brand = page.getByAltText(/^vértice$/i).first()
     await expect(brand).toBeVisible()
     await expect(
       page.getByAltText(/ilustración de cartagena conectada por una red de gestión/i),
