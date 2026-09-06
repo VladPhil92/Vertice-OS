@@ -1,4 +1,8 @@
-import { CommunityFeedQuerySchema, CommunityLeaderboardQuerySchema } from '../community.schema'
+import {
+  CommunityFeedQuerySchema,
+  CommunityLeaderboardQuerySchema,
+  UpdateCivicProfileSchema,
+} from '../community.schema'
 
 describe('community query schemas', () => {
   it('applies safe feed defaults', () => {
@@ -20,5 +24,19 @@ describe('community query schemas', () => {
   it('caps leaderboard queries to the pilot-safe contract', () => {
     expect(CommunityLeaderboardQuerySchema.parse({})).toEqual({ limit: 20 })
     expect(() => CommunityLeaderboardQuerySchema.parse({ limit: 51 })).toThrow()
+  })
+
+  it('keeps civic identity separate from authorization roles', () => {
+    expect(UpdateCivicProfileSchema.parse({
+      profile_type: 'candidate',
+      bio: 'Gestión comunitaria documentada',
+      organization: null,
+      public_profile: true,
+    }).profile_type).toBe('candidate')
+
+    expect(() => UpdateCivicProfileSchema.parse({
+      profile_type: 'admin',
+      public_profile: true,
+    })).toThrow()
   })
 })
