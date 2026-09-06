@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma'
 import {
   followCivicProfile,
+  getActivityValidationState,
   getCivicProfile,
   setActivityValidation,
   unfollowCivicProfile,
@@ -9,6 +10,7 @@ import {
 const VIEWER_ID = '550e8400-e29b-41d4-a716-446655440000'
 const TARGET_ID = '550e8400-e29b-41d4-a716-446655440001'
 const REPORT_ID = '550e8400-e29b-41d4-a716-446655440010'
+const PROPOSAL_ID = '550e8400-e29b-41d4-a716-446655440011'
 
 const PUBLIC_PROFILE_ROW = {
   citizen_id: TARGET_ID,
@@ -58,6 +60,20 @@ describe('community social service guards', () => {
       statusCode: 404,
       code: 'CIVIC_PROFILE_NOT_FOUND',
     })
+  })
+
+  it('refuses to follow a civic profile that is not public', async () => {
+    const executeSpy = jest.spyOn(prisma, '$executeRaw')
+    jest.spyOn(prisma, '$queryRaw').mockResolvedValueOnce([{
+      ...PUBLIC_PROFILE_ROW,
+      public_civic_profile: false,
+    }] as never)
+
+    await expect(followCivicProfile(VIEWER_ID, TARGET_ID)).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'CIVIC_PROFILE_NOT_PUBLIC',
+    })
+    expect(executeSpy).not.toHaveBeenCalled()
   })
 
   it('follows a published civic profile and returns the updated follower state', async () => {
@@ -133,5 +149,44 @@ describe('community social service guards', () => {
     })
     expect(executeSpy).toHaveBeenCalledTimes(1)
     expect(querySpy).toHaveBeenCalledTimes(4)
+  })
+
+  it('returns an anonymous validation summary without manufacturing a viewer stance', async () => {
+    const querySpy = jest.spyOn(prisma, '$queryRaw')
+      .mockResolvedValueOnce([{ owner_id: TARGET_ID }] as never)
+      .mockResolvedValueOnce([{ corroborations: 2n, disputes: 3n }] as never)
+
+    await expect(getActivityValidationState('report', REPORT_ID)).resolves.toEqual({
+      corroborations: 2,
+      disputes: 3,
+      total: 5,
+      my_stance: null,
+      my_note: null,
+    })
+    expect(querySpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves proposal ownership and validation totals through the proposal path', async () => {
+    const querySpy = jest.spyOn(prisma, '$queryRaw')
+      .mockResolvedValueOnce([{ owner_id: TARGET_ID }] as never)
+      .mockResolvedValueOnce([{ corroborations: 1n, disputes: 0n }] as never)
+
+    await expect(getActivityValidationState('proposal', PROPOSAL_ID)).resolves.toEqual({
+      corroborations: 1,
+      disputes: 0,
+      total: 1,
+      my_stance: null,
+      my_note: null,
+    })
+    expect(querySpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when a proposal being validated is unavailable', async () => {
+    jest.spyOn(prisma, '$queryRaw').mockResolvedValueOnce([] as never)
+
+    await expect(getActivityValidationState('proposal', PROPOSAL_ID)).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'CIVIC_ACTIVITY_NOT_FOUND',
+    })
   })
 })
