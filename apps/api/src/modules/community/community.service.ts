@@ -1,13 +1,15 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import type {
+  CivicActivityValidationInput,
   CivicProfileType,
+  CommunityActivityType,
   CommunityFeedQuery,
   CommunityLeaderboardQuery,
+  CommunityValidationStance,
   UpdateCivicProfileInput,
 } from './community.schema'
 
-type ActivityType = 'report' | 'proposal'
 type VerificationState = 'declared' | 'evidence_backed' | 'verified'
 
 type CivicScoreDimensions = {
@@ -59,9 +61,15 @@ interface ProposalActivityRow extends ActorFields {
   created_at: Date
 }
 
+export interface CommunityValidationSummary {
+  corroborations: number
+  disputes: number
+  total: number
+}
+
 export interface CivicActivity {
   id: string
-  type: ActivityType
+  type: CommunityActivityType
   actor: {
     id: string | null
     display_name: string
@@ -80,6 +88,7 @@ export interface CivicActivity {
   verification_state: VerificationState
   civic_score: number
   score_dimensions: CivicScoreDimensions
+  community_validation: CommunityValidationSummary
   created_at: string
   updated_at: string
   href: string
@@ -94,6 +103,15 @@ export interface CivicProfile {
   organization: string | null
   public_profile: boolean
   reputation_score: number
+}
+
+export interface PublicCivicProfile extends CivicProfile {
+  follower_count: number
+  actions_count: number
+  verified_actions: number
+  evidence_count: number
+  average_action_score: number
+  recent_actions: CivicActivity[]
 }
 
 export interface CivicLeaderEntry {
@@ -112,12 +130,26 @@ export interface CivicLeaderEntry {
   rank: number
 }
 
+export interface FollowState {
+  following: boolean
+  follower_count: number
+}
+
+export interface ActivityValidationState extends CommunityValidationSummary {
+  my_stance: CommunityValidationStance | null
+  my_note: string | null
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
 function totalScore(dimensions: CivicScoreDimensions): number {
   return clamp(Object.values(dimensions).reduce((sum, value) => sum + value, 0), 0, 100)
+}
+
+function emptyCommunityValidation(): CommunityValidationSummary {
+  return { corroborations: 0, disputes: 0, total: 0 }
 }
 
 function publicActor(row: ActorFields): CivicActivity['actor'] {
@@ -173,6 +205,7 @@ function reportToActivity(row: ReportActivityRow): CivicActivity {
     verification_state: verified ? 'verified' : evidenceCount > 0 ? 'evidence_backed' : 'declared',
     civic_score: totalScore(dimensions),
     score_dimensions: dimensions,
+    community_validation: emptyCommunityValidation(),
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
     href: `/dashboard/reports/${row.id}`,
@@ -216,6 +249,7 @@ function proposalToActivity(row: ProposalActivityRow): CivicActivity {
     verification_state: verified ? 'verified' : evidenceCount > 0 ? 'evidence_backed' : 'declared',
     civic_score: totalScore(dimensions),
     score_dimensions: dimensions,
+    community_validation: emptyCommunityValidation(),
     created_at: row.created_at.toISOString(),
     updated_at: row.created_at.toISOString(),
     href: `/dashboard/proposals/${row.id}`,
@@ -234,9 +268,55 @@ function actorProjection() {
   `
 }
 
-async function loadActivities(input: CommunityFeedQuery, fetchLimit = input.limit): Promise<CivicActivity[]> {
+async function attachCommunityValidation(activities: CivicActivity[]): Promise<CivicActivity[]> {
+  if (activities.length === 0) return activities
+
+  const ids = [...new Set(activities.map((activity) => activity.id))]
+  const rows = await prisma.$queryRaw<Array<{
+    activity_type: CommunityActivityType
+    activity_id: string
+    corroborations: bigint
+    disputes: bigint
+  }>>(Prisma.sql`
+    SELECT
+      activity_type,
+      activity_id::text,
+      COUNT(*) FILTER (WHERE stance = 'corroborate') AS corroborations,
+      COUNT(*) FILTER (WHERE stance = 'dispute') AS disputes
+    FROM civic_activity_validations
+    WHERE activity_id::text IN (${Prisma.join(ids)})
+    GROUP BY activity_type, activity_id
+  `)
+
+  const byActivity = new Map<string, CommunityValidationSummary>()
+  for (const row of rows) {
+    const corroborations = Number(row.corroborations)
+    const disputes = Number(row.disputes)
+    byActivity.set(`${row.activity_type}:${row.activity_id}`, {
+      corroborations,
+      disputes,
+      total: corroborations + disputes,
+    })
+  }
+
+  return activities.map((activity) => ({
+    ...activity,
+    community_validation: byActivity.get(`${activity.type}:${activity.id}`) ?? emptyCommunityValidation(),
+  }))
+}
+
+async function loadActivities(
+  input: CommunityFeedQuery,
+  fetchLimit = input.limit,
+  actorIds?: string[],
+): Promise<CivicActivity[]> {
+  if (actorIds && actorIds.length === 0) return []
+
   const neighborhoodFilter = input.neighborhood
     ? Prisma.sql`AND LOWER(COALESCE(source.neighborhood, actor.neighborhood, '')) = LOWER(${input.neighborhood})`
+    : Prisma.empty
+  const actorFilter = actorIds
+    ? Prisma.sql`AND actor.id::text IN (${Prisma.join(actorIds)}) AND actor.public_civic_profile = TRUE`
     : Prisma.empty
 
   const reportRows = input.type === 'proposal' ? [] : await prisma.$queryRaw<ReportActivityRow[]>(Prisma.sql`
@@ -256,6 +336,7 @@ async function loadActivities(input: CommunityFeedQuery, fetchLimit = input.limi
     JOIN citizens actor ON actor.id = source.citizen_id
     WHERE source.status NOT IN ('rejected', 'duplicate')
       ${neighborhoodFilter}
+      ${actorFilter}
     ORDER BY source.updated_at DESC
     LIMIT ${fetchLimit}
   `)
@@ -279,17 +360,33 @@ async function loadActivities(input: CommunityFeedQuery, fetchLimit = input.limi
     JOIN citizens actor ON actor.id = source.author_id
     WHERE source.status <> 'archived'
       ${neighborhoodFilter}
+      ${actorFilter}
     ORDER BY source.created_at DESC
     LIMIT ${fetchLimit}
   `)
 
-  return [...reportRows.map(reportToActivity), ...proposalRows.map(proposalToActivity)]
+  const activities = [...reportRows.map(reportToActivity), ...proposalRows.map(proposalToActivity)]
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, input.limit)
+
+  return attachCommunityValidation(activities)
 }
 
 export async function listCommunityFeed(input: CommunityFeedQuery): Promise<CivicActivity[]> {
   return loadActivities(input)
+}
+
+export async function listFollowingFeed(citizenId: string, input: CommunityFeedQuery): Promise<CivicActivity[]> {
+  const rows = await prisma.$queryRaw<Array<{ followed_id: string }>>(Prisma.sql`
+    SELECT follows.followed_id::text
+    FROM civic_profile_follows follows
+    JOIN citizens target ON target.id = follows.followed_id
+    WHERE follows.follower_id = ${citizenId}::uuid
+      AND target.is_active = TRUE
+      AND target.public_civic_profile = TRUE
+    ORDER BY follows.created_at DESC
+  `)
+  return loadActivities(input, Math.max(input.limit * 3, 60), rows.map((row) => row.followed_id))
 }
 
 export async function getCommunityLeaderboard(input: CommunityLeaderboardQuery): Promise<CivicLeaderEntry[]> {
@@ -388,16 +485,218 @@ export async function getCivicProfile(citizenId: string): Promise<CivicProfile> 
   }
 }
 
+async function requirePublicProfile(citizenId: string): Promise<CivicProfile> {
+  const profile = await getCivicProfile(citizenId)
+  if (!profile.public_profile) {
+    throw Object.assign(new Error('Perfil cívico no publicado'), { statusCode: 404, code: 'CIVIC_PROFILE_NOT_PUBLIC' })
+  }
+  return profile
+}
+
+export async function getPublicCivicProfile(citizenId: string): Promise<PublicCivicProfile> {
+  const profile = await requirePublicProfile(citizenId)
+  const [followRows, recentActions] = await Promise.all([
+    prisma.$queryRaw<Array<{ follower_count: bigint }>>(Prisma.sql`
+      SELECT COUNT(*) AS follower_count
+      FROM civic_profile_follows
+      WHERE followed_id = ${citizenId}::uuid
+    `),
+    loadActivities({ limit: 12 }, 36, [citizenId]),
+  ])
+
+  const actionsCount = recentActions.length
+  const verifiedActions = recentActions.filter((activity) => activity.verification_state === 'verified').length
+  const evidenceCount = recentActions.reduce((sum, activity) => sum + activity.evidence_count, 0)
+  const averageActionScore = actionsCount > 0
+    ? Math.round(recentActions.reduce((sum, activity) => sum + activity.civic_score, 0) / actionsCount)
+    : 0
+
+  return {
+    ...profile,
+    follower_count: Number(followRows[0]?.follower_count ?? 0),
+    actions_count: actionsCount,
+    verified_actions: verifiedActions,
+    evidence_count: evidenceCount,
+    average_action_score: averageActionScore,
+    recent_actions: recentActions,
+  }
+}
+
 export async function updateCivicProfile(citizenId: string, input: UpdateCivicProfileInput): Promise<CivicProfile> {
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE citizens
-    SET
-      civic_profile_type = ${input.profile_type},
-      civic_bio = ${input.bio ?? null},
-      civic_organization = ${input.organization ?? null},
-      public_civic_profile = ${input.public_profile},
-      last_active_at = NOW()
-    WHERE id = ${citizenId}::uuid AND is_active = TRUE
-  `)
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE citizens
+      SET
+        civic_profile_type = ${input.profile_type},
+        civic_bio = ${input.bio ?? null},
+        civic_organization = ${input.organization ?? null},
+        public_civic_profile = ${input.public_profile},
+        last_active_at = NOW()
+      WHERE id = ${citizenId}::uuid AND is_active = TRUE
+    `)
+
+    if (!input.public_profile) {
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM civic_profile_follows
+        WHERE followed_id = ${citizenId}::uuid
+      `)
+    }
+  })
   return getCivicProfile(citizenId)
+}
+
+export async function getFollowState(viewerId: string, targetId: string): Promise<FollowState> {
+  await requirePublicProfile(targetId)
+  const rows = await prisma.$queryRaw<Array<{ following: boolean; follower_count: bigint }>>(Prisma.sql`
+    SELECT
+      EXISTS (
+        SELECT 1
+        FROM civic_profile_follows
+        WHERE follower_id = ${viewerId}::uuid
+          AND followed_id = ${targetId}::uuid
+      ) AS following,
+      (
+        SELECT COUNT(*)
+        FROM civic_profile_follows
+        WHERE followed_id = ${targetId}::uuid
+      ) AS follower_count
+  `)
+  return {
+    following: Boolean(rows[0]?.following),
+    follower_count: Number(rows[0]?.follower_count ?? 0),
+  }
+}
+
+export async function followCivicProfile(viewerId: string, targetId: string): Promise<FollowState> {
+  if (viewerId === targetId) {
+    throw Object.assign(new Error('No puedes seguir tu propio perfil'), { statusCode: 409, code: 'SELF_FOLLOW_NOT_ALLOWED' })
+  }
+  await requirePublicProfile(targetId)
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO civic_profile_follows (follower_id, followed_id)
+    VALUES (${viewerId}::uuid, ${targetId}::uuid)
+    ON CONFLICT (follower_id, followed_id) DO NOTHING
+  `)
+  return getFollowState(viewerId, targetId)
+}
+
+export async function unfollowCivicProfile(viewerId: string, targetId: string): Promise<FollowState> {
+  await prisma.$executeRaw(Prisma.sql`
+    DELETE FROM civic_profile_follows
+    WHERE follower_id = ${viewerId}::uuid
+      AND followed_id = ${targetId}::uuid
+  `)
+
+  const rows = await prisma.$queryRaw<Array<{ public_civic_profile: boolean }>>(Prisma.sql`
+    SELECT public_civic_profile
+    FROM citizens
+    WHERE id = ${targetId}::uuid AND is_active = TRUE
+    LIMIT 1
+  `)
+  if (!rows[0]?.public_civic_profile) return { following: false, follower_count: 0 }
+  return getFollowState(viewerId, targetId)
+}
+
+async function getActivityOwner(type: CommunityActivityType, activityId: string): Promise<string | null> {
+  if (type === 'report') {
+    const rows = await prisma.$queryRaw<Array<{ owner_id: string | null }>>(Prisma.sql`
+      SELECT citizen_id::text AS owner_id
+      FROM territorial_reports
+      WHERE id = ${activityId}::uuid
+        AND status NOT IN ('rejected', 'duplicate')
+      LIMIT 1
+    `)
+    if (!rows[0]) throw Object.assign(new Error('Gestión no encontrada'), { statusCode: 404, code: 'CIVIC_ACTIVITY_NOT_FOUND' })
+    return rows[0].owner_id
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ owner_id: string | null }>>(Prisma.sql`
+    SELECT author_id::text AS owner_id
+    FROM proposals
+    WHERE id = ${activityId}::uuid
+      AND status <> 'archived'
+    LIMIT 1
+  `)
+  if (!rows[0]) throw Object.assign(new Error('Iniciativa no encontrada'), { statusCode: 404, code: 'CIVIC_ACTIVITY_NOT_FOUND' })
+  return rows[0].owner_id
+}
+
+export async function getActivityValidationState(
+  type: CommunityActivityType,
+  activityId: string,
+  viewerId?: string,
+): Promise<ActivityValidationState> {
+  await getActivityOwner(type, activityId)
+  const [summaryRows, viewerRows] = await Promise.all([
+    prisma.$queryRaw<Array<{ corroborations: bigint; disputes: bigint }>>(Prisma.sql`
+      SELECT
+        COUNT(*) FILTER (WHERE stance = 'corroborate') AS corroborations,
+        COUNT(*) FILTER (WHERE stance = 'dispute') AS disputes
+      FROM civic_activity_validations
+      WHERE activity_type = ${type}
+        AND activity_id = ${activityId}::uuid
+    `),
+    viewerId
+      ? prisma.$queryRaw<Array<{ stance: CommunityValidationStance; note: string | null }>>(Prisma.sql`
+          SELECT stance, note
+          FROM civic_activity_validations
+          WHERE activity_type = ${type}
+            AND activity_id = ${activityId}::uuid
+            AND citizen_id = ${viewerId}::uuid
+          LIMIT 1
+        `)
+      : Promise.resolve([]),
+  ])
+
+  const corroborations = Number(summaryRows[0]?.corroborations ?? 0)
+  const disputes = Number(summaryRows[0]?.disputes ?? 0)
+  return {
+    corroborations,
+    disputes,
+    total: corroborations + disputes,
+    my_stance: viewerRows[0]?.stance ?? null,
+    my_note: viewerRows[0]?.note ?? null,
+  }
+}
+
+export async function setActivityValidation(
+  citizenId: string,
+  type: CommunityActivityType,
+  activityId: string,
+  input: CivicActivityValidationInput,
+): Promise<ActivityValidationState> {
+  const ownerId = await getActivityOwner(type, activityId)
+  if (ownerId === citizenId) {
+    throw Object.assign(new Error('No puedes validar tu propia gestión'), { statusCode: 409, code: 'SELF_VALIDATION_NOT_ALLOWED' })
+  }
+
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO civic_activity_validations (
+      activity_type, activity_id, citizen_id, stance, note
+    ) VALUES (
+      ${type}, ${activityId}::uuid, ${citizenId}::uuid, ${input.stance}, ${input.note ?? null}
+    )
+    ON CONFLICT (activity_type, activity_id, citizen_id)
+    DO UPDATE SET
+      stance = EXCLUDED.stance,
+      note = EXCLUDED.note,
+      updated_at = NOW()
+  `)
+
+  return getActivityValidationState(type, activityId, citizenId)
+}
+
+export async function removeActivityValidation(
+  citizenId: string,
+  type: CommunityActivityType,
+  activityId: string,
+): Promise<ActivityValidationState> {
+  await getActivityOwner(type, activityId)
+  await prisma.$executeRaw(Prisma.sql`
+    DELETE FROM civic_activity_validations
+    WHERE activity_type = ${type}
+      AND activity_id = ${activityId}::uuid
+      AND citizen_id = ${citizenId}::uuid
+  `)
+  return getActivityValidationState(type, activityId, citizenId)
 }
