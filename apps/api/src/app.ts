@@ -21,6 +21,7 @@ import { identityProviderSessionRoutes } from './modules/identity/identity-provi
 import { territorialRoutes } from './modules/territorial/territorial.routes'
 import { governanceRoutes } from './modules/governance/governance.routes'
 import { reputationRoutes } from './modules/reputation/reputation.routes'
+import { communityRoutes } from './modules/community/community.routes'
 import { legalRoutes } from './modules/legal/legal.routes'
 import { aiRoutes } from './modules/ai/ai.routes'
 import { eventsRoutes } from './modules/events/events.routes'
@@ -194,6 +195,7 @@ export function buildApp() {
   app.register(territorialRoutes, { prefix: '/territorial' })
   app.register(governanceRoutes, { prefix: '/governance' })
   app.register(reputationRoutes, { prefix: '/reputation' })
+  app.register(communityRoutes, { prefix: '/community' })
   app.register(legalRoutes, { prefix: '/legal' })
   app.register(aiRoutes, { prefix: '/ai' })
   app.register(workflowRoutes, { prefix: '/workflows' })

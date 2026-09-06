@@ -19,6 +19,7 @@ import {
   User,
   X,
   GitBranch,
+  Network,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
@@ -31,10 +32,11 @@ import { RoleSwitcher } from '@/components/auth/RoleSwitcher'
 
 const NAV_ITEMS = [
   { href: '/dashboard',            label: 'Inicio',          icon: LayoutDashboard, exact: true,  adminOnly: false },
+  { href: '/dashboard/community',  label: 'Red cívica',      icon: Network,         exact: false, adminOnly: false },
   { href: '/dashboard/reports',    label: 'Mapa y reportes', icon: Map,             exact: false, adminOnly: false },
-  { href: '/dashboard/workflows',  label: 'Expedientes',     icon: GitBranch,       exact: false, adminOnly: false },
-  { href: '/dashboard/proposals',  label: 'Propuestas',      icon: FileText,        exact: false, adminOnly: false },
-  { href: '/dashboard/governance', label: 'Decidir',         icon: Vote,            exact: false, adminOnly: false },
+  { href: '/dashboard/workflows',  label: 'Gestión social',  icon: GitBranch,       exact: false, adminOnly: false },
+  { href: '/dashboard/proposals',  label: 'Iniciativas',     icon: FileText,        exact: false, adminOnly: false },
+  { href: '/dashboard/governance', label: 'Consultas',       icon: Vote,            exact: false, adminOnly: false },
   { href: '/dashboard/ai',         label: 'IA cívica',       icon: Sparkles,        exact: false, adminOnly: false },
   { href: '/dashboard/identity',   label: 'Identidad',       icon: ShieldCheck,     exact: false, adminOnly: false },
   { href: '/dashboard/reputation', label: 'Perfil cívico',   icon: Star,            exact: false, adminOnly: false },
@@ -43,11 +45,11 @@ const NAV_ITEMS = [
 ] as const
 
 const BOTTOM_NAV = [
-  { href: '/dashboard',             label: 'Inicio',   icon: Home, exact: true },
-  { href: '/dashboard/reports',     label: 'Mapa',     icon: Map, exact: false },
-  { href: '/dashboard/reports/new', label: 'Reportar', icon: Plus, exact: false, fab: true },
-  { href: '/dashboard/governance',  label: 'Decidir',  icon: Vote, exact: false },
-  { href: '/dashboard/reputation',  label: 'Perfil',   icon: User, exact: false },
+  { href: '/dashboard',             label: 'Inicio',    icon: Home,      exact: true },
+  { href: '/dashboard/community',   label: 'Red',       icon: Network,   exact: false },
+  { href: '/dashboard/reports/new', label: 'Gestionar', icon: Plus,      exact: false, fab: true },
+  { href: '/dashboard/workflows',   label: 'Gestión',   icon: GitBranch, exact: false },
+  { href: '/dashboard/reputation',  label: 'Perfil',    icon: User,      exact: false },
 ] as const
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -59,13 +61,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     if (event.type === 'report:created') {
-      addToast('Nuevo reporte ciudadano registrado', '#4A90E2')
+      addToast('Nueva gestión territorial registrada', '#4A90E2')
     } else if (event.type === 'report:status_changed') {
-      addToast(`Reporte actualizado a: ${event.payload.status as string}`, '#0A2A66')
+      addToast(`Gestión actualizada a: ${event.payload.status as string}`, '#0A2A66')
     } else if (event.type === 'proposal:vote_cast') {
-      addToast('Nuevo voto registrado en una propuesta', '#F5B700')
+      addToast('Nueva participación registrada en una consulta', '#F5B700')
     } else if (event.type === 'proposal:endorsed') {
-      addToast('Una propuesta recibió un nuevo aval', '#2BA745')
+      addToast('Una iniciativa recibió un nuevo apoyo', '#2BA745')
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -144,7 +146,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="px-3 pb-3">
           <div className="mb-3 rounded-2xl bg-[#0A2A66] p-4 text-white">
             <div className="text-[9px] font-bold uppercase tracking-[.14em] text-[#B6CBEC]">Principio VÉRTICE</div>
-            <div className="mt-2 text-sm font-extrabold leading-5">La ciudadanía es el vértice del cambio.</div>
+            <div className="mt-2 text-sm font-extrabold leading-5">La gestión se demuestra con evidencia.</div>
+            <div className="mt-2 text-[10px] font-medium leading-5 text-white/65">Popularidad no equivale a impacto comunitario.</div>
             <div className="mt-3 flex gap-1">
               <span className="h-1 w-7 rounded-full bg-[#F5B700]" />
               <span className="h-1 w-7 rounded-full bg-white" />
@@ -201,7 +204,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Menu size={19} />
           </button>
-          <Link href="/dashboard" className="flex items-center">
+          <Link href="/dashboard/community" className="flex items-center">
             <BrandLogo compact className="scale-[.88]" />
           </Link>
           <div className="flex items-center gap-2">

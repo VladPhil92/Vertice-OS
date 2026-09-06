@@ -1,61 +1,61 @@
 import Link from 'next/link'
-import { ArrowRight, BadgeCheck, Bot, Building2, FileText, MapPinned, UserRound } from 'lucide-react'
+import { ArrowRight, Bot, FileText, GitBranch, MapPinned, Network, UserRound, Vote } from 'lucide-react'
 import { PublicSectionHeader } from '@/components/ui/PublicSectionHeader'
 
 const MODULES = [
   {
-    icon: MapPinned,
-    title: 'Mapa y reportes',
-    description: 'Explora reportes territoriales y registra lo que ocurre cerca de ti con ubicación, contexto y evidencia.',
-    path: '/dashboard/reports',
+    icon: Network,
+    title: 'Red cívica',
+    description: 'Sigue acciones, resultados y liderazgos del territorio en un feed ordenado por evidencia e impacto, no por popularidad.',
+    path: '/dashboard/community',
     color: '#246CB6',
     bg: '#EAF1FB',
+    label: 'Comunidad',
+  },
+  {
+    icon: MapPinned,
+    title: 'Gestión territorial',
+    description: 'Documenta problemas, acciones y avances con ubicación, contexto y evidencia para construir una trayectoria pública verificable.',
+    path: '/dashboard/reports',
+    color: '#D98B00',
+    bg: '#FFF4D1',
     label: 'Territorio',
   },
   {
+    icon: GitBranch,
+    title: 'Seguimiento de gestión',
+    description: 'Conecta reportes, análisis, iniciativas y control público dentro de expedientes con memoria de principio a fin.',
+    path: '/dashboard/workflows',
+    color: '#178C8C',
+    bg: '#E7F6F5',
+    label: 'Gestión',
+  },
+  {
     icon: FileText,
-    title: 'Propuestas ciudadanas',
-    description: 'Convierte una idea en una iniciativa estructurada, reúne argumentos y sigue su evolución.',
+    title: 'Iniciativas comunitarias',
+    description: 'Convierte una idea en una iniciativa estructurada, reúne apoyos y documenta su evolución hasta el resultado.',
     path: '/dashboard/proposals',
-    color: '#D98B00',
-    bg: '#FFF4D1',
-    label: 'Iniciativa',
-  },
-  {
-    icon: Building2,
-    title: 'Gobernanza',
-    description: 'Consulta procesos, decisiones y espacios de participación disponibles dentro del piloto.',
-    path: '/dashboard/governance',
-    color: '#0A2A66',
-    bg: '#EDF2F8',
-    label: 'Decisión',
-  },
-  {
-    icon: Bot,
-    title: 'Asistente cívico con IA',
-    description: 'Aclara conceptos, organiza ideas y comprende información antes de participar o proponer.',
-    path: '/dashboard/ai',
-    color: '#6D5CC7',
-    bg: '#F0ECFB',
-    label: 'Comprensión',
-  },
-  {
-    icon: BadgeCheck,
-    title: 'Identidad cívica',
-    description: 'Concentra tu historial y los mecanismos de verificación disponibles sin mezclar credenciales entre servicios.',
-    path: '/dashboard/identity',
     color: '#2BA745',
     bg: '#EAF6ED',
-    label: 'Identidad',
+    label: 'Iniciativa',
   },
   {
     icon: UserRound,
     title: 'Perfil y reputación',
-    description: 'Consulta actividad, contribuciones, evolución temporal y trayectoria dentro de VÉRTICE.',
+    description: 'Muestra trayectoria, acciones, evidencia, resultados y evolución reputacional de ciudadanos y liderazgos.',
     path: '/dashboard/reputation',
     color: '#D72638',
     bg: '#FCEBED',
     label: 'Trayectoria',
+  },
+  {
+    icon: Bot,
+    title: 'IA cívica y consultas',
+    description: 'Comprende información, estructura propuestas y participa en consultas simbólicas o procesos deliberativos cuando aporten valor al territorio.',
+    path: '/dashboard/ai',
+    color: '#6D5CC7',
+    bg: '#F0ECFB',
+    label: 'Comprensión',
   },
 ] as const
 
@@ -66,11 +66,11 @@ export function ModulesSection() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <PublicSectionHeader
             eyebrow="Qué puedes hacer"
-            title="Seis herramientas, una sola experiencia ciudadana."
-            description="Cada módulo responde a una tarea concreta, conserva el mismo lenguaje visual y comparte una lógica común de identidad, contexto y seguimiento."
+            title="Gestionar, demostrar, colaborar y construir reputación."
+            description="VÉRTICE conecta actividad social, evidencia y seguimiento en una sola experiencia para ciudadanía, líderes, organizaciones y candidatos."
           />
           <div className="max-w-sm rounded-2xl border border-[#DCE5EF] bg-white px-5 py-4 text-xs font-semibold leading-6 text-[#607087] shadow-[0_10px_30px_rgba(10,42,102,.04)]">
-            El objetivo no es multiplicar pantallas: es mantener continuidad entre <strong className="text-[#0A2A66]">reportar, proponer, comprender, decidir y seguir</strong>.
+            El principio es simple: <strong className="text-[#0A2A66]">seguidores y likes no equivalen a impacto</strong>. La reputación crece con acciones, evidencia, resultados y colaboración.
           </div>
         </div>
 
@@ -101,6 +101,11 @@ export function ModulesSection() {
               </div>
             </Link>
           ))}
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#DCE5EF] bg-white px-5 py-4 text-xs font-semibold text-[#607087]">
+          <span>Las votaciones permanecen disponibles como herramienta complementaria de consulta y deliberación.</span>
+          <Link href="/dashboard/governance" className="inline-flex items-center gap-2 font-extrabold text-[#0A2A66]">Abrir consultas <Vote size={14} /></Link>
         </div>
       </div>
     </section>

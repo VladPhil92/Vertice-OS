@@ -1,12 +1,12 @@
-import { BadgeCheck, CheckCircle2, FilePenLine, MessageSquareText } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, FilePenLine, UsersRound } from 'lucide-react'
 import { PublicSectionHeader } from '@/components/ui/PublicSectionHeader'
 
 const STEPS = [
   {
     number: '01',
     icon: BadgeCheck,
-    title: 'Crea tu identidad cívica',
-    description: 'Regístrate y construye un historial de participación dentro de la plataforma.',
+    title: 'Construye una identidad cívica',
+    description: 'Regístrate, define tu territorio y conserva una trayectoria pública de gestión dentro de VÉRTICE.',
     color: '#246CB6',
     bg: '#EAF1FB',
     tag: 'Identidad',
@@ -14,29 +14,29 @@ const STEPS = [
   {
     number: '02',
     icon: FilePenLine,
-    title: 'Registra un asunto',
-    description: 'Reporta, propone o consulta un tema con ubicación, contexto y evidencia.',
+    title: 'Documenta una acción',
+    description: 'Registra una gestión, problema o iniciativa con contexto territorial, avances y evidencia disponible.',
     color: '#D98B00',
     bg: '#FFF4D1',
-    tag: 'Territorio',
+    tag: 'Gestión',
   },
   {
     number: '03',
-    icon: MessageSquareText,
-    title: 'Delibera con contexto',
-    description: 'Consulta información y participa en conversaciones organizadas alrededor del asunto.',
+    icon: UsersRound,
+    title: 'Actúa con la comunidad',
+    description: 'Suma apoyos, colaboración y seguimiento ciudadano sin convertir popularidad en reputación automática.',
     color: '#6D5CC7',
     bg: '#F0ECFB',
-    tag: 'Participación',
+    tag: 'Comunidad',
   },
   {
     number: '04',
     icon: CheckCircle2,
-    title: 'Sigue el resultado',
-    description: 'Revisa estados, acciones y cambios para conservar una memoria cívica visible.',
+    title: 'Demuestra el resultado',
+    description: 'La evidencia, el resultado, la continuidad y la validación alimentan un score cívico explicable.',
     color: '#2BA745',
     bg: '#EAF6ED',
-    tag: 'Seguimiento',
+    tag: 'Reputación',
   },
 ] as const
 
@@ -47,8 +47,8 @@ export function HowItWorksSection() {
         <div className="grid gap-8 lg:grid-cols-[.72fr_1.28fr] lg:items-end lg:gap-12">
           <PublicSectionHeader
             eyebrow="Cómo funciona"
-            title="De una señal del territorio a un resultado que se puede seguir."
-            description="El recorrido mantiene una lógica única: identidad, registro, deliberación y seguimiento. Cada etapa conserva contexto para que la participación no se pierda entre pantallas o trámites aislados."
+            title="De la gestión declarada al impacto que puede demostrarse."
+            description="VÉRTICE conserva una secuencia común para ciudadanía, líderes, organizaciones y candidatos: identidad, acción, evidencia, colaboración y resultado. La reputación se construye sobre esa trayectoria, no sobre métricas de popularidad."
           />
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -92,8 +92,8 @@ export function HowItWorksSection() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#0A2A66] px-5 py-4 text-white">
-            <span className="text-xs font-extrabold">Un solo flujo ciudadano, con memoria de principio a fin.</span>
-            <span className="text-[9px] font-extrabold uppercase tracking-[.14em] text-[#F5B700]">Identificar · participar · seguir</span>
+            <span className="text-xs font-extrabold">Una trayectoria pública de gestión, con evidencia de principio a fin.</span>
+            <span className="text-[9px] font-extrabold uppercase tracking-[.14em] text-[#F5B700]">Actuar · documentar · verificar · reputar</span>
           </div>
         </div>
       </div>

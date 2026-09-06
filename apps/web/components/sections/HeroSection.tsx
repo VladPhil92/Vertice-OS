@@ -1,24 +1,24 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, MapPin, ShieldCheck, Siren, TrendingUp } from 'lucide-react'
+import { ArrowRight, BadgeCheck, MapPin, ShieldCheck, TrendingUp, Users } from 'lucide-react'
 
 const HERO_FEATURES = [
   {
-    icon: ShieldCheck,
-    title: 'Identidad cívica y trazabilidad',
-    text: 'Participa desde una cuenta con historial visible.',
+    icon: Users,
+    title: 'Red cívica de gestión',
+    text: 'Ciudadanía, líderes y organizaciones trabajan sobre problemas reales.',
     color: '#246CB6',
   },
   {
-    icon: Siren,
-    title: 'Señal ciudadana',
-    text: 'Reporta lo que pasa en un territorio concreto.',
+    icon: ShieldCheck,
+    title: 'Evidencia verificable',
+    text: 'Documenta acciones, avances y resultados con trazabilidad.',
     color: '#D98B00',
   },
   {
     icon: TrendingUp,
-    title: 'Seguimiento',
-    text: 'Consulta el estado y la evolución de los asuntos.',
+    title: 'Reputación por impacto',
+    text: 'La gestión pesa más que seguidores, likes o autopromoción.',
     color: '#2BA745',
   },
 ] as const
@@ -32,30 +32,30 @@ export function HeroSection() {
         <div className="grid items-center gap-10 lg:grid-cols-[0.94fr_1.06fr] xl:gap-14">
           <div className="max-w-2xl">
             <div className="mb-5 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#0A2A66]">
-              <span>Inteligencia ciudadana</span>
+              <span>Red cívica de gestión</span>
               <span className="h-1.5 w-1.5 rounded-full bg-[#F5B700]" />
               <span>Piloto Cartagena de Indias</span>
             </div>
 
             <h1 className="font-display text-[3rem] font-extrabold leading-[1.02] tracking-[-0.05em] text-[#0A2A66] sm:text-6xl lg:text-[4.5rem]">
-              Cartagena
+              Haz que tu gestión
               <br />
-              la construimos{' '}
-              <span className="font-serif font-light italic tracking-[-0.02em] text-[#F5B700]">juntos.</span>
+              pueda{' '}
+              <span className="font-serif font-light italic tracking-[-0.02em] text-[#F5B700]">demostrarse.</span>
             </h1>
 
             <p className="mt-6 max-w-xl text-[15px] font-medium leading-7 text-[#4B5870] sm:text-[17px] sm:leading-8">
-              VÉRTICE conecta ciudadanía, información y seguimiento público para convertir señales del territorio
-              en participación, deliberación y acción colectiva.
+              VÉRTICE convierte la gestión social y comunitaria en acciones, evidencia, resultados y reputación pública.
+              Ciudadanos, líderes, organizaciones y candidatos pueden mostrar qué hacen en el territorio y cómo evoluciona su impacto.
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
               <Link href="/auth/register" className="btn-primary group gap-2">
-                Tu voz tiene poder
+                Entrar a la red cívica
                 <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
               </Link>
               <a href="#como-funciona" className="btn-ghost gap-2">
-                Conoce cómo funciona
+                Ver cómo se mide la gestión
               </a>
             </div>
 
@@ -80,34 +80,34 @@ export function HeroSection() {
               <div className="relative aspect-[1.22/1] sm:aspect-[1.34/1] lg:aspect-[1.2/1]">
                 <Image
                   src="/brand/cartagena-civic-panorama.svg"
-                  alt="Ilustración de Cartagena conectada por una red de participación ciudadana"
+                  alt="Ilustración de Cartagena conectada por una red de gestión y participación ciudadana"
                   fill
                   priority
                   sizes="(max-width: 1024px) 100vw, 52vw"
                   className="object-cover"
                 />
 
-                <div className="absolute left-4 top-4 max-w-[190px] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur-sm sm:left-6 sm:top-6">
+                <div className="absolute left-4 top-4 max-w-[210px] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur-sm sm:left-6 sm:top-6">
                   <div className="flex items-center gap-2 text-[#246CB6]">
                     <MapPin size={15} />
-                    <span className="text-[9px] font-extrabold uppercase tracking-[.1em]">Reporte ciudadano</span>
+                    <span className="text-[9px] font-extrabold uppercase tracking-[.1em]">Gestión comunitaria</span>
                   </div>
-                  <div className="mt-2 text-[11px] font-extrabold text-[#0A2A66]">Alumbrado público · El Laguito</div>
+                  <div className="mt-2 text-[11px] font-extrabold text-[#0A2A66]">Recuperación de alumbrado · El Laguito</div>
                 </div>
 
                 <div className="absolute right-4 top-5 rounded-2xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur-sm sm:right-6 sm:top-7">
-                  <div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">Caso en seguimiento</div>
-                  <div className="mt-1.5 text-sm font-extrabold text-[#0A2A66]">En revisión</div>
+                  <div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">VÉRTICE score</div>
+                  <div className="mt-1.5 flex items-end gap-1 text-[#0A2A66]"><span className="text-2xl font-extrabold">88</span><span className="pb-0.5 text-[9px] font-bold text-[#7B8799]">/100</span></div>
                   <div className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-[#E4EAF1]">
-                    <div className="h-full w-[68%] rounded-full bg-[#4A90E2]" />
+                    <div className="h-full w-[88%] rounded-full bg-[#2BA745]" />
                   </div>
                 </div>
 
                 <div className="absolute bottom-4 left-4 rounded-2xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur-sm sm:bottom-6 sm:left-6">
-                  <div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">Acción en curso</div>
+                  <div className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">Resultado</div>
                   <div className="mt-1.5 flex items-center gap-2 text-[11px] font-extrabold text-[#0A2A66]">
-                    <span className="h-2 w-2 rounded-full bg-[#2BA745]" />
-                    Seguimiento abierto
+                    <BadgeCheck size={14} className="text-[#2BA745]" />
+                    Verificado con evidencia
                   </div>
                 </div>
               </div>
