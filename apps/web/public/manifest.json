@@ -1,15 +1,15 @@
 {
-  "name": "VÉRTICE OS — Sistema Operativo Cívico",
-  "short_name": "VÉRTICE OS",
-  "description": "Infraestructura cívica de próxima generación para Cartagena de Indias",
-  "start_url": "/dashboard",
+  "name": "VÉRTICE — Red Cívica de Gestión",
+  "short_name": "VÉRTICE",
+  "description": "Red cívica para convertir gestión social y comunitaria en acciones, evidencia, resultados y reputación verificable.",
+  "start_url": "/dashboard/community",
   "display": "standalone",
-  "background_color": "#050508",
-  "theme_color": "#C8A84B",
+  "background_color": "#F7F9FC",
+  "theme_color": "#0A2A66",
   "orientation": "portrait-primary",
   "lang": "es-CO",
   "scope": "/",
-  "categories": ["government", "social", "utilities"],
+  "categories": ["social", "government", "productivity"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -27,17 +27,24 @@
   "screenshots": [],
   "shortcuts": [
     {
-      "name": "Nuevo reporte",
-      "short_name": "Reporte",
-      "description": "Reportar un problema territorial",
+      "name": "Abrir red cívica",
+      "short_name": "Red",
+      "description": "Ver acciones, evidencias y liderazgos del territorio",
+      "url": "/dashboard/community",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Registrar gestión",
+      "short_name": "Gestionar",
+      "description": "Documentar una acción o situación del territorio",
       "url": "/dashboard/reports/new",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Ver propuestas",
-      "short_name": "Propuestas",
-      "description": "Explorar propuestas ciudadanas",
-      "url": "/dashboard/governance",
+      "name": "Crear iniciativa",
+      "short_name": "Iniciativa",
+      "description": "Convertir una idea en una iniciativa comunitaria",
+      "url": "/dashboard/proposals/new",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
