@@ -9,10 +9,10 @@ async function setupAuth(page: Page) {
   await page.context().addCookies([
     { name: 'vertice_auth', value: '1', domain: 'localhost', path: '/' },
   ])
-  await page.addInitScript(() => {
+  await page.addInitScript((citizenId) => {
     localStorage.setItem('access_token', 'test-jwt-token')
-    localStorage.setItem('citizen_id', '550e8400-e29b-41d4-a716-446655440000')
-  })
+    localStorage.setItem('citizen_id', citizenId)
+  }, CITIZEN_ID)
 }
 
 const ACTIVITY = {
