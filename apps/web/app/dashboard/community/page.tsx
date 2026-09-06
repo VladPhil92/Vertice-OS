@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
   BadgeCheck,
@@ -18,10 +18,12 @@ import {
   Trophy,
   Users,
 } from 'lucide-react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 
 type ActivityType = 'report' | 'proposal'
 type VerificationState = 'declared' | 'evidence_backed' | 'verified'
+type ActorKind = 'citizen' | 'social_leader' | 'candidate' | 'public_official'
 
 interface CivicActivity {
   id: string
@@ -30,7 +32,7 @@ interface CivicActivity {
     id: string
     display_name: string
     neighborhood: string | null
-    actor_kind: 'citizen' | 'social_leader' | 'candidate' | 'public_official'
+    actor_kind: ActorKind
     platform_reputation_score: number
   }
   title: string
@@ -60,7 +62,7 @@ interface LeaderEntry {
   citizen_id: string
   display_name: string
   neighborhood: string | null
-  actor_kind: CivicActivity['actor']['actor_kind']
+  actor_kind: ActorKind
   leader_score: number
   platform_reputation_score: number
   actions_count: number
@@ -74,23 +76,20 @@ interface LeaderEntry {
 interface FeedResponse {
   data: CivicActivity[]
   count: number
-  scoring: {
-    version: string
-    max_score: number
-    dimensions: Record<string, number>
-    note: string
-  }
 }
 
 interface LeaderboardResponse {
   data: LeaderEntry[]
   count: number
-  ranking_basis: string
-  excludes: string[]
-  scoring_version: string
 }
 
-const ACTOR_LABEL: Record<CivicActivity['actor']['actor_kind'], string> = {
+interface SummaryCard {
+  label: string
+  value: number
+  icon: LucideIcon
+}
+
+const ACTOR_LABEL: Record<ActorKind, string> = {
   citizen: 'Ciudadanía',
   social_leader: 'Liderazgo social',
   candidate: 'Candidatura',
@@ -115,7 +114,7 @@ function formatDate(iso: string) {
 
 function ScoreBadge({ score }: { score: number }) {
   return (
-    <div className="flex h-14 w-14 flex-col items-center justify-center rounded-2xl border border-[#DCE5EF] bg-[#F7F9FC]">
+    <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl border border-[#DCE5EF] bg-[#F7F9FC]">
       <span className="text-lg font-extrabold leading-none text-[#0A2A66]">{score}</span>
       <span className="mt-1 text-[8px] font-extrabold uppercase tracking-[.12em] text-[#7B8799]">score</span>
     </div>
@@ -151,68 +150,65 @@ export default function CommunityPage() {
     load()
   }, [filter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const summary = useMemo(() => ({
-    actions: feed.length,
-    verified: feed.filter((item) => item.verification_state === 'verified').length,
-    evidence: feed.reduce((sum, item) => sum + item.evidence_count, 0),
-    leaders: leaders.length,
-  }), [feed, leaders])
+  const summaryCards = useMemo<SummaryCard[]>(() => [
+    { label: 'Actividad visible', value: feed.length, icon: Activity },
+    { label: 'Resultados verificados', value: feed.filter((item) => item.verification_state === 'verified').length, icon: BadgeCheck },
+    { label: 'Evidencias', value: feed.reduce((sum, item) => sum + item.evidence_count, 0), icon: ShieldCheck },
+    { label: 'Liderazgos activos', value: leaders.length, icon: Users },
+  ], [feed, leaders])
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-      <section className="overflow-hidden rounded-[28px] bg-[#0A2A66] text-white shadow-[0_20px_55px_rgba(10,42,102,.16)]">
-        <div className="grid h-1.5 grid-cols-3"><span className="bg-[#F5B700]" /><span className="bg-[#4A90E2]" /><span className="bg-[#D72638]" /></div>
-        <div className="grid gap-7 p-5 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-center lg:p-9">
+    <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <section className="overflow-hidden rounded-[24px] bg-[#0A2A66] text-white shadow-[0_20px_55px_rgba(10,42,102,.16)] sm:rounded-[28px]">
+        <div className="grid h-1.5 grid-cols-3">
+          <span className="bg-[#F5B700]" /><span className="bg-[#4A90E2]" /><span className="bg-[#D72638]" />
+        </div>
+        <div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-center lg:p-9">
           <div>
             <div className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#F5B700]">Red cívica de gestión</div>
-            <h1 className="mt-3 font-display text-3xl font-extrabold tracking-[-.04em] sm:text-4xl">Lo que haces pesa más que lo que publicas.</h1>
-            <p className="mt-4 max-w-3xl text-sm font-medium leading-7 text-white/72">
+            <h1 className="mt-3 font-display text-2xl font-extrabold tracking-[-.04em] sm:text-4xl">Lo que haces pesa más que lo que publicas.</h1>
+            <p className="mt-3 max-w-3xl text-xs font-medium leading-6 text-white/75 sm:mt-4 sm:text-sm sm:leading-7">
               Sigue acciones comunitarias, evidencia, resultados y trayectorias. VÉRTICE ordena la gestión por evidencia verificable; seguidores, likes e impresiones no elevan el ranking.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 lg:max-w-[290px] lg:justify-end">
-            <Link href="/dashboard/reports/new" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F5B700] px-4 py-2.5 text-xs font-extrabold text-[#0A2A66]">
+            <Link href="/dashboard/reports/new" className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#F5B700] px-4 py-2.5 text-xs font-extrabold text-[#0A2A66] sm:flex-none">
               <FilePlus2 size={16} /> Registrar gestión
             </Link>
-            <Link href="/dashboard/proposals/new" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-extrabold text-white">
+            <Link href="/dashboard/proposals/new" className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-extrabold text-white sm:flex-none">
               <FileText size={16} /> Crear iniciativa
             </Link>
           </div>
         </div>
       </section>
 
-      <section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          ['Actividad visible', summary.actions, Activity],
-          ['Resultados verificados', summary.verified, BadgeCheck],
-          ['Evidencias', summary.evidence, ShieldCheck],
-          ['Liderazgos activos', summary.leaders, Users],
-        ].map(([label, value, Icon]) => (
-          <div key={String(label)} className="rounded-2xl border border-[#E1E7EF] bg-white p-4 shadow-[0_8px_28px_rgba(10,42,102,.04)]">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] font-extrabold uppercase tracking-[.11em] text-[#7B8799]">{String(label)}</span>
-              <Icon size={16} className="text-[#4A90E2]" />
+      <section className="mt-4 grid grid-cols-2 gap-2.5 lg:mt-5 lg:grid-cols-4 lg:gap-3">
+        {summaryCards.map(({ label, value, icon: Icon }) => (
+          <div key={label} className="rounded-2xl border border-[#E1E7EF] bg-white p-3.5 shadow-[0_8px_28px_rgba(10,42,102,.04)] sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] font-extrabold uppercase tracking-[.09em] text-[#7B8799] sm:text-[10px]">{label}</span>
+              <Icon size={15} className="shrink-0 text-[#4A90E2]" />
             </div>
-            <div className="mt-3 text-2xl font-extrabold text-[#0A2A66]">{String(value)}</div>
+            <div className="mt-2 text-xl font-extrabold text-[#0A2A66] sm:mt-3 sm:text-2xl">{value}</div>
           </div>
         ))}
       </section>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_340px]">
+      <div className="mt-5 grid gap-5 xl:mt-6 xl:grid-cols-[1fr_340px] xl:gap-6">
         <section>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3 sm:mb-4">
             <div>
               <div className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#7B8799]">Actividad comunitaria</div>
-              <h2 className="mt-1 text-xl font-extrabold text-[#0A2A66]">Feed de acciones y resultados</h2>
+              <h2 className="mt-1 text-lg font-extrabold text-[#0A2A66] sm:text-xl">Feed de acciones y resultados</h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {(['all', 'report', 'proposal'] as const).map((value) => (
                 <button
                   key={value}
                   onClick={() => setFilter(value)}
                   className={filter === value
-                    ? 'rounded-full bg-[#0A2A66] px-3 py-2 text-[10px] font-extrabold text-white'
-                    : 'rounded-full border border-[#DCE5EF] bg-white px-3 py-2 text-[10px] font-extrabold text-[#607087]'}
+                    ? 'rounded-full bg-[#0A2A66] px-3 py-2 text-[9px] font-extrabold text-white sm:text-[10px]'
+                    : 'rounded-full border border-[#DCE5EF] bg-white px-3 py-2 text-[9px] font-extrabold text-[#607087] sm:text-[10px]'}
                 >
                   {value === 'all' ? 'Todo' : value === 'report' ? 'Gestiones' : 'Iniciativas'}
                 </button>
@@ -224,13 +220,13 @@ export default function CommunityPage() {
           </div>
 
           {loading && (
-            <div className="flex min-h-[240px] items-center justify-center rounded-3xl border border-[#E1E7EF] bg-white">
+            <div className="flex min-h-[220px] items-center justify-center rounded-3xl border border-[#E1E7EF] bg-white">
               <Loader2 size={24} className="animate-spin text-[#4A90E2]" />
             </div>
           )}
 
           {!loading && error && (
-            <div className="rounded-3xl border border-[#F1C8CE] bg-[#FCEBED] p-6 text-sm font-semibold text-[#A91D2E]">{error}</div>
+            <div className="rounded-3xl border border-[#F1C8CE] bg-[#FCEBED] p-5 text-sm font-semibold text-[#A91D2E]">{error}</div>
           )}
 
           {!loading && !error && feed.length === 0 && (
@@ -241,34 +237,34 @@ export default function CommunityPage() {
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {!loading && !error && feed.map((item) => {
               const verification = VERIFICATION_META[item.verification_state]
               return (
-                <article key={`${item.type}-${item.id}`} className="rounded-[24px] border border-[#E1E7EF] bg-white p-5 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:p-6">
-                  <div className="flex gap-4">
+                <article key={`${item.type}-${item.id}`} className="rounded-[22px] border border-[#E1E7EF] bg-white p-4 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:rounded-[24px] sm:p-6">
+                  <div className="flex gap-3 sm:gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span className="text-xs font-extrabold text-[#0A2A66]">{item.actor.display_name}</span>
-                        <span className="rounded-full bg-[#EDF3FA] px-2.5 py-1 text-[9px] font-extrabold text-[#246CB6]">{ACTOR_LABEL[item.actor.actor_kind]}</span>
-                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-extrabold ${verification.className}`}>
+                        <span className="rounded-full bg-[#EDF3FA] px-2 py-1 text-[8px] font-extrabold text-[#246CB6] sm:px-2.5 sm:text-[9px]">{ACTOR_LABEL[item.actor.actor_kind]}</span>
+                        <span className={`rounded-full px-2 py-1 text-[8px] font-extrabold sm:px-2.5 sm:text-[9px] ${verification.className}`}>
                           {verification.label}
                         </span>
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-[#7B8799]">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[9px] font-semibold text-[#7B8799] sm:text-[10px]">
                         {item.neighborhood && <span className="inline-flex items-center gap-1"><MapPin size={11} /> {item.neighborhood}</span>}
                         <span>·</span><span>{formatDate(item.updated_at)}</span>
                       </div>
-                      <Link href={item.href} className="mt-4 block text-lg font-extrabold leading-6 text-[#0A2A66] hover:text-[#246CB6]">{item.title}</Link>
-                      <p className="mt-2 line-clamp-3 text-xs font-medium leading-6 text-[#607087]">{item.summary}</p>
+                      <Link href={item.href} className="mt-3 block text-base font-extrabold leading-6 text-[#0A2A66] hover:text-[#246CB6] sm:mt-4 sm:text-lg">{item.title}</Link>
+                      <p className="mt-2 line-clamp-3 text-[11px] font-medium leading-5 text-[#607087] sm:text-xs sm:leading-6">{item.summary}</p>
                     </div>
                     <ScoreBadge score={item.civic_score} />
                   </div>
 
-                  <div className="mt-5 grid grid-cols-3 gap-2 border-t border-[#E9EDF3] pt-4 text-center">
-                    <div className="rounded-xl bg-[#F7F9FC] p-2.5"><div className="text-sm font-extrabold text-[#0A2A66]">{item.evidence_count}</div><div className="text-[8px] font-bold uppercase tracking-[.1em] text-[#7B8799]">Evidencias</div></div>
-                    <div className="rounded-xl bg-[#F7F9FC] p-2.5"><div className="text-sm font-extrabold text-[#0A2A66]">{item.score_dimensions.results}/20</div><div className="text-[8px] font-bold uppercase tracking-[.1em] text-[#7B8799]">Resultado</div></div>
-                    <div className="rounded-xl bg-[#F7F9FC] p-2.5"><div className="text-sm font-extrabold text-[#0A2A66]">{item.score_dimensions.confidence}/15</div><div className="text-[8px] font-bold uppercase tracking-[.1em] text-[#7B8799]">Confianza</div></div>
+                  <div className="mt-4 grid grid-cols-3 gap-1.5 border-t border-[#E9EDF3] pt-3 text-center sm:mt-5 sm:gap-2 sm:pt-4">
+                    <div className="rounded-xl bg-[#F7F9FC] p-2"><div className="text-sm font-extrabold text-[#0A2A66]">{item.evidence_count}</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#7B8799] sm:text-[8px]">Evidencias</div></div>
+                    <div className="rounded-xl bg-[#F7F9FC] p-2"><div className="text-sm font-extrabold text-[#0A2A66]">{item.score_dimensions.results}/20</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#7B8799] sm:text-[8px]">Resultado</div></div>
+                    <div className="rounded-xl bg-[#F7F9FC] p-2"><div className="text-sm font-extrabold text-[#0A2A66]">{item.score_dimensions.confidence}/15</div><div className="text-[7px] font-bold uppercase tracking-[.08em] text-[#7B8799] sm:text-[8px]">Confianza</div></div>
                   </div>
                 </article>
               )
@@ -276,16 +272,16 @@ export default function CommunityPage() {
           </div>
         </section>
 
-        <aside className="space-y-5">
-          <section className="rounded-[24px] border border-[#E1E7EF] bg-white p-5 shadow-[0_10px_35px_rgba(10,42,102,.05)]">
+        <aside className="space-y-4 sm:space-y-5">
+          <section className="rounded-[22px] border border-[#E1E7EF] bg-white p-4 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:rounded-[24px] sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-[9px] font-extrabold uppercase tracking-[.13em] text-[#7B8799]">Ranking territorial</div>
-                <h2 className="mt-1 text-lg font-extrabold text-[#0A2A66]">Gestión con mayor evidencia</h2>
+                <h2 className="mt-1 text-base font-extrabold text-[#0A2A66] sm:text-lg">Gestión con mayor evidencia</h2>
               </div>
               <Trophy size={20} className="text-[#F5B700]" />
             </div>
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-2.5 sm:mt-5 sm:space-y-3">
               {leaders.map((leader) => (
                 <div key={leader.citizen_id} className="flex items-center gap-3 rounded-2xl bg-[#F7F9FC] p-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-extrabold text-[#0A2A66] shadow-sm">
@@ -301,13 +297,13 @@ export default function CommunityPage() {
             </div>
           </section>
 
-          <section className="rounded-[24px] border border-[#C9D8EA] bg-[#EDF3FA] p-5">
+          <section className="rounded-[22px] border border-[#C9D8EA] bg-[#EDF3FA] p-4 sm:rounded-[24px] sm:p-5">
             <div className="flex items-center gap-2 text-[#0A2A66]"><BarChart3 size={17} /><span className="text-[10px] font-extrabold uppercase tracking-[.12em]">Cómo se calcula</span></div>
             <div className="mt-4 space-y-2 text-[11px] font-semibold text-[#526176]">
-              {[['Evidencia', 25], ['Resultados', 20], ['Impacto', 15], ['Validación', 10], ['Confianza', 15]].map(([label, points]) => (
-                <div key={String(label)} className="flex items-center justify-between"><span>{String(label)}</span><strong className="text-[#0A2A66]">{String(points)} pts</strong></div>
+              {([['Evidencia', 25], ['Resultados', 20], ['Impacto', 15], ['Validación', 10], ['Confianza', 15]] as const).map(([label, points]) => (
+                <div key={label} className="flex items-center justify-between"><span>{label}</span><strong className="text-[#0A2A66]">{points} pts</strong></div>
               ))}
-              <div className="flex items-center justify-between"><span>Transparencia + colaboración + continuidad</span><strong className="text-[#0A2A66]">15 pts</strong></div>
+              <div className="flex items-center justify-between gap-4"><span>Transparencia + colaboración + continuidad</span><strong className="shrink-0 text-[#0A2A66]">15 pts</strong></div>
             </div>
             <div className="mt-4 flex gap-2 rounded-xl bg-white/70 p-3 text-[10px] font-semibold leading-5 text-[#526176]"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-[#2BA745]" />Popularidad y seguidores no suman puntos.</div>
           </section>
