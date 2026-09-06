@@ -40,16 +40,16 @@ const NAV_ITEMS = [
   { href: '/dashboard/ai',         label: 'IA cívica',       icon: Sparkles,        exact: false, adminOnly: false },
   { href: '/dashboard/identity',   label: 'Identidad',       icon: ShieldCheck,     exact: false, adminOnly: false },
   { href: '/dashboard/reputation', label: 'Perfil cívico',   icon: Star,            exact: false, adminOnly: false },
-  { href: '/dashboard/legal',      label: 'Control público', icon: Scale,           exact: false, adminOnly: false },
-  { href: '/dashboard/admin',      label: 'Moderación',      icon: Shield,          exact: false, adminOnly: true  },
+  { href: '/dashboard/legal',      label: 'Control público', icon: Scale,            exact: false, adminOnly: false },
+  { href: '/dashboard/admin',      label: 'Moderación',      icon: Shield,           exact: false, adminOnly: true  },
 ] as const
 
 const BOTTOM_NAV = [
-  { href: '/dashboard',             label: 'Inicio',    icon: Home,      exact: true },
-  { href: '/dashboard/community',   label: 'Red',       icon: Network,   exact: false },
-  { href: '/dashboard/reports/new', label: 'Gestionar', icon: Plus,      exact: false, fab: true },
-  { href: '/dashboard/workflows',   label: 'Gestión',   icon: GitBranch, exact: false },
-  { href: '/dashboard/reputation',  label: 'Perfil',    icon: User,      exact: false },
+  { href: '/dashboard',                              label: 'Inicio',  icon: Home,      exact: true },
+  { href: '/dashboard/community',                    label: 'Red',     icon: Network,   exact: false },
+  { href: '/dashboard/community/actions/new',        label: 'Acción',  icon: Plus,      exact: false, fab: true },
+  { href: '/dashboard/workflows',                    label: 'Gestión', icon: GitBranch, exact: false },
+  { href: '/dashboard/reputation',                   label: 'Perfil',  icon: User,      exact: false },
 ] as const
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -204,7 +204,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Menu size={19} />
           </button>
-          <Link href="/dashboard/community" className="flex items-center">
+          <Link href="/dashboard" className="flex items-center">
             <BrandLogo compact className="scale-[.88]" />
           </Link>
           <div className="flex items-center gap-2">
