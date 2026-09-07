@@ -79,6 +79,14 @@ const schema = z.object({
   VERIFF_CALLBACK_URL: z.string().url().optional(),
   VERIFF_REVOCATION_STATUS_CODE: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,99}$/).default('vertice_revoked'),
 
+  // Civic profile identity media. Optional and feature-scoped: without these
+  // values the profile API remains available but avatar uploads fail closed.
+  // Cloudflare Images direct uploads keep image bytes out of the API process.
+  CLOUDFLARE_IMAGES_ACCOUNT_ID: z.string().regex(/^[a-fA-F0-9]{32}$/).optional(),
+  CLOUDFLARE_IMAGES_API_TOKEN: z.string().min(20).optional(),
+  CLOUDFLARE_IMAGES_DELIVERY_URL: z.string().url().optional(),
+  CLOUDFLARE_IMAGES_VARIANT: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).default('public'),
+
   // ── Blockchain (Polygon) — capacidades opcionales ─────────────────
   POLYGON_RPC_URL:          z.string().url().optional(),
   POLYGON_PRIVATE_KEY:      z.string().optional(),

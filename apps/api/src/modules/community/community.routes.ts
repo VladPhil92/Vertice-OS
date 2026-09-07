@@ -3,9 +3,11 @@ import { requireAuth, requireVerified } from '../../middleware/auth'
 import {
   CivicActivityParamsSchema,
   CivicActivityValidationSchema,
+  CivicAvatarBatchQuerySchema,
   CivicProfileParamsSchema,
   CommunityFeedQuerySchema,
   CommunityLeaderboardQuerySchema,
+  ConfirmCivicAvatarSchema,
   UpdateCivicProfileSchema,
 } from './community.schema'
 import {
@@ -22,6 +24,13 @@ import {
   unfollowCivicProfile,
   updateCivicProfile,
 } from './community.service'
+import {
+  confirmCivicAvatarUpload,
+  createCivicAvatarUploadIntent,
+  getCivicAvatarState,
+  listPublicCivicAvatars,
+  removeCivicAvatar,
+} from './civic-avatar.service'
 
 export async function communityRoutes(app: FastifyInstance): Promise<void> {
   // Public activity is privacy-safe: actors that have not opted into a public
@@ -93,6 +102,20 @@ export async function communityRoutes(app: FastifyInstance): Promise<void> {
     })
   })
 
+  // Batch avatar lookup prevents N+1 requests in feed/ranking clients and only
+  // returns media for citizens who explicitly published their civic profile.
+  app.get('/avatars', async (request, reply) => {
+    const parsed = CivicAvatarBatchQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Consulta de imágenes inválida',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+    const data = await listPublicCivicAvatars(parsed.data.ids)
+    return reply.send({ data, count: Object.keys(data).length })
+  })
+
   app.get('/profile/me', { preHandler: requireAuth }, async (request, reply) => {
     return reply.send(await getCivicProfile(request.citizen.sub))
   })
@@ -109,6 +132,45 @@ export async function communityRoutes(app: FastifyInstance): Promise<void> {
       })
     }
     return reply.send(await updateCivicProfile(request.citizen.sub, parsed.data))
+  })
+
+  app.get('/profile/me/avatar', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getCivicAvatarState(request.citizen.sub))
+  })
+
+  app.post('/profile/me/avatar/upload-intent', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    return reply.send(await createCivicAvatarUploadIntent(request.citizen.sub))
+  })
+
+  app.post('/profile/me/avatar/confirm', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = ConfirmCivicAvatarSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Foto de perfil inválida',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+
+    // The policy attestation is deliberately separate from identity proofing.
+    // Browser face checks assist quality control but never create a biometric
+    // identity record and verification_level remains the source of truth.
+    return reply.send(await confirmCivicAvatarUpload(
+      request.citizen.sub,
+      parsed.data.asset_id,
+    ))
+  })
+
+  app.delete('/profile/me/avatar', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    return reply.send(await removeCivicAvatar(request.citizen.sub))
   })
 
   app.get('/profiles/:citizenId', async (request, reply) => {

@@ -1,9 +1,11 @@
 import {
   CivicActivityParamsSchema,
   CivicActivityValidationSchema,
+  CivicAvatarBatchQuerySchema,
   CivicProfileParamsSchema,
   CommunityFeedQuerySchema,
   CommunityLeaderboardQuerySchema,
+  ConfirmCivicAvatarSchema,
   UpdateCivicProfileSchema,
 } from '../community.schema'
 
@@ -51,6 +53,47 @@ describe('community query schemas', () => {
       activityId: citizenId,
     })
     expect(() => CivicProfileParamsSchema.parse({ citizenId: 'not-a-uuid' })).toThrow()
+  })
+
+  it('accepts a deduplicated, bounded avatar batch', () => {
+    const citizenId = '550e8400-e29b-41d4-a716-446655440000'
+    expect(CivicAvatarBatchQuerySchema.parse({ ids: `${citizenId},${citizenId}` })).toEqual({ ids: [citizenId] })
+    expect(() => CivicAvatarBatchQuerySchema.parse({ ids: 'not-a-uuid' })).toThrow()
+  })
+
+  it('requires explicit portrait policy attestation and safe client checks', () => {
+    expect(ConfirmCivicAvatarSchema.parse({
+      asset_id: 'avatar_asset_12345',
+      policy_attestation: true,
+      client_checks: {
+        width: 1024,
+        height: 1024,
+        face_detector_available: true,
+        face_count: 1,
+      },
+    }).policy_attestation).toBe(true)
+
+    expect(() => ConfirmCivicAvatarSchema.parse({
+      asset_id: 'avatar_asset_12345',
+      policy_attestation: true,
+      client_checks: {
+        width: 512,
+        height: 1024,
+        face_detector_available: false,
+        face_count: null,
+      },
+    })).toThrow()
+
+    expect(() => ConfirmCivicAvatarSchema.parse({
+      asset_id: 'avatar_asset_12345',
+      policy_attestation: true,
+      client_checks: {
+        width: 1024,
+        height: 1024,
+        face_detector_available: true,
+        face_count: 2,
+      },
+    })).toThrow()
   })
 
   it('allows one-click corroboration without turning it into verified evidence', () => {

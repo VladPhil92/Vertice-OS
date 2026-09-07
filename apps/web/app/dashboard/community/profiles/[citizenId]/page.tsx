@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { CivicAvatar } from '@/components/community/CivicAvatar'
 
 type CivicProfileType = 'citizen' | 'social_leader' | 'candidate' | 'organization_rep' | 'public_official'
 type ActivityType = 'report' | 'proposal'
@@ -55,6 +56,17 @@ interface FollowState {
   follower_count: number
 }
 
+interface PublicAvatar {
+  citizen_id: string
+  avatar_url: string | null
+  identity_verified: boolean
+}
+
+interface AvatarBatchResponse {
+  data: Record<string, PublicAvatar>
+  count: number
+}
+
 const PROFILE_LABEL: Record<CivicProfileType, string> = {
   citizen: 'Ciudadanía',
   social_leader: 'Liderazgo social',
@@ -76,6 +88,7 @@ export default function PublicCivicProfilePage() {
   const params = useParams<{ citizenId: string }>()
   const citizenId = params.citizenId
   const [profile, setProfile] = useState<PublicCivicProfile | null>(null)
+  const [avatar, setAvatar] = useState<PublicAvatar | null>(null)
   const [followState, setFollowState] = useState<FollowState | null>(null)
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
@@ -84,10 +97,12 @@ export default function PublicCivicProfilePage() {
   useEffect(() => {
     Promise.all([
       apiFetch<PublicCivicProfile>(`/community/profiles/${citizenId}`, { public: true }),
+      apiFetch<AvatarBatchResponse>(`/community/avatars?ids=${encodeURIComponent(citizenId)}`, { public: true }),
       apiFetch<FollowState>(`/community/profiles/${citizenId}/follow-state`).catch(() => null),
     ])
-      .then(([profileData, state]) => {
+      .then(([profileData, avatarData, state]) => {
         setProfile(profileData)
+        setAvatar(avatarData.data[citizenId] ?? null)
         setFollowState(state)
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'No fue posible cargar el perfil.'))
@@ -128,23 +143,34 @@ export default function PublicCivicProfilePage() {
         <div className="h-1.5 bg-[linear-gradient(90deg,#F5B700_0_33%,#4A90E2_33%_66%,#D72638_66%)]" />
         <div className="p-5 sm:p-7 lg:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[#EDF3FA] px-3 py-1 text-[9px] font-extrabold uppercase tracking-[.1em] text-[#246CB6]">
-                  {PROFILE_LABEL[profile.profile_type]}
-                </span>
-                {profile.organization && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#607087]"><Building2 size={12} /> {profile.organization}</span>
-                )}
+            <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-start">
+              <CivicAvatar
+                src={avatar?.avatar_url}
+                name={profile.display_name}
+                identityVerified={avatar?.identity_verified ?? false}
+                size="xl"
+              />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[#EDF3FA] px-3 py-1 text-[9px] font-extrabold uppercase tracking-[.1em] text-[#246CB6]">
+                    {PROFILE_LABEL[profile.profile_type]}
+                  </span>
+                  {avatar?.identity_verified && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#EAF6ED] px-2.5 py-1 text-[9px] font-extrabold text-[#237D36]"><BadgeCheck size={12} /> Identidad verificada</span>
+                  )}
+                  {profile.organization && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#607087]"><Building2 size={12} /> {profile.organization}</span>
+                  )}
+                </div>
+                <h1 className="mt-3 text-2xl font-extrabold tracking-[-.03em] text-[#0A2A66] sm:text-4xl">
+                  {profile.display_name ?? 'Perfil cívico VÉRTICE'}
+                </h1>
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-semibold text-[#7B8799]">
+                  {profile.neighborhood && <span className="inline-flex items-center gap-1"><MapPin size={12} /> {profile.neighborhood}</span>}
+                  <span className="inline-flex items-center gap-1"><Users size={12} /> {profile.follower_count} seguidores</span>
+                </div>
+                {profile.bio && <p className="mt-5 max-w-3xl text-sm font-medium leading-7 text-[#526176]">{profile.bio}</p>}
               </div>
-              <h1 className="mt-3 text-2xl font-extrabold tracking-[-.03em] text-[#0A2A66] sm:text-4xl">
-                {profile.display_name ?? 'Perfil cívico VÉRTICE'}
-              </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-semibold text-[#7B8799]">
-                {profile.neighborhood && <span className="inline-flex items-center gap-1"><MapPin size={12} /> {profile.neighborhood}</span>}
-                <span className="inline-flex items-center gap-1"><Users size={12} /> {profile.follower_count} seguidores</span>
-              </div>
-              {profile.bio && <p className="mt-5 max-w-3xl text-sm font-medium leading-7 text-[#526176]">{profile.bio}</p>}
             </div>
 
             {followState && (
@@ -217,7 +243,7 @@ export default function PublicCivicProfilePage() {
       </section>
 
       <section className="mt-5 rounded-2xl border border-[#DCE5EF] bg-[#F7F9FC] p-4 text-[10px] font-semibold leading-5 text-[#607087]">
-        <div className="flex items-start gap-2"><FileText size={14} className="mt-0.5 shrink-0 text-[#246CB6]" /> Los seguidores sirven para descubrir y suscribirse a gestión. No aumentan el VÉRTICE Score ni el ranking.</div>
+        <div className="flex items-start gap-2"><FileText size={14} className="mt-0.5 shrink-0 text-[#246CB6]" /> La foto pública identifica visualmente al titular del perfil; el distintivo “Identidad verificada” proviene del sistema de verificación y no de la imagen. Los seguidores no aumentan el VÉRTICE Score ni el ranking.</div>
       </section>
     </div>
   )
