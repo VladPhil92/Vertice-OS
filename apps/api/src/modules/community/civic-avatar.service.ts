@@ -55,7 +55,7 @@ function requireProvider(): void {
   }
 }
 
-function providerHeaders(): HeadersInit {
+function providerHeaders(): Record<string, string> {
   return {
     Authorization: `Bearer ${config.CLOUDFLARE_IMAGES_API_TOKEN}`,
   }
