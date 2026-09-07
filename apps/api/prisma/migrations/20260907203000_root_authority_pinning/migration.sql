@@ -36,6 +36,9 @@ BEGIN
      AND ei.provider = 'ctg_one'
     WHERE c.id = NEW.citizen_id
       AND LOWER(c.email) = 'valderramapino@gmail.com'
+      -- email_at_link is refreshed by the CTG One federation exchange, so a
+      -- changed upstream email cannot pass using a stale citizens.email value.
+      AND LOWER(ei.email_at_link) = 'valderramapino@gmail.com'
       AND ENCODE(DIGEST(ei.provider_subject, 'sha256'), 'hex') =
           '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
   ) INTO canonical_identity;
@@ -69,6 +72,7 @@ BEGIN
           FROM external_identities ei
           WHERE ei.citizen_id = c.id
             AND ei.provider = 'ctg_one'
+            AND LOWER(ei.email_at_link) = 'valderramapino@gmail.com'
             AND ENCODE(DIGEST(ei.provider_subject, 'sha256'), 'hex') =
                 '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
         )
