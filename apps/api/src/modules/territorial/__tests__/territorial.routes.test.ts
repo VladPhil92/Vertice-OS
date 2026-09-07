@@ -31,6 +31,7 @@ import { buildApp } from '../../../app'
 const app = buildApp()
 const DID = 'did:vertice:550e8400-e29b-41d4-a716-446655440000'
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
+const SESSION_ID = '6f9619ff-8b86-d011-b42d-00c04fc964ff'
 
 let verifiedToken: string
 let moderatorToken: string
@@ -38,7 +39,7 @@ let moderatorToken: string
 beforeAll(async () => {
   await app.ready()
   verifiedToken  = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 1, role: 'citizen' })
-  moderatorToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'moderator' })
+  moderatorToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'moderator', sid: SESSION_ID })
 })
 afterAll(() => app.close())
 beforeEach(() => jest.clearAllMocks())
