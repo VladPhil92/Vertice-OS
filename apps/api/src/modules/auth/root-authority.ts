@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto'
+
 export const ROOT_SUPERADMIN_EMAIL = 'valderramapino@gmail.com' as const
 
-// CTG One auth.users.id for the canonical VÉRTICE root identity. This UUID is
-// an identifier, not a credential: possession of it cannot authenticate a user.
-// Keeping the pin in source makes root-authority rotation an explicit, reviewed
-// code change instead of an environment-only mutation.
-export const ROOT_SUPERADMIN_CTG_ONE_SUBJECT = 'b7c5a0f0-0ff4-4470-9df5-aaa50fbf5405' as const
+// The raw CTG One auth.users UUID is deliberately not stored in the current
+// source tree. Rotating this digest requires an explicit reviewed code change.
+const ROOT_SUPERADMIN_CTG_ONE_SUBJECT_SHA256 =
+  '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08' as const
 
 export type FederatedRootAuthorityIdentity = {
   email: string
@@ -12,6 +13,7 @@ export type FederatedRootAuthorityIdentity = {
 }
 
 export function isCanonicalRootAuthority(identity: FederatedRootAuthorityIdentity): boolean {
+  const subjectDigest = createHash('sha256').update(identity.subject, 'utf8').digest('hex')
   return identity.email.trim().toLowerCase() === ROOT_SUPERADMIN_EMAIL
-    && identity.subject === ROOT_SUPERADMIN_CTG_ONE_SUBJECT
+    && subjectDigest === ROOT_SUPERADMIN_CTG_ONE_SUBJECT_SHA256
 }

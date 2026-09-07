@@ -5,6 +5,7 @@ import { config } from '../../config'
 import { recordAuditEvent } from '../../lib/audit'
 import { prisma } from '../../lib/prisma'
 import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt'
+import { isCanonicalRootAuthority, ROOT_SUPERADMIN_EMAIL } from './root-authority'
 
 export const CITIZEN_ROLES = ['citizen', 'moderator', 'admin', 'superadmin'] as const
 const BOOTSTRAP_AUTHORITY = 'bootstrap_superadmin'
@@ -97,6 +98,38 @@ export async function bootstrapFederatedSuperadmin(
     // can never establish two first superadmins from a stale count.
     await lockSuperadminAuthority(tx)
 
+    // Root authority is pinned locally in VÉRTICE. The CTG One authority claim
+    // is necessary but never sufficient: both the current federated email and
+    // immutable provider subject must resolve to the canonical root identity.
+    const [rootIdentity] = await tx.$queryRaw<Array<{
+      local_email: string | null
+      federated_email: string | null
+      provider_subject: string | null
+    }>>(Prisma.sql`
+      SELECT
+        c.email AS local_email,
+        ei.email_at_link AS federated_email,
+        ei.provider_subject
+      FROM citizens c
+      INNER JOIN external_identities ei
+        ON ei.citizen_id = c.id
+       AND ei.provider = 'ctg_one'
+      WHERE c.id = ${citizenId}::uuid
+      ORDER BY ei.created_at ASC
+      LIMIT 1
+      FOR SHARE OF c, ei
+    `)
+
+    const localEmailMatches = rootIdentity?.local_email?.trim().toLowerCase() === ROOT_SUPERADMIN_EMAIL
+    const canonicalRoot = rootIdentity?.federated_email && rootIdentity.provider_subject
+      ? isCanonicalRootAuthority({
+          email: rootIdentity.federated_email,
+          subject: rootIdentity.provider_subject,
+        })
+      : false
+
+    if (!localEmailMatches || !canonicalRoot) return 'identity_mismatch' as const
+
     const [existing] = await tx.$queryRaw<Array<{ has_grant: boolean; total_superadmins: bigint }>>(Prisma.sql`
       SELECT
         EXISTS(
@@ -124,6 +157,21 @@ export async function bootstrapFederatedSuperadmin(
     return 'granted' as const
   })
 
+  if (outcome === 'identity_mismatch') {
+    await recordAuditEvent({
+      actorId: citizenId,
+      action: 'role.bootstrap_superadmin',
+      targetType: 'citizen',
+      targetId: citizenId,
+      result: 'denied',
+      reason: 'root_identity_mismatch',
+      metadata: { source: 'ctg_one_federation' },
+    })
+    throw Object.assign(new Error('La identidad federada no coincide con la autoridad raíz de VÉRTICE'), {
+      statusCode: 403,
+      code: 'ROOT_SUPERADMIN_IDENTITY_MISMATCH',
+    })
+  }
   if (outcome === 'blocked') return null
   if (outcome === 'existing') return 'superadmin'
 
