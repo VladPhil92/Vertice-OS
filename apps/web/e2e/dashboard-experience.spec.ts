@@ -131,4 +131,35 @@ test.describe('Dashboard Experience Convergence v6', () => {
     await expect(center.getByRole('link', { name: /completar verificación básica/i })).toHaveAttribute('href', '/dashboard/identity')
     await expect(page.getByRole('heading', { name: /convierte gestión en evidencia pública/i })).toBeVisible()
   })
+
+  test('deduplicates concurrent dashboard reads while keeping independent surfaces resilient', async ({ page }) => {
+    let dashboardReads = 0
+
+    await page.route('**/dashboard/me', async (route) => {
+      dashboardReads += 1
+      await new Promise((resolve) => setTimeout(resolve, 75))
+      await route.fulfill({ status: 200, json: leaderDashboard })
+    })
+    await page.route('**/community/profile/me', (route) => route.fulfill({ status: 200, json: leaderCivicProfile }))
+
+    await page.goto('/dashboard')
+
+    await expect(page.getByTestId('dashboard-experience-layer')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /convierte gestión en evidencia pública/i })).toBeVisible()
+    await expect.poll(() => dashboardReads).toBe(1)
+  })
+
+  test('groups desktop navigation by user intent and marks the current route semantically', async ({ page }) => {
+    await page.route('**/dashboard/me', (route) => route.fulfill({ status: 200, json: leaderDashboard }))
+    await page.route('**/community/profile/me', (route) => route.fulfill({ status: 200, json: leaderCivicProfile }))
+
+    await page.goto('/dashboard')
+
+    const navigation = page.getByRole('navigation', { name: 'Navegación principal del dashboard' })
+    await expect(navigation.getByText('Principal', { exact: true })).toBeVisible()
+    await expect(navigation.getByText('Participación', { exact: true })).toBeVisible()
+    await expect(navigation.getByText('Herramientas', { exact: true })).toBeVisible()
+    await expect(navigation.getByText('Cuenta', { exact: true })).toBeVisible()
+    await expect(navigation.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
+  })
 })
