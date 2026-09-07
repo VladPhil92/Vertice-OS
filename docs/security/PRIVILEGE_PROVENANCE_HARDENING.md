@@ -7,7 +7,7 @@
 Trusted elevated provenance is limited to:
 
 - `ctg_one_bootstrap`: only for the canonical CTG One root identity pinned by `ROOT_AUTHORITY_PINNING.md`.
-- `superadmin_dashboard`: only when `granted_by_citizen_id` currently holds a trusted live `superadmin` grant.
+- `superadmin_dashboard`: only when `granted_by_citizen_id` has a live superadmin lineage that ultimately terminates in that canonical root bootstrap.
 
 The historical sources `legacy_role` and `legacy_backfill` may not create, revive, or preserve elevated authority.
 
@@ -17,14 +17,18 @@ Local login always starts at the `citizen` baseline. Refresh keeps an elevated `
 
 ## Database enforcement
 
-Migration `20260907210000_privilege_provenance_hardening`:
+Migration `20260907210000_privilege_provenance_hardening` performs an authority handover before cleanup so it remains compatible with the pre-existing `LAST_SUPERADMIN_PROTECTED` invariant:
 
-1. revokes active elevated grants from `legacy_role` and `legacy_backfill`;
-2. aborts deployment if any other unknown elevated provenance remains active;
-3. downgrades stale privileged sessions to `citizen`;
-4. recalculates `citizens.role` from live grants as a compatibility projection;
-5. installs `citizen_role_grants_privilege_provenance`, rejecting future elevated grants unless provenance is canonical bootstrap or an authorized superadmin dashboard action.
+1. resolves the canonical CTG One root using the pinned email + subject digest;
+2. under the superadmin advisory lock, establishes/rewrites the root's `moderator`, `admin`, and `superadmin` grants as `ctg_one_bootstrap` without ever removing the final active superadmin;
+3. revokes remaining elevated grants from `legacy_role` and `legacy_backfill`;
+4. aborts if unknown or non-root-backed elevated provenance remains active;
+5. downgrades stale privileged sessions to `citizen`;
+6. recalculates `citizens.role` from live grants as a compatibility projection;
+7. installs `citizen_role_grants_privilege_provenance`, rejecting future elevated grants unless provenance is canonical bootstrap or an authorized root-backed superadmin dashboard action.
+
+If the canonical root cannot be proven at migration time, deployment fails closed with `CANONICAL_ROOT_REQUIRED_FOR_PRIVILEGE_HANDOVER`; the last-superadmin guard is never disabled.
 
 ## Operational consequence
 
-Any operator who previously depended only on a legacy elevated role loses that authority by design. A current trusted superadmin must explicitly re-grant the required role from Control VÉRTICE. This converts historical implicit authority into auditable explicit authority.
+Operators who previously depended only on legacy elevated roles lose that authority by design. The canonical root remains continuously authorized through the atomic provenance handover and can explicitly re-grant required roles from Control VÉRTICE. This converts historical implicit authority into auditable explicit authority without creating a superadmin-free interval.

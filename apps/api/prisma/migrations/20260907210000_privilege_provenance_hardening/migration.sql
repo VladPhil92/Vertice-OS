@@ -3,14 +3,13 @@
 -- Elevated authority is no longer inheritable from citizens.role or from the
 -- historical legacy_role / legacy_backfill sources. Active elevated grants are
 -- accepted only when they descend from the canonical CTG One root bootstrap.
+--
+-- IMPORTANT: VÉRTICE already protects the final active superadmin at the DB
+-- boundary. Therefore provenance migration must establish the canonical root
+-- first and only then quarantine legacy authority. This preserves continuity
+-- without disabling the LAST_SUPERADMIN_PROTECTED invariant.
 
--- 1. Quarantine historical elevated authority. The citizen baseline remains
--- intact; legitimate operators can be re-granted explicitly by a superadmin.
-UPDATE citizen_role_grants
-SET revoked_at = NOW()
-WHERE revoked_at IS NULL
-  AND role IN ('moderator', 'admin', 'superadmin')
-  AND source IN ('legacy_role', 'legacy_backfill');
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Canonical root predicate shared by bootstrap validation and lineage checks.
 CREATE OR REPLACE FUNCTION is_canonical_ctg_one_root(candidate UUID)
@@ -31,6 +30,69 @@ AS $$
           '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
   );
 $$;
+
+-- 1. If legacy elevated authority exists, atomically hand authority to the
+-- canonical root BEFORE removing any legacy superadmin. Clean installations
+-- without historical privilege do not need a root account merely to migrate.
+DO $$
+DECLARE
+  canonical_root_id UUID;
+  legacy_elevated_exists BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM citizen_role_grants
+    WHERE revoked_at IS NULL
+      AND role IN ('moderator', 'admin', 'superadmin')
+      AND source IN ('legacy_role', 'legacy_backfill')
+  ) INTO legacy_elevated_exists;
+
+  IF legacy_elevated_exists IS NOT TRUE THEN
+    RETURN;
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('vertice-superadmin-authority'));
+
+  SELECT c.id
+  INTO canonical_root_id
+  FROM citizens c
+  WHERE is_canonical_ctg_one_root(c.id)
+  ORDER BY c.created_at ASC
+  LIMIT 1;
+
+  IF canonical_root_id IS NULL THEN
+    RAISE EXCEPTION 'CANONICAL_ROOT_REQUIRED_FOR_PRIVILEGE_HANDOVER'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'citizen_role_grants_privilege_provenance';
+  END IF;
+
+  INSERT INTO citizen_role_grants
+    (citizen_id, role, granted_by_citizen_id, source, granted_at, revoked_at)
+  SELECT
+    canonical_root_id,
+    elevated.role,
+    NULL,
+    'ctg_one_bootstrap',
+    NOW(),
+    NULL
+  FROM unnest(ARRAY['moderator', 'admin', 'superadmin']::text[]) AS elevated(role)
+  ON CONFLICT (citizen_id, role)
+  DO UPDATE SET
+    granted_by_citizen_id = NULL,
+    source = 'ctg_one_bootstrap',
+    granted_at = NOW(),
+    revoked_at = NULL;
+END;
+$$;
+
+-- 2. Quarantine historical elevated authority only after the canonical root is
+-- live when a handover was required. The existing last-superadmin trigger stays
+-- enabled throughout the migration.
+UPDATE citizen_role_grants
+SET revoked_at = NOW()
+WHERE revoked_at IS NULL
+  AND role IN ('moderator', 'admin', 'superadmin')
+  AND source IN ('legacy_role', 'legacy_backfill');
 
 -- A superadmin is trusted only if its live grant chain terminates at the
 -- canonical CTG One root bootstrap. The path array breaks malformed cycles.
@@ -75,7 +137,7 @@ AS $$
   );
 $$;
 
--- 2. Fail closed if production contains any elevated provenance that is either
+-- 3. Fail closed if production contains any elevated provenance that is either
 -- unknown or cannot be proven back to the canonical root.
 DO $$
 BEGIN
@@ -125,7 +187,7 @@ BEGIN
 END;
 $$;
 
--- 3. Any session whose selected role lost provenance is immediately reduced to
+-- 4. Any session whose selected role lost provenance is immediately reduced to
 -- citizen. Refresh and live-role middleware then continue from explicit grants.
 UPDATE sessions s
 SET active_role = 'citizen'
@@ -146,7 +208,7 @@ WHERE s.active_role IN ('moderator', 'admin', 'superadmin')
       )
   );
 
--- 4. citizens.role is retained only as a backwards-compatible projection. It
+-- 5. citizens.role is retained only as a backwards-compatible projection. It
 -- is recalculated from live grants so stale historical values cannot survive
 -- the provenance cleanup.
 WITH effective_roles AS (
