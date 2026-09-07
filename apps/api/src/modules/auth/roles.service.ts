@@ -78,12 +78,14 @@ export async function ensureRoleGrant(
   await ensureRoleGrantWithStore(prisma, citizenId, role, source, grantedByCitizenId)
 }
 
-export async function ensureBaselineRoleGrants(citizenId: string, preferredRole: CitizenRole): Promise<CitizenRole> {
+export async function ensureBaselineRoleGrants(
+  citizenId: string,
+  _preferredRole: CitizenRole = 'citizen',
+): Promise<CitizenRole> {
+  // Baseline provisioning can never create or revive elevated authority. The
+  // second parameter remains temporarily for call-site compatibility only.
   await ensureRoleGrant(citizenId, 'citizen', 'session_baseline')
-  if (preferredRole !== 'citizen') {
-    await ensureRoleGrant(citizenId, preferredRole, 'legacy_role')
-  }
-  return preferredRole
+  return 'citizen'
 }
 
 export async function bootstrapFederatedSuperadmin(
@@ -146,13 +148,12 @@ export async function bootstrapFederatedSuperadmin(
 
     if (existing?.has_grant) return 'existing' as const
 
-    // CTG One may only establish the very first VERTICE superadmin. Once a
-    // superadmin exists, all future grants are controlled from VERTICE itself.
+    // CTG One may only establish the very first VÉRTICE superadmin. The root
+    // receives no redundant moderator/admin grants: superadmin is the sole
+    // elevated bootstrap grant and already satisfies lower authorization guards.
     if (Number(existing?.total_superadmins ?? 0) > 0) return 'blocked' as const
 
-    for (const role of CITIZEN_ROLES) {
-      await ensureRoleGrantWithStore(tx, citizenId, role, 'ctg_one_bootstrap')
-    }
+    await ensureRoleGrantWithStore(tx, citizenId, 'superadmin', 'ctg_one_bootstrap')
     await tx.citizen.update({ where: { id: citizenId }, data: { role: 'superadmin' } })
     return 'granted' as const
   })
