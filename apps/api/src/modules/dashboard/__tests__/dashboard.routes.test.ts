@@ -33,6 +33,7 @@ import { buildApp } from '../../../app'
 const app = buildApp()
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
 const DID = `did:vertice:${CITIZEN_ID}`
+const SESSION_ID = '6f9619ff-8b86-d011-b42d-00c04fc964ff'
 
 let citizenToken: string
 let adminToken: string
@@ -41,8 +42,8 @@ let superadminToken: string
 beforeAll(async () => {
   await app.ready()
   citizenToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 1, role: 'citizen' })
-  adminToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'admin' })
-  superadminToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'superadmin' })
+  adminToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'admin', sid: SESSION_ID })
+  superadminToken = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 2, role: 'superadmin', sid: SESSION_ID })
 })
 
 afterAll(() => app.close())
