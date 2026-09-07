@@ -139,7 +139,12 @@ export async function getPilotControlCenter() {
         (SELECT COUNT(*) FROM civic_actions WHERE status = 'no_evidence') AS civic_actions_no_evidence,
         (SELECT COUNT(*) FROM civic_actions WHERE status = 'not_completed') AS civic_actions_not_completed,
         (SELECT COUNT(*) FROM civic_actions WHERE status <> 'cancelled') AS civic_actions_non_cancelled,
-        (SELECT COUNT(DISTINCT action_id) FROM civic_action_evidence) AS civic_actions_with_evidence,
+        (
+          SELECT COUNT(DISTINCT evidence.action_id)
+          FROM civic_action_evidence AS evidence
+          INNER JOIN civic_actions AS action ON action.id = evidence.action_id
+          WHERE action.status <> 'cancelled'
+        ) AS civic_actions_with_evidence,
         (SELECT COUNT(*) FROM civic_activity_validations WHERE stance = 'corroborate' AND created_at >= NOW() - INTERVAL '7 days') AS corroborations_7d,
         (SELECT COUNT(*) FROM civic_activity_validations WHERE stance = 'dispute' AND created_at >= NOW() - INTERVAL '7 days') AS disputes_7d,
         (SELECT COUNT(*) FROM civic_action_validations WHERE stance = 'corroborate' AND updated_at >= NOW() - INTERVAL '7 days') AS civic_action_corroborations_7d,
