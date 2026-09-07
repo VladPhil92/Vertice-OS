@@ -42,9 +42,28 @@ interface PilotMetrics {
     endorsements_7d: number
     validations_7d: number
     follows_7d: number
+    civic_actions_7d: number
+    civic_action_evidence_7d: number
+    civic_action_validations_7d: number
     attribution_note: string
   }
   operations: {
+    civic_actions: {
+      proposed: number
+      preparing: number
+      in_progress: number
+      result_declared: number
+      under_verification: number
+      verified: number
+      disputed: number
+      no_evidence: number
+      not_completed: number
+      non_cancelled: number
+      with_evidence: number
+      evidence_coverage_rate_pct: number
+      verified_action_rate_pct: number
+      validations_7d: { corroborations: number; disputes: number }
+    }
     reports: { open: number; in_progress: number; resolved: number }
     proposals: { debate: number; voting: number }
     evidence: { corroborations_7d: number; disputes_7d: number }
@@ -176,6 +195,10 @@ export default function PilotControlCenterPage() {
 
   if (!data) return null
 
+  const actions = data.operations.civic_actions
+  const actionsInExecution = actions.preparing + actions.in_progress
+  const actionsAwaitingVerification = actions.result_declared + actions.under_verification
+
   return (
     <div className="space-y-8 p-6 lg:p-8">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -188,7 +211,7 @@ export default function PilotControlCenterPage() {
             Pilot Control Center
           </h1>
           <p className="mt-1 max-w-2xl font-mono text-[11px] leading-relaxed text-tertiary">
-            Estado agregado de cohorte, identidad, participación y operación. No expone PII ni reatribuye votos anónimos.
+            Estado agregado de cohorte, identidad, participación y resultados de Acción Cívica. No expone PII ni reatribuye votos anónimos.
           </p>
         </div>
         <button
@@ -225,12 +248,15 @@ export default function PilotControlCenterPage() {
 
         <div className="rounded border border-border bg-surface p-5">
           <h2 className="mb-5 font-mono text-[11px] uppercase tracking-widest text-secondary">Participación · 7 días</h2>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4 font-mono text-[11px]">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 font-mono text-[11px] sm:grid-cols-3">
             <div><p className="text-tertiary">Participantes significativos</p><p className="mt-1 text-lg text-primary">{data.participation.meaningful_participants_7d}</p></div>
+            <div><p className="text-tertiary">Acciones cívicas</p><p className="mt-1 text-lg text-primary">{data.participation.civic_actions_7d}</p></div>
+            <div><p className="text-tertiary">Evidencias de acción</p><p className="mt-1 text-lg text-primary">{data.participation.civic_action_evidence_7d}</p></div>
+            <div><p className="text-tertiary">Validaciones de acción</p><p className="mt-1 text-lg text-primary">{data.participation.civic_action_validations_7d}</p></div>
             <div><p className="text-tertiary">Reportes</p><p className="mt-1 text-lg text-primary">{data.participation.reports_7d}</p></div>
             <div><p className="text-tertiary">Propuestas</p><p className="mt-1 text-lg text-primary">{data.participation.proposals_7d}</p></div>
             <div><p className="text-tertiary">Avales</p><p className="mt-1 text-lg text-primary">{data.participation.endorsements_7d}</p></div>
-            <div><p className="text-tertiary">Validaciones</p><p className="mt-1 text-lg text-primary">{data.participation.validations_7d}</p></div>
+            <div><p className="text-tertiary">Validaciones de perfil</p><p className="mt-1 text-lg text-primary">{data.participation.validations_7d}</p></div>
             <div><p className="text-tertiary">Seguimientos</p><p className="mt-1 text-lg text-primary">{data.participation.follows_7d}</p></div>
           </div>
           <p className="mt-5 border-t border-border pt-3 font-mono text-[9px] leading-relaxed text-tertiary">
@@ -240,7 +266,70 @@ export default function PilotControlCenterPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 font-mono text-[11px] uppercase tracking-widest text-secondary">Operación y moderación</h2>
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="font-mono text-[11px] uppercase tracking-widest text-secondary">Acción Cívica · resultados del piloto</h2>
+            <p className="mt-1 font-mono text-[9px] text-tertiary">North-star: acciones que avanzan desde declaración hacia evidencia y verificación.</p>
+          </div>
+          <span className="font-mono text-[9px] uppercase tracking-wider text-tertiary">{actions.non_cancelled} activas/no canceladas</span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            label="Creadas · 7d"
+            value={data.participation.civic_actions_7d}
+            detail={`${actions.proposed} propuestas actualmente`}
+            icon={Activity}
+          />
+          <MetricCard
+            label="En ejecución"
+            value={actionsInExecution}
+            detail={`${actions.preparing} preparando · ${actions.in_progress} en progreso`}
+            icon={GitPullRequest}
+          />
+          <MetricCard
+            label="Por verificar"
+            value={actionsAwaitingVerification}
+            detail={`${actions.result_declared} resultado declarado · ${actions.under_verification} en revisión`}
+            icon={Eye}
+          />
+          <MetricCard
+            label="Verificadas"
+            value={actions.verified}
+            detail={`${actions.verified_action_rate_pct.toFixed(1)}% de acciones no canceladas`}
+            icon={CheckCircle2}
+          />
+        </div>
+
+        <div className="mt-3 grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded border border-border bg-surface p-5">
+            <h3 className="mb-4 font-mono text-[10px] uppercase tracking-widest text-secondary">Calidad de evidencia</h3>
+            <div className="space-y-4">
+              <RateRow label="Cobertura con evidencia" value={actions.evidence_coverage_rate_pct} />
+              <RateRow label="Acciones verificadas" value={actions.verified_action_rate_pct} />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-4 border-t border-border pt-4 font-mono text-[10px]">
+              <div><p className="text-tertiary">Con evidencia</p><p className="mt-1 text-lg text-primary">{actions.with_evidence}</p></div>
+              <div><p className="text-tertiary">Evidencias 7d</p><p className="mt-1 text-lg text-primary">{data.participation.civic_action_evidence_7d}</p></div>
+            </div>
+          </div>
+
+          <div className="rounded border border-border bg-surface p-5">
+            <h3 className="mb-4 font-mono text-[10px] uppercase tracking-widest text-secondary">Riesgo y revisión</h3>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 font-mono text-[10px]">
+              <div><p className="text-tertiary">Disputadas</p><p className="mt-1 text-lg text-primary">{actions.disputed}</p></div>
+              <div><p className="text-tertiary">Sin evidencia</p><p className="mt-1 text-lg text-primary">{actions.no_evidence}</p></div>
+              <div><p className="text-tertiary">No completadas</p><p className="mt-1 text-lg text-primary">{actions.not_completed}</p></div>
+              <div><p className="text-tertiary">Disputas validación 7d</p><p className="mt-1 text-lg text-primary">{actions.validations_7d.disputes}</p></div>
+            </div>
+            <p className="mt-4 border-t border-border pt-3 font-mono text-[9px] leading-relaxed text-tertiary">
+              {actions.validations_7d.corroborations} corroboraciones de acciones en la ventana. Son señales operativas, no popularidad ni permisos.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 font-mono text-[11px] uppercase tracking-widest text-secondary">Operación complementaria y moderación</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             label="Reportes abiertos"
@@ -255,7 +344,7 @@ export default function PilotControlCenterPage() {
             icon={GitPullRequest}
           />
           <MetricCard
-            label="Disputas evidencia 7d"
+            label="Disputas perfil 7d"
             value={data.operations.evidence.disputes_7d}
             detail={`${data.operations.evidence.corroborations_7d} corroboraciones`}
             icon={AlertCircle}
