@@ -29,6 +29,11 @@ import { NotificationBell } from '@/components/ui/NotificationBell'
 import { PwaRegister } from '@/components/pwa/PwaRegister'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { RoleSwitcher } from '@/components/auth/RoleSwitcher'
+import { CivicAvatar } from '@/components/community/CivicAvatar'
+import {
+  DashboardIdentityProvider,
+  useDashboardIdentity,
+} from '@/components/dashboard/DashboardIdentityProvider'
 
 const NAV_SECTIONS = [
   {
@@ -78,11 +83,20 @@ const BOTTOM_NAV = [
 ] as const
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <DashboardIdentityProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </DashboardIdentityProvider>
+  )
+}
+
+function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [role, setRole] = useState<string>('citizen')
   const { toasts, addToast, dismiss } = useToasts()
+  const identity = useDashboardIdentity()
 
   const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     if (event.type === 'report:created') {
@@ -118,6 +132,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/auth/login')
   }
 
+  const avatarSrc = identity.avatar?.status === 'approved' ? identity.avatar.avatar_url : null
+
   const Sidebar = () => (
     <aside className="flex h-full w-72 flex-shrink-0 flex-col border-r border-[#E1E7EF] bg-white shadow-[12px_0_35px_rgba(10,42,102,.035)]" style={{ minHeight: '100vh' }}>
       <div className="border-b border-[#E1E7EF] px-5 py-5">
@@ -130,10 +146,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="mt-4 flex items-center justify-between rounded-2xl bg-[#F7F9FC] px-3 py-2.5">
           <div>
             <div className="text-[9px] font-extrabold uppercase tracking-[.13em] text-[#7B8799]">Territorio activo</div>
-            <div className="mt-1 text-xs font-bold text-[#0A2A66]">Cartagena de Indias</div>
+            <div className="mt-1 text-xs font-bold text-[#0A2A66]">{identity.territory}</div>
           </div>
           <span className="h-2.5 w-2.5 rounded-full bg-[#2BA745] shadow-[0_0_0_5px_rgba(43,167,69,.1)]" />
         </div>
+
+        <Link
+          href="/dashboard/community/profile"
+          prefetch={false}
+          onClick={() => setSidebarOpen(false)}
+          className="mt-3 flex items-center gap-3 rounded-2xl border border-[#E1E7EF] bg-white px-3 py-3 transition hover:bg-[#F7F9FC]"
+          aria-label="Abrir perfil cívico"
+        >
+          <CivicAvatar
+            src={avatarSrc}
+            name={identity.displayName}
+            identityVerified={identity.identityVerified}
+            size="sm"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-extrabold text-[#0A2A66]">{identity.displayName}</div>
+            <div className="mt-1 text-[9px] font-semibold uppercase tracking-[.08em] text-[#7B8799]">
+              {identity.profile?.public_profile ? 'Perfil público' : 'Perfil cívico'}
+            </div>
+          </div>
+          {identity.identityVerified && <ShieldCheck size={15} className="shrink-0 text-[#2BA745]" aria-label="Identidad verificada" />}
+        </Link>
       </div>
 
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4" aria-label="Navegación principal del dashboard">
@@ -250,6 +288,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
           <div className="flex items-center gap-2">
             <NotificationBell />
+            <Link href="/dashboard/community/profile" prefetch={false} aria-label="Abrir perfil cívico">
+              <CivicAvatar
+                src={avatarSrc}
+                name={identity.displayName}
+                identityVerified={identity.identityVerified}
+                size="xs"
+              />
+            </Link>
             <button onClick={handleSignOut} className="text-[#7B8799] hover:text-[#D72638]" aria-label="Salir">
               <LogOut size={17} />
             </button>
