@@ -8,10 +8,6 @@ const leaderDashboard = {
     locality_id: 1,
     verification_level: 2,
     created_at: '2026-09-01T10:00:00.000Z',
-    civic_profile_type: 'social_leader',
-    civic_bio: 'Liderazgo comunitario enfocado en espacio público.',
-    civic_organization: 'Manga Activa',
-    public_civic_profile: true,
   },
   reputation: {
     score: 61,
@@ -31,14 +27,7 @@ const leaderDashboard = {
     total_items: 7,
   },
   mine: {
-    civic_actions: {
-      total: 5,
-      active: 3,
-      verified: 2,
-      needs_evidence: 3,
-      awaiting_verification: 0,
-      recent: [],
-    },
+    civic_actions: { total: 5, active: 3, verified: 2, needs_evidence: 3, awaiting_verification: 0, recent: [] },
     reports: { total: 4, by_status: { in_progress: 2 }, recent: [] },
     proposals: { total: 1, by_status: {}, recent: [] },
     legal: { total: 1, by_status: { draft: 1 }, recent: [] },
@@ -51,6 +40,17 @@ const leaderDashboard = {
   generated_at: '2026-09-07T13:00:00.000Z',
 }
 
+const leaderCivicProfile = {
+  citizen_id: '550e8400-e29b-41d4-a716-446655440000',
+  display_name: 'Líder Manga',
+  neighborhood: 'Manga',
+  profile_type: 'social_leader',
+  bio: 'Liderazgo comunitario enfocado en espacio público.',
+  organization: 'Manga Activa',
+  public_profile: true,
+  reputation_score: 61,
+}
+
 async function authenticate(page: Page) {
   const baseURL = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
   await page.context().addCookies([{ name: 'vertice_auth', value: '1', url: baseURL }])
@@ -61,18 +61,9 @@ async function authenticate(page: Page) {
 }
 
 async function mockShell(page: Page) {
-  await page.route('**/auth/roles', (route) => route.fulfill({
-    status: 200,
-    json: { assigned_roles: ['citizen'], active_role: 'citizen' },
-  }))
-  await page.route('**/notifications', (route) => route.fulfill({
-    status: 200,
-    json: { notifications: [], unread: 0 },
-  }))
-  await page.route('**/dashboard/me/resolution', (route) => route.fulfill({
-    status: 200,
-    json: { total: 0, items: [] },
-  }))
+  await page.route('**/auth/roles', (route) => route.fulfill({ status: 200, json: { assigned_roles: ['citizen'], active_role: 'citizen' } }))
+  await page.route('**/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
+  await page.route('**/dashboard/me/resolution', (route) => route.fulfill({ status: 200, json: { total: 0, items: [] } }))
 }
 
 test.describe('Dashboard Experience Convergence v6', () => {
@@ -83,6 +74,7 @@ test.describe('Dashboard Experience Convergence v6', () => {
 
   test('adapts the command layer to a social leader and exposes one prioritized action center', async ({ page }) => {
     await page.route('**/dashboard/me', (route) => route.fulfill({ status: 200, json: leaderDashboard }))
+    await page.route('**/community/profile/me', (route) => route.fulfill({ status: 200, json: leaderCivicProfile }))
     await page.goto('/dashboard')
 
     const experience = page.getByTestId('dashboard-experience-layer')
@@ -98,23 +90,14 @@ test.describe('Dashboard Experience Convergence v6', () => {
     await expect(center.getByText('Consultas pendientes', { exact: true })).toBeVisible()
     await expect(center.getByText('Control público por completar', { exact: true })).toBeVisible()
     await expect(center.getByText('Reportes en seguimiento', { exact: true })).toBeVisible()
-
     await expect(experience.getByRole('link', { name: /gestionar mis acciones/i })).toHaveAttribute('href', '/dashboard/community/actions')
     await expect(center.getByRole('link', { name: /acciones que necesitan evidencia/i })).toHaveAttribute('href', '/dashboard/community/actions')
   })
 
   test('turns missing identity and civic-profile setup into explicit onboarding work without blocking the dashboard', async ({ page }) => {
-    const incomplete = {
+    const incompleteDashboard = {
       ...leaderDashboard,
-      profile: {
-        ...leaderDashboard.profile,
-        verification_level: 0,
-        civic_profile_type: 'citizen',
-        civic_bio: null,
-        civic_organization: null,
-        public_civic_profile: false,
-        neighborhood: null,
-      },
+      profile: { ...leaderDashboard.profile, verification_level: 0, neighborhood: null },
       attention: {
         verification_required: true,
         pending_votes: [],
@@ -124,8 +107,18 @@ test.describe('Dashboard Experience Convergence v6', () => {
         total_items: 1,
       },
     }
+    const incompleteCivicProfile = {
+      ...leaderCivicProfile,
+      neighborhood: null,
+      profile_type: 'citizen',
+      bio: null,
+      organization: null,
+      public_profile: false,
+      reputation_score: 0,
+    }
 
-    await page.route('**/dashboard/me', (route) => route.fulfill({ status: 200, json: incomplete }))
+    await page.route('**/dashboard/me', (route) => route.fulfill({ status: 200, json: incompleteDashboard }))
+    await page.route('**/community/profile/me', (route) => route.fulfill({ status: 200, json: incompleteCivicProfile }))
     await page.goto('/dashboard')
 
     const experience = page.getByTestId('dashboard-experience-layer')
