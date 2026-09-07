@@ -8,7 +8,6 @@ import {
   BarChart3,
   CheckCircle2,
   FilePlus2,
-  FileText,
   Loader2,
   MapPin,
   Medal,
@@ -19,10 +18,10 @@ import {
   ThumbsUp,
   Trophy,
   UserRound,
-  Users,
 } from 'lucide-react'
 import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
+import { CivicAvatar } from '@/components/community/CivicAvatar'
 
 type ActivityType = 'report' | 'proposal'
 type FeedFilter = 'all' | 'following' | ActivityType
@@ -86,6 +85,12 @@ interface LeaderEntry {
   rank: number
 }
 
+interface PublicAvatar {
+  citizen_id: string
+  avatar_url: string | null
+  identity_verified: boolean
+}
+
 interface FeedResponse {
   data: CivicActivity[]
   count: number
@@ -93,6 +98,11 @@ interface FeedResponse {
 
 interface LeaderboardResponse {
   data: LeaderEntry[]
+  count: number
+}
+
+interface AvatarBatchResponse {
+  data: Record<string, PublicAvatar>
   count: number
 }
 
@@ -146,6 +156,7 @@ function ScoreBadge({ score }: { score: number }) {
 export default function CommunityPage() {
   const [feed, setFeed] = useState<CivicActivity[]>([])
   const [leaders, setLeaders] = useState<LeaderEntry[]>([])
+  const [avatars, setAvatars] = useState<Record<string, PublicAvatar>>({})
   const [filter, setFilter] = useState<FeedFilter>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -160,12 +171,29 @@ export default function CommunityPage() {
       const endpoint = filter === 'following'
         ? '/community/following/feed?limit=40'
         : `/community/feed?limit=40${isTypedFilter ? `&type=${filter}` : ''}`
+
       const [feedResponse, leaderboardResponse] = await Promise.all([
         apiFetch<FeedResponse>(endpoint, filter === 'following' ? {} : { public: true }),
         apiFetch<LeaderboardResponse>('/community/leaderboard?limit=10', { public: true }),
       ])
+
+      const citizenIds = [...new Set([
+        ...feedResponse.data.map((item) => item.actor.id).filter((id): id is string => Boolean(id)),
+        ...leaderboardResponse.data.map((leader) => leader.citizen_id),
+      ])]
+
+      let nextAvatars: Record<string, PublicAvatar> = {}
+      if (citizenIds.length > 0) {
+        const avatarResponse = await apiFetch<AvatarBatchResponse>(
+          `/community/avatars?ids=${encodeURIComponent(citizenIds.join(','))}`,
+          { public: true },
+        )
+        nextAvatars = avatarResponse.data
+      }
+
       setFeed(feedResponse.data)
       setLeaders(leaderboardResponse.data)
+      setAvatars(nextAvatars)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No fue posible cargar la red cívica.')
     } finally {
@@ -235,7 +263,7 @@ export default function CommunityPage() {
             <div className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#F5B700]">Red cívica de gestión</div>
             <h1 className="mt-3 font-display text-2xl font-extrabold tracking-[-.04em] sm:text-4xl">Sigue gestión, no popularidad.</h1>
             <p className="mt-3 max-w-3xl text-xs font-medium leading-6 text-white/75 sm:mt-4 sm:text-sm sm:leading-7">
-              Conecta con perfiles públicos, sigue su trabajo y contrasta evidencia. Las corroboraciones y disputas son señales comunitarias: no equivalen a verificación oficial y no alteran el VÉRTICE Score v1.
+              Conecta con perfiles públicos, reconoce visualmente a sus responsables y contrasta evidencia. La identidad verificada, la validación comunitaria y el VÉRTICE Score siguen siendo señales distintas.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 lg:max-w-[320px] lg:justify-end">
@@ -310,25 +338,40 @@ export default function CommunityPage() {
               const validationKey = `${item.type}:${item.id}`
               const currentValidation = validationState[validationKey]
               const validationBusy = workingValidation === validationKey
+              const actorAvatar = item.actor.id ? avatars[item.actor.id] : null
+
               return (
                 <article key={validationKey} className="rounded-[22px] border border-[#E1E7EF] bg-white p-4 shadow-[0_10px_35px_rgba(10,42,102,.05)] sm:rounded-[24px] sm:p-6">
                   <div className="flex gap-3 sm:gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        {item.actor.id ? (
-                          <Link href={`/dashboard/community/profiles/${item.actor.id}`} className="text-xs font-extrabold text-[#0A2A66] hover:text-[#246CB6]">{item.actor.display_name}</Link>
-                        ) : (
-                          <span className="text-xs font-extrabold text-[#0A2A66]">{item.actor.display_name}</span>
-                        )}
-                        <span className="rounded-full bg-[#EDF3FA] px-2 py-1 text-[8px] font-extrabold text-[#246CB6] sm:px-2.5 sm:text-[9px]">{ACTOR_LABEL[item.actor.actor_kind]}</span>
-                        <span className={`rounded-full px-2 py-1 text-[8px] font-extrabold sm:px-2.5 sm:text-[9px] ${verification.className}`}>
-                          {verification.label}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[9px] font-semibold text-[#7B8799] sm:text-[10px]">
-                        {item.neighborhood && <span className="inline-flex items-center gap-1"><MapPin size={11} /> {item.neighborhood}</span>}
-                        {item.actor.organization && <><span>·</span><span>{item.actor.organization}</span></>}
-                        <span>·</span><span>{formatDate(item.updated_at)}</span>
+                      <div className="flex items-start gap-3">
+                        <CivicAvatar
+                          src={actorAvatar?.avatar_url}
+                          name={item.actor.display_name}
+                          identityVerified={actorAvatar?.identity_verified ?? false}
+                          size="sm"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                            {item.actor.id ? (
+                              <Link href={`/dashboard/community/profiles/${item.actor.id}`} className="text-xs font-extrabold text-[#0A2A66] hover:text-[#246CB6]">{item.actor.display_name}</Link>
+                            ) : (
+                              <span className="text-xs font-extrabold text-[#0A2A66]">{item.actor.display_name}</span>
+                            )}
+                            {actorAvatar?.identity_verified && (
+                              <span title="Identidad verificada"><BadgeCheck size={13} className="text-[#246CB6]" /></span>
+                            )}
+                            <span className="rounded-full bg-[#EDF3FA] px-2 py-1 text-[8px] font-extrabold text-[#246CB6] sm:px-2.5 sm:text-[9px]">{ACTOR_LABEL[item.actor.actor_kind]}</span>
+                            <span className={`rounded-full px-2 py-1 text-[8px] font-extrabold sm:px-2.5 sm:text-[9px] ${verification.className}`}>
+                              {verification.label}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[9px] font-semibold text-[#7B8799] sm:text-[10px]">
+                            {item.neighborhood && <span className="inline-flex items-center gap-1"><MapPin size={11} /> {item.neighborhood}</span>}
+                            {item.actor.organization && <><span>·</span><span>{item.actor.organization}</span></>}
+                            <span>·</span><span>{formatDate(item.updated_at)}</span>
+                          </div>
+                        </div>
                       </div>
                       <Link href={item.href} className="mt-3 block text-base font-extrabold leading-6 text-[#0A2A66] hover:text-[#246CB6] sm:mt-4 sm:text-lg">{item.title}</Link>
                       <p className="mt-2 line-clamp-3 text-[11px] font-medium leading-5 text-[#607087] sm:text-xs sm:leading-6">{item.summary}</p>
@@ -379,18 +422,32 @@ export default function CommunityPage() {
               <Trophy size={20} className="text-[#F5B700]" />
             </div>
             <div className="mt-4 space-y-2.5 sm:mt-5 sm:space-y-3">
-              {leaders.map((leader) => (
-                <Link href={`/dashboard/community/profiles/${leader.citizen_id}`} key={leader.citizen_id} className="flex items-center gap-3 rounded-2xl bg-[#F7F9FC] p-3 transition hover:bg-[#EDF3FA]">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-extrabold text-[#0A2A66] shadow-sm">
-                    {leader.rank <= 3 ? <Medal size={16} className="text-[#D98B00]" /> : leader.rank}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-extrabold text-[#0A2A66]">{leader.display_name}</div>
-                    <div className="mt-1 text-[9px] font-semibold text-[#7B8799]">{leader.verified_actions} verificadas · {leader.evidence_count} evidencias</div>
-                  </div>
-                  <div className="text-right"><div className="text-lg font-extrabold text-[#0A2A66]">{leader.leader_score}</div><div className="text-[8px] font-bold uppercase text-[#7B8799]">impacto</div></div>
-                </Link>
-              ))}
+              {leaders.map((leader) => {
+                const leaderAvatar = avatars[leader.citizen_id]
+                return (
+                  <Link href={`/dashboard/community/profiles/${leader.citizen_id}`} key={leader.citizen_id} className="flex items-center gap-3 rounded-2xl bg-[#F7F9FC] p-3 transition hover:bg-[#EDF3FA]">
+                    <div className="relative">
+                      <CivicAvatar
+                        src={leaderAvatar?.avatar_url}
+                        name={leader.display_name}
+                        identityVerified={leaderAvatar?.identity_verified ?? false}
+                        size="sm"
+                      />
+                      <span className="absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#0A2A66] px-1 text-[8px] font-extrabold text-white">
+                        {leader.rank <= 3 ? <Medal size={11} /> : leader.rank}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <div className="truncate text-xs font-extrabold text-[#0A2A66]">{leader.display_name}</div>
+                        {leaderAvatar?.identity_verified && <BadgeCheck size={12} className="shrink-0 text-[#246CB6]" />}
+                      </div>
+                      <div className="mt-1 text-[9px] font-semibold text-[#7B8799]">{leader.verified_actions} verificadas · {leader.evidence_count} evidencias</div>
+                    </div>
+                    <div className="text-right"><div className="text-lg font-extrabold text-[#0A2A66]">{leader.leader_score}</div><div className="text-[8px] font-bold uppercase text-[#7B8799]">impacto</div></div>
+                  </Link>
+                )
+              })}
             </div>
           </section>
 
@@ -406,8 +463,8 @@ export default function CommunityPage() {
           </section>
 
           <Link href="/dashboard/community/profile" className="flex items-center justify-between rounded-[22px] border border-[#E1E7EF] bg-white p-4 text-[#0A2A66] shadow-[0_8px_30px_rgba(10,42,102,.04)]">
-            <div><div className="text-[9px] font-extrabold uppercase tracking-[.11em] text-[#7B8799]">Identidad pública</div><div className="mt-1 text-sm font-extrabold">Configura tu perfil cívico</div></div>
-            <Users size={18} />
+            <div><div className="text-[9px] font-extrabold uppercase tracking-[.11em] text-[#7B8799]">Identidad pública</div><div className="mt-1 text-sm font-extrabold">Configura tu foto y perfil cívico</div></div>
+            <UserRound size={18} />
           </Link>
         </aside>
       </div>
