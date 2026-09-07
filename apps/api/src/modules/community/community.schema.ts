@@ -33,6 +33,31 @@ export const CivicProfileParamsSchema = z.object({
   citizenId: z.string().uuid(),
 })
 
+export const CivicAvatarBatchQuerySchema = z.object({
+  ids: z.string().trim().min(1).transform((value) => (
+    [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))]
+  )).pipe(z.array(z.string().uuid()).min(1).max(50)),
+})
+
+export const ConfirmCivicAvatarSchema = z.object({
+  asset_id: z.string().trim().regex(/^[A-Za-z0-9_-]{8,128}$/),
+  policy_attestation: z.literal(true),
+  client_checks: z.object({
+    width: z.number().int().min(640).max(20000),
+    height: z.number().int().min(640).max(20000),
+    face_detector_available: z.boolean(),
+    face_count: z.number().int().min(0).max(10).nullable(),
+  }).superRefine((value, ctx) => {
+    if (value.face_detector_available && value.face_count !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['face_count'],
+        message: 'La foto debe contener exactamente un rostro visible.',
+      })
+    }
+  }),
+})
+
 export const CivicActivityParamsSchema = z.object({
   type: z.enum(COMMUNITY_ACTIVITY_TYPES),
   activityId: z.string().uuid(),
