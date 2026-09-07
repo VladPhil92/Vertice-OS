@@ -17,6 +17,10 @@ type RootIdentityRow = {
   provider_subject: string
 }
 
+type CountRow = {
+  count: bigint
+}
+
 const ROOT_EMAIL = 'valderramapino@gmail.com'
 const ROOT_SUBJECT_SHA256 = '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
 const prisma = new PrismaClient()
@@ -39,6 +43,18 @@ async function main() {
       AND g.role IN ('admin', 'superadmin')
     ORDER BY g.role ASC, LOWER(c.email) ASC
   `)
+
+  const [citizenCountRow] = await prisma.$queryRawUnsafe<CountRow[]>(`
+    SELECT COUNT(*)::bigint AS count FROM citizens
+  `)
+  const citizenCount = Number(citizenCountRow?.count ?? 0n)
+
+  const [allGrantCountRow] = await prisma.$queryRawUnsafe<CountRow[]>(`
+    SELECT COUNT(*)::bigint AS count
+    FROM citizen_role_grants
+    WHERE revoked_at IS NULL
+  `)
+  const activeGrantCount = Number(allGrantCountRow?.count ?? 0n)
 
   const superadmins = rows.filter((row) => row.role === 'superadmin')
   const admins = rows.filter((row) => row.role === 'admin')
@@ -78,7 +94,13 @@ async function main() {
       && identity.provider_subject_sha256 === ROOT_SUBJECT_SHA256,
   )
 
-  const invariantPass =
+  // Fresh installations have no citizen identities yet. They are safe to boot
+  // only when they also have no active grants at all; the canonical root will
+  // be established later through the pinned CTG One bootstrap flow.
+  const prebootstrapEmpty = citizenCount === 0 && activeGrantCount === 0
+
+  const canonicalProduction =
+    citizenCount > 0 &&
     superadmins.length === 1 &&
     canonicalRoots.length === 1 &&
     canonicalRootGrant &&
@@ -86,9 +108,14 @@ async function main() {
     admins.length === 0 &&
     legacyElevated.length === 0
 
+  const invariantPass = prebootstrapEmpty || canonicalProduction
+  const mode = prebootstrapEmpty ? 'PREBOOTSTRAP_EMPTY' : 'CANONICAL_ROOT'
+
   console.log(`PRIVILEGE_AUDIT_ROWS=${JSON.stringify(safeRows)}`)
   console.log(
     `PRIVILEGE_AUDIT_COUNTS=${JSON.stringify({
+      citizens: citizenCount,
+      activeGrants: activeGrantCount,
       admin: admins.length,
       superadmin: superadmins.length,
       legacyElevated: legacyElevated.length,
@@ -99,6 +126,7 @@ async function main() {
   console.log(
     `PRIVILEGE_AUDIT_ROOT_IDENTITY=${JSON.stringify(safeRootIdentities)}`,
   )
+  console.log(`PRIVILEGE_AUDIT_MODE=${mode}`)
   console.log(`PRIVILEGE_AUDIT_INVARIANT=${invariantPass ? 'PASS' : 'FAIL'}`)
 
   if (!invariantPass) {
