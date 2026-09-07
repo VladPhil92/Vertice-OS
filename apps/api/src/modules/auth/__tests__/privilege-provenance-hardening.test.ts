@@ -65,13 +65,16 @@ describe('P0/P1 authorization hardening contract', () => {
   })
 
   it('hands authority to the canonical root before quarantining legacy privilege', () => {
+  it('hands exactly one root superadmin authority over before quarantining legacy privilege', () => {
     const sql = read(MIGRATION_PATH)
     const handover = sql.indexOf("INSERT INTO citizen_role_grants\n    (citizen_id, role, granted_by_citizen_id, source, granted_at, revoked_at)")
-    const quarantine = sql.indexOf("UPDATE citizen_role_grants\nSET revoked_at = NOW()")
+    const quarantine = sql.indexOf("UPDATE citizen_role_grants\nSET revoked_at = NOW()\nWHERE revoked_at IS NULL\n  AND role IN ('moderator', 'admin', 'superadmin')")
 
     expect(sql).toContain('CANONICAL_ROOT_REQUIRED_FOR_PRIVILEGE_HANDOVER')
     expect(sql).toContain("pg_advisory_xact_lock(hashtext('vertice-superadmin-authority'))")
-    expect(sql).toContain("unnest(ARRAY['moderator', 'admin', 'superadmin']::text[])")
+    expect(sql).toContain("(canonical_root_id, 'superadmin', NULL, 'ctg_one_bootstrap', NOW(), NULL)")
+    expect(sql).not.toContain("unnest(ARRAY['moderator', 'admin', 'superadmin']::text[])")
+    expect(sql).toContain('ROOT_BOOTSTRAP_SUPERADMIN_ONLY')
     expect(handover).toBeGreaterThanOrEqual(0)
     expect(quarantine).toBeGreaterThan(handover)
   })
@@ -82,6 +85,15 @@ describe('P0/P1 authorization hardening contract', () => {
     expect(sql).toContain('legacy_elevated_exists BOOLEAN')
     expect(sql).toContain('IF legacy_elevated_exists IS NOT TRUE THEN')
     expect(sql).toContain('RETURN;')
+  })
+
+  it('normalizes redundant historical root bootstrap roles even without legacy handover', () => {
+    const sql = read(MIGRATION_PATH)
+    const handoverEnd = sql.indexOf('END;\n$$;')
+    const bootstrapCleanup = sql.indexOf("role IN ('moderator', 'admin')\n  AND source = 'ctg_one_bootstrap'")
+
+    expect(bootstrapCleanup).toBeGreaterThan(handoverEnd)
+    expect(sql).toContain("g.role <> 'superadmin'")
   })
 
   it('revokes historical elevated grants and resets stale privileged sessions', () => {
