@@ -64,7 +64,6 @@ describe('P0/P1 authorization hardening contract', () => {
     expect(sql).toContain('BEFORE INSERT ON sessions')
   })
 
-  it('hands authority to the canonical root before quarantining legacy privilege', () => {
   it('hands exactly one root superadmin authority over before quarantining legacy privilege', () => {
     const sql = read(MIGRATION_PATH)
     const handover = sql.indexOf("INSERT INTO citizen_role_grants\n    (citizen_id, role, granted_by_citizen_id, source, granted_at, revoked_at)")
