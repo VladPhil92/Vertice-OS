@@ -52,6 +52,7 @@ terraform.tfstate.backup
 .terraform/
 *.tfvars
 !*.tfvars.example
+infrastructure/kubernetes/secrets.yaml
 
 # Database
 *.sqlite
@@ -61,6 +62,12 @@ terraform.tfstate.backup
 artifacts/
 cache/
 typechain-types/
+
+# Expo / React Native
+apps/mobile/.expo/
+apps/mobile/.env
+apps/mobile/android/
+apps/mobile/ios/
 
 # Misc
 *.tgz
