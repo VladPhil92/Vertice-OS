@@ -108,7 +108,7 @@ export function RoleSwitcher({ onRoleChange }: { onRoleChange?: (role: Role) => 
           href="/dashboard/authority"
           className="mt-2 block text-[10px] font-extrabold text-[#0A2A66] hover:underline"
         >
-          Administrar roles y superadmins →
+          Abrir Control VÉRTICE →
         </Link>
       )}
       {error && <p className="mt-2 text-[10px] font-semibold text-[#A11D2A]">{error}</p>}

@@ -12,6 +12,7 @@ import { getNeo4jDriver } from './lib/neo4j'
 import { getFeatureCapabilities } from './lib/feature-secrets'
 import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
+import { superadminControlPlaneRoutes } from './modules/auth/control-plane.routes'
 import { probeCtgOneFederation } from './modules/auth/federation.service'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { identityRoutes } from './modules/identity/identity.routes'
@@ -186,6 +187,7 @@ export function buildApp() {
   })
 
   app.register(authRoutes, { prefix: '/auth' })
+  app.register(superadminControlPlaneRoutes, { prefix: '/superadmin' })
   app.register(dashboardRoutes, { prefix: '/dashboard' })
   // P1.0 keeps JSON certification administration outside the raw-body webhook
   // parser while preserving the common identity provider namespace.
