@@ -46,7 +46,12 @@ describe('P0/P1 authorization hardening contract', () => {
     expect(middleware).toContain('if (!request.citizen.sid)')
     expect(middleware).toContain("code: 'ROLE_SWITCH_REAUTH_REQUIRED'")
     expect(middleware).toContain('s.active_role = ${activeRole}')
-    expect(middleware).not.toContain(': await prisma.$queryRaw')
+    // The old implementation selected one of two database queries through a
+    // `request.citizen.sid ? ... : ...` fallback. The no-sid branch trusted a
+    // durable grant without an explicitly activated session. P1 removes that
+    // conditional path while retaining the one legitimate live-session query.
+    expect(middleware).not.toContain('request.citizen.sid ?')
+    expect(middleware).not.toContain('const liveRows = request.citizen.sid')
   })
 
   it('normalizes existing elevated sessions and forbids privileged session inserts', () => {
