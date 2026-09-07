@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { verifyMessage } from 'ethers'
 import { prisma } from '../../lib/prisma'
 import { redis } from '../../lib/redis'
-import { getCache, delCache, TTL } from '../../lib/cache'
+import { getCache, delCache } from '../../lib/cache'
 import { config } from '../../config'
 import { sendEmailVerification } from '../../lib/email'
 import { hashCedula } from '../../lib/identity-hash'
@@ -10,6 +10,7 @@ import { isValidWalletAddress } from '../../lib/blockchain'
 import { enqueueJob } from '../../lib/jobs'
 import type { DIDDocument, VerificationStatus, VerificationLevel } from './identity.types'
 import type { UpdateProfileInput, ConnectWalletInput } from './identity.schema'
+import { getCivicIdentityAssurance } from './identity-assurance.service'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -87,19 +88,26 @@ function buildDIDDocument(citizen: {
   }
 }
 
-function buildVerificationStatus(citizen: {
-  id: string
-  did: string
-  verificationLevel: number
-}): VerificationStatus {
+function buildVerificationStatus(
+  citizen: {
+    id: string
+    did: string
+    verificationLevel: number
+  },
+  governanceEligible = false,
+): VerificationStatus {
   const level = Math.min(citizen.verificationLevel, 2) as 0 | 1 | 2
   return {
     citizen_id: citizen.id,
     did: citizen.did,
     level,
     level_name: LEVEL_NAMES[level],
-    can_vote: level >= 1,
-    can_propose: level >= 2,
+    // Voting is no longer inferred from a legacy numeric level. The canonical
+    // governance boundary requires active proof-backed civic identity assurance.
+    can_vote: governanceEligible,
+    // Governance routes currently require the verified/basic boundary (level 1+)
+    // for proposal creation and endorsement.
+    can_propose: level >= 1,
   }
 }
 
@@ -139,7 +147,8 @@ export async function getVerificationStatus(citizenId: string): Promise<Verifica
     where: { id: citizenId },
     select: { id: true, did: true, verificationLevel: true },
   })
-  return buildVerificationStatus(citizen)
+  const assurance = await getCivicIdentityAssurance(citizenId)
+  return buildVerificationStatus(citizen, assurance.governance_eligible)
 }
 
 // ── Verificación de cédula (nivel 0 → 1) ──────────────────────────────────────
@@ -154,25 +163,32 @@ export async function confirmCedula(citizenId: string, cedula: string): Promise<
     throw Object.assign(new Error('Cédula ya confirmada'), { statusCode: 409, code: 'ALREADY_VERIFIED' })
   }
 
+  if (!citizen.cedulaHash) {
+    throw Object.assign(
+      new Error('Esta cuenta no tiene una cédula local registrada. Si ingresaste desde CTG One, completa o verifica tu KYC allí y vuelve a iniciar sesión.'),
+      { statusCode: 409, code: 'CEDULA_NOT_ON_FILE' },
+    )
+  }
+
   const inputHash = hashCedula(cedula)
   if (inputHash !== citizen.cedulaHash) {
     // Mismo mensaje para hash incorrecto y cédula errónea — previene enumeración
+    // entre cuentas que sí tienen un hash local registrado.
     throw Object.assign(new Error('La cédula no coincide con el registro'), {
       statusCode: 400,
       code: 'CEDULA_MISMATCH',
     })
   }
 
-  const updated = await prisma.citizen.update({
+  await prisma.citizen.update({
     where: { id: citizenId },
     data: { verificationLevel: 1, lastActiveAt: new Date() },
-    select: { id: true, did: true, verificationLevel: true },
   })
 
   // Invalidar cache de perfil — el nivel cambió
   await delCache('profile', citizenId)
 
-  return buildVerificationStatus(updated)
+  return getVerificationStatus(citizenId)
 }
 
 // ── Verificación de email (nivel 1 → 2) ───────────────────────────────────────
@@ -247,7 +263,7 @@ export async function confirmEmail(citizenId: string, token: string): Promise<Ve
     })
   }
 
-  return buildVerificationStatus(updated)
+  return getVerificationStatus(citizenId)
 }
 
 // ── Wallet Polygon ────────────────────────────────────────────────────────────
