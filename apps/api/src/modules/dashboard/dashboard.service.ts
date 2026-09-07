@@ -4,6 +4,7 @@ import { config } from '../../config'
 import { prisma } from '../../lib/prisma'
 import { getCitizenProfile } from '../auth/auth.service'
 import { listMyCivicActions } from '../civic-actions/civic-actions.service'
+import { getCivicProfile } from '../community/community.service'
 import { getGovernanceStats } from '../governance/governance.service'
 import { getReputationProfile } from '../reputation/reputation.service'
 import { getTerritorialStats } from '../territorial/territorial.service'
@@ -76,6 +77,7 @@ function countByStatus(rows: Array<{ status: string; count: bigint }>): Record<s
 export async function getCitizenCommandCenter(citizenId: string) {
   const [
     profile,
+    civicProfile,
     reputation,
     territorialStats,
     governanceStats,
@@ -93,6 +95,7 @@ export async function getCitizenCommandCenter(citizenId: string) {
     recentCivicActions,
   ] = await Promise.all([
     getCitizenProfile(citizenId),
+    getCivicProfile(citizenId),
     getReputationProfile(citizenId),
     getTerritorialStats(),
     getGovernanceStats(),
@@ -242,6 +245,10 @@ export async function getCitizenCommandCenter(citizenId: string) {
       locality_id: profile.locality_id,
       verification_level: profile.verification_level,
       created_at: profile.created_at,
+      civic_profile_type: civicProfile.profile_type,
+      civic_bio: civicProfile.bio,
+      civic_organization: civicProfile.organization,
+      public_civic_profile: civicProfile.public_profile,
     },
     reputation: {
       score: reputation.reputation_score,
