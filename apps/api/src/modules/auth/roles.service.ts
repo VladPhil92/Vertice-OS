@@ -24,8 +24,11 @@ function highestRole(roles: CitizenRole[]): CitizenRole {
 }
 
 async function lockSuperadminAuthority(tx: Prisma.TransactionClient): Promise<void> {
-  await tx.$queryRaw(Prisma.sql`
-    SELECT pg_advisory_xact_lock(hashtext(${SUPERADMIN_AUTHORITY_LOCK}))
+  // pg_advisory_xact_lock returns PostgreSQL `void`. Prisma cannot deserialize
+  // a raw `void` column, so cast the result to text while preserving the lock's
+  // transaction-scoped side effect.
+  await tx.$queryRaw<Array<{ lock_result: string | null }>>(Prisma.sql`
+    SELECT pg_advisory_xact_lock(hashtext(${SUPERADMIN_AUTHORITY_LOCK}))::text AS lock_result
   `)
 }
 
