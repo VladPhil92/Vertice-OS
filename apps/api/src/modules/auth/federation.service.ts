@@ -21,10 +21,27 @@ const CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/
 const FEDERATION_PROBE_CODE = 'A'.repeat(43)
 const FEDERATION_PROBE_VERIFIER = 'B'.repeat(43)
+const MAX_ASSURANCE_FUTURE_SKEW_MS = 5 * 60 * 1000
 
 export type FederationExchangeInput = {
   code: string
   code_verifier: string
+}
+
+type RawFederatedIdentityAssurance = {
+  status?: unknown
+  level?: unknown
+  source?: unknown
+  reference?: unknown
+  verified_at?: unknown
+}
+
+type FederatedIdentityAssurance = {
+  status: 'verified'
+  level: 2
+  source: 'ctg_one_kyc'
+  reference: string
+  verified_at: string
 }
 
 type CtgOneFederationIdentity = {
@@ -33,6 +50,7 @@ type CtgOneFederationIdentity = {
   email?: unknown
   email_verified?: unknown
   authorities?: unknown
+  identity_assurance?: unknown
 }
 
 type RemoteFederationError = {
@@ -63,10 +81,43 @@ function normalizeInput(input: FederationExchangeInput): FederationExchangeInput
   return input
 }
 
+function normalizeIdentityAssurance(raw: unknown): FederatedIdentityAssurance | null {
+  if (raw === undefined || raw === null) return null
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw federationError('Aseguramiento federado inválido', 502, 'INVALID_FEDERATION_ASSURANCE')
+  }
+
+  const assurance = raw as RawFederatedIdentityAssurance
+  const reference = typeof assurance.reference === 'string' ? assurance.reference.trim() : ''
+  const verifiedAt = typeof assurance.verified_at === 'string' ? assurance.verified_at.trim() : ''
+  const verifiedAtMs = Date.parse(verifiedAt)
+
+  if (
+    assurance.status !== 'verified'
+    || assurance.level !== 2
+    || assurance.source !== 'ctg_one_kyc'
+    || !SUBJECT_PATTERN.test(reference)
+    || !verifiedAt
+    || Number.isNaN(verifiedAtMs)
+    || verifiedAtMs > Date.now() + MAX_ASSURANCE_FUTURE_SKEW_MS
+  ) {
+    throw federationError('Aseguramiento federado inválido', 502, 'INVALID_FEDERATION_ASSURANCE')
+  }
+
+  return {
+    status: 'verified',
+    level: 2,
+    source: 'ctg_one_kyc',
+    reference,
+    verified_at: new Date(verifiedAtMs).toISOString(),
+  }
+}
+
 function normalizeIdentity(raw: CtgOneFederationIdentity): {
   subject: string
   email: string
   authorities: string[]
+  assurance: FederatedIdentityAssurance | null
 } {
   const provider = raw.provider
   const subject = typeof raw.subject === 'string' ? raw.subject.trim() : ''
@@ -86,7 +137,12 @@ function normalizeIdentity(raw: CtgOneFederationIdentity): {
     throw federationError('Identidad federada inválida', 502, 'INVALID_FEDERATION_IDENTITY')
   }
 
-  return { subject, email, authorities }
+  return {
+    subject,
+    email,
+    authorities,
+    assurance: normalizeIdentityAssurance(raw.identity_assurance),
+  }
 }
 
 async function remoteErrorCode(response: Response): Promise<string | undefined> {
@@ -210,7 +266,11 @@ async function exchangeWithCtgOne(input: FederationExchangeInput) {
   return normalizeIdentity(body)
 }
 
-async function resolveCitizen(subject: string, email: string) {
+async function resolveCitizen(
+  subject: string,
+  email: string,
+  assurance: FederatedIdentityAssurance | null,
+) {
   const existingIdentity = await prisma.externalIdentity.findUnique({
     where: {
       provider_providerSubject: {
@@ -237,11 +297,29 @@ async function resolveCitizen(subject: string, email: string) {
       throw federationError('Cuenta VÉRTICE inactiva', 403, 'FEDERATED_ACCOUNT_INACTIVE')
     }
 
-    await prisma.externalIdentity.update({
-      where: { id: existingIdentity.id },
-      data: { lastLoginAt: new Date(), emailAtLink: email },
+    return prisma.$transaction(async (tx) => {
+      await tx.externalIdentity.update({
+        where: { id: existingIdentity.id },
+        data: { lastLoginAt: new Date(), emailAtLink: email },
+      })
+
+      if (assurance && existingIdentity.citizen.verificationLevel < assurance.level) {
+        return tx.citizen.update({
+          where: { id: existingIdentity.citizen.id },
+          data: { verificationLevel: assurance.level, lastActiveAt: new Date() },
+          select: {
+            id: true,
+            did: true,
+            email: true,
+            verificationLevel: true,
+            role: true,
+            isActive: true,
+          },
+        })
+      }
+
+      return existingIdentity.citizen
     })
-    return existingIdentity.citizen
   }
 
   const emailCollision = await prisma.citizen.findUnique({
@@ -268,7 +346,7 @@ async function resolveCitizen(subject: string, email: string) {
           cedulaHash: null,
           email,
           passwordHash: null,
-          verificationLevel: 0,
+          verificationLevel: assurance?.level ?? 0,
           role: 'citizen',
           lastActiveAt: new Date(),
         },
@@ -313,7 +391,7 @@ export async function exchangeCtgOneFederation(
 ): Promise<AuthTokenResponse & { refresh_token: string }> {
   const input = normalizeInput(rawInput)
   const identity = await exchangeWithCtgOne(input)
-  const citizen = await resolveCitizen(identity.subject, identity.email)
+  const citizen = await resolveCitizen(identity.subject, identity.email, identity.assurance)
 
   const bootstrappedRole = await bootstrapFederatedSuperadmin(citizen.id, identity.authorities)
   const preferredRole = bootstrappedRole ?? ((citizen.role as CitizenRole) ?? 'citizen')
