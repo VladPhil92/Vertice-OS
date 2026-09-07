@@ -15,6 +15,7 @@ describe('P0 root authority pinning contract', () => {
     const sql = migrationSql()
 
     expect(sql).toContain("LOWER(c.email) = 'valderramapino@gmail.com'")
+    expect(sql).toContain("LOWER(ei.email_at_link) = 'valderramapino@gmail.com'")
     expect(sql).toContain("DIGEST(ei.provider_subject, 'sha256')")
     expect(sql).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
   })
