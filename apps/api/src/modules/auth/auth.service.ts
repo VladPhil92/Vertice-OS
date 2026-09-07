@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcrypt'
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '../../lib/prisma'
-import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt'
+import type { AccessTokenPayload } from '../../lib/jwt'
 import { generateRefreshToken, hashToken, refreshTokenExpiresAt } from '../../lib/jwt'
 import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
@@ -83,8 +83,10 @@ export async function loginCitizen(
     throw Object.assign(new Error('Credenciales inválidas'), { statusCode: 401, code: 'INVALID_CREDENTIALS' })
   }
 
-  const preferredRole = (citizen.role as CitizenRole) ?? 'citizen'
-  const activeRole = await ensureBaselineRoleGrants(citizen.id, preferredRole)
+  // P0 privilege provenance: citizens.role is a legacy projection only. A new
+  // local session always starts from the citizen baseline; elevated authority
+  // must already exist as an explicit live grant and be selected via role switch.
+  const activeRole = await ensureBaselineRoleGrants(citizen.id, 'citizen')
   const refreshToken = generateRefreshToken()
   const session = await prisma.session.create({
     data: {
@@ -132,10 +134,9 @@ export async function refreshAccessToken(
     throw Object.assign(new Error('Sesión inválida o expirada'), { statusCode: 401, code: 'INVALID_SESSION' })
   }
 
-  await ensureBaselineRoleGrants(
-    session.citizen.id,
-    (session.citizen.role as CitizenRole) ?? 'citizen',
-  )
+  // Never resurrect authority from citizens.role during refresh. The session's
+  // active role survives only when getRoleContext confirms a live grant.
+  await ensureBaselineRoleGrants(session.citizen.id, 'citizen')
   const roleContext = await getRoleContext(session.citizen.id, session.id)
   await setSessionActiveRole(session.id, session.citizen.id, roleContext.active_role)
 
