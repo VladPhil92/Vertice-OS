@@ -34,6 +34,7 @@ $$;
 -- 1. If legacy elevated authority exists, atomically hand authority to the
 -- canonical root BEFORE removing any legacy superadmin. Clean installations
 -- without historical privilege do not need a root account merely to migrate.
+-- The canonical root receives exactly ONE privileged grant: superadmin.
 DO $$
 DECLARE
   canonical_root_id UUID;
@@ -68,14 +69,8 @@ BEGIN
 
   INSERT INTO citizen_role_grants
     (citizen_id, role, granted_by_citizen_id, source, granted_at, revoked_at)
-  SELECT
-    canonical_root_id,
-    elevated.role,
-    NULL,
-    'ctg_one_bootstrap',
-    NOW(),
-    NULL
-  FROM unnest(ARRAY['moderator', 'admin', 'superadmin']::text[]) AS elevated(role)
+  VALUES
+    (canonical_root_id, 'superadmin', NULL, 'ctg_one_bootstrap', NOW(), NULL)
   ON CONFLICT (citizen_id, role)
   DO UPDATE SET
     granted_by_citizen_id = NULL,
@@ -84,6 +79,16 @@ BEGIN
     revoked_at = NULL;
 END;
 $$;
+
+-- Older bootstrap code materialized moderator/admin grants alongside the root
+-- superadmin. Authorization already lets an active superadmin satisfy lower
+-- guards, so normalize those redundant grants on every installation, including
+-- clean databases that did not require the legacy handover block above.
+UPDATE citizen_role_grants
+SET revoked_at = NOW()
+WHERE revoked_at IS NULL
+  AND role IN ('moderator', 'admin')
+  AND source = 'ctg_one_bootstrap';
 
 -- 2. Quarantine historical elevated authority only after the canonical root is
 -- live when a handover was required. The existing last-superadmin trigger stays
@@ -160,7 +165,8 @@ BEGIN
       AND g.role IN ('moderator', 'admin', 'superadmin')
       AND g.source = 'ctg_one_bootstrap'
       AND (
-        g.granted_by_citizen_id IS NOT NULL
+        g.role <> 'superadmin'
+        OR g.granted_by_citizen_id IS NOT NULL
         OR NOT is_canonical_ctg_one_root(g.citizen_id)
       )
   ) THEN
@@ -256,6 +262,14 @@ BEGIN
   END IF;
 
   IF NEW.source = 'ctg_one_bootstrap' THEN
+    -- Root bootstrap is a one-role authority establishment, not a role-stack
+    -- generator. Moderator/admin access is inherited from active superadmin.
+    IF NEW.role <> 'superadmin' THEN
+      RAISE EXCEPTION 'ROOT_BOOTSTRAP_SUPERADMIN_ONLY'
+        USING ERRCODE = '23514',
+              CONSTRAINT = 'citizen_role_grants_privilege_provenance';
+    END IF;
+
     IF NEW.granted_by_citizen_id IS NOT NULL
        OR NOT is_canonical_ctg_one_root(NEW.citizen_id) THEN
       RAISE EXCEPTION 'INVALID_BOOTSTRAP_PRIVILEGE_PROVENANCE'
