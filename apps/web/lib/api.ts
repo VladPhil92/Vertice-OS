@@ -15,6 +15,8 @@ export const BASE_URL = process.env.NODE_ENV === 'development'
   ? (configuredDevelopmentBaseUrl || 'http://localhost:4000')
   : '/api'
 
+export const DASHBOARD_IDENTITY_CHANGED_EVENT = 'vertice:dashboard-identity-changed'
+
 export function requireApiBaseUrl(): string {
   return BASE_URL
 }
@@ -97,6 +99,20 @@ function dedupeKey(path: string, isPublic: boolean, options: RequestInit): strin
   return `${method}:${authScope}:${path}`
 }
 
+function changesDashboardIdentity(path: string, options: RequestInit): boolean {
+  const method = (options.method ?? 'GET').toUpperCase()
+  return (
+    (path === '/community/profile/me' && method === 'PATCH')
+    || (path === '/community/profile/me/avatar' && method === 'DELETE')
+    || (path === '/community/profile/me/avatar/confirm' && method === 'POST')
+  )
+}
+
+function notifyDashboardIdentityChanged(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(DASHBOARD_IDENTITY_CHANGED_EVENT))
+}
+
 async function executeApiRequest<T>(
   path: string,
   isPublic: boolean,
@@ -154,7 +170,9 @@ export async function apiFetch<T = unknown>(
   const { public: isPublic = false, headers: extraHeaders, ...rest } = options
 
   if (!isDedupeEligible(rest)) {
-    return executeApiRequest<T>(path, isPublic, extraHeaders, rest)
+    const result = await executeApiRequest<T>(path, isPublic, extraHeaders, rest)
+    if (changesDashboardIdentity(path, rest)) notifyDashboardIdentityChanged()
+    return result
   }
 
   const key = dedupeKey(path, isPublic, rest)
