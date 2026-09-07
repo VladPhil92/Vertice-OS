@@ -39,6 +39,7 @@ jest.mock('../root-authority', () => ({
 import { prisma } from '../../../lib/prisma'
 import {
   bootstrapFederatedSuperadmin,
+  ensureBaselineRoleGrants,
   replaceCitizenRoles,
 } from '../roles.service'
 
@@ -64,6 +65,13 @@ beforeEach(() => {
 })
 
 describe('superadmin authority serialization', () => {
+  it('never resurrects an elevated baseline from a preferred legacy role', async () => {
+    const role = await ensureBaselineRoleGrants('citizen-id', 'admin')
+
+    expect(role).toBe('citizen')
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects removal of the last superadmin inside the serialized transaction', async () => {
     mockTxQueryRaw
       .mockResolvedValueOnce([]) // advisory lock
@@ -123,7 +131,7 @@ describe('superadmin authority serialization', () => {
     expect(queryText(0)).toContain('::text AS lock_result')
     expect(queryText(1)).toContain("ei.provider = 'ctg_one'")
     expect(queryText(1)).toContain('FOR SHARE OF c, ei')
-    expect(mockTxExecuteRaw).toHaveBeenCalledTimes(4)
+    expect(mockTxExecuteRaw).toHaveBeenCalledTimes(1)
     expect(mockTxCitizenUpdate).toHaveBeenCalledWith({
       where: { id: 'citizen-id' },
       data: { role: 'superadmin' },
