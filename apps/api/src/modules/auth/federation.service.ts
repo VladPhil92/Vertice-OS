@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify'
 
 import { config } from '../../config'
 import { prisma } from '../../lib/prisma'
-import type { AccessTokenPayload, CitizenRole } from '../../lib/jwt'
+import type { AccessTokenPayload } from '../../lib/jwt'
 import { generateRefreshToken, hashToken, refreshTokenExpiresAt } from '../../lib/jwt'
 import type { AuthTokenResponse } from './auth.types'
 import {
@@ -394,8 +394,11 @@ export async function exchangeCtgOneFederation(
   const citizen = await resolveCitizen(identity.subject, identity.email, identity.assurance)
 
   const bootstrappedRole = await bootstrapFederatedSuperadmin(citizen.id, identity.authorities)
-  const preferredRole = bootstrappedRole ?? ((citizen.role as CitizenRole) ?? 'citizen')
-  const activeRole = await ensureBaselineRoleGrants(citizen.id, preferredRole)
+  // P0 privilege provenance: federation may activate a role only when this
+  // exchange just proved/confirmed the canonical bootstrap. citizens.role is
+  // never used as an authority source for ordinary federated sessions.
+  const baselineRole = await ensureBaselineRoleGrants(citizen.id, 'citizen')
+  const activeRole = bootstrappedRole ?? baselineRole
 
   const refreshToken = generateRefreshToken()
   const session = await prisma.session.create({
