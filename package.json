@@ -1,11 +1,12 @@
 {
   "name": "vertice-os",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Sistema Operativo Cívico — Cartagena de Indias, Colombia",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "contracts"
   ],
   "scripts": {
     "dev": "turbo run dev",
@@ -13,7 +14,11 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "mobile": "pnpm --filter @vertice/mobile start",
+    "mobile:android": "pnpm --filter @vertice/mobile android",
+    "mobile:ios": "pnpm --filter @vertice/mobile ios",
+    "mobile:typecheck": "pnpm --filter @vertice/mobile typecheck"
   },
   "devDependencies": {
     "turbo": "^2.0.0",
@@ -26,13 +31,13 @@
     "eslint": "^9.0.0"
   },
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=22.13.0",
+    "pnpm": ">=10.0.0"
   },
   "pnpm": {
     "overrides": {
       "eslint-plugin-react-hooks": "^5.1.0",
-      "@next/eslint-plugin-next": "^15.0.0",
+      "@next/eslint-plugin-next": "^15.5.24",
       "@typescript-eslint/parser": "^8.0.0",
       "tar": ">=7.5.11",
       "brace-expansion": ">=5.0.9",
