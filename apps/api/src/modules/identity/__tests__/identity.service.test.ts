@@ -32,6 +32,12 @@ jest.mock('../../../lib/jobs', () => ({
   enqueueJob: mockEnqueueJob,
 }))
 
+const mockGetCivicIdentityAssurance = jest.fn()
+
+jest.mock('../identity-assurance.service', () => ({
+  getCivicIdentityAssurance: mockGetCivicIdentityAssurance,
+}))
+
 import { Wallet } from 'ethers'
 import {
   resolveDID,
@@ -56,6 +62,7 @@ const CITIZEN_BASE = {
 
 beforeEach(() => {
   jest.resetAllMocks()
+  mockGetCivicIdentityAssurance.mockResolvedValue({ governance_eligible: false })
 })
 
 // ── resolveDID ────────────────────────────────────────────────────────────────
@@ -121,23 +128,33 @@ describe('getVerificationStatus', () => {
 
     expect(status.level).toBe(1)
     expect(status.level_name).toBe('documento_declarado')
-    expect(status.can_vote).toBe(true)
-    expect(status.can_propose).toBe(false)
+    expect(status.can_vote).toBe(false)
+    expect(status.can_propose).toBe(true)
   })
 
-  it('reflects level 2 capabilities correctly', async () => {
+  it('reflects level 2 capabilities correctly without granting governance eligibility', async () => {
     mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2 })
 
     const status = await getVerificationStatus(CITIZEN_BASE.id)
 
     expect(status.level).toBe(2)
     expect(status.level_name).toBe('contacto_verificado')
-    expect(status.can_vote).toBe(true)
+    expect(status.can_vote).toBe(false)
     expect(status.can_propose).toBe(true)
+  })
+
+  it('grants voting only when civic identity assurance is governance eligible', async () => {
+    mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2 })
+    mockGetCivicIdentityAssurance.mockResolvedValueOnce({ governance_eligible: true })
+
+    const status = await getVerificationStatus(CITIZEN_BASE.id)
+
+    expect(status.can_vote).toBe(true)
+    expect(mockGetCivicIdentityAssurance).toHaveBeenCalledWith(CITIZEN_BASE.id)
   })
 })
 
-// ── confirmCedula ─────────────────────────────────────────────────────────────
+// ── confirmCedula ──────────────────────────────────────────────────────────────
 
 describe('confirmCedula', () => {
   it('upgrades citizen to level 1 when cedula matches', async () => {
@@ -145,17 +162,20 @@ describe('confirmCedula', () => {
     const cedula = '1234567890'
     const cedulaHash = hashCedula(cedula)
 
-    mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({
-      ...CITIZEN_BASE,
-      cedulaHash,
-      verificationLevel: 0,
-    })
+    mockCitizen.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        ...CITIZEN_BASE,
+        cedulaHash,
+        verificationLevel: 0,
+      })
+      .mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 1 })
     mockCitizen.update.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 1 })
 
     const status = await confirmCedula(CITIZEN_BASE.id, cedula)
 
     expect(status.level).toBe(1)
-    expect(status.can_vote).toBe(true)
+    expect(status.can_vote).toBe(false)
+    expect(status.can_propose).toBe(true)
     expect(mockDelCache).toHaveBeenCalledWith('profile', CITIZEN_BASE.id)
   })
 
@@ -251,11 +271,13 @@ describe('confirmEmail', () => {
   it('upgrades citizen to level 2 with valid token', async () => {
     mockRedisGet.mockResolvedValueOnce(token)
     mockCitizen.update.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2 })
+    mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2 })
     mockRedisDel.mockResolvedValueOnce(1)
 
     const status = await confirmEmail(CITIZEN_BASE.id, token)
 
     expect(status.level).toBe(2)
+    expect(status.can_vote).toBe(false)
     expect(status.can_propose).toBe(true)
     expect(mockRedisDel).toHaveBeenCalled()
     expect(mockDelCache).toHaveBeenCalledWith('profile', CITIZEN_BASE.id)
@@ -284,6 +306,7 @@ describe('confirmEmail', () => {
     mockCitizen.update.mockResolvedValueOnce({
       ...CITIZEN_BASE, verificationLevel: 2, walletAddress: '0x' + 'a'.repeat(40),
     })
+    mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2 })
     mockRedisDel.mockResolvedValueOnce(1)
 
     await confirmEmail(CITIZEN_BASE.id, token)
@@ -298,6 +321,7 @@ describe('confirmEmail', () => {
   it('no encola ningún mint cuando el ciudadano todavía no tiene wallet conectada', async () => {
     mockRedisGet.mockResolvedValueOnce(token)
     mockCitizen.update.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2, walletAddress: null })
+    mockCitizen.findUniqueOrThrow.mockResolvedValueOnce({ ...CITIZEN_BASE, verificationLevel: 2 })
     mockRedisDel.mockResolvedValueOnce(1)
 
     await confirmEmail(CITIZEN_BASE.id, token)
