@@ -78,9 +78,8 @@ COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/package.json ./pa
 COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/dist ./packages/types/dist
 
 EXPOSE 4000
-# Temporary production recovery boundary for the known failed provenance
-# migration. The recovery script is idempotent: it marks the specific failed
-# attempt rolled back only when an unresolved attempt exists. Normal Prisma
-# deployment then reapplies the corrected migration and the strict privilege
-# audit must PASS before the unprivileged API process is allowed to start.
-CMD ["sh", "-c", "node apps/api/dist/scripts/recover-privilege-provenance-migration.js && ./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/scripts/audit-production-privileges.js && exec su -s /bin/sh nodeapp -c 'node apps/api/dist/index.js'"]
+# Production boot remains fail-closed: apply pending versioned migrations and
+# certify the canonical privilege state before starting the unprivileged API.
+# The one-time P0 migration recovery shim was removed after successful
+# production reconciliation and is no longer part of the steady-state boot.
+CMD ["sh", "-c", "./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/scripts/audit-production-privileges.js && exec su -s /bin/sh nodeapp -c 'node apps/api/dist/index.js'"]

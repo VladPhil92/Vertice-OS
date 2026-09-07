@@ -393,12 +393,11 @@ export async function exchangeCtgOneFederation(
   const identity = await exchangeWithCtgOne(input)
   const citizen = await resolveCitizen(identity.subject, identity.email, identity.assurance)
 
-  const bootstrappedRole = await bootstrapFederatedSuperadmin(citizen.id, identity.authorities)
-  // P0 privilege provenance: federation may activate a role only when this
-  // exchange just proved/confirmed the canonical bootstrap. citizens.role is
-  // never used as an authority source for ordinary federated sessions.
-  const baselineRole = await ensureBaselineRoleGrants(citizen.id, 'citizen')
-  const activeRole = bootstrappedRole ?? baselineRole
+  // Root bootstrap is a durable-grant operation only. Even when this exchange
+  // establishes or confirms the canonical superadmin grant, the newly created
+  // session remains unprivileged until the user explicitly switches roles.
+  await bootstrapFederatedSuperadmin(citizen.id, identity.authorities)
+  const activeRole = await ensureBaselineRoleGrants(citizen.id, 'citizen')
 
   const refreshToken = generateRefreshToken()
   const session = await prisma.session.create({

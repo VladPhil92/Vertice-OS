@@ -41,29 +41,31 @@ async function requireLiveRole(
     return
   }
 
-  const rows = request.citizen.sid
-    ? await prisma.$queryRaw<Array<{ ok: number }>>(Prisma.sql`
-        SELECT 1 AS ok
-        FROM citizen_role_grants g
-        JOIN sessions s
-          ON s.citizen_id = g.citizen_id
-         AND s.id = ${request.citizen.sid}::uuid
-         AND s.revoked_at IS NULL
-         AND s.expires_at > NOW()
-         AND s.active_role = ${activeRole}
-        WHERE g.citizen_id = ${request.citizen.sub}::uuid
-          AND g.role = ${activeRole}
-          AND g.revoked_at IS NULL
-        LIMIT 1
-      `)
-    : await prisma.$queryRaw<Array<{ ok: number }>>(Prisma.sql`
-        SELECT 1 AS ok
-        FROM citizen_role_grants
-        WHERE citizen_id = ${request.citizen.sub}::uuid
-          AND role = ${activeRole}
-          AND revoked_at IS NULL
-        LIMIT 1
-      `)
+  // P1 least privilege: elevated authority exists only inside an explicit,
+  // live session. Legacy access tokens without a session id can authenticate
+  // but can never enter the privileged control plane.
+  if (!request.citizen.sid) {
+    reply.status(401).send({
+      error: 'Vuelve a iniciar sesión y activa explícitamente el rol requerido',
+      code: 'ROLE_SWITCH_REAUTH_REQUIRED',
+    })
+    return
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ ok: number }>>(Prisma.sql`
+    SELECT 1 AS ok
+    FROM citizen_role_grants g
+    JOIN sessions s
+      ON s.citizen_id = g.citizen_id
+     AND s.id = ${request.citizen.sid}::uuid
+     AND s.revoked_at IS NULL
+     AND s.expires_at > NOW()
+     AND s.active_role = ${activeRole}
+    WHERE g.citizen_id = ${request.citizen.sub}::uuid
+      AND g.role = ${activeRole}
+      AND g.revoked_at IS NULL
+    LIMIT 1
+  `)
 
   if (!rows[0]) {
     reply.status(403).send({ error: 'El rol activo ya no está autorizado', code: 'ROLE_GRANT_REVOKED' })

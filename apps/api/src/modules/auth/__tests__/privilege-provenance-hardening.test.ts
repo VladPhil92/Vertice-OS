@@ -5,14 +5,19 @@ const MIGRATION_PATH = path.resolve(
   __dirname,
   '../../../../prisma/migrations/20260907210000_privilege_provenance_hardening/migration.sql',
 )
+const SESSION_MIGRATION_PATH = path.resolve(
+  __dirname,
+  '../../../../prisma/migrations/20260907223000_least_privilege_session_activation/migration.sql',
+)
 const AUTH_SERVICE_PATH = path.resolve(__dirname, '../auth.service.ts')
 const FEDERATION_SERVICE_PATH = path.resolve(__dirname, '../federation.service.ts')
+const AUTH_MIDDLEWARE_PATH = path.resolve(__dirname, '../../../middleware/auth.ts')
 
 function read(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8')
 }
 
-describe('P0 privilege provenance hardening contract', () => {
+describe('P0/P1 authorization hardening contract', () => {
   it('does not derive local or refresh session authority from citizens.role', () => {
     const auth = read(AUTH_SERVICE_PATH)
 
@@ -22,14 +27,44 @@ describe('P0 privilege provenance hardening contract', () => {
     expect(auth).not.toContain('(session.citizen.role as CitizenRole)')
   })
 
-  it('does not derive ordinary federated session authority from citizens.role', () => {
+  it('starts every federated session at citizen even when root bootstrap succeeds', () => {
     const federation = read(FEDERATION_SERVICE_PATH)
 
-    expect(federation).toContain("ensureBaselineRoleGrants(citizen.id, 'citizen')")
-    expect(federation).toContain('const activeRole = bootstrappedRole ?? baselineRole')
+    expect(federation).toContain(
+      'await bootstrapFederatedSuperadmin(citizen.id, identity.authorities)',
+    )
+    expect(federation).toContain(
+      "const activeRole = await ensureBaselineRoleGrants(citizen.id, 'citizen')",
+    )
+    expect(federation).not.toContain('bootstrappedRole ??')
     expect(federation).not.toContain('(citizen.role as CitizenRole)')
   })
 
+  it('requires a live session id for every privileged request', () => {
+    const middleware = read(AUTH_MIDDLEWARE_PATH)
+
+    expect(middleware).toContain('if (!request.citizen.sid)')
+    expect(middleware).toContain("code: 'ROLE_SWITCH_REAUTH_REQUIRED'")
+    expect(middleware).toContain('s.active_role = ${activeRole}')
+    // The old implementation selected one of two database queries through a
+    // `request.citizen.sid ? ... : ...` fallback. The no-sid branch trusted a
+    // durable grant without an explicitly activated session. P1 removes that
+    // conditional path while retaining the one legitimate live-session query.
+    expect(middleware).not.toContain('request.citizen.sid ?')
+    expect(middleware).not.toContain('const liveRows = request.citizen.sid')
+  })
+
+  it('normalizes existing elevated sessions and forbids privileged session inserts', () => {
+    const sql = read(SESSION_MIGRATION_PATH)
+
+    expect(sql).toContain("SET active_role = 'citizen'")
+    expect(sql).toContain("active_role IN ('moderator', 'admin', 'superadmin')")
+    expect(sql).toContain('SESSION_MUST_START_AS_CITIZEN')
+    expect(sql).toContain('sessions_least_privilege_insert')
+    expect(sql).toContain('BEFORE INSERT ON sessions')
+  })
+
+  it('hands authority to the canonical root before quarantining legacy privilege', () => {
   it('hands exactly one root superadmin authority over before quarantining legacy privilege', () => {
     const sql = read(MIGRATION_PATH)
     const handover = sql.indexOf("INSERT INTO citizen_role_grants\n    (citizen_id, role, granted_by_citizen_id, source, granted_at, revoked_at)")
