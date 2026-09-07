@@ -12,6 +12,7 @@ import { getNeo4jDriver } from './lib/neo4j'
 import { getFeatureCapabilities } from './lib/feature-secrets'
 import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
+import { mobileAuthRoutes } from './modules/auth/mobile-auth.routes'
 import { superadminControlPlaneRoutes } from './modules/auth/control-plane.routes'
 import { probeCtgOneFederation } from './modules/auth/federation.service'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
@@ -120,7 +121,7 @@ export function buildApp() {
 
   app.get('/health', async () => ({
     status: 'ok',
-    version: '0.1.0',
+    version: '0.2.0',
     revision: deployedRevision(),
     timestamp: new Date().toISOString(),
   }))
@@ -166,7 +167,7 @@ export function buildApp() {
         : 'unavailable',
       checks,
       capabilities,
-      version: '0.1.0',
+      version: '0.2.0',
       revision: deployedRevision(),
       timestamp: new Date().toISOString(),
     })
@@ -187,6 +188,7 @@ export function buildApp() {
   })
 
   app.register(authRoutes, { prefix: '/auth' })
+  app.register(mobileAuthRoutes, { prefix: '/auth/mobile' })
   app.register(superadminControlPlaneRoutes, { prefix: '/superadmin' })
   app.register(dashboardRoutes, { prefix: '/dashboard' })
   // P1.0 keeps JSON certification administration outside the raw-body webhook
