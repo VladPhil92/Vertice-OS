@@ -22,7 +22,7 @@ COPY packages/types/package.json ./packages/types/
 COPY packages/config/package.json ./packages/config/
 RUN pnpm install --frozen-lockfile
 
-# ── Build ─────────────────────────────────────────────────────────────────────
+# ── Build ──────────────────────────────────────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -78,11 +78,9 @@ COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/package.json ./pa
 COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/dist ./packages/types/dist
 
 EXPOSE 4000
-# Production boot is self-contained: apply only pending Prisma migrations using
-# the schema's real monorepo path, then replace the shell with the API process.
-# Deliberately NOT setting `USER nodeapp` for the whole container: Prisma
-# migrations must run as root so they can read the schema/engine files
-# without hitting permission issues, but the long-running Node process must
-# not run as root. `su` switches to the unprivileged user right before
-# exec'ing node, so only Node (not migrate deploy) runs unprivileged.
-CMD ["sh", "-c", "./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec su -s /bin/sh nodeapp -c 'node apps/api/dist/index.js'"]
+# Temporary production recovery boundary for the known failed provenance
+# migration. The recovery script is idempotent: it marks the specific failed
+# attempt rolled back only when an unresolved attempt exists. Normal Prisma
+# deployment then reapplies the corrected migration and the strict privilege
+# audit must PASS before the unprivileged API process is allowed to start.
+CMD ["sh", "-c", "node apps/api/dist/scripts/recover-privilege-provenance-migration.js && ./apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/scripts/audit-production-privileges.js && exec su -s /bin/sh nodeapp -c 'node apps/api/dist/index.js'"]
