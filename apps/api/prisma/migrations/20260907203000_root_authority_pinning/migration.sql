@@ -8,6 +8,10 @@
 -- manual ORM mutation, or stale service code cannot bootstrap admin/superadmin
 -- authority for a different federated identity.
 
+-- pgcrypto is already part of the VÉRTICE database extension baseline. Keep the
+-- migration self-contained so the SHA-256 pin is available on every target.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE OR REPLACE FUNCTION enforce_root_superadmin_bootstrap_pin()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -55,16 +59,19 @@ BEGIN
     SELECT 1
     FROM citizen_role_grants g
     INNER JOIN citizens c ON c.id = g.citizen_id
-    LEFT JOIN external_identities ei
-      ON ei.citizen_id = c.id
-     AND ei.provider = 'ctg_one'
     WHERE g.revoked_at IS NULL
       AND g.source = 'ctg_one_bootstrap'
       AND g.role IN ('admin', 'superadmin')
-      AND NOT (
-        LOWER(c.email) = 'valderramapino@gmail.com'
-        AND ENCODE(DIGEST(COALESCE(ei.provider_subject, ''), 'sha256'), 'hex') =
-            '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
+      AND (
+        LOWER(c.email) IS DISTINCT FROM 'valderramapino@gmail.com'
+        OR NOT EXISTS (
+          SELECT 1
+          FROM external_identities ei
+          WHERE ei.citizen_id = c.id
+            AND ei.provider = 'ctg_one'
+            AND ENCODE(DIGEST(ei.provider_subject, 'sha256'), 'hex') =
+                '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
+        )
       )
   ) THEN
     RAISE EXCEPTION 'ROOT_SUPERADMIN_EXISTING_IDENTITY_MISMATCH'
