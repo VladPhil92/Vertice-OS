@@ -31,8 +31,12 @@ export function middleware(request: NextRequest) {
     // Styles: unsafe-inline kept — inline styles carry no code-execution risk
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://*.mapbox.com https://ipfs.io",
-    "connect-src 'self' https://*.mapbox.com wss: ws: https://*.sentry.io",
+    // Cloudflare Images is restricted to image delivery only. No third-party
+    // script execution is introduced by the civic profile media capability.
+    "img-src 'self' data: blob: https://*.mapbox.com https://ipfs.io https://imagedelivery.net",
+    // Direct Creator Upload sends the selected image from the browser straight
+    // to Cloudflare Images; the upload host is the only new connect-src origin.
+    "connect-src 'self' https://*.mapbox.com wss: ws: https://*.sentry.io https://upload.imagedelivery.net",
     "worker-src blob:",
   ].join('; ')
 
