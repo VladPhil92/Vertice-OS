@@ -8,6 +8,14 @@ const SCHEMA_PATH = 'apps/api/prisma/schema.prisma'
 const prisma = new PrismaClient()
 
 async function unresolvedAttemptCount(): Promise<number> {
+  const table = await prisma.$queryRawUnsafe<Array<{ migrations_table: string | null }>>(
+    `SELECT to_regclass('public."_prisma_migrations"')::text AS migrations_table`,
+  )
+
+  // Clean databases have no Prisma migration table yet. They require ordinary
+  // migrate deploy and must never be forced through recovery.
+  if (!table[0]?.migrations_table) return 0
+
   const rows = await prisma.$queryRawUnsafe<Array<{ unresolved: bigint }>>(
     `SELECT COUNT(*)::bigint AS unresolved
        FROM "_prisma_migrations"
