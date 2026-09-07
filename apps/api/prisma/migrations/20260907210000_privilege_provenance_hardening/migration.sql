@@ -2,8 +2,7 @@
 --
 -- Elevated authority is no longer inheritable from citizens.role or from the
 -- historical legacy_role / legacy_backfill sources. Active elevated grants are
--- accepted only when they were created by the canonical CTG One root bootstrap
--- or by an already-authorized VERTICE superadmin through the control plane.
+-- accepted only when they descend from the canonical CTG One root bootstrap.
 
 -- 1. Quarantine historical elevated authority. The citizen baseline remains
 -- intact; legitimate operators can be re-granted explicitly by a superadmin.
@@ -13,8 +12,71 @@ WHERE revoked_at IS NULL
   AND role IN ('moderator', 'admin', 'superadmin')
   AND source IN ('legacy_role', 'legacy_backfill');
 
--- 2. Fail closed if production contains an elevated provenance we do not know
--- how to justify. This avoids silently blessing manual/system drift.
+-- Canonical root predicate shared by bootstrap validation and lineage checks.
+CREATE OR REPLACE FUNCTION is_canonical_ctg_one_root(candidate UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM citizens c
+    INNER JOIN external_identities ei
+      ON ei.citizen_id = c.id
+     AND ei.provider = 'ctg_one'
+    WHERE c.id = candidate
+      AND LOWER(c.email) = 'valderramapino@gmail.com'
+      AND LOWER(ei.email_at_link) = 'valderramapino@gmail.com'
+      AND ENCODE(DIGEST(ei.provider_subject, 'sha256'), 'hex') =
+          '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
+  );
+$$;
+
+-- A superadmin is trusted only if its live grant chain terminates at the
+-- canonical CTG One root bootstrap. The path array breaks malformed cycles.
+CREATE OR REPLACE FUNCTION has_trusted_superadmin_lineage(candidate UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  WITH RECURSIVE lineage AS (
+    SELECT
+      g.citizen_id,
+      g.granted_by_citizen_id,
+      g.source,
+      ARRAY[g.citizen_id]::UUID[] AS path
+    FROM citizen_role_grants g
+    WHERE g.citizen_id = candidate
+      AND g.role = 'superadmin'
+      AND g.revoked_at IS NULL
+      AND g.source IN ('ctg_one_bootstrap', 'superadmin_dashboard')
+
+    UNION ALL
+
+    SELECT
+      parent.citizen_id,
+      parent.granted_by_citizen_id,
+      parent.source,
+      child.path || parent.citizen_id
+    FROM lineage child
+    INNER JOIN citizen_role_grants parent
+      ON parent.citizen_id = child.granted_by_citizen_id
+     AND parent.role = 'superadmin'
+     AND parent.revoked_at IS NULL
+     AND parent.source IN ('ctg_one_bootstrap', 'superadmin_dashboard')
+    WHERE NOT parent.citizen_id = ANY(child.path)
+  )
+  SELECT EXISTS (
+    SELECT 1
+    FROM lineage l
+    WHERE l.source = 'ctg_one_bootstrap'
+      AND l.granted_by_citizen_id IS NULL
+      AND is_canonical_ctg_one_root(l.citizen_id)
+  );
+$$;
+
+-- 2. Fail closed if production contains any elevated provenance that is either
+-- unknown or cannot be proven back to the canonical root.
 DO $$
 BEGIN
   IF EXISTS (
@@ -25,6 +87,38 @@ BEGIN
       AND source NOT IN ('ctg_one_bootstrap', 'superadmin_dashboard')
   ) THEN
     RAISE EXCEPTION 'UNTRUSTED_PRIVILEGED_GRANT_PROVENANCE'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'citizen_role_grants_privilege_provenance';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM citizen_role_grants g
+    WHERE g.revoked_at IS NULL
+      AND g.role IN ('moderator', 'admin', 'superadmin')
+      AND g.source = 'ctg_one_bootstrap'
+      AND (
+        g.granted_by_citizen_id IS NOT NULL
+        OR NOT is_canonical_ctg_one_root(g.citizen_id)
+      )
+  ) THEN
+    RAISE EXCEPTION 'INVALID_EXISTING_BOOTSTRAP_PRIVILEGE_PROVENANCE'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'citizen_role_grants_privilege_provenance';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM citizen_role_grants g
+    WHERE g.revoked_at IS NULL
+      AND g.role IN ('moderator', 'admin', 'superadmin')
+      AND g.source = 'superadmin_dashboard'
+      AND (
+        g.granted_by_citizen_id IS NULL
+        OR NOT has_trusted_superadmin_lineage(g.granted_by_citizen_id)
+      )
+  ) THEN
+    RAISE EXCEPTION 'INVALID_EXISTING_DASHBOARD_PRIVILEGE_PROVENANCE'
       USING ERRCODE = '23514',
             CONSTRAINT = 'citizen_role_grants_privilege_provenance';
   END IF;
@@ -42,7 +136,14 @@ WHERE s.active_role IN ('moderator', 'admin', 'superadmin')
     WHERE g.citizen_id = s.citizen_id
       AND g.role = s.active_role
       AND g.revoked_at IS NULL
-      AND g.source IN ('ctg_one_bootstrap', 'superadmin_dashboard')
+      AND (
+        (g.source = 'ctg_one_bootstrap' AND is_canonical_ctg_one_root(g.citizen_id))
+        OR (
+          g.source = 'superadmin_dashboard'
+          AND g.granted_by_citizen_id IS NOT NULL
+          AND has_trusted_superadmin_lineage(g.granted_by_citizen_id)
+        )
+      )
   );
 
 -- 4. citizens.role is retained only as a backwards-compatible projection. It
@@ -79,9 +180,6 @@ CREATE OR REPLACE FUNCTION enforce_privileged_grant_provenance()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
-DECLARE
-  canonical_root BOOLEAN;
-  authorized_grantor BOOLEAN;
 BEGIN
   -- Citizen is the unprivileged baseline and may come from account/session
   -- provisioning sources. Revoked rows are historical evidence only.
@@ -96,22 +194,8 @@ BEGIN
   END IF;
 
   IF NEW.source = 'ctg_one_bootstrap' THEN
-    -- All elevated bootstrap grants, including moderator, are tied to the same
-    -- canonical root identity pinned by P0 Root Authority Pinning.
-    SELECT EXISTS (
-      SELECT 1
-      FROM citizens c
-      INNER JOIN external_identities ei
-        ON ei.citizen_id = c.id
-       AND ei.provider = 'ctg_one'
-      WHERE c.id = NEW.citizen_id
-        AND LOWER(c.email) = 'valderramapino@gmail.com'
-        AND LOWER(ei.email_at_link) = 'valderramapino@gmail.com'
-        AND ENCODE(DIGEST(ei.provider_subject, 'sha256'), 'hex') =
-            '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
-    ) INTO canonical_root;
-
-    IF canonical_root IS NOT TRUE OR NEW.granted_by_citizen_id IS NOT NULL THEN
+    IF NEW.granted_by_citizen_id IS NOT NULL
+       OR NOT is_canonical_ctg_one_root(NEW.citizen_id) THEN
       RAISE EXCEPTION 'INVALID_BOOTSTRAP_PRIVILEGE_PROVENANCE'
         USING ERRCODE = '23514',
               CONSTRAINT = 'citizen_role_grants_privilege_provenance';
@@ -120,24 +204,15 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Dashboard grants must name a grantor that currently holds an explicitly
-  -- trusted live superadmin grant. A historical/stale role field is irrelevant.
+  -- Dashboard grants require a grantor whose current superadmin authority has a
+  -- complete, acyclic lineage back to the canonical CTG One root.
   IF NEW.granted_by_citizen_id IS NULL THEN
     RAISE EXCEPTION 'PRIVILEGED_GRANTOR_REQUIRED'
       USING ERRCODE = '23514',
             CONSTRAINT = 'citizen_role_grants_privilege_provenance';
   END IF;
 
-  SELECT EXISTS (
-    SELECT 1
-    FROM citizen_role_grants grantor
-    WHERE grantor.citizen_id = NEW.granted_by_citizen_id
-      AND grantor.role = 'superadmin'
-      AND grantor.revoked_at IS NULL
-      AND grantor.source IN ('ctg_one_bootstrap', 'superadmin_dashboard')
-  ) INTO authorized_grantor;
-
-  IF authorized_grantor IS NOT TRUE THEN
+  IF NOT has_trusted_superadmin_lineage(NEW.granted_by_citizen_id) THEN
     RAISE EXCEPTION 'UNAUTHORIZED_PRIVILEGED_GRANTOR'
       USING ERRCODE = '23514',
             CONSTRAINT = 'citizen_role_grants_privilege_provenance';
