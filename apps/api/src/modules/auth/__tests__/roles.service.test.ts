@@ -62,6 +62,7 @@ describe('superadmin authority serialization', () => {
     ).rejects.toMatchObject({ statusCode: 409, code: 'LAST_SUPERADMIN_PROTECTED' })
 
     expect(queryText(0)).toContain('pg_advisory_xact_lock')
+    expect(queryText(0)).toContain('::text AS lock_result')
     expect(mockTxExecuteRaw).not.toHaveBeenCalled()
     expect(mockTxCitizenUpdate).not.toHaveBeenCalled()
     expect(mockRecordAuditEvent).not.toHaveBeenCalled()
@@ -101,6 +102,7 @@ describe('superadmin authority serialization', () => {
 
     expect(role).toBe('superadmin')
     expect(queryText(0)).toContain('pg_advisory_xact_lock')
+    expect(queryText(0)).toContain('::text AS lock_result')
     expect(mockTxExecuteRaw).toHaveBeenCalledTimes(4)
     expect(mockTxCitizenUpdate).toHaveBeenCalledWith({
       where: { id: 'citizen-id' },
