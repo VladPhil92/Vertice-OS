@@ -44,6 +44,18 @@ interface ApiOptions extends Omit<RequestInit, 'headers'> {
  */
 let refreshInFlight: Promise<string | null> | null = null
 
+/**
+ * Deduplicación exclusivamente *in-flight* para lecturas idempotentes.
+ *
+ * El dashboard monta varias superficies independientes que consumen el mismo
+ * contrato (`/dashboard/me`). Mantener aislamiento entre componentes es útil
+ * para resiliencia, pero no debe traducirse en dos o tres requests idénticos
+ * al mismo tiempo. Este mapa comparte únicamente la promesa activa y se limpia
+ * al terminar: no es una caché de datos y, por tanto, no puede servir estado
+ * cívico obsoleto después de una mutación.
+ */
+const readInFlight = new Map<string, Promise<unknown>>()
+
 async function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight
 
@@ -72,19 +84,31 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshInFlight
 }
 
-export async function apiFetch<T = unknown>(
+function isDedupeEligible(options: RequestInit): boolean {
+  const method = (options.method ?? 'GET').toUpperCase()
+  return (method === 'GET' || method === 'HEAD') && options.body == null && options.signal == null
+}
+
+function dedupeKey(path: string, isPublic: boolean, options: RequestInit): string {
+  const method = (options.method ?? 'GET').toUpperCase()
+  const authScope = isPublic ? 'public' : (getToken() ?? 'cookie-session')
+  return `${method}:${authScope}:${path}`
+}
+
+async function executeApiRequest<T>(
   path: string,
-  options: ApiOptions = {},
+  isPublic: boolean,
+  extraHeaders: Record<string, string> | undefined,
+  rest: RequestInit,
 ): Promise<T> {
   const baseUrl = requireApiBaseUrl()
-  const { public: isPublic, headers: extraHeaders, ...rest } = options
 
   function buildHeaders(token: string | null): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...extraHeaders,
     }
-    if (!isPublic && token) headers['Authorization'] = `Bearer ${token}`
+    if (!isPublic && token) headers.Authorization = `Bearer ${token}`
     return headers
   }
 
@@ -119,4 +143,28 @@ export async function apiFetch<T = unknown>(
   const text = await res.text()
   if (!text) return undefined as T
   return JSON.parse(text) as T
+}
+
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: ApiOptions = {},
+): Promise<T> {
+  const { public: isPublic = false, headers: extraHeaders, ...rest } = options
+
+  if (!isDedupeEligible(rest)) {
+    return executeApiRequest<T>(path, isPublic, extraHeaders, rest)
+  }
+
+  const key = dedupeKey(path, isPublic, rest)
+  const active = readInFlight.get(key)
+  if (active) return active as Promise<T>
+
+  const request = executeApiRequest<T>(path, isPublic, extraHeaders, rest)
+  readInFlight.set(key, request)
+
+  try {
+    return await request
+  } finally {
+    if (readInFlight.get(key) === request) readInFlight.delete(key)
+  }
 }
