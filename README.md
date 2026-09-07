@@ -8,7 +8,7 @@
 [![Licencia](https://img.shields.io/badge/Licencia-Propietaria-1A2744?style=flat-square)](./LICENSE)
 [![Piloto](https://img.shields.io/badge/Piloto-Cartagena%20de%20Indias-C0392B?style=flat-square)](https://es.wikipedia.org/wiki/Cartagena_de_Indias)
 
-> **Snapshot documental:** 2 de septiembre de 2026. El paquete raíz conserva la versión técnica `0.1.0`; el estado funcional del producto ha avanzado sustancialmente respecto de la documentación original de la Fase I.
+> **Snapshot documental:** 7 de septiembre de 2026. El paquete raíz conserva la versión técnica `0.1.0`; el estado funcional del producto ha avanzado sustancialmente respecto de la documentación original de la Fase I.
 
 ---
 
@@ -26,7 +26,8 @@ El sistema combina un dashboard ciudadano, una API modular, un servicio de IA mu
 
 | Área | Estado | Implementación actual |
 |---|---|---|
-| **Dashboard ciudadano** | ✅ Implementado | `Mi VÉRTICE`, atención pendiente, actividad personal, reportes, propuestas, votos, control público, IA, reputación y expedientes cívicos |
+| **Dashboard ciudadano** | ✅ Implementado | `Mi VÉRTICE`, identidad visual compartida, avatar cívico, atención pendiente, actividad personal, reportes, propuestas, votos, control público, IA, reputación y expedientes cívicos |
+| **Perfil cívico e Identity Media** | 🟡 Integrado / certificación productiva pendiente | Perfil público, foto de retrato, propagación a superficies sociales y sesión de identidad reutilizada en header/sidebar/móvil; la carga depende de Cloudflare Images configurado |
 | **Workflows cívicos** | ✅ Implementado | Expediente durable que conecta reporte → análisis IA → propuesta → gobernanza → acción legal/control público |
 | **Identidad y autenticación** | ✅ Implementado / P0 activo | Login local + federación CTG One; separación explícita entre autenticación, contacto verificado y civic identity assurance |
 | **Roles y autoridad** | ✅ Implementado | Grants persistentes `citizen/moderator/admin/superadmin`, `active_role` por sesión, JWT ligado a sesión, panel de autoridad y bootstrap controlado del superadmin raíz |
@@ -44,6 +45,7 @@ El sistema combina un dashboard ciudadano, una API modular, un servicio de IA mu
 
 - Integración directa con Registraduría Nacional o un proveedor KYC/liveness productivo no está certificada por defecto.
 - `CTG One SSO` no equivale a `civic identity assurance`.
+- Una foto de perfil aprobada no equivale a identidad verificada; el distintivo de verificación continúa derivándose de `verification_level`.
 - MongoDB, Kafka, The Graph, DAO y otros componentes descritos en documentos tempranos son arquitectura potencial, no dependencias obligatorias del runtime actual.
 - Las votaciones de VÉRTICE son mecanismos cívicos/consultivos; no sustituyen por sí mismas los procedimientos administrativos o electorales legalmente vinculantes.
 
@@ -101,6 +103,10 @@ La API productiva es actualmente **REST sobre Fastify**. No se debe documentar A
 ### Dashboard Functional Convergence
 
 El dashboard dejó de ser una vista principalmente urbana y ahora funciona como centro de comando autenticado del ciudadano. Expone actividad personal, acciones pendientes y acceso operativo a los módulos principales.
+
+### Perfil cívico, Identity Media y sesión de identidad
+
+La presencia pública del ciudadano incorpora retrato cívico, tipo de perfil, organización y visibilidad sin confundir estas señales con civic identity assurance. `DashboardIdentityProvider` reutiliza el mismo snapshot canónico en encabezado, sidebar y navegación móvil y lo invalida después de mutaciones exitosas de perfil/avatar. No persiste una segunda identidad en el browser.
 
 ### Expedientes cívicos
 
@@ -183,6 +189,7 @@ pnpm --filter @vertice/contracts deploy:amoy
 ## Documentación
 
 - [`docs/CURRENT_STATE.md`](./docs/CURRENT_STATE.md) — snapshot funcional y límites conocidos.
+- [`docs/dashboard/dashboard-identity-session-provider-v9.md`](./docs/dashboard/dashboard-identity-session-provider-v9.md) — sesión compartida de identidad del dashboard e invalidación.
 - [`docs/architecture/ARCHITECTURE.md`](./docs/architecture/ARCHITECTURE.md) — arquitectura implementada y componentes opcionales.
 - [`docs/governance/GOVERNANCE.md`](./docs/governance/GOVERNANCE.md) — reglas de gobernanza y contrato del ledger de participación.
 - [`docs/security/CIVIC_IDENTITY_ASSURANCE.md`](./docs/security/CIVIC_IDENTITY_ASSURANCE.md) — frontera de confianza de identidad cívica.
@@ -194,6 +201,7 @@ pnpm --filter @vertice/contracts deploy:amoy
 ## Seguridad — invariantes actuales
 
 - CTG One federation/SSO **no** constituye por sí sola assurance de identidad cívica.
+- La foto del perfil es una señal de presentación; **no** concede ni eleva `verification_level`.
 - La allowlist `CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es explícita y fail-closed.
 - El padrón congelado es la autoridad de admisión durante la ventana de votación.
 - Los votos usan nullifiers; el sistema no debe enlazar públicamente identidad y sentido del voto.
@@ -217,7 +225,3 @@ Las decisiones agregadas de la plataforma son evidencia cívica y mecanismos con
 **Fundador y Arquitecto de Producto:** Juan Pablo Valderrama Pino  
 **Organización:** CTG One Corporation  
 **Ciudad piloto:** Cartagena de Indias, Bolívar, Colombia
-
----
-
-*VÉRTICE OS — infraestructura para la democracia continua.*

@@ -1,95 +1,39 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Building2, Eye, EyeOff, MapPin, ShieldCheck, UserRound } from 'lucide-react'
 import { CivicAvatar } from '@/components/community/CivicAvatar'
-import { apiFetch } from '@/lib/api'
+import { useDashboardIdentity } from '@/components/dashboard/DashboardIdentityProvider'
 
-type CivicProfileType = 'citizen' | 'social_leader' | 'candidate' | 'organization_rep' | 'public_official'
-
-interface CivicProfile {
-  citizen_id: string
-  display_name: string | null
-  neighborhood: string | null
-  profile_type: CivicProfileType
-  bio: string | null
-  organization: string | null
-  public_profile: boolean
-  reputation_score: number
-}
-
-interface CivicAvatarState {
-  citizen_id: string
-  avatar_url: string | null
-  status: 'missing' | 'approved' | 'rejected'
-}
-
-interface DashboardIdentitySnapshot {
-  profile: {
-    id: string
-    email: string
-    neighborhood: string | null
-    verification_level: number
-  }
-}
-
-const PROFILE_TYPE_LABEL: Record<CivicProfileType, string> = {
+const PROFILE_TYPE_LABEL = {
   citizen: 'Ciudadanía',
   social_leader: 'Liderazgo social',
   candidate: 'Candidatura',
   organization_rep: 'Organización',
   public_official: 'Gestión pública',
-}
+} as const
 
 export default function DashboardIdentityHeader() {
-  const [profile, setProfile] = useState<CivicProfile | null>(null)
-  const [avatar, setAvatar] = useState<CivicAvatarState | null>(null)
-  const [dashboardIdentity, setDashboardIdentity] = useState<DashboardIdentitySnapshot | null>(null)
-  const [failed, setFailed] = useState(false)
+  const {
+    profile,
+    avatar,
+    dashboardIdentity,
+    displayName,
+    territory,
+    identityVerified,
+    loading,
+    error,
+  } = useDashboardIdentity()
 
-  useEffect(() => {
-    let active = true
+  if (error && !profile) return null
 
-    Promise.all([
-      apiFetch<CivicProfile>('/community/profile/me'),
-      apiFetch<CivicAvatarState>('/community/profile/me/avatar'),
-      apiFetch<DashboardIdentitySnapshot>('/dashboard/me'),
-    ])
-      .then(([profileData, avatarData, dashboardData]) => {
-        if (!active) return
-        setProfile(profileData)
-        setAvatar(avatarData)
-        setDashboardIdentity(dashboardData)
-      })
-      .catch(() => {
-        if (active) setFailed(true)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  const displayName = useMemo(() => {
-    if (profile?.display_name?.trim()) return profile.display_name.trim()
-    const email = dashboardIdentity?.profile.email
-    if (email) return email.split('@')[0] ?? 'Mi perfil cívico'
-    return 'Mi perfil cívico'
-  }, [dashboardIdentity?.profile.email, profile?.display_name])
-
-  if (failed) return null
-
-  if (!profile || !avatar || !dashboardIdentity) {
+  if (loading || !profile || !avatar || !dashboardIdentity) {
     return (
       <div className="bg-[#F7F9FC] px-4 pt-5 sm:px-6 lg:px-8" aria-label="Cargando identidad cívica">
         <div className="mx-auto h-[118px] max-w-7xl animate-pulse rounded-[24px] border border-[#E1E7EF] bg-white" />
       </div>
     )
   }
-
-  const identityVerified = dashboardIdentity.profile.verification_level >= 1
-  const territory = profile.neighborhood ?? dashboardIdentity.profile.neighborhood ?? 'Cartagena de Indias'
 
   return (
     <section

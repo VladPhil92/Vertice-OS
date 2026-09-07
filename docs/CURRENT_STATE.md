@@ -1,7 +1,7 @@
 # VÉRTICE OS — Current State
 
-> Snapshot técnico-funcional: **4 de septiembre de 2026**  
-> Basado en `main` P0.9 + evidence-backed external certification P1.0 en validación.
+> Snapshot técnico-funcional: **7 de septiembre de 2026**  
+> Basado en `main` P0.9 + evidence-backed external certification P1.0 en validación y convergencia de identidad del dashboard v9.
 
 Este documento separa tres categorías:
 
@@ -18,6 +18,8 @@ Este documento separa tres categorías:
 El dashboard autenticado es el centro de comando del ciudadano y expone:
 
 - perfil e identidad;
+- retrato cívico público con separación estricta respecto de identity assurance;
+- sesión de identidad de UI compartida entre encabezado, sidebar y navegación móvil;
 - reportes territoriales;
 - propuestas y gobernanza;
 - votos pendientes/elegibles;
@@ -30,6 +32,8 @@ El dashboard autenticado es el centro de comando del ciudadano y expone:
 - panel de autoridad para superadmin.
 
 La API `GET /dashboard/me` separa actividad personal de indicadores generales de ciudad.
+
+La capa web `DashboardIdentityProvider` compone en memoria los contratos canónicos `/community/profile/me`, `/community/profile/me/avatar` y `/dashboard/me`. No persiste una segunda copia de identidad. `verification_level` continúa siendo la única fuente de verdad del distintivo de identidad verificada. Las mutaciones exitosas de perfil y avatar invalidan explícitamente el snapshot de sesión para propagar cambios sin recarga manual.
 
 ### 1.2 Workflows cívicos
 
@@ -222,6 +226,8 @@ No documentar `deployed` únicamente porque exista código o configuración IaC.
 
 Para Veriff, **integrado** significa que el adapter, sesión, firma, replay, lifecycle, interlock P0.9 y ledger P1.0 existen en código. **Activo para gobernanza** exige además credenciales reales, webhooks configurados, canary satisfactorio, registro durable P1.0 activo, promoción en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` y allowlist explícita en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
 
+La carga de avatar cívico se considera `🟡 Integrada / pendiente de certificación productiva` mientras Cloudflare Images no tenga credenciales y entrega verificadas en el entorno real. La sesión compartida del dashboard no cambia esa frontera: únicamente reutiliza el estado que las APIs canónicas ya autorizan.
+
 ---
 
 ## 3. Blockchain
@@ -258,10 +264,3 @@ La liveness/biometría deja de describirse como mera intención arquitectónica 
 - `⛔ No activo / retirado`
 
 No usar “implementado” o “producción” para describir únicamente intención arquitectónica.
-
-Cuando un PR cambie estos contratos, actualizar como mínimo:
-
-1. `README.md` si afecta superficie del producto;
-2. `docs/CURRENT_STATE.md`;
-3. documento de dominio/integración;
-4. `CLAUDE.md` si cambia una regla para futuros agentes.
