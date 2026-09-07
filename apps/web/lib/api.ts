@@ -86,7 +86,9 @@ async function refreshAccessToken(): Promise<string | null> {
 
 function isDedupeEligible(options: RequestInit): boolean {
   const method = (options.method ?? 'GET').toUpperCase()
-  return (method === 'GET' || method === 'HEAD') && options.body == null && options.signal == null
+  const hasNoBody = options.body === undefined || options.body === null
+  const hasNoSignal = options.signal === undefined || options.signal === null
+  return (method === 'GET' || method === 'HEAD') && hasNoBody && hasNoSignal
 }
 
 function dedupeKey(path: string, isPublic: boolean, options: RequestInit): string {
