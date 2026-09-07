@@ -22,15 +22,8 @@ import { apiFetch } from '@/lib/api'
 
 type CivicProfileType = 'citizen' | 'social_leader' | 'candidate' | 'organization_rep' | 'public_official'
 
-type DashboardExperienceResponse = {
-  profile: {
-    neighborhood: string | null
-    verification_level: number
-    civic_profile_type?: CivicProfileType
-    civic_bio?: string | null
-    civic_organization?: string | null
-    public_civic_profile?: boolean
-  }
+type DashboardResponse = {
+  profile: { neighborhood: string | null; verification_level: number }
   attention: {
     pending_votes: Array<{ id: string; title: string }>
     legal_needs_action: number
@@ -38,6 +31,17 @@ type DashboardExperienceResponse = {
     civic_actions_needing_evidence: number
   }
 }
+
+type CivicProfile = {
+  citizen_id: string
+  neighborhood: string | null
+  profile_type: CivicProfileType
+  bio: string | null
+  organization: string | null
+  public_profile: boolean
+}
+
+type ExperienceData = { dashboard: DashboardResponse; civicProfile: CivicProfile }
 
 type RoleExperience = {
   label: string
@@ -113,25 +117,23 @@ const PRIORITY_META = {
   normal: { label: 'Pendiente', className: 'border-[#D6E2F0] bg-[#EDF3FA] text-[#245EA7]' },
 } as const
 
-function completion(profile: DashboardExperienceResponse['profile']) {
+function completion(data: ExperienceData) {
+  const { dashboard, civicProfile } = data
   const checks = [
-    { key: 'identity', label: 'Verificación básica', done: profile.verification_level >= 2, weight: 30 },
-    { key: 'territory', label: 'Territorio', done: Boolean(profile.neighborhood), weight: 20 },
-    { key: 'type', label: 'Tipo de perfil', done: Boolean(profile.civic_profile_type), weight: 10 },
-    { key: 'bio', label: 'Biografía de gestión', done: Boolean(profile.civic_bio?.trim()), weight: 20 },
-    { key: 'public', label: 'Perfil público', done: Boolean(profile.public_civic_profile), weight: 20 },
+    { key: 'identity', label: 'Verificación básica', done: dashboard.profile.verification_level >= 2, weight: 30 },
+    { key: 'territory', label: 'Territorio', done: Boolean(dashboard.profile.neighborhood ?? civicProfile.neighborhood), weight: 20 },
+    { key: 'type', label: 'Tipo de perfil', done: Boolean(civicProfile.profile_type), weight: 10 },
+    { key: 'bio', label: 'Biografía de gestión', done: Boolean(civicProfile.bio?.trim()), weight: 20 },
+    { key: 'public', label: 'Perfil público', done: civicProfile.public_profile, weight: 20 },
   ]
-  return {
-    checks,
-    percent: checks.reduce((sum, check) => sum + (check.done ? check.weight : 0), 0),
-  }
+  return { checks, percent: checks.reduce((sum, check) => sum + (check.done ? check.weight : 0), 0) }
 }
 
-function buildActionItems(data: DashboardExperienceResponse): ActionItem[] {
+function buildActionItems(data: ExperienceData): ActionItem[] {
+  const { dashboard, civicProfile } = data
   const items: ActionItem[] = []
-  const profile = data.profile
 
-  if (profile.verification_level < 2) {
+  if (dashboard.profile.verification_level < 2) {
     items.push({
       id: 'identity',
       label: 'Completar verificación básica',
@@ -141,56 +143,51 @@ function buildActionItems(data: DashboardExperienceResponse): ActionItem[] {
       icon: ShieldCheck,
     })
   }
-
-  if (data.attention.civic_actions_needing_evidence > 0) {
+  if (dashboard.attention.civic_actions_needing_evidence > 0) {
     items.push({
       id: 'evidence',
       label: 'Acciones que necesitan evidencia',
       detail: 'Completa soporte verificable para que tus resultados puedan avanzar.',
       href: '/dashboard/community/actions',
-      count: data.attention.civic_actions_needing_evidence,
+      count: dashboard.attention.civic_actions_needing_evidence,
       priority: 'urgent',
       icon: Activity,
     })
   }
-
-  if (data.attention.pending_votes.length > 0) {
+  if (dashboard.attention.pending_votes.length > 0) {
     items.push({
       id: 'votes',
       label: 'Consultas pendientes',
       detail: 'Hay mecanismos de participación abiertos para los que apareces habilitado.',
       href: '/dashboard/governance',
-      count: data.attention.pending_votes.length,
+      count: dashboard.attention.pending_votes.length,
       priority: 'high',
       icon: Vote,
     })
   }
-
-  if (data.attention.legal_needs_action > 0) {
+  if (dashboard.attention.legal_needs_action > 0) {
     items.push({
       id: 'legal',
       label: 'Control público por completar',
       detail: 'Revisa documentos o actuaciones que todavía requieren una decisión tuya.',
       href: '/dashboard/legal',
-      count: data.attention.legal_needs_action,
+      count: dashboard.attention.legal_needs_action,
       priority: 'high',
       icon: Scale,
     })
   }
-
-  if (data.attention.reports_in_progress > 0) {
+  if (dashboard.attention.reports_in_progress > 0) {
     items.push({
       id: 'reports',
       label: 'Reportes en seguimiento',
       detail: 'Consulta cambios de estado y próximos pasos de tu gestión territorial.',
       href: '/dashboard/reports',
-      count: data.attention.reports_in_progress,
+      count: dashboard.attention.reports_in_progress,
       priority: 'normal',
       icon: MapPin,
     })
   }
-
-  if (!profile.civic_bio?.trim() || !profile.public_civic_profile) {
+  if (!civicProfile.bio?.trim() || !civicProfile.public_profile) {
     items.push({
       id: 'profile',
       label: 'Completar presencia cívica',
@@ -206,19 +203,21 @@ function buildActionItems(data: DashboardExperienceResponse): ActionItem[] {
 }
 
 export default function DashboardExperienceLayer() {
-  const [data, setData] = useState<DashboardExperienceResponse | null>(null)
+  const [data, setData] = useState<ExperienceData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    apiFetch<DashboardExperienceResponse>('/dashboard/me')
-      .then(setData)
+    Promise.all([
+      apiFetch<DashboardResponse>('/dashboard/me'),
+      apiFetch<CivicProfile>('/community/profile/me'),
+    ])
+      .then(([dashboard, civicProfile]) => setData({ dashboard, civicProfile }))
       .catch(() => setData(null))
       .finally(() => setLoading(false))
   }, [])
 
-  const profileType = data?.profile.civic_profile_type ?? 'citizen'
-  const experience = ROLE_EXPERIENCE[profileType]
-  const progress = useMemo(() => data ? completion(data.profile) : null, [data])
+  const experience = ROLE_EXPERIENCE[data?.civicProfile.profile_type ?? 'citizen']
+  const progress = useMemo(() => data ? completion(data) : null, [data])
   const tasks = useMemo(() => data ? buildActionItems(data) : [], [data])
 
   if (loading) {
@@ -228,51 +227,36 @@ export default function DashboardExperienceLayer() {
       </section>
     )
   }
-
   if (!data || !progress) return null
 
   const RoleIcon = experience.icon
 
   return (
-    <section
-      data-testid="dashboard-experience-layer"
-      className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 lg:px-8 lg:pt-6"
-      aria-labelledby="today-heading"
-    >
+    <section data-testid="dashboard-experience-layer" className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 lg:px-8 lg:pt-6" aria-labelledby="today-heading">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,.95fr)]">
         <article className="overflow-hidden rounded-[24px] border border-[#DCE5EF] bg-white shadow-[0_12px_38px_rgba(10,42,102,.055)]">
           <div className="h-1.5 bg-[linear-gradient(90deg,#F5B700_0_34%,#4A90E2_34%_67%,#D72638_67%)]" />
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EDF3FA] text-[#0A2A66]">
-                  <RoleIcon size={20} />
-                </span>
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EDF3FA] text-[#0A2A66]"><RoleIcon size={20} /></span>
                 <div>
                   <p className="text-xs font-extrabold uppercase tracking-[.1em] text-[#6B7890]">{experience.eyebrow}</p>
                   <p className="mt-1 text-sm font-extrabold text-[#0A2A66]">{experience.label}</p>
                 </div>
               </div>
-              {data.profile.civic_organization && (
-                <span className="inline-flex min-h-8 items-center gap-2 rounded-full bg-[#F7F9FC] px-3 text-xs font-semibold text-[#607087]">
-                  <Building2 size={14} /> {data.profile.civic_organization}
-                </span>
+              {data.civicProfile.organization && (
+                <span className="inline-flex min-h-8 items-center gap-2 rounded-full bg-[#F7F9FC] px-3 text-xs font-semibold text-[#607087]"><Building2 size={14} /> {data.civicProfile.organization}</span>
               )}
             </div>
 
             <p className="mt-5 text-xs font-extrabold uppercase tracking-[.13em] text-[#7B8799]">Hoy en VÉRTICE</p>
-            <h2 id="today-heading" className="mt-2 max-w-3xl text-xl font-extrabold leading-8 tracking-[-.02em] text-[#0A2A66] sm:text-2xl">
-              {experience.headline}
-            </h2>
+            <h2 id="today-heading" className="mt-2 max-w-3xl text-xl font-extrabold leading-8 tracking-[-.02em] text-[#0A2A66] sm:text-2xl">{experience.headline}</h2>
             <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#607087]">{experience.description}</p>
 
             <div className="mt-5 flex flex-wrap gap-2.5">
-              <Link href={experience.primary.href} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0A2A66] px-4 text-sm font-extrabold text-white">
-                {experience.primary.label} <ArrowRight size={15} />
-              </Link>
-              <Link href={experience.secondary.href} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D5DFEB] bg-white px-4 text-sm font-bold text-[#0A2A66]">
-                {experience.secondary.label}
-              </Link>
+              <Link href={experience.primary.href} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0A2A66] px-4 text-sm font-extrabold text-white">{experience.primary.label} <ArrowRight size={15} /></Link>
+              <Link href={experience.secondary.href} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D5DFEB] bg-white px-4 text-sm font-bold text-[#0A2A66]">{experience.secondary.label}</Link>
             </div>
 
             <div className="mt-6 border-t border-[#E9EDF3] pt-5">
@@ -288,11 +272,8 @@ export default function DashboardExperienceLayer() {
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {progress.checks.map((check) => (
-                  <span key={check.key} className={check.done
-                    ? 'inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#EAF6ED] px-3 text-xs font-bold text-[#237D36]'
-                    : 'inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#F7F9FC] px-3 text-xs font-semibold text-[#6B7890]'}>
-                    {check.done ? <CheckCircle2 size={13} /> : <span className="h-2 w-2 rounded-full bg-[#B5C0CF]" />}
-                    {check.label}
+                  <span key={check.key} className={check.done ? 'inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#EAF6ED] px-3 text-xs font-bold text-[#237D36]' : 'inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#F7F9FC] px-3 text-xs font-semibold text-[#6B7890]'}>
+                    {check.done ? <CheckCircle2 size={13} /> : <span className="h-2 w-2 rounded-full bg-[#B5C0CF]" />}{check.label}
                   </span>
                 ))}
               </div>
@@ -323,10 +304,7 @@ export default function DashboardExperienceLayer() {
                   <Link key={task.id} href={task.href} className="group flex min-h-[72px] items-start gap-3 rounded-2xl border border-[#E1E7EF] p-3.5 transition hover:border-[#BFD0E8] hover:bg-[#FBFCFE]">
                     <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#EDF3FA] text-[#0A2A66]"><Icon size={16} /></span>
                     <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-extrabold text-[#0A2A66]">{task.label}</span>
-                        {typeof task.count === 'number' && <span className="rounded-full bg-[#0A2A66] px-2 py-0.5 text-xs font-extrabold text-white">{task.count}</span>}
-                      </span>
+                      <span className="flex flex-wrap items-center gap-2"><span className="text-sm font-extrabold text-[#0A2A66]">{task.label}</span>{typeof task.count === 'number' && <span className="rounded-full bg-[#0A2A66] px-2 py-0.5 text-xs font-extrabold text-white">{task.count}</span>}</span>
                       <span className="mt-1 block text-xs font-medium leading-5 text-[#6B7890]">{task.detail}</span>
                       <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${priority.className}`}>{priority.label}</span>
                     </span>
@@ -337,9 +315,7 @@ export default function DashboardExperienceLayer() {
             </div>
           )}
 
-          <Link href="/dashboard/community/profile" className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#D5DFEB] text-sm font-extrabold text-[#0A2A66]">
-            <FileText size={15} /> Revisar mi perfil cívico
-          </Link>
+          <Link href="/dashboard/community/profile" className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#D5DFEB] text-sm font-extrabold text-[#0A2A66]"><FileText size={15} /> Revisar mi perfil cívico</Link>
         </aside>
       </div>
     </section>
