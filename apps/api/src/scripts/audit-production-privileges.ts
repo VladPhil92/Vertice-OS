@@ -18,6 +18,7 @@ type RootIdentityRow = {
 }
 
 const ROOT_EMAIL = 'valderramapino@gmail.com'
+const ROOT_SUBJECT_SHA256 = '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
 const prisma = new PrismaClient()
 
 async function main() {
@@ -69,12 +70,21 @@ async function main() {
       .digest('hex'),
   }))
 
+  const canonicalRootGrant = canonicalRoots.length === 1
+    && canonicalRoots[0].source === 'ctg_one_bootstrap'
+    && canonicalRoots[0].granted_by_citizen_id === null
+  const canonicalRootIdentity = safeRootIdentities.some(
+    (identity) => identity.provider === 'ctg_one'
+      && identity.provider_subject_sha256 === ROOT_SUBJECT_SHA256,
+  )
+
   const invariantPass =
     superadmins.length === 1 &&
     canonicalRoots.length === 1 &&
+    canonicalRootGrant &&
+    canonicalRootIdentity &&
     admins.length === 0 &&
-    legacyElevated.length === 0 &&
-    rootIdentities.length >= 1
+    legacyElevated.length === 0
 
   console.log(`PRIVILEGE_AUDIT_ROWS=${JSON.stringify(safeRows)}`)
   console.log(
@@ -82,6 +92,8 @@ async function main() {
       admin: admins.length,
       superadmin: superadmins.length,
       legacyElevated: legacyElevated.length,
+      canonicalRootGrant: canonicalRootGrant ? 1 : 0,
+      canonicalRootIdentity: canonicalRootIdentity ? 1 : 0,
     })}`,
   )
   console.log(
