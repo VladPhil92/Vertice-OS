@@ -1,5 +1,6 @@
 const mockQueryRaw = jest.fn()
 const mockGetCitizenProfile = jest.fn()
+const mockGetCivicProfile = jest.fn()
 const mockGetReputationProfile = jest.fn()
 const mockGetTerritorialStats = jest.fn()
 const mockGetGovernanceStats = jest.fn()
@@ -9,6 +10,7 @@ const mockListMyCivicActions = jest.fn()
 jest.mock('../../../lib/prisma', () => ({ prisma: { $queryRaw: mockQueryRaw } }))
 jest.mock('../../auth/auth.service', () => ({ getCitizenProfile: mockGetCitizenProfile }))
 jest.mock('../../civic-actions/civic-actions.service', () => ({ listMyCivicActions: mockListMyCivicActions }))
+jest.mock('../../community/community.service', () => ({ getCivicProfile: mockGetCivicProfile }))
 jest.mock('../../reputation/reputation.service', () => ({ getReputationProfile: mockGetReputationProfile }))
 jest.mock('../../territorial/territorial.service', () => ({ getTerritorialStats: mockGetTerritorialStats }))
 jest.mock('../../governance/governance.service', () => ({ getGovernanceStats: mockGetGovernanceStats }))
@@ -23,14 +25,24 @@ beforeEach(() => {
 })
 
 describe('citizen dashboard command center', () => {
-  it('reports workflow and evidence-backed civic action metrics', async () => {
+  it('reports workflow and evidence-backed civic action metrics with civic profile context', async () => {
     mockGetCitizenProfile.mockResolvedValueOnce({
       id: CITIZEN_ID,
       email: 'citizen@example.com',
       neighborhood: 'Manga',
       locality_id: 1,
-      verification_level: 1,
+      verification_level: 2,
       created_at: new Date('2026-09-01T10:00:00.000Z'),
+    })
+    mockGetCivicProfile.mockResolvedValueOnce({
+      citizen_id: CITIZEN_ID,
+      display_name: 'Líder Manga',
+      neighborhood: 'Manga',
+      profile_type: 'social_leader',
+      bio: 'Gestión comunitaria y recuperación de espacio público.',
+      organization: 'Colectivo Manga Activa',
+      public_profile: true,
+      reputation_score: 42,
     })
     mockGetReputationProfile.mockResolvedValueOnce({
       reputation_score: 42,
@@ -75,8 +87,15 @@ describe('citizen dashboard command center', () => {
 
     const result = await getCitizenCommandCenter(CITIZEN_ID)
 
+    expect(mockGetCivicProfile).toHaveBeenCalledWith(CITIZEN_ID)
     expect(mockListCivicCases).toHaveBeenCalledWith(CITIZEN_ID, 5)
     expect(mockListMyCivicActions).toHaveBeenCalledWith(CITIZEN_ID, { limit: 5 })
+    expect(result.profile).toMatchObject({
+      civic_profile_type: 'social_leader',
+      civic_bio: 'Gestión comunitaria y recuperación de espacio público.',
+      civic_organization: 'Colectivo Manga Activa',
+      public_civic_profile: true,
+    })
     expect(result.mine.workflows).toEqual({ total: 8, active: 6, recent: recentCases })
     expect(result.mine.civic_actions).toEqual({
       total: 4,
@@ -91,7 +110,7 @@ describe('citizen dashboard command center', () => {
     expect(result.attention.total_items).toBe(2)
   })
 
-  it('fails closed to zero metrics when aggregate rows are absent', async () => {
+  it('fails closed to zero metrics for a new citizen while preserving civic-profile defaults from the domain', async () => {
     mockGetCitizenProfile.mockResolvedValueOnce({
       id: CITIZEN_ID,
       email: 'new-citizen@example.com',
@@ -99,6 +118,16 @@ describe('citizen dashboard command center', () => {
       locality_id: null,
       verification_level: 0,
       created_at: new Date('2026-09-06T10:00:00.000Z'),
+    })
+    mockGetCivicProfile.mockResolvedValueOnce({
+      citizen_id: CITIZEN_ID,
+      display_name: null,
+      neighborhood: null,
+      profile_type: 'citizen',
+      bio: null,
+      organization: null,
+      public_profile: false,
+      reputation_score: 0,
     })
     mockGetReputationProfile.mockResolvedValueOnce({
       reputation_score: 0,
@@ -116,6 +145,12 @@ describe('citizen dashboard command center', () => {
 
     const result = await getCitizenCommandCenter(CITIZEN_ID)
 
+    expect(result.profile).toMatchObject({
+      civic_profile_type: 'citizen',
+      civic_bio: null,
+      civic_organization: null,
+      public_civic_profile: false,
+    })
     expect(result.mine.civic_actions).toEqual({
       total: 0,
       active: 0,
