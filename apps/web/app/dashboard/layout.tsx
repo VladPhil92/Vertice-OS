@@ -30,26 +30,51 @@ import { PwaRegister } from '@/components/pwa/PwaRegister'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { RoleSwitcher } from '@/components/auth/RoleSwitcher'
 
-const NAV_ITEMS = [
-  { href: '/dashboard',            label: 'Inicio',          icon: LayoutDashboard, exact: true,  adminOnly: false },
-  { href: '/dashboard/community',  label: 'Red cívica',      icon: Network,         exact: false, adminOnly: false },
-  { href: '/dashboard/reports',    label: 'Mapa y reportes', icon: Map,             exact: false, adminOnly: false },
-  { href: '/dashboard/workflows',  label: 'Gestión social',  icon: GitBranch,       exact: false, adminOnly: false },
-  { href: '/dashboard/proposals',  label: 'Iniciativas',     icon: FileText,        exact: false, adminOnly: false },
-  { href: '/dashboard/governance', label: 'Consultas',       icon: Vote,            exact: false, adminOnly: false },
-  { href: '/dashboard/ai',         label: 'IA cívica',       icon: Sparkles,        exact: false, adminOnly: false },
-  { href: '/dashboard/identity',   label: 'Identidad',       icon: ShieldCheck,     exact: false, adminOnly: false },
-  { href: '/dashboard/reputation', label: 'Perfil cívico',   icon: Star,            exact: false, adminOnly: false },
-  { href: '/dashboard/legal',      label: 'Control público', icon: Scale,            exact: false, adminOnly: false },
-  { href: '/dashboard/admin',      label: 'Moderación',      icon: Shield,           exact: false, adminOnly: true  },
+const NAV_SECTIONS = [
+  {
+    label: 'Principal',
+    items: [
+      { href: '/dashboard',            label: 'Inicio',          icon: LayoutDashboard, exact: true,  adminOnly: false, prefetch: true },
+      { href: '/dashboard/community',  label: 'Red cívica',      icon: Network,         exact: false, adminOnly: false, prefetch: true },
+      { href: '/dashboard/workflows',  label: 'Gestión social',  icon: GitBranch,       exact: false, adminOnly: false, prefetch: true },
+      { href: '/dashboard/reports',    label: 'Mapa y reportes', icon: Map,             exact: false, adminOnly: false, prefetch: false },
+    ],
+  },
+  {
+    label: 'Participación',
+    items: [
+      { href: '/dashboard/proposals',  label: 'Iniciativas',     icon: FileText,        exact: false, adminOnly: false, prefetch: false },
+      { href: '/dashboard/governance', label: 'Consultas',       icon: Vote,            exact: false, adminOnly: false, prefetch: false },
+      { href: '/dashboard/legal',      label: 'Control público', icon: Scale,           exact: false, adminOnly: false, prefetch: false },
+    ],
+  },
+  {
+    label: 'Herramientas',
+    items: [
+      { href: '/dashboard/ai',         label: 'IA cívica',       icon: Sparkles,        exact: false, adminOnly: false, prefetch: false },
+    ],
+  },
+  {
+    label: 'Cuenta',
+    items: [
+      { href: '/dashboard/identity',   label: 'Identidad',       icon: ShieldCheck,     exact: false, adminOnly: false, prefetch: false },
+      { href: '/dashboard/reputation', label: 'Perfil cívico',   icon: Star,            exact: false, adminOnly: false, prefetch: false },
+    ],
+  },
+  {
+    label: 'Administración',
+    items: [
+      { href: '/dashboard/admin',      label: 'Moderación',      icon: Shield,           exact: false, adminOnly: true,  prefetch: false },
+    ],
+  },
 ] as const
 
 const BOTTOM_NAV = [
-  { href: '/dashboard',                              label: 'Inicio',  icon: Home,      exact: true },
-  { href: '/dashboard/community',                    label: 'Red',     icon: Network,   exact: false },
-  { href: '/dashboard/community/actions/new',        label: 'Acción',  icon: Plus,      exact: false, fab: true },
-  { href: '/dashboard/workflows',                    label: 'Gestión', icon: GitBranch, exact: false },
-  { href: '/dashboard/reputation',                   label: 'Perfil',  icon: User,      exact: false },
+  { href: '/dashboard',                       label: 'Inicio',  icon: Home,      exact: true,  prefetch: true },
+  { href: '/dashboard/community',             label: 'Red',     icon: Network,   exact: false, prefetch: true },
+  { href: '/dashboard/community/actions/new', label: 'Acción',  icon: Plus,      exact: false, prefetch: true, fab: true },
+  { href: '/dashboard/workflows',             label: 'Gestión', icon: GitBranch, exact: false, prefetch: true },
+  { href: '/dashboard/reputation',            label: 'Perfil',  icon: User,      exact: false, prefetch: false },
 ] as const
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -97,7 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <aside className="flex h-full w-72 flex-shrink-0 flex-col border-r border-[#E1E7EF] bg-white shadow-[12px_0_35px_rgba(10,42,102,.035)]" style={{ minHeight: '100vh' }}>
       <div className="border-b border-[#E1E7EF] px-5 py-5">
         <div className="flex items-center justify-between gap-3">
-          <Link href="/dashboard" onClick={() => setSidebarOpen(false)} className="min-w-0 flex-1">
+          <Link href="/dashboard" prefetch onClick={() => setSidebarOpen(false)} className="min-w-0 flex-1">
             <BrandLogo compact />
           </Link>
           <NotificationBell />
@@ -111,32 +136,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
-        {NAV_ITEMS.filter(item => !item.adminOnly || ['moderator', 'admin', 'superadmin'].includes(role)).map(({ href, label, icon: Icon, exact }) => {
-          const active = isActive(href, exact)
+      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4" aria-label="Navegación principal del dashboard">
+        {NAV_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter((item) => !item.adminOnly || ['moderator', 'admin', 'superadmin'].includes(role))
+          if (visibleItems.length === 0) return null
+
           return (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setSidebarOpen(false)}
-              className={[
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition-all',
-                active
-                  ? 'bg-[#EAF1FB] text-[#0A2A66] shadow-sm'
-                  : 'text-[#607087] hover:bg-[#F7F9FC] hover:text-[#0A2A66]',
-              ].join(' ')}
-            >
-              <span className={[
-                'flex h-8 w-8 items-center justify-center rounded-lg border',
-                active
-                  ? 'border-[#BFD0E8] bg-white text-[#0A2A66]'
-                  : 'border-transparent bg-[#F7F9FC] text-[#7B8799]',
-              ].join(' ')}>
-                <Icon size={15} className="flex-shrink-0" strokeWidth={1.8} />
-              </span>
-              {label}
-              {active && <span className="ml-auto h-5 w-1 rounded-full bg-[#F5B700]" />}
-            </Link>
+            <div key={section.label}>
+              <div className="mb-1.5 px-3 text-[9px] font-extrabold uppercase tracking-[.14em] text-[#9AA5B4]">
+                {section.label}
+              </div>
+              <div className="flex flex-col gap-1">
+                {visibleItems.map(({ href, label, icon: Icon, exact, prefetch }) => {
+                  const active = isActive(href, exact)
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      prefetch={prefetch}
+                      aria-current={active ? 'page' : undefined}
+                      onClick={() => setSidebarOpen(false)}
+                      className={[
+                        'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition-all',
+                        active
+                          ? 'bg-[#EAF1FB] text-[#0A2A66] shadow-sm'
+                          : 'text-[#607087] hover:bg-[#F7F9FC] hover:text-[#0A2A66]',
+                      ].join(' ')}
+                    >
+                      <span className={[
+                        'flex h-8 w-8 items-center justify-center rounded-lg border',
+                        active
+                          ? 'border-[#BFD0E8] bg-white text-[#0A2A66]'
+                          : 'border-transparent bg-[#F7F9FC] text-[#7B8799]',
+                      ].join(' ')}>
+                        <Icon size={15} className="flex-shrink-0" strokeWidth={1.8} />
+                      </span>
+                      {label}
+                      {active && <span className="ml-auto h-5 w-1 rounded-full bg-[#F5B700]" />}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
           )
         })}
       </nav>
@@ -204,7 +245,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Menu size={19} />
           </button>
-          <Link href="/dashboard" className="flex items-center">
+          <Link href="/dashboard" prefetch className="flex items-center">
             <BrandLogo compact className="scale-[.88]" />
           </Link>
           <div className="flex items-center gap-2">
@@ -220,15 +261,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E1E7EF] bg-white/96 shadow-[0_-8px_30px_rgba(10,42,102,.06)] backdrop-blur-md lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E1E7EF] bg-white/96 shadow-[0_-8px_30px_rgba(10,42,102,.06)] backdrop-blur-md lg:hidden" aria-label="Navegación móvil del dashboard">
         <div className="flex items-end justify-around px-2 pb-safe pt-2">
-          {BOTTOM_NAV.map(({ href, label, icon: Icon, exact, ...rest }) => {
+          {BOTTOM_NAV.map(({ href, label, icon: Icon, exact, prefetch, ...rest }) => {
             const isFab = 'fab' in rest && rest.fab
             const active = isActive(href, exact)
 
             if (isFab) {
               return (
-                <Link key={href} href={href} className="flex flex-col items-center pb-1" aria-label={label}>
+                <Link key={href} href={href} prefetch={prefetch} className="flex flex-col items-center pb-1" aria-label={label}>
                   <div className="flex h-14 w-14 -translate-y-4 items-center justify-center rounded-full bg-[#F5B700] text-[#0A2A66] shadow-[0_8px_24px_rgba(245,183,0,.28)] transition-transform active:scale-95">
                     <Icon size={23} strokeWidth={2.4} />
                   </div>
@@ -238,7 +279,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             }
 
             return (
-              <Link key={href} href={href} className="flex flex-col items-center gap-1 px-3 pb-2 pt-1" aria-label={label}>
+              <Link key={href} href={href} prefetch={prefetch} aria-current={active ? 'page' : undefined} className="flex flex-col items-center gap-1 px-3 pb-2 pt-1" aria-label={label}>
                 <Icon size={20} strokeWidth={active ? 2.2 : 1.7} className={active ? 'text-[#0A2A66]' : 'text-[#94A0B0]'} />
                 <span className={active ? 'text-[9px] font-extrabold text-[#0A2A66]' : 'text-[9px] font-semibold text-[#94A0B0]'}>
                   {label}
