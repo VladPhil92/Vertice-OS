@@ -31,14 +31,26 @@ AS $$
   );
 $$;
 
--- 1. Atomically hand authority to the canonical root BEFORE removing any
--- legacy superadmin. Existing root role rows are rewritten in place; otherwise
--- the grants are inserted. The prior root-authority trigger independently
--- revalidates admin/superadmin against the same canonical identity.
+-- 1. If legacy elevated authority exists, atomically hand authority to the
+-- canonical root BEFORE removing any legacy superadmin. Clean installations
+-- without historical privilege do not need a root account merely to migrate.
 DO $$
 DECLARE
   canonical_root_id UUID;
+  legacy_elevated_exists BOOLEAN;
 BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM citizen_role_grants
+    WHERE revoked_at IS NULL
+      AND role IN ('moderator', 'admin', 'superadmin')
+      AND source IN ('legacy_role', 'legacy_backfill')
+  ) INTO legacy_elevated_exists;
+
+  IF legacy_elevated_exists IS NOT TRUE THEN
+    RETURN;
+  END IF;
+
   PERFORM pg_advisory_xact_lock(hashtext('vertice-superadmin-authority'));
 
   SELECT c.id
@@ -74,8 +86,8 @@ END;
 $$;
 
 -- 2. Quarantine historical elevated authority only after the canonical root is
--- live. The existing last-superadmin trigger now observes at least one trusted
--- active superadmin and remains fully enabled throughout the handover.
+-- live when a handover was required. The existing last-superadmin trigger stays
+-- enabled throughout the migration.
 UPDATE citizen_role_grants
 SET revoked_at = NOW()
 WHERE revoked_at IS NULL

@@ -32,14 +32,22 @@ describe('P0 privilege provenance hardening contract', () => {
 
   it('hands authority to the canonical root before quarantining legacy privilege', () => {
     const sql = read(MIGRATION_PATH)
-    const handover = sql.indexOf("'ctg_one_bootstrap'")
-    const quarantine = sql.indexOf("source IN ('legacy_role', 'legacy_backfill')")
+    const handover = sql.indexOf("INSERT INTO citizen_role_grants\n    (citizen_id, role, granted_by_citizen_id, source, granted_at, revoked_at)")
+    const quarantine = sql.indexOf("UPDATE citizen_role_grants\nSET revoked_at = NOW()")
 
     expect(sql).toContain('CANONICAL_ROOT_REQUIRED_FOR_PRIVILEGE_HANDOVER')
     expect(sql).toContain("pg_advisory_xact_lock(hashtext('vertice-superadmin-authority'))")
     expect(sql).toContain("unnest(ARRAY['moderator', 'admin', 'superadmin']::text[])")
     expect(handover).toBeGreaterThanOrEqual(0)
     expect(quarantine).toBeGreaterThan(handover)
+  })
+
+  it('requires canonical root handover only when legacy elevated authority exists', () => {
+    const sql = read(MIGRATION_PATH)
+
+    expect(sql).toContain('legacy_elevated_exists BOOLEAN')
+    expect(sql).toContain('IF legacy_elevated_exists IS NOT TRUE THEN')
+    expect(sql).toContain('RETURN;')
   })
 
   it('revokes historical elevated grants and resets stale privileged sessions', () => {
