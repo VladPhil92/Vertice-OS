@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const API = 'http://localhost:4000'
+const API = '**/api'
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
 const ACTION_ID = '550e8400-e29b-41d4-a716-446655440020'
 
@@ -78,7 +78,7 @@ test.describe('Civic actions', () => {
 
     await expect(page.getByRole('heading', { name: /acciones cívicas con evidencia/i })).toBeVisible()
     await expect(page.getByText('Recuperar iluminación del parque')).toBeVisible()
-    await expect(page.getByText('67')).toBeVisible()
+    await expect(page.getByText('67', { exact: true }).first()).toBeVisible()
     await expect(page.getByText(/conf\. media · 58/i)).toBeVisible()
     await expect(page.getByText(/seguidores, likes e impresiones no suman reputación/i)).toBeVisible()
   })

@@ -4,7 +4,7 @@
  */
 import { test, expect, type Page } from '@playwright/test'
 
-const API = 'http://localhost:4000'
+const API = '**/api'
 
 const MOCK_PROPOSALS = [
   {
@@ -43,8 +43,6 @@ async function setupAuth(page: Page) {
   })
 }
 
-// ─── Proposals list ───────────────────────────────────────────────────────────
-
 test.describe('Proposals list', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuth(page)
@@ -71,11 +69,7 @@ test.describe('Proposals list', () => {
     )
 
     await page.goto('/dashboard/proposals')
-    // Find and click the endorse button for the first proposal
-    const endorseBtn = page.getByRole('button', { name: /apoyar/i }).first()
-    await endorseBtn.click()
-
-    // Optimistic update: count should increase immediately
+    await page.getByRole('button', { name: /avalar propuesta: ciclovía/i }).click()
     await expect(page.getByText('144')).toBeVisible()
   })
 
@@ -85,10 +79,7 @@ test.describe('Proposals list', () => {
     )
 
     await page.goto('/dashboard/proposals')
-    const endorseBtn = page.getByRole('button', { name: /apoyar/i }).first()
-    await endorseBtn.click()
-
-    // Should roll back to original count after failure
+    await page.getByRole('button', { name: /avalar propuesta: ciclovía/i }).click()
     await expect(page.getByText('143')).toBeVisible()
     await expect(page.getByText('144')).not.toBeVisible()
   })
@@ -101,8 +92,6 @@ test.describe('Proposals list', () => {
     await expect(page.getByText('Cámaras de seguridad')).not.toBeVisible()
   })
 })
-
-// ─── Create proposal ──────────────────────────────────────────────────────────
 
 test.describe('Create proposal', () => {
   test.beforeEach(async ({ page }) => {
@@ -121,7 +110,7 @@ test.describe('Create proposal', () => {
     await page.goto('/dashboard/proposals/new')
     const desc = page.getByLabel(/descripción/i)
     await desc.fill('Esta es mi propuesta ciudadana para mejorar Cartagena.')
-    await expect(page.getByText(/53/)).toBeVisible()
+    await expect(page.getByText('54/10 000')).toBeVisible()
   })
 
   test('validates minimum description length', async ({ page }) => {
@@ -130,19 +119,14 @@ test.describe('Create proposal', () => {
     await page.getByLabel(/categoría/i).selectOption('infraestructura')
     await page.getByLabel(/alcance/i).selectOption('city')
     await page.getByLabel(/descripción/i).fill('Corta')
-
     await page.getByRole('button', { name: /publicar propuesta/i }).click()
-
     await expect(page.getByText(/al menos 50 caracteres/i)).toBeVisible()
   })
 
   test('submits proposal and redirects', async ({ page }) => {
     await page.route(`${API}/governance/proposals`, (route) => {
       if (route.request().method() === 'POST') {
-        return route.fulfill({
-          status: 201,
-          json: { id: 'new-prop-uuid', title: 'Mi nueva propuesta' },
-        })
+        return route.fulfill({ status: 201, json: { id: 'new-prop-uuid', title: 'Mi nueva propuesta' } })
       }
       return route.fulfill({ status: 200, json: { data: [], count: 0 } })
     })

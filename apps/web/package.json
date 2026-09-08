@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",
+    "e2e:golden": "playwright test auth.spec.ts civic-actions.spec.ts reports.spec.ts proposals.spec.ts ctgone-auth.spec.ts golden-safety.spec.ts",
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
