@@ -49,6 +49,20 @@ jest.mock('../../../middleware/auth', () => ({
   requireVerified: jest.fn((_req: unknown, _rep: unknown, done: () => void) => done()),
 }))
 
+// Usage metering — avoid opening a real database connection during tests
+const mockReserveUsage = jest.fn()
+const mockReleaseUsage = jest.fn()
+
+jest.mock('../../billing/billing.usage.service', () => ({
+  reserveUsage: mockReserveUsage,
+  releaseUsage: mockReleaseUsage,
+}))
+
+mockReserveUsage.mockResolvedValue({
+  metric: 'ai_requests', used: 1, limit: 500, remaining: 499, percent: 1, periodStart: '2026-09-01',
+})
+mockReleaseUsage.mockResolvedValue(undefined)
+
 import Fastify from 'fastify'
 import { aiRoutes } from '../ai.routes'
 
