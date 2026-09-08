@@ -1,20 +1,40 @@
 import type { FastifyInstance } from 'fastify'
-import { requireAuth } from '../../middleware/auth'
+import { requireAdmin, requireAuth, requireVerified } from '../../middleware/auth'
 import { ENTITLEMENTS } from '../billing/billing.catalog'
 import { requireEntitlement } from '../billing/billing.middleware'
+import { createCrowdfundingContributionCheckout } from '../billing/payment.service'
 import {
   ALLOWED_FUNDING_MODELS,
   CAMPAIGN_STATUSES,
   CROWDFUNDING_CATEGORIES,
   CROWDFUNDING_GUARDRAILS,
 } from './crowdfunding.policy'
-import { createCampaignDraftSchema } from './crowdfunding.schema'
+import {
+  campaignIdParamsSchema,
+  campaignReviewSchema,
+  citizenIdParamsSchema,
+  contributionCheckoutSchema,
+  createCampaignDraftSchema,
+  payoutProfileReviewSchema,
+} from './crowdfunding.schema'
 import {
   createCampaignDraft,
   getCampaignAnalytics,
   listOwnCampaigns,
   listPublicCampaigns,
 } from './crowdfunding.service'
+import {
+  activateCampaign,
+  getPayoutReadiness,
+  listComplianceQueue,
+  requestPayoutReview,
+  reviewCampaign,
+  reviewPayoutProfile,
+} from './crowdfunding.compliance.service'
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
 
 export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
   app.get('/config', async (_request, reply) => {
@@ -33,6 +53,14 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/me/campaigns', { preHandler: requireAuth }, async (request, reply) => {
     return reply.send({ campaigns: await listOwnCampaigns(request.citizen.sub) })
+  })
+
+  app.get('/me/payout-readiness', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getPayoutReadiness(request.citizen.sub))
+  })
+
+  app.post('/me/payout-readiness/request-review', { preHandler: requireVerified }, async (request, reply) => {
+    return reply.send(await requestPayoutReview(request.citizen.sub))
   })
 
   app.get(
@@ -59,5 +87,64 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
       nextStep: 'compliance_review',
       activationRequiresReview: true,
     })
+  })
+
+  app.post('/me/campaigns/:campaignId/activate', { preHandler: requireVerified }, async (request, reply) => {
+    const params = campaignIdParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.status(400).send({ error: 'Campaña inválida', code: 'INVALID_CAMPAIGN_ID' })
+    }
+    return reply.send(await activateCampaign(request.citizen.sub, params.data.campaignId))
+  })
+
+  app.post(
+    '/campaigns/:campaignId/contributions/checkout',
+    { preHandler: requireEntitlement(ENTITLEMENTS.CROWDFUNDING_CONTRIBUTE) },
+    async (request, reply) => {
+      const params = campaignIdParamsSchema.safeParse(request.params)
+      const body = contributionCheckoutSchema.safeParse(request.body)
+      if (!params.success || !body.success) {
+        return reply.status(400).send({
+          error: 'Datos de aporte inválidos',
+          code: 'INVALID_CONTRIBUTION',
+          details: body.success ? undefined : body.error.flatten(),
+        })
+      }
+
+      return reply.status(201).send(await createCrowdfundingContributionCheckout({
+        citizenId: request.citizen.sub,
+        campaignId: params.data.campaignId,
+        amountCop: body.data.amount_cop,
+        platformTipCop: body.data.platform_tip_cop,
+        isAnonymous: body.data.is_anonymous,
+        requestedIdempotencyKey: headerValue(request.headers['idempotency-key']),
+      }))
+    },
+  )
+
+  app.get('/admin/review-queue', { preHandler: requireAdmin }, async (_request, reply) => {
+    return reply.send(await listComplianceQueue())
+  })
+
+  app.post('/admin/campaigns/:campaignId/review', { preHandler: requireAdmin }, async (request, reply) => {
+    const params = campaignIdParamsSchema.safeParse(request.params)
+    const body = campaignReviewSchema.safeParse(request.body)
+    if (!params.success || !body.success) {
+      return reply.status(400).send({ error: 'Revisión inválida', code: 'INVALID_CAMPAIGN_REVIEW' })
+    }
+    return reply.send(await reviewCampaign(params.data.campaignId, body.data))
+  })
+
+  app.post('/admin/payout-profiles/:citizenId/review', { preHandler: requireAdmin }, async (request, reply) => {
+    const params = citizenIdParamsSchema.safeParse(request.params)
+    const body = payoutProfileReviewSchema.safeParse(request.body)
+    if (!params.success || !body.success) {
+      return reply.status(400).send({ error: 'Revisión inválida', code: 'INVALID_PAYOUT_REVIEW' })
+    }
+    return reply.send(await reviewPayoutProfile(
+      request.citizen.sub,
+      params.data.citizenId,
+      body.data,
+    ))
   })
 }
