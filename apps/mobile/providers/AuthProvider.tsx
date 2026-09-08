@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiFetch, loginMobile, logoutMobile } from '../lib/api'
 import { clearSessionTokens, getRefreshToken } from '../lib/session'
+import { deactivatePushRegistration } from '../lib/push-notifications'
 import type { CitizenProfile } from '../types/api'
 
 interface AuthContextValue {
@@ -49,6 +50,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    // Deactivate the current citizen/token association while auth is still
+    // valid. Failure never prevents logout, and the local opt-in preference is
+    // preserved so a future sign-in can re-register without another prompt.
+    try {
+      await deactivatePushRegistration({ preservePreference: true })
+    } catch {
+      // best effort: auth revocation remains authoritative
+    }
     await logoutMobile()
     setUser(null)
   }, [])
