@@ -2,8 +2,10 @@ import type { BillingCycle, PlanCode } from './billing.catalog'
 
 export interface CheckoutSessionRequest {
   citizenId: string
+  payerEmail: string
   planCode: Exclude<PlanCode, 'free'>
   billingCycle: BillingCycle
+  externalReference: string
   successUrl: string
   cancelUrl: string
 }

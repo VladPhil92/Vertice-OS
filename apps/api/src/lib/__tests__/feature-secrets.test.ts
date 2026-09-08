@@ -86,6 +86,8 @@ describe('feature-scoped production configuration', () => {
       civic_identity_proofing_ingress: 'disabled',
       civic_sbt: 'disabled',
       voting_registry: 'disabled',
+      payments: 'disabled',
+      crowdfunding_payments: 'disabled',
     })
   })
 
