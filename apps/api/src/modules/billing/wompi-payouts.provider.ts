@@ -15,6 +15,13 @@ export type WompiPayoutBatchStatus =
 
 export type WompiPayoutTransactionStatus = 'PENDING' | 'APPROVED' | 'CANCELLED' | 'FAILED' | 'REJECTED' | string
 
+export type WompiBrebKeyType =
+  | 'ALPHANUMERIC'
+  | 'MAIL'
+  | 'PHONE'
+  | 'IDENTIFICATION'
+  | 'ESTABLISHMENT_CODE'
+
 export interface WompiPayoutBatch {
   id: string
   reference?: string
@@ -35,12 +42,19 @@ export interface WompiPayoutTransaction {
   } | null
 }
 
-export interface WompiBankDestination {
-  legalIdType: 'CC' | 'NIT' | 'CE'
-  legalId: string
-  bankId: string
-  accountType: 'AHORROS' | 'CORRIENTE'
-  accountNumber: string
+export interface WompiBrebPreview {
+  holderName: string
+  financialEntity: {
+    name: string
+    code: string
+  }
+  keyType: string
+  keyValue: string
+}
+
+export interface WompiBrebDestination {
+  key: string
+  keyType: WompiBrebKeyType
   name: string
   email: string
 }
@@ -56,8 +70,8 @@ export class WompiPayoutApiError extends Error {
 
 function apiBase(): string {
   return config.WOMPI_PAYOUTS_ENV === 'production'
-    ? 'https://api.payouts.wompi.co/v1'
-    : 'https://api.sandbox.payouts.wompi.co/v1'
+    ? 'https://api.payouts.wompi.co/v2'
+    : 'https://api.sandbox.payouts.wompi.co/v2'
 }
 
 export function getWompiPayoutConfigurationState(): WompiPayoutConfigurationState {
@@ -108,6 +122,7 @@ async function wompiPayoutRequest<T>(
         Accept: 'application/json',
         'x-api-key': credentials.apiKey,
         'user-principal-id': credentials.userPrincipalId,
+        'business-application-id': 'WOMPI_PAYOUTS',
         ...(options.idempotencyKey ? { 'idempotency-key': options.idempotencyKey } : {}),
         ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       },
@@ -176,13 +191,12 @@ function listRecords(payload: unknown): Record<string, unknown>[] {
 function toBatch(resource: Record<string, unknown>): WompiPayoutBatch | null {
   const id = resourceId(resource)
   if (!id) return null
+  const amount = resource.amountInCents ?? resource.amount
   return {
     id,
     reference: asString(resource.reference) ?? undefined,
     status: resourceStatus(resource),
-    amountInCents: typeof resource.amountInCents === 'number' || typeof resource.amountInCents === 'string'
-      ? resource.amountInCents
-      : undefined,
+    amountInCents: typeof amount === 'number' || typeof amount === 'string' ? amount : undefined,
     totalTransactions: typeof resource.totalTransactions === 'number' ? resource.totalTransactions : undefined,
   }
 }
@@ -191,26 +205,50 @@ function toTransaction(resource: Record<string, unknown>): WompiPayoutTransactio
   const id = resourceId(resource)
   if (!id) return null
   const failureReason = asRecord(resource.failureReason)
+  const amount = resource.amountInCents ?? resource.amount
   return {
     id,
     payoutId: asString(resource.payoutId) ?? undefined,
     reference: asString(resource.reference) ?? undefined,
     status: resourceStatus(resource),
-    amountInCents: typeof resource.amountInCents === 'number' || typeof resource.amountInCents === 'string'
-      ? resource.amountInCents
-      : undefined,
+    amountInCents: typeof amount === 'number' || typeof amount === 'string' ? amount : undefined,
     failureReason: failureReason
       ? { code: asString(failureReason.code) ?? undefined, message: asString(failureReason.message) ?? undefined }
       : null,
   }
 }
 
-export async function createWompiBankPayout(input: {
+export async function resolveWompiBrebKey(input: {
+  key: string
+  keyType: WompiBrebKeyType
+}): Promise<WompiBrebPreview> {
+  const payload = await wompiPayoutRequest<unknown>(
+    `/breb/keys/resolve/${encodeURIComponent(input.key)}?keyType=${encodeURIComponent(input.keyType)}`,
+  )
+  const resource = resourceRecord(payload)
+  const financialEntity = asRecord(resource?.financialEntity)
+  const holderName = asString(resource?.holderName)
+  const entityName = asString(financialEntity?.name)
+  const entityCode = asString(financialEntity?.code)
+  const keyType = asString(resource?.keyType)
+  const keyValue = asString(resource?.keyValue)
+  if (!holderName || !entityName || !entityCode || !keyType || !keyValue) {
+    throw new WompiPayoutApiError(false)
+  }
+  return {
+    holderName,
+    financialEntity: { name: entityName, code: entityCode },
+    keyType,
+    keyValue,
+  }
+}
+
+export async function createWompiBrebPayout(input: {
   reference: string
   transactionReference: string
   idempotencyKey: string
   amountInCents: number
-  destination: WompiBankDestination
+  destination: WompiBrebDestination
 }): Promise<{ payoutId: string | null; status: string; traceId: string | null }> {
   const credentials = requireProviderConfiguration()
   const payload = await wompiPayoutRequest<unknown>('/payouts', {
@@ -221,8 +259,10 @@ export async function createWompiBankPayout(input: {
       accountId: credentials.sourceAccountId,
       paymentType: 'OTHER',
       transactions: [{
-        ...input.destination,
         amount: input.amountInCents,
+        name: input.destination.name,
+        email: input.destination.email,
+        key: input.destination.key,
         reference: input.transactionReference,
       }],
     },
@@ -259,11 +299,6 @@ export async function getWompiPayoutTransactions(payoutId: string): Promise<Womp
   return listRecords(payload)
     .map(toTransaction)
     .filter((value): value is WompiPayoutTransaction => Boolean(value))
-}
-
-export async function getWompiPayoutHealth(): Promise<string> {
-  const payload = await wompiPayoutRequest<unknown>('/health')
-  return asString(resourceRecord(payload)?.status) ?? 'UNKNOWN'
 }
 
 function readSignedProperty(data: unknown, path: string): string {
