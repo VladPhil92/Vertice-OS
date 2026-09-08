@@ -78,7 +78,7 @@ test.describe('Civic actions', () => {
 
     await expect(page.getByRole('heading', { name: /acciones cívicas con evidencia/i })).toBeVisible()
     await expect(page.getByText('Recuperar iluminación del parque')).toBeVisible()
-    await expect(page.getByText('67')).toBeVisible()
+    await expect(page.getByText('67', { exact: true }).first()).toBeVisible()
     await expect(page.getByText(/conf\. media · 58/i)).toBeVisible()
     await expect(page.getByText(/seguidores, likes e impresiones no suman reputación/i)).toBeVisible()
   })
