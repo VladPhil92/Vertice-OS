@@ -17,10 +17,11 @@ const CAMPAIGN_ROW = {
   creator_citizen_id: 'citizen-1',
   title: 'Parque del barrio',
   slug: 'parque-del-barrio-abcd1234',
-  summary: 'Recuperar el parque',
-  description: 'Descripción larga de la campaña.',
-  category: 'infraestructura',
+  summary: 'Recuperar el parque para la comunidad',
+  description: 'Descripción suficientemente larga de la campaña y de su plan de ejecución comunitaria verificable.',
+  category: 'community',
   funding_model: 'donation',
+  funding_policy: 'milestone',
   status: 'draft',
   compliance_status: 'pending',
   goal_amount_cop: 1_000_000n,
@@ -28,7 +29,7 @@ const CAMPAIGN_ROW = {
   currency: 'COP',
   locality_id: null,
   neighborhood: null,
-  budget: { items: [] },
+  budget: [{ label: 'Materiales', amount_cop: 500_000 }],
   starts_at: null,
   ends_at: null,
   created_at: new Date('2026-09-01T00:00:00.000Z'),
@@ -40,22 +41,40 @@ beforeEach(() => {
 })
 
 describe('createCampaignDraft', () => {
-  it('inserts a draft campaign and serializes bigint amounts', async () => {
+  it('inserts a draft campaign and serializes bigint amounts and funding policy', async () => {
     mockQueryRaw.mockResolvedValue([CAMPAIGN_ROW])
 
     const result = await createCampaignDraft('citizen-1', {
       title: 'Parque del barrio',
-      summary: 'Recuperar el parque',
-      description: 'Descripción larga de la campaña.',
-      category: 'infraestructura',
+      summary: 'Recuperar el parque para la comunidad',
+      description: 'Descripción suficientemente larga de la campaña y de su plan de ejecución comunitaria verificable.',
+      category: 'community',
       funding_model: 'donation',
+      funding_policy: 'milestone',
       goal_amount_cop: 1_000_000,
-      budget: { items: [] },
-    } as never)
+      budget: [{ label: 'Materiales', amount_cop: 500_000 }],
+    })
 
     expect(result.goal_amount_cop).toBe(1_000_000)
     expect(result.raised_amount_cop).toBe(0)
+    expect(result.funding_policy).toBe('milestone')
     expect(result.starts_at).toBeNull()
+  })
+
+  it('uses the donation default funding policy when it is omitted', async () => {
+    mockQueryRaw.mockResolvedValue([{ ...CAMPAIGN_ROW, funding_policy: 'flexible' }])
+
+    const result = await createCampaignDraft('citizen-1', {
+      title: 'Ayuda social urgente',
+      summary: 'Apoyo verificable para una necesidad social urgente',
+      description: 'Esta campaña describe con suficiente detalle el uso de los recursos, sus responsables y la evidencia requerida.',
+      category: 'social',
+      funding_model: 'donation',
+      goal_amount_cop: 500_000,
+      budget: [{ label: 'Ayuda directa', amount_cop: 500_000 }],
+    })
+
+    expect(result.funding_policy).toBe('flexible')
   })
 })
 
