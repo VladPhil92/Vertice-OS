@@ -2,6 +2,7 @@ import DashboardCommandCenterV2 from '@/components/dashboard/DashboardCommandCen
 import { DashboardGlobalSearch } from '@/components/dashboard/DashboardGlobalSearch'
 import { DashboardOperationalAttention } from '@/components/dashboard/DashboardOperationalAttention'
 import { EcosystemBridge } from '@/components/dashboard/EcosystemBridge'
+import { OperationalCapacityShortcut } from '@/components/dashboard/OperationalCapacityShortcut'
 import { RoleAdaptiveLauncher } from '@/components/dashboard/RoleAdaptiveLauncher'
 
 export default function DashboardPage() {
@@ -11,6 +12,7 @@ export default function DashboardPage() {
       <DashboardGlobalSearch />
       <DashboardOperationalAttention />
       <RoleAdaptiveLauncher />
+      <OperationalCapacityShortcut />
       <DashboardCommandCenterV2 />
     </>
   )

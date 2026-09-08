@@ -8,7 +8,7 @@ export const CIVIC_PROFILE_TYPES = [
   'public_official',
 ] as const
 
-export const COMMUNITY_ACTIVITY_TYPES = ['report', 'proposal'] as const
+export const COMMUNITY_ACTIVITY_TYPES = ['report', 'proposal', 'publication'] as const
 export const COMMUNITY_VALIDATION_STANCES = ['corroborate', 'dispute'] as const
 
 export const CommunityFeedQuerySchema = z.object({

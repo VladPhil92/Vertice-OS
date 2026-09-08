@@ -59,6 +59,14 @@ export async function provisionCtgOneForCitizen(citizenId: string): Promise<{
     )
   }
 
+  if (!citizen.email) {
+    throw federationError(
+      'Agrega un correo a tu cuenta VÉRTICE antes de crear tu cuenta CTG One desde esta plataforma',
+      409,
+      'EMAIL_REQUIRED_FOR_PROVISIONING',
+    )
+  }
+
   const secret = config.CTG_ONE_FEDERATION_SECRET?.trim()
   if (!secret) {
     throw federationError(
