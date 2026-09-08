@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto'
 import { buildApp } from '../app'
 import { prisma } from '../lib/prisma'
+import { redis } from '../lib/redis'
+import { closeNeo4j } from '../lib/neo4j'
 
 const describeGolden = process.env.GOLDEN_API_JOURNEYS === '1' ? describe : describe.skip
 const app = buildApp()
@@ -48,7 +50,11 @@ describeGolden('Golden E2E API journeys', () => {
 
   afterAll(async () => {
     await app.close()
-    await prisma.$disconnect()
+    await Promise.allSettled([
+      prisma.$disconnect(),
+      closeNeo4j(),
+      redis.quit(),
+    ])
   })
 
   test('GJ-01 auth/session lifecycle: register → login → me → refresh → logout → revoked', async () => {
