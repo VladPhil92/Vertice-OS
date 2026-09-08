@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const API = 'http://localhost:4000'
 const MEDIA_ASSET_ID = '550e8400-e29b-41d4-a716-446655440010'
 
 async function setupAuth(page: Page) {
@@ -23,7 +22,9 @@ test.describe('Territorial evidence media', () => {
   test('uploads provider-backed evidence and submits only confirmed media asset ids', async ({ page }) => {
     let submittedBody: Record<string, unknown> | null = null
 
-    await page.route(`${API}/territorial/media/upload-intent`, (route) => route.fulfill({
+    // The glob intentionally supports both development (direct local API) and
+    // production/same-origin (/api proxy) so this spec can serve as a release gate.
+    await page.route('**/territorial/media/upload-intent', (route) => route.fulfill({
       status: 200,
       json: {
         media_asset_id: MEDIA_ASSET_ID,
@@ -34,7 +35,7 @@ test.describe('Territorial evidence media', () => {
       status: 200,
       json: { success: true },
     }))
-    await page.route(`${API}/territorial/media/confirm`, (route) => route.fulfill({
+    await page.route('**/territorial/media/confirm', (route) => route.fulfill({
       status: 200,
       json: {
         media_asset_id: MEDIA_ASSET_ID,
@@ -42,7 +43,7 @@ test.describe('Territorial evidence media', () => {
         status: 'confirmed',
       },
     }))
-    await page.route(`${API}/territorial/reports*`, (route) => {
+    await page.route('**/territorial/reports*', (route) => {
       if (route.request().method() === 'POST') {
         submittedBody = route.request().postDataJSON() as Record<string, unknown>
         return route.fulfill({
