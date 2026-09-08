@@ -1,12 +1,27 @@
-import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../providers/AuthProvider'
+import {
+  deactivatePushRegistration,
+  enablePushNotifications,
+  getPushPreferenceState,
+} from '../../lib/push-notifications'
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile } = useAuth()
   const [busy, setBusy] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushRegistered, setPushRegistered] = useState(false)
+
+  useEffect(() => {
+    void getPushPreferenceState().then((state) => {
+      setPushEnabled(state.enabled)
+      setPushRegistered(state.registeredToken)
+    })
+  }, [])
 
   async function handleSignOut() {
     setBusy(true)
@@ -15,6 +30,29 @@ export default function ProfileScreen() {
       router.replace('/(auth)/sign-in')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function togglePush() {
+    setPushBusy(true)
+    try {
+      if (pushEnabled) {
+        await deactivatePushRegistration()
+        setPushEnabled(false)
+        setPushRegistered(false)
+        return
+      }
+
+      await enablePushNotifications()
+      setPushEnabled(true)
+      setPushRegistered(true)
+    } catch (cause) {
+      Alert.alert(
+        'Notificaciones no disponibles',
+        cause instanceof Error ? cause.message : 'No fue posible actualizar esta preferencia.',
+      )
+    } finally {
+      setPushBusy(false)
     }
   }
 
@@ -45,6 +83,36 @@ export default function ProfileScreen() {
             <Text style={styles.value}>{user?.reputation_score ?? '0'}</Text>
           </View>
         </View>
+
+        <View style={styles.notificationCard}>
+          <View style={styles.notificationCopy}>
+            <Text style={styles.notificationTitle}>Actualizaciones cívicas</Text>
+            <Text style={styles.notificationBody}>
+              {pushEnabled
+                ? pushRegistered
+                  ? 'Este dispositivo está registrado para recibir alertas de reportes, propuestas y resultados.'
+                  : 'La preferencia está activa y se reintentará el registro cuando el build tenga configuración EAS válida.'
+                : 'Actívalas cuando quieras. Vértice no solicita permisos de notificación automáticamente.'}
+            </Text>
+          </View>
+          <Pressable
+            disabled={pushBusy}
+            onPress={() => void togglePush()}
+            style={[styles.pushButton, pushEnabled && styles.pushButtonActive, pushBusy && styles.disabled]}
+          >
+            <Text style={[styles.pushButtonText, pushEnabled && styles.pushButtonTextActive]}>
+              {pushBusy ? 'Procesando…' : pushEnabled ? 'Desactivar' : 'Activar'}
+            </Text>
+          </Pressable>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/notifications')}
+          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.secondaryButtonText}>Ver notificaciones</Text>
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"
@@ -81,6 +149,14 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   label: { flex: 1, color: '#6C7068' },
   value: { flex: 1, textAlign: 'right', fontWeight: '600', color: '#24271F' },
+  notificationCard: { borderRadius: 20, padding: 16, backgroundColor: '#E7E4D8', gap: 12 },
+  notificationCopy: { gap: 5 },
+  notificationTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' },
+  notificationBody: { color: '#565D54', lineHeight: 19 },
+  pushButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#AEB7AF', backgroundColor: '#FFFFFF' },
+  pushButtonActive: { backgroundColor: '#17382A', borderColor: '#17382A' },
+  pushButtonText: { color: '#17382A', fontWeight: '700' },
+  pushButtonTextActive: { color: '#FFFFFF' },
   secondaryButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1, borderColor: '#B9BDB5' },
   secondaryButtonText: { fontWeight: '700', color: '#263228' },
   dangerButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#F4DFDC' },
