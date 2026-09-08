@@ -17,6 +17,19 @@ const VELOCITY_WINDOW_MINUTES = 10
 const VELOCITY_THRESHOLD = 5
 const FAILED_PAYMENT_THRESHOLD = 3
 
+type ContributionPaymentState = 'pending' | 'paid' | 'failed' | 'refunded' | 'chargeback' | 'cancelled'
+
+type LedgerCandidate = {
+  id: string
+  citizen_id: string | null
+  kind: string
+  status: string
+  provider_transaction_id: string | null
+  amount_cop: bigint
+  currency: string
+  metadata: unknown
+}
+
 function httpError(message: string, code: string, statusCode: number): Error {
   return Object.assign(new Error(message), { code, statusCode })
 }
@@ -46,7 +59,7 @@ export function classifyCrowdfundingOrderStatus(
   status: string,
   paidAmount: number | null,
   expectedAmount: number,
-): 'pending' | 'paid' | 'failed' | 'refunded' | 'chargeback' | 'cancelled' {
+): ContributionPaymentState {
   if ((status === 'processed' || status === 'approved') && paidAmount !== null && paidAmount >= expectedAmount) return 'paid'
   if (status === 'refunded') return 'refunded'
   if (status === 'charged_back' || status === 'charged_backed') return 'chargeback'
@@ -62,17 +75,6 @@ export function financeCsvEscape(value: unknown): string {
   return `"${text.replace(/"/g, '""')}"`
 }
 
-type LedgerCandidate = {
-  id: string
-  citizen_id: string | null
-  kind: string
-  status: string
-  provider_transaction_id: string | null
-  amount_cop: bigint
-  currency: string
-  metadata: unknown
-}
-
 async function currentTransactionStatus(transactionId: string): Promise<string> {
   const rows = await prisma.$queryRaw<Array<{ status: string }>>(Prisma.sql`
     SELECT status FROM payment_transactions WHERE id = ${transactionId}::uuid LIMIT 1
@@ -80,7 +82,10 @@ async function currentTransactionStatus(transactionId: string): Promise<string> 
   return rows[0]?.status ?? 'missing'
 }
 
-async function applyCrowdfundingOrderState(tx: LedgerCandidate, order: MercadoPagoOrder): Promise<void> {
+async function applyCrowdfundingOrderState(
+  tx: LedgerCandidate,
+  order: MercadoPagoOrder,
+): Promise<ContributionPaymentState> {
   const total = asNumber(order.total_amount)
   const paid = asNumber(order.total_paid_amount)
   if ((order.currency && order.currency !== tx.currency) || (total !== null && total !== Number(tx.amount_cop))) {
@@ -88,6 +93,8 @@ async function applyCrowdfundingOrderState(tx: LedgerCandidate, order: MercadoPa
   }
 
   const target = classifyCrowdfundingOrderStatus(order.status, paid, Number(tx.amount_cop))
+  let effectiveTarget = target
+
   await prisma.$transaction(async (db) => {
     const rows = await db.$queryRaw<Array<{
       contribution_id: string
@@ -104,12 +111,13 @@ async function applyCrowdfundingOrderState(tx: LedgerCandidate, order: MercadoPa
     const contribution = rows[0]
     if (!contribution) throw httpError('Aporte asociado no encontrado.', 'CONTRIBUTION_NOT_FOUND', 409)
 
-    // Terminal reversals are monotonic. A stale provider read must never resurrect
-    // a refunded/charged-back contribution as paid.
     if (
       (contribution.contribution_status === 'refunded' || contribution.contribution_status === 'chargeback')
       && target === 'paid'
-    ) return
+    ) {
+      effectiveTarget = contribution.contribution_status as ContributionPaymentState
+      return
+    }
 
     await db.$executeRaw(Prisma.sql`
       UPDATE payment_transactions
@@ -141,6 +149,8 @@ async function applyCrowdfundingOrderState(tx: LedgerCandidate, order: MercadoPa
       `)
     }
   })
+
+  return effectiveTarget
 }
 
 async function reconcileCrowdfundingTransaction(tx: LedgerCandidate): Promise<void> {
@@ -167,15 +177,13 @@ async function reconcileSubscriptionTransaction(tx: LedgerCandidate): Promise<vo
   if (resource.status === 'authorized') {
     await prisma.$executeRaw(Prisma.sql`
       UPDATE payment_transactions
-      SET status = CASE WHEN status = 'pending' THEN 'authorized' ELSE status END,
-          updated_at = NOW()
+      SET status = CASE WHEN status = 'pending' THEN 'authorized' ELSE status END, updated_at = NOW()
       WHERE id = ${tx.id}::uuid
     `)
   } else if (resource.status === 'cancelled') {
     await prisma.$executeRaw(Prisma.sql`
       UPDATE payment_transactions
-      SET status = CASE WHEN status IN ('pending', 'authorized') THEN 'cancelled' ELSE status END,
-          updated_at = NOW()
+      SET status = CASE WHEN status IN ('pending', 'authorized') THEN 'cancelled' ELSE status END, updated_at = NOW()
       WHERE id = ${tx.id}::uuid
     `)
   }
@@ -184,8 +192,7 @@ async function reconcileSubscriptionTransaction(tx: LedgerCandidate): Promise<vo
     UPDATE subscriptions
     SET last_provider_sync_at = NOW(),
         cancel_at_period_end = CASE
-          WHEN ${resource.status} IN ('cancelled', 'paused') THEN TRUE
-          ELSE cancel_at_period_end
+          WHEN ${resource.status} IN ('cancelled', 'paused') THEN TRUE ELSE cancel_at_period_end
         END,
         status = CASE
           WHEN ${resource.status} IN ('cancelled', 'paused')
@@ -212,8 +219,7 @@ export async function reconcileFinanceLedger(input: {
   const runId = runs[0].id
 
   const candidates = await prisma.$queryRaw<LedgerCandidate[]>(Prisma.sql`
-    SELECT id, citizen_id, kind, status, provider_transaction_id,
-           amount_cop, currency, metadata
+    SELECT id, citizen_id, kind, status, provider_transaction_id, amount_cop, currency, metadata
     FROM payment_transactions
     WHERE provider = ${PROVIDER}
       AND kind IN ('subscription', 'crowdfunding_contribution')
@@ -235,16 +241,16 @@ export async function reconcileFinanceLedger(input: {
       if (result === 'synced') changed += 1
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO payment_reconciliation_items (
-          run_id, payment_transaction_id, provider_resource_id,
-          before_status, after_status, result
+          run_id, payment_transaction_id, provider_resource_id, before_status, after_status, result
         ) VALUES (
-          ${runId}::uuid, ${tx.id}::uuid, ${tx.provider_transaction_id},
-          ${before}, ${after}, ${result}
+          ${runId}::uuid, ${tx.id}::uuid, ${tx.provider_transaction_id}, ${before}, ${after}, ${result}
         )
       `)
     } catch (error) {
       failed += 1
-      const code = error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code ?? '') : null
+      const code = error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : null
       const message = error instanceof Error ? error.message.slice(0, 1000) : 'Error de conciliación'
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO payment_reconciliation_items (
@@ -258,14 +264,15 @@ export async function reconcileFinanceLedger(input: {
     }
   }
 
-  const runStatus = failed === 0 ? 'succeeded' : failed === candidates.length && candidates.length > 0 ? 'failed' : 'partial'
+  const runStatus = failed === 0
+    ? 'succeeded'
+    : failed === candidates.length && candidates.length > 0
+      ? 'failed'
+      : 'partial'
   await prisma.$executeRaw(Prisma.sql`
     UPDATE payment_reconciliation_runs
-    SET status = ${runStatus},
-        scanned_count = ${candidates.length},
-        changed_count = ${changed},
-        failed_count = ${failed},
-        completed_at = NOW()
+    SET status = ${runStatus}, scanned_count = ${candidates.length}, changed_count = ${changed},
+        failed_count = ${failed}, completed_at = NOW()
     WHERE id = ${runId}::uuid
   `)
 
@@ -300,9 +307,10 @@ export async function requestCrowdfundingRefund(input: {
     status: string
     provider_transaction_id: string | null
     amount_cop: bigint
+    currency: string
     metadata: unknown
   }>>(Prisma.sql`
-    SELECT id, status, provider_transaction_id, amount_cop, metadata
+    SELECT id, status, provider_transaction_id, amount_cop, currency, metadata
     FROM payment_transactions
     WHERE id = ${input.transactionId}::uuid
       AND provider = ${PROVIDER}
@@ -336,40 +344,39 @@ export async function requestCrowdfundingRefund(input: {
 
   try {
     const refund = await refundMercadoPagoOrder(orderId, idempotencyKey)
-    await prisma.$executeRaw(Prisma.sql`
-      UPDATE payment_refund_requests
-      SET provider_refund_id = ${refund.id != null ? String(refund.id) : null},
-          status = 'succeeded',
-          provider_response = ${JSON.stringify({ status: refund.status ?? null, amount: refund.amount ?? null })}::jsonb,
-          completed_at = NOW(), updated_at = NOW()
-      WHERE id = ${refundRequestId}::uuid
-    `)
-
-    // Do not infer that money was returned merely from our local request. The
-    // provider order is fetched again and the contribution ledger changes only
-    // if its verified state reports the refund.
-    const ledgerTx: LedgerCandidate = {
+    const providerRefundId = refund.id !== null && refund.id !== undefined ? String(refund.id) : null
+    const verifiedState = await applyCrowdfundingOrderState({
       id: tx.id,
       citizen_id: null,
       kind: 'crowdfunding_contribution',
       status: tx.status,
       provider_transaction_id: tx.provider_transaction_id,
       amount_cop: tx.amount_cop,
-      currency: 'COP',
+      currency: tx.currency,
       metadata: tx.metadata,
-    }
-    await applyCrowdfundingOrderState(ledgerTx, await getMercadoPagoOrder(orderId))
+    }, await getMercadoPagoOrder(orderId))
+
+    const requestStatus = verifiedState === 'refunded' ? 'succeeded' : 'reconciliation_required'
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE payment_refund_requests
+      SET provider_refund_id = ${providerRefundId},
+          status = ${requestStatus},
+          provider_response = ${JSON.stringify({ status: refund.status ?? null, amount: refund.amount ?? null })}::jsonb,
+          completed_at = CASE WHEN ${requestStatus} = 'succeeded' THEN NOW() ELSE completed_at END,
+          updated_at = NOW()
+      WHERE id = ${refundRequestId}::uuid
+    `)
 
     await recordAuditEvent({
       actorId: input.actorId,
       action: 'finance.refund_crowdfunding',
       targetType: 'payment_transaction',
       targetId: tx.id,
-      result: 'provider_accepted',
+      result: requestStatus,
       reason: input.reason,
       metadata: { refundRequestId },
     })
-    return { refundRequestId, status: 'succeeded', reused: false }
+    return { refundRequestId, status: requestStatus, reused: false }
   } catch (error) {
     const reconciliationRequired = error instanceof MercadoPagoApiError && error.retryable
     await prisma.$executeRaw(Prisma.sql`
@@ -443,7 +450,7 @@ export async function scanFinanceRisk(actorId?: string | null) {
     SELECT citizen_id, (ARRAY_AGG(id ORDER BY created_at DESC))[1] AS latest_tx_id, COUNT(*) AS event_count
     FROM payment_transactions
     WHERE citizen_id IS NOT NULL
-      AND created_at >= NOW() - (${VELOCITY_WINDOW_MINUTES} || ' minutes')::interval
+      AND created_at >= NOW() - make_interval(mins => ${VELOCITY_WINDOW_MINUTES})
     GROUP BY citizen_id
     HAVING COUNT(*) >= ${VELOCITY_THRESHOLD}
   `)
@@ -569,8 +576,7 @@ export async function buildAccountingExport(from: Date, to: Date): Promise<strin
   }>>(Prisma.sql`
     SELECT tx.id, tx.occurred_at, tx.created_at, tx.kind, tx.status, tx.provider,
            tx.provider_transaction_id, tx.amount_cop, tx.platform_fee_cop, tx.currency,
-           tx.citizen_id, c.campaign_id, c.amount_cop AS contribution_amount_cop,
-           c.platform_tip_cop
+           tx.citizen_id, c.campaign_id, c.amount_cop AS contribution_amount_cop, c.platform_tip_cop
     FROM payment_transactions tx
     LEFT JOIN crowdfunding_contributions c ON c.payment_transaction_id = tx.id
     WHERE tx.created_at >= ${from} AND tx.created_at < ${to}
@@ -596,8 +602,8 @@ export async function buildAccountingExport(from: Date, to: Date): Promise<strin
       row.currency,
       row.citizen_id,
       row.campaign_id,
-      row.contribution_amount_cop == null ? null : Number(row.contribution_amount_cop),
-      row.platform_tip_cop == null ? null : Number(row.platform_tip_cop),
+      row.contribution_amount_cop === null ? null : Number(row.contribution_amount_cop),
+      row.platform_tip_cop === null ? null : Number(row.platform_tip_cop),
     ].map(financeCsvEscape).join(','))
   }
   return `${lines.join('\n')}\n`
@@ -648,7 +654,8 @@ export async function getFinanceOperationsStatus() {
     prisma.$queryRaw<Array<{ open_risk_flags: bigint; pending_refunds: bigint }>>(Prisma.sql`
       SELECT
         (SELECT COUNT(*) FROM payment_risk_flags WHERE status IN ('open', 'escalated')) AS open_risk_flags,
-        (SELECT COUNT(*) FROM payment_refund_requests WHERE status IN ('requested', 'processing', 'reconciliation_required')) AS pending_refunds
+        (SELECT COUNT(*) FROM payment_refund_requests
+          WHERE status IN ('requested', 'processing', 'reconciliation_required')) AS pending_refunds
     `),
     prisma.$queryRaw<Array<{
       id: string
