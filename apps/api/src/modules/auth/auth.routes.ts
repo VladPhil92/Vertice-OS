@@ -17,9 +17,13 @@ import {
   CITIZEN_ROLES,
   getRoleContext,
   listCitizensForRoleAdmin,
-  replaceCitizenRoles,
   switchSessionRole,
 } from './roles.service'
+import {
+  DELEGABLE_ROLES,
+  grantCitizenRole,
+  revokeCitizenRole,
+} from './role-delegation.service'
 import { config } from '../../config'
 
 const REFRESH_COOKIE = 'vertice_refresh'
@@ -29,10 +33,17 @@ const FederationExchangeSchema = z.object({
   code_verifier: z.string().min(43).max(128).regex(/^[A-Za-z0-9._~-]+$/),
 })
 const RoleSchema = z.enum(CITIZEN_ROLES)
+const DelegableRoleSchema = z.enum(DELEGABLE_ROLES)
 const RoleSwitchSchema = z.object({ role: RoleSchema })
-const ReplaceRolesSchema = z.object({ roles: z.array(RoleSchema).min(1).max(CITIZEN_ROLES.length) })
+const RoleReasonSchema = z.string().trim().min(8).max(500)
+const GrantRoleSchema = z.object({ role: DelegableRoleSchema, reason: RoleReasonSchema })
+const RevokeRoleSchema = z.object({ reason: RoleReasonSchema })
 const RoleAdminQuerySchema = z.object({ q: z.string().trim().max(100).optional().default('') })
 const CitizenIdParamsSchema = z.object({ citizenId: z.string().uuid() })
+const CitizenRoleParamsSchema = z.object({
+  citizenId: z.string().uuid(),
+  role: DelegableRoleSchema,
+})
 
 const cookieOpts = {
   httpOnly: true,
@@ -126,8 +137,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await switchSessionRole(app, request.citizen, parsed.data.role))
   })
 
-  // Superadmin authority plane. Search is deliberately bounded and role grants
-  // are server-authorized; email is only a search/display field, never an authority key.
+  // P2 role authority plane. Search is deliberately bounded and email is only
+  // a discovery/display field; citizen UUID is the mutation target. All role
+  // mutations require an explicitly activated live Superadmin session.
   app.get('/role-admin/users', {
     preHandler: requireSuperadmin,
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
@@ -137,17 +149,48 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ users: await listCitizensForRoleAdmin(parsed.data.q) })
   })
 
-  app.put('/role-admin/users/:citizenId/roles', {
+  // Grant and revoke are intentionally separate operations. The former batch
+  // replace endpoint made provenance ambiguous and could not express *why* a
+  // specific role changed. Every mutation now requires a human-readable reason.
+  app.post('/role-admin/users/:citizenId/grants', {
     preHandler: requireSuperadmin,
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
   }, async (request, reply) => {
     const params = CitizenIdParamsSchema.safeParse(request.params)
-    const body = ReplaceRolesSchema.safeParse(request.body)
+    const body = GrantRoleSchema.safeParse(request.body)
     if (!params.success || !body.success) {
-      return reply.status(400).send({ error: 'Solicitud de roles inválida', code: 'INVALID_ROLE_REQUEST' })
+      return reply.status(400).send({
+        error: 'Solicitud de delegación inválida',
+        code: 'INVALID_ROLE_GRANT_REQUEST',
+      })
     }
-    const roles = await replaceCitizenRoles(request.citizen.sub, params.data.citizenId, body.data.roles)
-    return reply.send({ citizen_id: params.data.citizenId, roles })
+    const result = await grantCitizenRole(
+      request.citizen.sub,
+      params.data.citizenId,
+      body.data.role,
+      body.data.reason,
+    )
+    return reply.status(201).send(result)
+  })
+
+  app.delete('/role-admin/users/:citizenId/grants/:role', {
+    preHandler: requireSuperadmin,
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const params = CitizenRoleParamsSchema.safeParse(request.params)
+    const body = RevokeRoleSchema.safeParse(request.body)
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        error: 'Solicitud de revocación inválida',
+        code: 'INVALID_ROLE_REVOKE_REQUEST',
+      })
+    }
+    return reply.send(await revokeCitizenRole(
+      request.citizen.sub,
+      params.data.citizenId,
+      params.data.role,
+      body.data.reason,
+    ))
   })
 
   app.post('/forgot-password', { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } }, async (request, reply) => {
