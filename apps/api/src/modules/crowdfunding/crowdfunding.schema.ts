@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { addBrebKeyIssue, brebKeyTypeSchema } from '../billing/breb-key.schema'
 import { ALLOWED_FUNDING_MODELS, CROWDFUNDING_CATEGORIES } from './crowdfunding.policy'
+import {
+  ALLOWED_FUNDING_MODELS,
+  CROWDFUNDING_CATEGORIES,
+  FUNDING_POLICIES,
+} from './crowdfunding.policy'
 
 const budgetItemSchema = z.object({
   label: z.string().trim().min(3).max(120),
@@ -13,6 +18,7 @@ export const createCampaignDraftSchema = z.object({
   description: z.string().trim().min(80).max(8_000),
   category: z.enum(CROWDFUNDING_CATEGORIES),
   funding_model: z.enum(ALLOWED_FUNDING_MODELS).default('donation'),
+  funding_policy: z.enum(FUNDING_POLICIES).optional(),
   goal_amount_cop: z.number().int().min(50_000).max(2_000_000_000),
   locality_id: z.number().int().positive().optional(),
   neighborhood: z.string().trim().min(2).max(120).optional(),
@@ -24,6 +30,13 @@ export const createCampaignDraftSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['budget'],
       message: 'El presupuesto desglosado no puede superar la meta de recaudo.',
+    })
+  }
+  if (input.funding_model === 'reward' && input.funding_policy === 'flexible') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['funding_policy'],
+      message: 'Las campañas con recompensas o preventas no pueden usar financiación flexible.',
     })
   }
 })
