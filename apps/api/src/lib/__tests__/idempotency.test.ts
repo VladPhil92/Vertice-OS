@@ -178,6 +178,29 @@ describe('durable mutation idempotency contract', () => {
     })).rejects.toMatchObject({ statusCode: 409, code: 'IDEMPOTENCY_IN_PROGRESS' })
   })
 
+  it('keeps an expired processing receipt fail-closed instead of re-executing it', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([receipt({
+        state: 'processing',
+        response_status: null,
+        response_body: null,
+        expires_at: new Date(Date.now() - 1_000),
+      })])
+    const operation = jest.fn()
+
+    await expect(executeIdempotentMutation({
+      citizenId: CITIZEN_ID,
+      scope: SCOPE,
+      payload: PAYLOAD,
+      requestedKey: 'proposal:request-stale-processing',
+      operation,
+    })).rejects.toMatchObject({ statusCode: 409, code: 'IDEMPOTENCY_IN_PROGRESS' })
+
+    expect(operation).not.toHaveBeenCalled()
+    expect(mockExecuteRaw).not.toHaveBeenCalled()
+  })
+
   it('requires reconciliation after an earlier failed/uncertain execution', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([])
@@ -200,13 +223,40 @@ describe('durable mutation idempotency contract', () => {
     })
   })
 
-  it('removes an expired receipt and safely reserves a fresh execution', async () => {
+  it('preserves an expired failed receipt and still requires reconciliation', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([receipt({
+        state: 'failed',
+        response_status: null,
+        response_body: null,
+        failure_code: 'COMMIT_UNCERTAIN',
+        expires_at: new Date(Date.now() - 1_000),
+      })])
+    const operation = jest.fn()
+
+    await expect(executeIdempotentMutation({
+      citizenId: CITIZEN_ID,
+      scope: SCOPE,
+      payload: PAYLOAD,
+      requestedKey: 'proposal:request-stale-failed',
+      operation,
+    })).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'IDEMPOTENCY_RECONCILIATION_REQUIRED:COMMIT_UNCERTAIN',
+    })
+
+    expect(operation).not.toHaveBeenCalled()
+    expect(mockExecuteRaw).not.toHaveBeenCalled()
+  })
+
+  it('removes an expired completed receipt and safely reserves a fresh execution', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([receipt({ expires_at: new Date(Date.now() - 1_000) })])
       .mockResolvedValueOnce([{ id: 'receipt-2' }])
     mockExecuteRaw
-      .mockResolvedValueOnce(1) // delete expired receipt
+      .mockResolvedValueOnce(1) // delete expired completed receipt
       .mockResolvedValueOnce(1) // complete fresh receipt
     const operation = jest.fn().mockResolvedValue({ id: 'proposal-2' })
 
@@ -224,7 +274,7 @@ describe('durable mutation idempotency contract', () => {
     expect(result.value).toEqual({ id: 'proposal-2' })
   })
 
-  it('re-loads the winner when another request wins the expired-receipt reservation race', async () => {
+  it('re-loads the winner when another request wins the expired-completed reservation race', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([receipt({ expires_at: new Date(Date.now() - 1_000) })])
