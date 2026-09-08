@@ -53,7 +53,7 @@ function UsageCard({ metricKey, metric }: { metricKey: MetricKey; metric: UsageM
   const meta = METRIC_META[metricKey]
   const Icon = meta.icon
   const measured = metric.used !== null
-  const usageLabel = measured
+  const usageLabel = metric.used !== null
     ? `${metric.used.toLocaleString('es-CO')} / ${metric.limit.toLocaleString('es-CO')}${meta.unit ? ` ${meta.unit}` : ''}`
     : `Capacidad: ${metric.limit.toLocaleString('es-CO')}${meta.unit ? ` ${meta.unit}` : ''}`
 
