@@ -2,3 +2,13 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'contracts'
+
+# Two HIGH advisories in image-size are currently unavoidable in the Expo/Metro
+# toolchain because every published image-size version is affected and no patched
+# release exists as of 2026-09-07. Keep the high-severity audit gate active for
+# every other advisory; remove these exceptions immediately when upstream ships
+# a fix. Rationale: docs/security/DEPENDENCY_EXCEPTIONS.md.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-w3rx-r6r6-pgpr
+    - GHSA-5p2g-fcmc-qvqq
