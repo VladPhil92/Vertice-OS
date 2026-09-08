@@ -126,20 +126,40 @@ export interface TerritorialReportSummary {
   created_at: string
 }
 
-export type ProposalStatus = 'idea' | 'draft' | 'debate' | 'voting' | 'approved' | 'rejected' | 'executed'
+export type ProposalStatus =
+  | 'idea'
+  | 'draft'
+  | 'debate'
+  | 'voting'
+  | 'approved'
+  | 'rejected'
+  | 'archived'
+  | 'executed'
+  | 'failed_execution'
+  | 'quorum_failed'
+
 export type ProposalScope = 'neighborhood' | 'locality' | 'city' | 'regional' | 'national'
 
 export interface GovernanceProposal {
   id: string
+  author_id: string | null
   title: string
   category: string
   scope: ProposalScope
   status: ProposalStatus
-  executive_summary: string | null
-  description: string
   endorsement_count: number
-  comment_count: number
+  total_votes: number
+  approve_votes_weighted: number
+  reject_votes_weighted: number
+  voting_ends_at: string | null
   created_at: string
+}
+
+export interface EndorseResult {
+  proposal_id: string
+  endorsement_count: number
+  status: ProposalStatus
+  advanced: boolean
 }
 
 export interface VoteTally {
@@ -149,8 +169,12 @@ export interface VoteTally {
   approve_weighted: number
   reject_weighted: number
   abstain_weighted: number
-  quorum_met: boolean
-  approval_percentage: number
+  quorum_required: number | null
+  approval_threshold: number | null
+  eligible_voters: number | null
+  quorum_reached: boolean | null
+  approval_percentage: number | null
+  voting_ends_at: string | null
 }
 
 export interface ApiList<T> {
