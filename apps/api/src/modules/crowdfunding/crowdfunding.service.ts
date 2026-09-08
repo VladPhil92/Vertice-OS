@@ -14,7 +14,6 @@ type CampaignRow = {
   description: string
   category: string
   funding_model: string
-  funding_policy: string
   funding_policy: FundingPolicy
   status: string
   compliance_status: string

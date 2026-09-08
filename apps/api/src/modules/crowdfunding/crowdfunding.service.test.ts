@@ -22,11 +22,6 @@ const CAMPAIGN_ROW = {
   category: 'community',
   funding_model: 'donation',
   funding_policy: 'flexible',
-  summary: 'Recuperar el parque para la comunidad',
-  description: 'Descripción suficientemente larga de la campaña y de su plan de ejecución comunitaria verificable.',
-  category: 'community',
-  funding_model: 'donation',
-  funding_policy: 'milestone',
   status: 'draft',
   compliance_status: 'pending',
   goal_amount_cop: 1_000_000n,
@@ -35,7 +30,6 @@ const CAMPAIGN_ROW = {
   locality_id: null,
   neighborhood: null,
   budget: [{ label: 'Materiales', amount_cop: 1_000_000 }],
-  budget: [{ label: 'Materiales', amount_cop: 500_000 }],
   starts_at: null,
   ends_at: null,
   created_at: new Date('2026-09-01T00:00:00.000Z'),
@@ -59,13 +53,6 @@ describe('createCampaignDraft', () => {
       funding_policy: 'flexible',
       goal_amount_cop: 1_000_000,
       budget: [{ label: 'Materiales', amount_cop: 1_000_000 }],
-      summary: 'Recuperar el parque para la comunidad',
-      description: 'Descripción suficientemente larga de la campaña y de su plan de ejecución comunitaria verificable.',
-      category: 'community',
-      funding_model: 'donation',
-      funding_policy: 'milestone',
-      goal_amount_cop: 1_000_000,
-      budget: [{ label: 'Materiales', amount_cop: 500_000 }],
     })
 
     expect(result.goal_amount_cop).toBe(1_000_000)
@@ -88,7 +75,6 @@ describe('createCampaignDraft', () => {
     })
 
     expect(result.funding_policy).toBe('all_or_nothing')
-    expect(result.funding_policy).toBe('milestone')
     expect(result.starts_at).toBeNull()
   })
 

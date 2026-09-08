@@ -91,5 +91,5 @@ export function getPlan(planCode: PlanCode): BillingPlan {
 }
 
 export function planHasEntitlement(planCode: PlanCode, entitlement: EntitlementKey): boolean {
-  return BILLING_PLANS[planCode].entitlements.includes(entitlement)
+  return BILLING_PLANS[planCode]?.entitlements.includes(entitlement) ?? false
 }
