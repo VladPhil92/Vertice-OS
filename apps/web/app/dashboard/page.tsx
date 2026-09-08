@@ -1,4 +1,4 @@
-import CitizenCommandCenter from '@/components/dashboard/CitizenCommandCenter'
+import CitizenCommandCenterRuntime from '@/components/dashboard/CitizenCommandCenterRuntime'
 import DashboardActionResolutionPlan from '@/components/dashboard/DashboardActionResolutionPlan'
 import DashboardExperienceLayer from '@/components/dashboard/DashboardExperienceLayer'
 import DashboardIdentityHeader from '@/components/dashboard/DashboardIdentityHeader'
@@ -9,7 +9,7 @@ export default function DashboardPage() {
       <DashboardIdentityHeader />
       <DashboardActionResolutionPlan />
       <DashboardExperienceLayer />
-      <CitizenCommandCenter />
+      <CitizenCommandCenterRuntime />
     </div>
   )
 }
