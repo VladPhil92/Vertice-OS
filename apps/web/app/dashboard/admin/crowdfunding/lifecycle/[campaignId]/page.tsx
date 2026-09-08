@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -85,7 +85,7 @@ export default function AdminCampaignLifecycleDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     setError(null)
     try {
       setData(await apiFetch<AdminLifecycleResponse>(`/crowdfunding/admin/lifecycle/campaigns/${campaignId}`))
@@ -94,9 +94,9 @@ export default function AdminCampaignLifecycleDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [campaignId])
 
-  useEffect(() => { void load() }, [campaignId])
+  useEffect(() => { void load() }, [load])
 
   async function decide(decision: 'approve' | 'request_changes' | 'reject' | 'suspend') {
     if (decision !== 'approve' && notes.trim().length < 10) {
