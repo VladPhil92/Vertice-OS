@@ -10,7 +10,7 @@ import {
   type DeviceCoordinates,
   type SelectedReportEvidence,
 } from '../../lib/report-device'
-import type { ApiList, NearbyTerritorialReport, ReportCategory, TerritorialReportSummary } from '../../types/api'
+import type { ApiList, NearbyTerritorialReport, ReportCategory, ReportMediaState, TerritorialReportSummary } from '../../types/api'
 
 const categories: ReportCategory[] = [
   'infraestructura',
@@ -45,6 +45,7 @@ export default function ReportsScreen() {
   const [currentCoordinates, setCurrentCoordinates] = useState<DeviceCoordinates | null>(null)
   const [form, setForm] = useState(initialForm)
   const [selectedEvidence, setSelectedEvidence] = useState<SelectedReportEvidence | null>(null)
+  const [confirmedEvidence, setConfirmedEvidence] = useState<ReportMediaState | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -103,12 +104,20 @@ export default function ReportsScreen() {
     setSelectingEvidence(true)
     try {
       const evidence = await selectReportEvidence(source)
-      if (evidence) setSelectedEvidence(evidence)
+      if (evidence) {
+        setSelectedEvidence(evidence)
+        setConfirmedEvidence(null)
+      }
     } catch (cause) {
       Alert.alert('Evidencia no disponible', cause instanceof Error ? cause.message : 'No fue posible abrir el dispositivo.')
     } finally {
       setSelectingEvidence(false)
     }
+  }
+
+  function clearEvidence() {
+    setSelectedEvidence(null)
+    setConfirmedEvidence(null)
   }
 
   async function createReport() {
@@ -131,12 +140,13 @@ export default function ReportsScreen() {
 
     setSaving(true)
     try {
-      const mediaAssetIds: string[] = []
-      if (selectedEvidence) {
-        const confirmed = await uploadAndConfirmReportEvidence(selectedEvidence)
-        mediaAssetIds.push(confirmed.media_asset_id)
+      let evidenceForSubmission = confirmedEvidence
+      if (selectedEvidence && !evidenceForSubmission) {
+        evidenceForSubmission = await uploadAndConfirmReportEvidence(selectedEvidence)
+        setConfirmedEvidence(evidenceForSubmission)
       }
 
+      const mediaAssetIds = evidenceForSubmission ? [evidenceForSubmission.media_asset_id] : []
       const created = await apiMutation<TerritorialReportSummary>('/territorial/reports', 'mobile-territorial-report', {
         method: 'POST',
         body: JSON.stringify({
@@ -153,7 +163,7 @@ export default function ReportsScreen() {
       })
 
       setForm(initialForm)
-      setSelectedEvidence(null)
+      clearEvidence()
       setShowCreate(false)
       await load()
       router.push({ pathname: '/report/[id]', params: { id: created.id } })
@@ -261,16 +271,17 @@ export default function ReportsScreen() {
               <View style={styles.previewCard}>
                 <Image source={{ uri: selectedEvidence.uri }} style={styles.previewImage} />
                 <View style={styles.previewCopy}>
-                  <Text style={styles.previewTitle}>Evidencia lista</Text>
+                  <Text style={styles.previewTitle}>{confirmedEvidence ? 'Evidencia confirmada' : 'Evidencia lista'}</Text>
                   <Text style={styles.hint}>{selectedEvidence.width} × {selectedEvidence.height}</Text>
-                  <Pressable onPress={() => setSelectedEvidence(null)}>
+                  {confirmedEvidence ? <Text style={styles.confirmedEvidence}>Asset seguro listo para reintento</Text> : null}
+                  <Pressable onPress={clearEvidence}>
                     <Text style={styles.removeEvidence}>Quitar</Text>
                   </Pressable>
                 </View>
               </View>
             ) : null}
 
-            <Text style={styles.hint}>La foto se carga directamente al proveedor seguro, luego el API verifica propiedad y metadata antes de adjuntarla al reporte.</Text>
+            <Text style={styles.hint}>La foto se carga directamente al proveedor seguro y el API confirma propiedad/metadata. Si la creación del reporte queda incierta, el mismo asset confirmado se reutiliza para conservar el payload idempotente.</Text>
             <Pressable disabled={saving} style={styles.submitButton} onPress={() => void createReport()}>
               <Text style={styles.submitButtonText}>{saving ? 'Procesando reporte…' : 'Crear reporte'}</Text>
             </Pressable>
@@ -333,6 +344,7 @@ const styles = StyleSheet.create({
   previewImage: { width: 74, height: 74, borderRadius: 10, backgroundColor: '#DDD' },
   previewCopy: { flex: 1, gap: 4 },
   previewTitle: { fontWeight: '700', color: '#1A1D18' },
+  confirmedEvidence: { color: '#1C3D2E', fontSize: 11, fontWeight: '700' },
   removeEvidence: { color: '#8A302A', fontWeight: '700', fontSize: 12 },
   hint: { color: '#6D7168', fontSize: 12, lineHeight: 17 },
   submitButton: { backgroundColor: '#1C3D2E', borderRadius: 12, padding: 13, alignItems: 'center' },
