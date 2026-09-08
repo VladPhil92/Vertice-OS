@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch, apiMutation } from '../../lib/api'
 import type { ApiList, GovernanceProposal, VoteTally } from '../../types/api'
 
-type VoteValue = 'approve' | 'reject' | 'abstain'
+type VoteValue = -1 | 0 | 1
 
 export default function GovernanceScreen() {
   const [proposals, setProposals] = useState<GovernanceProposal[]>([])
@@ -115,13 +115,13 @@ export default function GovernanceScreen() {
 
                 {proposal.status === 'voting' ? (
                   <View style={styles.voteRow}>
-                    <Pressable disabled={busy} style={styles.voteButton} onPress={() => void vote(proposal, 'approve')}>
+                    <Pressable disabled={busy} style={styles.voteButton} onPress={() => void vote(proposal, 1)}>
                       <Text style={styles.voteButtonText}>A favor</Text>
                     </Pressable>
-                    <Pressable disabled={busy} style={styles.voteButton} onPress={() => void vote(proposal, 'reject')}>
+                    <Pressable disabled={busy} style={styles.voteButton} onPress={() => void vote(proposal, -1)}>
                       <Text style={styles.voteButtonText}>En contra</Text>
                     </Pressable>
-                    <Pressable disabled={busy} style={styles.voteButton} onPress={() => void vote(proposal, 'abstain')}>
+                    <Pressable disabled={busy} style={styles.voteButton} onPress={() => void vote(proposal, 0)}>
                       <Text style={styles.voteButtonText}>Abstenerme</Text>
                     </Pressable>
                   </View>
