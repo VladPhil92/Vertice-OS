@@ -54,7 +54,7 @@ const civicProfile = {
   reputation_score: 42,
 }
 
-test('coalesces dashboard consumers into one effective runtime read', async ({ page }) => {
+test('coalesces command center v2 into one effective runtime read', async ({ page }) => {
   const baseURL = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
   await page.context().addCookies([{ name: 'vertice_auth', value: '1', url: baseURL }])
   await page.addInitScript(() => {
@@ -93,8 +93,10 @@ test('coalesces dashboard consumers into one effective runtime read', async ({ p
 
   await page.goto('/dashboard')
 
-  await expect(page.getByTestId('dashboard-experience-layer')).toBeVisible()
+  await expect(page.getByTestId('dashboard-command-center-v2')).toBeVisible()
   await expect(page.getByRole('heading', { name: /convierte gestión en evidencia pública/i })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Ciudadano Runtime' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /centro de pendientes/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /tu territorio/i })).toBeVisible()
   await expect.poll(() => dashboardReads).toBe(1)
 })
