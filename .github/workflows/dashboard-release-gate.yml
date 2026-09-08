@@ -6,6 +6,8 @@ on:
     paths:
       - 'apps/web/app/dashboard/**'
       - 'apps/web/components/dashboard/**'
+      - 'apps/web/components/billing/**'
+      - 'apps/web/components/community/**'
       - 'apps/web/components/ui/NotificationBell.tsx'
       - 'apps/web/components/auth/RoleSwitcher.tsx'
       - 'apps/web/e2e/dashboard.spec.ts'
@@ -14,6 +16,7 @@ on:
       - 'apps/web/e2e/dashboard-operational-convergence.spec.ts'
       - 'apps/web/e2e/dashboard-operational-convergence-phase6b.spec.ts'
       - 'apps/web/e2e/dashboard-operational-capacity-phase7.spec.ts'
+      - 'apps/web/e2e/pro-usage-community-resilience-phase7.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
       - 'apps/web/e2e/process-resilience.spec.ts'
@@ -25,12 +28,17 @@ on:
       - 'apps/api/src/modules/billing/**'
       - 'apps/api/src/modules/publishing/**'
       - 'apps/api/src/modules/community/**'
+      - 'apps/api/src/modules/community/**'
+      - 'apps/api/src/modules/ai/**'
+      - 'apps/api/prisma/migrations/**'
       - '.github/workflows/dashboard-release-gate.yml'
   push:
     branches: [main]
     paths:
       - 'apps/web/app/dashboard/**'
       - 'apps/web/components/dashboard/**'
+      - 'apps/web/components/billing/**'
+      - 'apps/web/components/community/**'
       - 'apps/web/components/ui/NotificationBell.tsx'
       - 'apps/web/components/auth/RoleSwitcher.tsx'
       - 'apps/web/e2e/dashboard.spec.ts'
@@ -39,6 +47,7 @@ on:
       - 'apps/web/e2e/dashboard-operational-convergence.spec.ts'
       - 'apps/web/e2e/dashboard-operational-convergence-phase6b.spec.ts'
       - 'apps/web/e2e/dashboard-operational-capacity-phase7.spec.ts'
+      - 'apps/web/e2e/pro-usage-community-resilience-phase7.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
       - 'apps/web/e2e/process-resilience.spec.ts'
@@ -50,6 +59,9 @@ on:
       - 'apps/api/src/modules/billing/**'
       - 'apps/api/src/modules/publishing/**'
       - 'apps/api/src/modules/community/**'
+      - 'apps/api/src/modules/community/**'
+      - 'apps/api/src/modules/ai/**'
+      - 'apps/api/prisma/migrations/**'
       - '.github/workflows/dashboard-release-gate.yml'
   workflow_dispatch:
 
@@ -125,6 +137,7 @@ jobs:
             e2e/dashboard-operational-convergence.spec.ts \
             e2e/dashboard-operational-convergence-phase6b.spec.ts \
             e2e/dashboard-operational-capacity-phase7.spec.ts \
+            e2e/pro-usage-community-resilience-phase7.spec.ts \
             e2e/report-media.spec.ts \
             e2e/avatar-persistence.spec.ts \
             e2e/process-resilience.spec.ts \

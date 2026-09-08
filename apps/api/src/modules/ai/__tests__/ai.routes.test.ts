@@ -1,20 +1,25 @@
 // Mock AI service functions before any imports
-const mockCivicQuery     = jest.fn()
-const mockAnalyzeTerr    = jest.fn()
-const mockSynthesize     = jest.fn()
-const mockDraftPolicy    = jest.fn()
-const mockAnalyzeLegal   = jest.fn()
+const mockCivicQuery = jest.fn()
+const mockAnalyzeTerr = jest.fn()
+const mockSynthesize = jest.fn()
+const mockDraftPolicy = jest.fn()
+const mockAnalyzeLegal = jest.fn()
 
 jest.mock('../ai.service', () => ({
-  civicQuery:        mockCivicQuery,
+  civicQuery: mockCivicQuery,
   analyzeTerritorial: mockAnalyzeTerr,
-  synthesizeDebate:  mockSynthesize,
-  draftPolicy:       mockDraftPolicy,
-  analyzeLegal:      mockAnalyzeLegal,
+  synthesizeDebate: mockSynthesize,
+  draftPolicy: mockDraftPolicy,
+  analyzeLegal: mockAnalyzeLegal,
+}))
+
+const mockRunWithAiUsageQuota = jest.fn(async (_citizenId: string, operation: () => Promise<unknown>) => operation())
+jest.mock('../../billing/billing.usage.service', () => ({
+  runWithAiUsageQuota: mockRunWithAiUsageQuota,
 }))
 
 // Territorial + governance service deps
-const mockGetReportById   = jest.fn()
+const mockGetReportById = jest.fn()
 const mockGetProposalById = jest.fn()
 
 jest.mock('../../territorial/territorial.service', () => ({
@@ -70,7 +75,6 @@ const CITIZEN_ID = 'aaaa0000-0000-0000-0000-000000000001'
 
 async function buildApp() {
   const app = Fastify()
-  // Inject a minimal citizen into every request
   app.addHook('onRequest', (req, _reply, done) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(req as any).citizen = { sub: CITIZEN_ID, did: 'did:vertice:test', lvl: 2, role: 'citizen' }
@@ -84,12 +88,13 @@ let app: Awaited<ReturnType<typeof buildApp>>
 
 beforeAll(async () => { app = await buildApp() })
 afterAll(async () => { await app.close() })
-beforeEach(() => jest.clearAllMocks())
-
-// ── POST /ai/query ─────────────────────────────────────────────────────────────
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockRunWithAiUsageQuota.mockImplementation(async (_citizenId: string, operation: () => Promise<unknown>) => operation())
+})
 
 describe('POST /ai/query', () => {
-  it('returns 200 with AI response', async () => {
+  it('returns 200 with AI response and passes through the server-side quota boundary', async () => {
     const aiResult = { response: 'ok', intent: 'info', agent_used: 'civic', confidence: 0.9, audit_id: 'a1' }
     mockCivicQuery.mockResolvedValue(aiResult)
 
@@ -100,27 +105,39 @@ describe('POST /ai/query', () => {
     })
 
     expect(res.statusCode).toBe(200)
-    // La respuesta incluye además un session_id generado por el servidor
-    expect(JSON.parse(res.body)).toEqual({
-      ...aiResult,
-      session_id: expect.any(String),
-    })
+    expect(JSON.parse(res.body)).toEqual({ ...aiResult, session_id: expect.any(String) })
+    expect(mockRunWithAiUsageQuota).toHaveBeenCalledWith(CITIZEN_ID, expect.any(Function))
     expect(mockCivicQuery).toHaveBeenCalledWith(expect.objectContaining({
       message: 'hola Vértice',
       citizen_id: CITIZEN_ID,
     }))
   })
 
-  it('returns 400 for empty body', async () => {
+  it('returns 429 without calling the AI service when plan capacity is exhausted', async () => {
+    mockRunWithAiUsageQuota.mockRejectedValueOnce(Object.assign(new Error('Has alcanzado el límite mensual de solicitudes de IA de tu plan.'), {
+      statusCode: 429,
+      code: 'AI_MONTHLY_QUOTA_EXCEEDED',
+    }))
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/ai/query',
+      payload: { message: 'consulta adicional' },
+    })
+
+    expect(res.statusCode).toBe(429)
+    expect(mockCivicQuery).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 for empty body without consuming quota', async () => {
     const res = await app.inject({ method: 'POST', url: '/ai/query', payload: {} })
     expect(res.statusCode).toBe(400)
+    expect(mockRunWithAiUsageQuota).not.toHaveBeenCalled()
   })
 })
 
-// ── POST /ai/legal/analyze ─────────────────────────────────────────────────────
-
 describe('POST /ai/legal/analyze', () => {
-  it('returns 200 with legal analysis', async () => {
+  it('returns 200 with legal analysis through the quota boundary', async () => {
     const legalResult = {
       legal_type: 'derecho_petición',
       urgency: 'high',
@@ -144,10 +161,12 @@ describe('POST /ai/legal/analyze', () => {
 
     expect(res.statusCode).toBe(200)
     expect(JSON.parse(res.body)).toEqual(legalResult)
+    expect(mockRunWithAiUsageQuota).toHaveBeenCalledWith(CITIZEN_ID, expect.any(Function))
   })
 
-  it('returns 400 when description is missing', async () => {
+  it('returns 400 when description is missing without consuming quota', async () => {
     const res = await app.inject({ method: 'POST', url: '/ai/legal/analyze', payload: {} })
     expect(res.statusCode).toBe(400)
+    expect(mockRunWithAiUsageQuota).not.toHaveBeenCalled()
   })
 })

@@ -7,6 +7,7 @@ import {
 } from '../../lib/idempotency'
 import { getBillingCatalog, getEffectiveBillingAccess } from './billing.service'
 import { getBillingUsageSnapshot } from './billing.usage.service'
+import { getBillingUsage } from './billing.usage.service'
 import {
   cancelMyProSubscription,
   createProCheckout,
@@ -43,6 +44,8 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/usage', { preHandler: requireAuth }, async (request, reply) => {
     return reply.send(await getBillingUsageSnapshot(request.citizen.sub))
+  app.get('/me/usage', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getBillingUsage(request.citizen.sub))
   })
 
   app.post('/checkout', { preHandler: requireAuth }, async (request, reply) => {
