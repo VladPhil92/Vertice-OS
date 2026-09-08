@@ -26,14 +26,20 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.13.0'
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify native device capability contract
+        run: node apps/mobile/scripts/verify-device-capabilities.mjs
+
       - name: Typecheck native client
         run: pnpm --filter @vertice/mobile typecheck
+
+      - name: Resolve Expo public configuration
+        run: pnpm --filter @vertice/mobile exec expo config --type public > /tmp/vertice-expo-config.json
 
       - name: Export Android and iOS bundles
         env:
@@ -44,5 +50,6 @@ jobs:
         run: |
           test -d apps/mobile/dist/android
           test -d apps/mobile/dist/ios
-          echo 'Mobile Phase 2A export contract: PASS'
-          echo 'This gate validates compilation/export only; it does not certify device permissions, store signing, push delivery or production providers.'
+          echo 'Mobile Phase 2B build/config contract: PASS'
+          echo 'This gate validates dependency lock, config plugins, TypeScript and Expo export.'
+          echo 'It does not certify physical-device permission prompts, Cloudflare production credentials, push delivery, store signing or app review.'
