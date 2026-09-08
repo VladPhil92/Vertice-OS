@@ -12,7 +12,9 @@ import {
   ALLOWED_FUNDING_MODELS,
   CAMPAIGN_STATUSES,
   CROWDFUNDING_CATEGORIES,
+  CROWDFUNDING_FEE_POLICY,
   CROWDFUNDING_GUARDRAILS,
+  FUNDING_POLICIES,
 } from './crowdfunding.policy'
 import {
   campaignIdParamsSchema,
@@ -53,8 +55,10 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
   app.get('/config', async (_request, reply) => reply.send({
     categories: CROWDFUNDING_CATEGORIES,
     fundingModels: ALLOWED_FUNDING_MODELS,
+    fundingPolicies: FUNDING_POLICIES,
     campaignStatuses: CAMPAIGN_STATUSES,
     guardrails: CROWDFUNDING_GUARDRAILS,
+    feePolicy: CROWDFUNDING_FEE_POLICY,
     currency: 'COP',
   }))
 
