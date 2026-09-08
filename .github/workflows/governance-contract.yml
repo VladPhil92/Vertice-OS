@@ -1,0 +1,39 @@
+name: Golden Main Governance Contract
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  governance:
+    name: Golden Main Governance Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Verify governance contract
+        run: node scripts/verify-release-governance.mjs
+
+      - name: Emit certification boundary
+        run: |
+          echo "Governance contract: PASS"
+          echo "This check certifies repository governance artifacts only."
+          echo "It does NOT certify deployment, readiness, provider canaries, financial rails or production release."
