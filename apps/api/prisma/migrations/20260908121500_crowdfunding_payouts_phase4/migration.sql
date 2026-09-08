@@ -1,10 +1,9 @@
 -- Crowdfunding payouts phase IV
 --
--- Wompi Pagos a Terceros is the payout rail. VÉRTICE deliberately does not
--- persist beneficiary account numbers, legal IDs or webhook payee payloads.
--- Only provider references, a keyed destination fingerprint and operational
--- status are durable. Production execution remains feature-flagged and requires
--- a separately verified payout-operation certification.
+-- Wompi Pagos a Terceros BRE-B v2 is the payout rail. VÉRTICE deliberately
+-- does not persist beneficiary bank accounts, legal IDs, BRE-B key values,
+-- beneficiary names/emails or raw webhook payee payloads. Only provider
+-- references, a keyed destination fingerprint and operational state are durable.
 
 CREATE TABLE IF NOT EXISTS crowdfunding_payout_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -19,10 +18,10 @@ CREATE TABLE IF NOT EXISTS crowdfunding_payout_requests (
   currency VARCHAR(3) NOT NULL DEFAULT 'COP',
   status VARCHAR(32) NOT NULL DEFAULT 'requested',
   provider_status VARCHAR(40),
-  destination_kind VARCHAR(20) NOT NULL DEFAULT 'bank',
+  destination_kind VARCHAR(20) NOT NULL DEFAULT 'breb',
   destination_fingerprint CHAR(64) NOT NULL,
-  bank_provider_id UUID,
-  account_type VARCHAR(20),
+  destination_key_type VARCHAR(32) NOT NULL,
+  preview_confirmed_at TIMESTAMPTZ NOT NULL,
   requested_by_citizen_id UUID NOT NULL REFERENCES citizens(id) ON DELETE RESTRICT,
   failure_code VARCHAR(80),
   failure_message TEXT,
@@ -31,9 +30,9 @@ CREATE TABLE IF NOT EXISTS crowdfunding_payout_requests (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
   CONSTRAINT crowdfunding_payout_requests_currency_check CHECK (currency = 'COP'),
-  CONSTRAINT crowdfunding_payout_requests_destination_check CHECK (destination_kind = 'bank'),
-  CONSTRAINT crowdfunding_payout_requests_account_type_check CHECK (
-    account_type IS NULL OR account_type IN ('AHORROS', 'CORRIENTE')
+  CONSTRAINT crowdfunding_payout_requests_destination_check CHECK (destination_kind = 'breb'),
+  CONSTRAINT crowdfunding_payout_requests_key_type_check CHECK (
+    destination_key_type IN ('ALPHANUMERIC', 'MAIL', 'PHONE', 'IDENTIFICATION', 'ESTABLISHMENT_CODE')
   ),
   CONSTRAINT crowdfunding_payout_requests_status_check CHECK (
     status IN (
@@ -85,5 +84,5 @@ CREATE INDEX IF NOT EXISTS idx_payout_webhook_events_resource
   ON payout_webhook_events (provider, provider_resource_id, received_at DESC)
   WHERE provider_resource_id IS NOT NULL;
 
--- No account number, beneficiary legal ID, beneficiary email/name, raw bank
--- destination or raw webhook body is stored by this migration.
+-- No BRE-B key, account number, legal ID, beneficiary email/name, raw provider
+-- payload or provider credential is stored by this migration.
