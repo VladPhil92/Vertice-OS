@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, CheckCircle2, Crown, ShieldCheck, Sparkles } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { ArrowRight, CheckCircle2, Crown, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 
 type BillingAccess = {
@@ -29,6 +30,13 @@ type BillingAccess = {
     cancelAtPeriodEnd: boolean
   }
   reputationNeutrality: Record<string, boolean>
+}
+
+type CheckoutResponse = {
+  transactionId: string
+  checkoutUrl: string
+  provider: string
+  reused: boolean
 }
 
 const ENTITLEMENT_LABELS: Record<string, string> = {
@@ -63,14 +71,79 @@ function formatDate(value: string | null) {
 }
 
 export default function BillingPage() {
+  const searchParams = useSearchParams()
   const [access, setAccess] = useState<BillingAccess | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [action, setAction] = useState<'monthly' | 'annual' | 'cancel' | 'reconcile' | null>(null)
+  const [returnNotice, setReturnNotice] = useState<string | null>(null)
+
+  const loadAccess = useCallback(async () => {
+    const next = await apiFetch<BillingAccess>('/billing/me')
+    setAccess(next)
+    return next
+  }, [])
+
+  const reconcile = useCallback(async () => {
+    setAction('reconcile')
+    setActionError(null)
+    try {
+      const next = await apiFetch<BillingAccess>('/billing/reconcile', { method: 'POST' })
+      setAccess(next)
+      setReturnNotice(next.plan.code === 'pro'
+        ? 'Pago confirmado. VÉRTICE Pro ya está activo.'
+        : 'El proveedor aún no confirma un pago autorizado. Tu cuenta permanece Free sin perder ninguna capacidad cívica.')
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'No fue posible conciliar el pago.')
+    } finally {
+      setAction(null)
+    }
+  }, [])
 
   useEffect(() => {
-    apiFetch<BillingAccess>('/billing/me')
-      .then(setAccess)
-      .catch((err) => setError(err instanceof Error ? err.message : 'No fue posible consultar tu plan.'))
-  }, [])
+    loadAccess().catch((err) => setError(err instanceof Error ? err.message : 'No fue posible consultar tu plan.'))
+  }, [loadAccess])
+
+  useEffect(() => {
+    const checkout = searchParams.get('checkout')
+    if (checkout === 'return') {
+      void reconcile()
+    } else if (checkout === 'cancelled') {
+      setReturnNotice('Checkout cancelado. No se cambió tu plan.')
+    }
+  }, [reconcile, searchParams])
+
+  async function startCheckout(billingCycle: 'monthly' | 'annual') {
+    setAction(billingCycle)
+    setActionError(null)
+    try {
+      const result = await apiFetch<CheckoutResponse>('/billing/checkout', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ billingCycle }),
+      })
+      if (!result.checkoutUrl.startsWith('https://')) throw new Error('El proveedor devolvió un checkout inválido.')
+      window.location.assign(result.checkoutUrl)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'No fue posible iniciar el checkout.')
+      setAction(null)
+    }
+  }
+
+  async function cancelSubscription() {
+    if (!window.confirm('¿Cancelar la renovación de VÉRTICE Pro? Mantendrás el acceso hasta el cierre del periodo ya pagado.')) return
+    setAction('cancel')
+    setActionError(null)
+    try {
+      const next = await apiFetch<BillingAccess>('/billing/cancel', { method: 'POST' })
+      setAccess(next)
+      setReturnNotice('La renovación fue cancelada. Tu acceso Pro se mantiene hasta finalizar el periodo pagado.')
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'No fue posible cancelar la renovación.')
+    } finally {
+      setAction(null)
+    }
+  }
 
   if (error) {
     return (
@@ -105,6 +178,12 @@ export default function BillingPage() {
           <ArrowRight size={15} />
         </Link>
       </div>
+
+      {(returnNotice || actionError) && (
+        <div className={`mt-6 rounded-2xl border p-4 text-sm font-semibold ${actionError ? 'border-[#F0C7CB] bg-[#FFF7F8] text-[#A51E2D]' : 'border-[#BFDCC7] bg-[#F4FBF6] text-[#236E35]'}`}>
+          {actionError ?? returnNotice}
+        </div>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.25fr_.75fr]">
         <section className={`rounded-[28px] border p-7 sm:p-8 ${isPro ? 'border-[#0A2A66] bg-[#0A2A66] text-white' : 'border-[#DCE5EF] bg-white text-[#0A2A66]'}`}>
@@ -142,14 +221,29 @@ export default function BillingPage() {
           </div>
 
           {!isPro && (
-            <div className="mt-7 flex flex-col gap-3 rounded-2xl bg-[#FFF8DF] p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-black text-[#0A2A66]">VÉRTICE Pro · {formatCop(15_000)}/mes</div>
-                <div className="mt-1 text-xs font-semibold text-[#6C5B21]">O {formatCop(150_000)} al año.</div>
+            <div className="mt-7 rounded-2xl bg-[#FFF8DF] p-5">
+              <div className="text-sm font-black text-[#0A2A66]">Activar VÉRTICE Pro</div>
+              <div className="mt-1 text-xs font-semibold text-[#6C5B21]">
+                El plan solo se activa cuando el backend verifica el estado directamente con el proveedor de pagos.
               </div>
-              <Link href="/pricing" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#0A2A66] px-4 text-[11px] font-black text-white">
-                Ver Pro <ArrowRight size={14} />
-              </Link>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={action !== null}
+                  onClick={() => void startCheckout('monthly')}
+                  className="min-h-11 rounded-xl bg-[#0A2A66] px-4 text-[11px] font-black text-white disabled:cursor-wait disabled:opacity-60"
+                >
+                  {action === 'monthly' ? 'Abriendo checkout…' : `${formatCop(15_000)} / mes`}
+                </button>
+                <button
+                  type="button"
+                  disabled={action !== null}
+                  onClick={() => void startCheckout('annual')}
+                  className="min-h-11 rounded-xl border border-[#0A2A66] bg-white px-4 text-[11px] font-black text-[#0A2A66] disabled:cursor-wait disabled:opacity-60"
+                >
+                  {action === 'annual' ? 'Abriendo checkout…' : `${formatCop(150_000)} / año`}
+                </button>
+              </div>
             </div>
           )}
         </section>
@@ -168,17 +262,39 @@ export default function BillingPage() {
           <section className="rounded-[24px] border border-[#DCE5EF] bg-white p-6">
             <h2 className="text-base font-black text-[#0A2A66]">Estado de facturación</h2>
             {access.subscription ? (
-              <dl className="mt-4 space-y-3 text-xs">
-                <BillingRow label="Ciclo" value={access.subscription.billingCycle === 'annual' ? 'Anual' : 'Mensual'} />
-                <BillingRow label="Proveedor" value={access.subscription.provider ?? 'No informado'} />
-                <BillingRow label="Vigencia" value={formatDate(access.subscription.currentPeriodEnd)} />
-                <BillingRow label="Renovación" value={access.subscription.cancelAtPeriodEnd ? 'Se cancelará al cierre' : 'Activa'} />
-              </dl>
+              <>
+                <dl className="mt-4 space-y-3 text-xs">
+                  <BillingRow label="Ciclo" value={access.subscription.billingCycle === 'annual' ? 'Anual' : 'Mensual'} />
+                  <BillingRow label="Proveedor" value={access.subscription.provider ?? 'No informado'} />
+                  <BillingRow label="Vigencia" value={formatDate(access.subscription.currentPeriodEnd)} />
+                  <BillingRow label="Renovación" value={access.subscription.cancelAtPeriodEnd ? 'Cancelada al cierre' : 'Activa'} />
+                </dl>
+                {!access.subscription.cancelAtPeriodEnd && (
+                  <button
+                    type="button"
+                    disabled={action !== null}
+                    onClick={() => void cancelSubscription()}
+                    className="mt-5 w-full rounded-xl border border-[#D9AAB0] px-4 py-2.5 text-[10px] font-black uppercase tracking-[.06em] text-[#A51E2D] disabled:opacity-60"
+                  >
+                    {action === 'cancel' ? 'Cancelando…' : 'Cancelar renovación'}
+                  </button>
+                )}
+              </>
             ) : (
               <p className="mt-3 text-xs font-medium leading-6 text-[#607087]">
                 Free no requiere medio de pago ni registro de suscripción.
               </p>
             )}
+
+            <button
+              type="button"
+              disabled={action !== null}
+              onClick={() => void reconcile()}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#DCE5EF] px-4 py-2.5 text-[10px] font-black uppercase tracking-[.06em] text-[#0A2A66] disabled:opacity-60"
+            >
+              <RefreshCw size={13} className={action === 'reconcile' ? 'animate-spin' : ''} />
+              Verificar con el proveedor
+            </button>
           </section>
         </div>
       </div>
