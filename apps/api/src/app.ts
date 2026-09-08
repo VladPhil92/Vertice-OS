@@ -31,6 +31,8 @@ import { aiRoutes } from './modules/ai/ai.routes'
 import { eventsRoutes } from './modules/events/events.routes'
 import { notificationsRoutes } from './modules/notifications/notifications.routes'
 import { workflowRoutes } from './modules/workflows/workflow.routes'
+import { billingRoutes } from './modules/billing/billing.routes'
+import { crowdfundingRoutes } from './modules/crowdfunding/crowdfunding.routes'
 
 initSentry()
 
@@ -207,6 +209,8 @@ export function buildApp() {
   app.register(aiRoutes, { prefix: '/ai' })
   app.register(workflowRoutes, { prefix: '/workflows' })
   app.register(notificationsRoutes, { prefix: '/notifications' })
+  app.register(billingRoutes, { prefix: '/billing' })
+  app.register(crowdfundingRoutes, { prefix: '/crowdfunding' })
   app.register(eventsRoutes)
 
   return app
