@@ -23,11 +23,16 @@ import {
   deleteLegalDocument,
 } from './legal.service'
 
-function isIdempotencyError(error: unknown): boolean {
-  return typeof error === 'object'
-    && error !== null
-    && 'code' in error
-    && String((error as { code?: unknown }).code ?? '').startsWith('IDEMPOTENCY_')
+function isStructuredHttpError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+
+  const candidate = error as { statusCode?: unknown; code?: unknown }
+  return typeof candidate.statusCode === 'number'
+    && Number.isInteger(candidate.statusCode)
+    && candidate.statusCode >= 400
+    && candidate.statusCode <= 599
+    && typeof candidate.code === 'string'
+    && candidate.code.length > 0
 }
 
 export async function legalRoutes(app: FastifyInstance): Promise<void> {
@@ -75,7 +80,11 @@ export async function legalRoutes(app: FastifyInstance): Promise<void> {
         reply.header('Idempotency-Replayed', result.replayed ? 'true' : 'false')
         return reply.status(result.statusCode).send(result.value)
       } catch (err: unknown) {
-        if (isIdempotencyError(err)) throw err
+        // Preserve validation/idempotency HTTP contracts. In particular,
+        // INVALID_IDEMPOTENCY_KEY is a client 400 and must never be disguised
+        // as an AI provider outage.
+        if (isStructuredHttpError(err)) throw err
+
         const message = err instanceof Error ? err.message : 'Error desconocido'
         app.log.error('[legal] createLegalDocument error: %s', message)
         return reply.status(503).send({
