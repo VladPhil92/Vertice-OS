@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Building2, Eye, EyeOff, MapPin, ShieldCheck, UserRound } from 'lucide-react'
+import { ArrowRight, Building2, CreditCard, Eye, EyeOff, MapPin, ShieldCheck, UserRound } from 'lucide-react'
 import { CivicAvatar } from '@/components/community/CivicAvatar'
 import { useDashboardIdentity } from '@/components/dashboard/DashboardIdentityProvider'
 
@@ -101,6 +101,14 @@ export default function DashboardIdentityHeader() {
           >
             Editar perfil cívico
             <ArrowRight size={13} />
+          </Link>
+          <Link
+            href="/dashboard/billing"
+            prefetch={false}
+            className="inline-flex items-center gap-2 rounded-xl border border-[#E1E7EF] px-4 py-2.5 text-[10px] font-extrabold uppercase tracking-[.07em] text-[#0A2A66]"
+          >
+            <CreditCard size={13} />
+            Plan y suscripción
           </Link>
           {!identityVerified && (
             <Link
