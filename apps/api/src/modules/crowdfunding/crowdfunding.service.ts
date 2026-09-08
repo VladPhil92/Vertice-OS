@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
-import { PUBLIC_CAMPAIGN_STATUSES } from './crowdfunding.policy'
+import { defaultFundingPolicy, PUBLIC_CAMPAIGN_STATUSES } from './crowdfunding.policy'
 import type { CreateCampaignDraftInput } from './crowdfunding.schema'
 
 type CampaignRow = {
@@ -13,6 +13,7 @@ type CampaignRow = {
   description: string
   category: string
   funding_model: string
+  funding_policy: string
   status: string
   compliance_status: string
   goal_amount_cop: bigint
@@ -59,6 +60,7 @@ function serializeCampaign(row: CampaignRow) {
     description: row.description,
     category: row.category,
     funding_model: row.funding_model,
+    funding_policy: row.funding_policy,
     status: row.status,
     compliance_status: row.compliance_status,
     goal_amount_cop: Number(row.goal_amount_cop),
@@ -77,6 +79,7 @@ function serializeCampaign(row: CampaignRow) {
 export async function createCampaignDraft(citizenId: string, input: CreateCampaignDraftInput) {
   const slug = slugify(input.title)
   const budgetJson = JSON.stringify(input.budget)
+  const fundingPolicy = input.funding_policy ?? defaultFundingPolicy(input.funding_model)
 
   const rows = await prisma.$queryRaw<CampaignRow[]>(Prisma.sql`
     INSERT INTO crowdfunding_campaigns (
@@ -87,6 +90,7 @@ export async function createCampaignDraft(citizenId: string, input: CreateCampai
       description,
       category,
       funding_model,
+      funding_policy,
       status,
       compliance_status,
       goal_amount_cop,
@@ -103,6 +107,7 @@ export async function createCampaignDraft(citizenId: string, input: CreateCampai
       ${input.description},
       ${input.category},
       ${input.funding_model},
+      ${fundingPolicy},
       'draft',
       'pending',
       ${input.goal_amount_cop},
