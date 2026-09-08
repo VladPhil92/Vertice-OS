@@ -87,6 +87,17 @@ const schema = z.object({
   CLOUDFLARE_IMAGES_DELIVERY_URL: z.string().url().optional(),
   CLOUDFLARE_IMAGES_VARIANT: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).default('public'),
 
+  // ── Pagos (Mercado Pago) — capability opcional/fail-closed ───────────────
+  // Ninguna credencial de pagos es core para arrancar la API. Si el set está
+  // incompleto, /health/ready reporta degradación y los endpoints monetarios
+  // rechazan operaciones sin afectar participación cívica gratuita.
+  MERCADOPAGO_ACCESS_TOKEN: z.string().min(20).optional(),
+  MERCADOPAGO_WEBHOOK_SECRET: z.string().min(16).optional(),
+  PAYMENTS_WEB_URL: z.string().url().optional(),
+  PAYMENTS_WEBHOOK_URL: z.string().url().optional(),
+  MERCADOPAGO_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(30).max(900).default(300),
+  CROWDFUNDING_PAYMENTS_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+
   // ── Blockchain (Polygon) — capacidades opcionales ─────────────────
   POLYGON_RPC_URL:          z.string().url().optional(),
   POLYGON_PRIVATE_KEY:      z.string().optional(),
