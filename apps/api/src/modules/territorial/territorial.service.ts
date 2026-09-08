@@ -5,6 +5,10 @@ import { logger } from '../../lib/logger'
 import { recordReputationEvent } from '../reputation/reputation.service'
 import { publish } from '../../lib/pubsub'
 import { createNotification } from '../notifications/notifications.service'
+import {
+  attachLockedReportMedia,
+  lockConfirmedReportMediaAssets,
+} from './report-media.service'
 import type {
   TerritorialReport,
   ReportSummary,
@@ -14,8 +18,6 @@ import type {
   ReportCategory,
 } from './territorial.types'
 import type { CreateReportInput, ListReportsInput, NearbyInput, UpdateStatusInput } from './territorial.schema'
-
-// ── Urgencia por defecto según categoría ─────────────────────────────────────
 
 const DEFAULT_URGENCY: Record<ReportCategory, number> = {
   seguridad: 0.8,
@@ -29,7 +31,7 @@ const DEFAULT_URGENCY: Record<ReportCategory, number> = {
   otro: 0.4,
 }
 
-// ── Transformador de fila DB → tipo API ───────────────────────────────────────
+type QueryClient = Pick<Prisma.TransactionClient, '$queryRaw'>
 
 function rowToReport(row: ReportRow): TerritorialReport {
   return {
@@ -63,19 +65,19 @@ function rowToSummary(row: ReportRow): ReportSummary {
     neighborhood: row.neighborhood,
     status: row.status as ReportSummary['status'],
     urgency_score: row.urgency_score !== null ? Number(row.urgency_score) : null,
+    media_urls: row.media_urls ?? [],
     created_at: row.created_at,
   }
 }
 
-// ── Crear reporte ─────────────────────────────────────────────────────────────
-
-export async function createReport(
+async function insertReportRow(
+  db: QueryClient,
   citizenId: string,
-  input: CreateReportInput
-): Promise<TerritorialReport> {
-  const urgency = input.urgency_score ?? DEFAULT_URGENCY[input.category]
-
-  const rows = await prisma.$queryRaw<ReportRow[]>(Prisma.sql`
+  input: CreateReportInput,
+  urgency: number,
+  mediaUrls: string[],
+): Promise<ReportRow> {
+  const rows = await db.$queryRaw<ReportRow[]>(Prisma.sql`
     INSERT INTO territorial_reports (
       citizen_id, category, subcategory, title, description,
       location, neighborhood, locality_id, address_reference,
@@ -91,7 +93,7 @@ export async function createReport(
       ${input.locality_id ?? null}::int,
       ${input.address_reference ?? null},
       ${urgency}::numeric,
-      ${input.media_urls}
+      ${mediaUrls}
     )
     RETURNING
       id::text,
@@ -112,8 +114,44 @@ export async function createReport(
       updated_at,
       NULL::timestamptz AS resolved_at
   `)
+  return rows[0]
+}
 
-  const report = rowToReport(rows[0])
+export async function createReport(
+  citizenId: string,
+  input: CreateReportInput,
+): Promise<TerritorialReport> {
+  const directMediaUrls = input.media_urls ?? []
+  const mediaAssetIds = input.media_asset_ids ?? []
+  if (directMediaUrls.length > 0) {
+    throw Object.assign(new Error('Las evidencias deben cargarse mediante el flujo seguro de archivos.'), {
+      statusCode: 400,
+      code: 'DIRECT_REPORT_MEDIA_URLS_DISABLED',
+    })
+  }
+
+  const urgency = input.urgency_score ?? DEFAULT_URGENCY[input.category]
+  let report: TerritorialReport
+
+  // Preserve the historical no-media write path. This keeps the existing report
+  // contract lightweight while evidence-backed creation uses an atomic transaction.
+  if (mediaAssetIds.length === 0) {
+    report = rowToReport(await insertReportRow(prisma, citizenId, input, urgency, []))
+  } else {
+    report = await prisma.$transaction(async (tx) => {
+      const assets = await lockConfirmedReportMediaAssets(tx, citizenId, mediaAssetIds)
+      const created = rowToReport(await insertReportRow(
+        tx,
+        citizenId,
+        input,
+        urgency,
+        assets.map((asset) => asset.public_url),
+      ))
+      await attachLockedReportMedia(tx, created.id, assets)
+      return created
+    })
+  }
+
   recordReputationEvent({ citizen_id: citizenId, event_type: 'report_submitted', reference_id: report.id })
     .catch((err: unknown) => logger.error('[territorial] reputation event failed', err))
   publish('territorial', 'report:created', {
@@ -123,18 +161,15 @@ export async function createReport(
   return report
 }
 
-// ── Listar reportes ───────────────────────────────────────────────────────────
-
 export async function listReports(input: ListReportsInput): Promise<ReportSummary[]> {
   const conditions: Prisma.Sql[] = []
   if (input.category) conditions.push(Prisma.sql`category = ${input.category}`)
   if (input.status) conditions.push(Prisma.sql`status = ${input.status}`)
   if (input.locality_id) conditions.push(Prisma.sql`locality_id = ${input.locality_id}`)
 
-  const whereClause =
-    conditions.length > 0
-      ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
-      : Prisma.empty
+  const whereClause = conditions.length > 0
+    ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+    : Prisma.empty
 
   const rows = await prisma.$queryRaw<ReportRow[]>(Prisma.sql`
     SELECT
@@ -146,6 +181,7 @@ export async function listReports(input: ListReportsInput): Promise<ReportSummar
       neighborhood,
       status,
       urgency_score::float8,
+      media_urls,
       created_at
     FROM territorial_reports
     ${whereClause}
@@ -155,8 +191,6 @@ export async function listReports(input: ListReportsInput): Promise<ReportSummar
 
   return rows.map(rowToSummary)
 }
-
-// ── Reporte por ID ────────────────────────────────────────────────────────────
 
 export async function getReportById(id: string): Promise<TerritorialReport> {
   const cached = await getCache<TerritorialReport>('report', id)
@@ -194,8 +228,6 @@ export async function getReportById(id: string): Promise<TerritorialReport> {
   return report
 }
 
-// ── Reportes cercanos (PostGIS) ────────────────────────────────────────────────
-
 export async function getNearbyReports(input: NearbyInput): Promise<NearbyReport[]> {
   const radiusMeters = input.radius_km * 1000
 
@@ -210,6 +242,7 @@ export async function getNearbyReports(input: NearbyInput): Promise<NearbyReport
       neighborhood,
       status,
       urgency_score::float8,
+      media_urls,
       created_at,
       ST_Distance(
         location::geography,
@@ -233,14 +266,11 @@ export async function getNearbyReports(input: NearbyInput): Promise<NearbyReport
   }))
 }
 
-// ── Actualizar estado ─────────────────────────────────────────────────────────
-
 export async function updateReportStatus(
   id: string,
-  input: UpdateStatusInput
+  input: UpdateStatusInput,
 ): Promise<TerritorialReport> {
-  const resolvedAt =
-    input.status === 'resolved' ? Prisma.sql`NOW()` : Prisma.sql`NULL::timestamptz`
+  const resolvedAt = input.status === 'resolved' ? Prisma.sql`NOW()` : Prisma.sql`NULL::timestamptz`
 
   const rows = await prisma.$queryRaw<ReportRow[]>(Prisma.sql`
     UPDATE territorial_reports
@@ -280,7 +310,6 @@ export async function updateReportStatus(
     id: report.id, status: report.status, category: report.category,
   }).catch(() => null)
 
-  // Notify the citizen who filed the report
   const STATUS_LABEL: Record<string, string> = {
     in_progress: 'En proceso',
     resolved: 'Resuelto',
@@ -299,8 +328,6 @@ export async function updateReportStatus(
   return report
 }
 
-// ── Estadísticas territoriales ────────────────────────────────────────────────
-
 export async function getTerritorialStats(): Promise<TerritorialStats> {
   const cached = await getCache<TerritorialStats>('stats', 'global')
   if (cached) return cached
@@ -314,27 +341,27 @@ export async function getTerritorialStats(): Promise<TerritorialStats> {
   }[]>(Prisma.sql`
     SELECT
       category,
-      COUNT(*)                                           AS total,
-      COUNT(*) FILTER (WHERE status = 'open')           AS open_count,
-      COUNT(*) FILTER (WHERE status = 'resolved')       AS resolved_count,
-      AVG(urgency_score)::float8                        AS avg_urgency
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE status = 'open') AS open_count,
+      COUNT(*) FILTER (WHERE status = 'resolved') AS resolved_count,
+      AVG(urgency_score)::float8 AS avg_urgency
     FROM territorial_reports
     GROUP BY category
     ORDER BY total DESC
   `)
 
-  const byCategory = rows.map((r) => ({
-    category: r.category,
-    total: Number(r.total),
-    open_count: Number(r.open_count),
-    resolved_count: Number(r.resolved_count),
-    avg_urgency: r.avg_urgency !== null ? Number(r.avg_urgency) : null,
+  const byCategory = rows.map((row) => ({
+    category: row.category,
+    total: Number(row.total),
+    open_count: Number(row.open_count),
+    resolved_count: Number(row.resolved_count),
+    avg_urgency: row.avg_urgency !== null ? Number(row.avg_urgency) : null,
   }))
 
   const stats: TerritorialStats = {
     by_category: byCategory,
-    total_reports: byCategory.reduce((sum, r) => sum + r.total, 0),
-    open_reports: byCategory.reduce((sum, r) => sum + r.open_count, 0),
+    total_reports: byCategory.reduce((sum, row) => sum + row.total, 0),
+    open_reports: byCategory.reduce((sum, row) => sum + row.open_count, 0),
   }
 
   await setCache('stats', 'global', stats, TTL.STATS)

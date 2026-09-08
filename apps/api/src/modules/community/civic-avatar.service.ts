@@ -1,6 +1,12 @@
 import { Prisma } from '@prisma/client'
-import { config } from '../../config'
 import { prisma } from '../../lib/prisma'
+import {
+  createDirectImageUpload,
+  deleteImageAsset,
+  inspectImageAsset,
+  isImageProviderReady,
+  resolveImageDeliveryUrl,
+} from '../media/media-provider'
 
 export type CivicAvatarStatus = 'missing' | 'approved' | 'rejected'
 
@@ -18,81 +24,12 @@ export interface PublicCivicAvatar {
   identity_verified: boolean
 }
 
-interface CloudflareEnvelope<T> {
-  success: boolean
-  errors?: Array<{ code?: number; message?: string }>
-  result?: T
-}
-
-interface CloudflareUploadIntent {
-  id: string
-  uploadURL: string
-}
-
-interface CloudflareImageDetails {
-  id: string
-  variants?: string[]
-  metadata?: Record<string, unknown>
-}
-
-function providerReady(): boolean {
-  return Boolean(
-    config.CLOUDFLARE_IMAGES_ACCOUNT_ID
-    && config.CLOUDFLARE_IMAGES_API_TOKEN,
-  )
-}
-
-function providerBaseUrl(): string {
-  return `https://api.cloudflare.com/client/v4/accounts/${config.CLOUDFLARE_IMAGES_ACCOUNT_ID}`
-}
-
 function requireProvider(): void {
-  if (!providerReady()) {
+  if (!isImageProviderReady()) {
     throw Object.assign(
       new Error('La carga de imágenes de perfil no está disponible temporalmente.'),
       { statusCode: 503, code: 'CIVIC_AVATAR_STORAGE_UNAVAILABLE' },
     )
-  }
-}
-
-function providerHeaders(): Record<string, string> {
-  return {
-    Authorization: `Bearer ${config.CLOUDFLARE_IMAGES_API_TOKEN}`,
-  }
-}
-
-async function parseProviderResponse<T>(response: Response): Promise<T> {
-  let body: CloudflareEnvelope<T>
-  try {
-    body = await response.json() as CloudflareEnvelope<T>
-  } catch {
-    throw Object.assign(new Error('El proveedor de imágenes devolvió una respuesta inválida.'), {
-      statusCode: 502,
-      code: 'CIVIC_AVATAR_PROVIDER_INVALID_RESPONSE',
-    })
-  }
-
-  if (!response.ok || !body.success || !body.result) {
-    const providerMessage = body.errors?.[0]?.message
-    throw Object.assign(new Error(providerMessage || 'No fue posible procesar la imagen de perfil.'), {
-      statusCode: 502,
-      code: 'CIVIC_AVATAR_PROVIDER_ERROR',
-    })
-  }
-
-  return body.result
-}
-
-async function deleteProviderImage(assetId: string): Promise<void> {
-  if (!providerReady() || !assetId) return
-  try {
-    await fetch(`${providerBaseUrl()}/images/v1/${encodeURIComponent(assetId)}`, {
-      method: 'DELETE',
-      headers: providerHeaders(),
-    })
-  } catch {
-    // Privacy is enforced by clearing the public database reference first.
-    // Provider cleanup is best-effort and can be retried operationally.
   }
 }
 
@@ -127,7 +64,7 @@ export async function getCivicAvatarState(citizenId: string): Promise<CivicAvata
     avatar_url: row.civic_avatar_status === 'approved' ? row.civic_avatar_url : null,
     status: row.civic_avatar_status,
     updated_at: row.civic_avatar_updated_at?.toISOString() ?? null,
-    upload_enabled: providerReady(),
+    upload_enabled: isImageProviderReady(),
   }
 }
 
@@ -184,42 +121,23 @@ export async function createCivicAvatarUploadIntent(citizenId: string): Promise<
   }
 
   if (currentRows[0].pending_asset_id) {
-    await deleteProviderImage(currentRows[0].pending_asset_id)
+    await deleteImageAsset(currentRows[0].pending_asset_id)
   }
 
-  const form = new FormData()
-  form.set('requireSignedURLs', 'false')
-  form.set('metadata', JSON.stringify({
-    citizen_id: citizenId,
-    purpose: 'civic_profile_avatar',
-  }))
-
-  const response = await fetch(`${providerBaseUrl()}/images/v2/direct_upload`, {
-    method: 'POST',
-    headers: providerHeaders(),
-    body: form,
-  })
-  const intent = await parseProviderResponse<CloudflareUploadIntent>(response)
-
-  if (!intent.id || !intent.uploadURL) {
-    throw Object.assign(new Error('El proveedor no generó una sesión de carga válida.'), {
-      statusCode: 502,
-      code: 'CIVIC_AVATAR_UPLOAD_INTENT_INVALID',
-    })
-  }
+  const intent = await createDirectImageUpload(citizenId, 'civic_profile_avatar')
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE citizens
     SET
-      civic_avatar_pending_asset_id = ${intent.id},
+      civic_avatar_pending_asset_id = ${intent.provider_asset_id},
       last_active_at = NOW()
     WHERE id = ${citizenId}::uuid
       AND is_active = TRUE
   `)
 
   return {
-    asset_id: intent.id,
-    upload_url: intent.uploadURL,
+    asset_id: intent.provider_asset_id,
+    upload_url: intent.upload_url,
   }
 }
 
@@ -256,11 +174,7 @@ export async function confirmCivicAvatarUpload(
     })
   }
 
-  const response = await fetch(`${providerBaseUrl()}/images/v1/${encodeURIComponent(assetId)}`, {
-    headers: providerHeaders(),
-  })
-  const image = await parseProviderResponse<CloudflareImageDetails>(response)
-
+  const image = await inspectImageAsset(assetId)
   if (image.id !== assetId) {
     throw Object.assign(new Error('No fue posible confirmar la imagen cargada.'), {
       statusCode: 409,
@@ -271,18 +185,17 @@ export async function confirmCivicAvatarUpload(
   const ownerInMetadata = typeof image.metadata?.citizen_id === 'string'
     ? image.metadata.citizen_id
     : null
-  if (ownerInMetadata && ownerInMetadata !== citizenId) {
+  const purposeInMetadata = typeof image.metadata?.purpose === 'string'
+    ? image.metadata.purpose
+    : null
+  if (ownerInMetadata !== citizenId || purposeInMetadata !== 'civic_profile_avatar') {
     throw Object.assign(new Error('La imagen cargada no pertenece a este perfil.'), {
       statusCode: 409,
       code: 'CIVIC_AVATAR_OWNER_MISMATCH',
     })
   }
 
-  const configuredDelivery = config.CLOUDFLARE_IMAGES_DELIVERY_URL
-    ? `${config.CLOUDFLARE_IMAGES_DELIVERY_URL.replace(/\/$/, '')}/${encodeURIComponent(assetId)}/${config.CLOUDFLARE_IMAGES_VARIANT}`
-    : null
-  const avatarUrl = configuredDelivery ?? image.variants?.find((variant) => variant.startsWith('https://')) ?? null
-
+  const avatarUrl = resolveImageDeliveryUrl(image)
   if (!avatarUrl) {
     throw Object.assign(new Error('La imagen fue cargada, pero no tiene una URL pública de entrega.'), {
       statusCode: 502,
@@ -305,7 +218,7 @@ export async function confirmCivicAvatarUpload(
   `)
 
   if (row.current_asset_id && row.current_asset_id !== assetId) {
-    await deleteProviderImage(row.current_asset_id)
+    await deleteImageAsset(row.current_asset_id)
   }
 
   return getCivicAvatarState(citizenId)
@@ -346,8 +259,9 @@ export async function removeCivicAvatar(citizenId: string): Promise<CivicAvatarS
       AND is_active = TRUE
   `)
 
-  const assets = [rows[0].current_asset_id, rows[0].pending_asset_id].filter((value): value is string => Boolean(value))
-  await Promise.all(assets.map((assetId) => deleteProviderImage(assetId)))
+  const assets = [rows[0].current_asset_id, rows[0].pending_asset_id]
+    .filter((value): value is string => Boolean(value))
+  await Promise.all(assets.map((assetId) => deleteImageAsset(assetId)))
 
   return getCivicAvatarState(citizenId)
 }

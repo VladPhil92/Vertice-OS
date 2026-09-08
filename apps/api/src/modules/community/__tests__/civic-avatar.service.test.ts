@@ -182,7 +182,7 @@ describe('civic avatar service', () => {
 
     await expect(createCivicAvatarUploadIntent(CITIZEN_ID)).rejects.toMatchObject({
       statusCode: 502,
-      code: 'CIVIC_AVATAR_PROVIDER_INVALID_RESPONSE',
+      code: 'MEDIA_PROVIDER_INVALID_RESPONSE',
     })
   })
 
@@ -199,7 +199,7 @@ describe('civic avatar service', () => {
 
     await expect(createCivicAvatarUploadIntent(CITIZEN_ID)).rejects.toMatchObject({
       statusCode: 502,
-      code: 'CIVIC_AVATAR_PROVIDER_ERROR',
+      code: 'MEDIA_PROVIDER_ERROR',
       message: 'direct upload denied',
     })
   })
@@ -211,7 +211,7 @@ describe('civic avatar service', () => {
 
     await expect(createCivicAvatarUploadIntent(CITIZEN_ID)).rejects.toMatchObject({
       statusCode: 502,
-      code: 'CIVIC_AVATAR_UPLOAD_INTENT_INVALID',
+      code: 'MEDIA_UPLOAD_INTENT_INVALID',
     })
   })
 
@@ -282,7 +282,7 @@ describe('civic avatar service', () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(providerSuccess({
       id: 'asset-1',
       variants: ['not-a-public-url'],
-      metadata: { citizen_id: CITIZEN_ID },
+      metadata: { citizen_id: CITIZEN_ID, purpose: 'civic_profile_avatar' },
     }))
 
     await expect(confirmCivicAvatarUpload(CITIZEN_ID, 'asset-1')).rejects.toMatchObject({
@@ -306,7 +306,7 @@ describe('civic avatar service', () => {
       .mockResolvedValueOnce(providerSuccess({
         id: 'asset-new',
         variants: ['https://fallback.example/asset-new/public'],
-        metadata: { citizen_id: CITIZEN_ID },
+        metadata: { citizen_id: CITIZEN_ID, purpose: 'civic_profile_avatar' },
       }))
       .mockResolvedValueOnce(new Response(null, { status: 200 }))
 
@@ -335,7 +335,7 @@ describe('civic avatar service', () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(providerSuccess({
       id: 'asset-1',
       variants: ['internal://private', 'https://images.example/asset-1/public'],
-      metadata: {},
+      metadata: { citizen_id: CITIZEN_ID, purpose: 'civic_profile_avatar' },
     }))
 
     await expect(confirmCivicAvatarUpload(CITIZEN_ID, 'asset-1')).resolves.toMatchObject({

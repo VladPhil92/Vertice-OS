@@ -45,11 +45,13 @@ export interface ReportSummary {
   id: string
   category: ReportCategory
   title: string
+  description?: string
   lat: number
   lng: number
   neighborhood: string | null
   status: ReportStatus
   urgency_score: number | null
+  media_urls: string[]
   created_at: Date
 }
 
@@ -72,7 +74,6 @@ export interface TerritorialStats {
   open_reports: number
 }
 
-// Fila raw devuelta por $queryRaw — campos con casts explícitos a float8/int
 export interface ReportRow {
   id: string
   citizen_id: string | null
