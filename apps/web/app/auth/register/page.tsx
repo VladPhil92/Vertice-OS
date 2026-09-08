@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
+import { requireApiBaseUrl } from '@/lib/api'
 
 const LOCALITIES = [
   { id: 1, name: 'Histórica y del Caribe Norte' },
@@ -11,6 +12,30 @@ const LOCALITIES = [
   { id: 3, name: 'Industrial y de la Bahía' },
   { id: 4, name: 'Bayunca' },
 ] as const
+
+type ApiErrorBody = {
+  error?: string
+  message?: string
+  code?: string
+}
+
+async function registrationErrorMessage(res: Response): Promise<string> {
+  const data = await res.json().catch(() => ({})) as ApiErrorBody
+
+  if (res.status === 502 || data.code === 'API_UPSTREAM_UNAVAILABLE') {
+    return 'El servicio de VÉRTICE no respondió. Intenta nuevamente en unos minutos.'
+  }
+
+  if (res.status === 503 || data.code === 'API_UPSTREAM_NOT_CONFIGURED') {
+    return 'El servicio de registro de VÉRTICE no está disponible temporalmente.'
+  }
+
+  if (res.status === 429) {
+    return 'Se alcanzó el límite temporal de intentos de registro. Intenta nuevamente más tarde.'
+  }
+
+  return data.error ?? data.message ?? 'No fue posible completar el registro.'
+}
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
@@ -35,22 +60,25 @@ export default function RegisterPage() {
         ...form,
         locality_id: form.locality_id === '' ? undefined : Number(form.locality_id),
       }
+      const baseUrl = requireApiBaseUrl()
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+      // Production must remain same-origin. /api is proxied by Vercel/Next.js
+      // to the canonical Railway API, matching the rest of the auth boundary.
+      const res = await fetch(`${baseUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       })
 
       if (!res.ok) {
-        const data = await res.json() as { error?: string }
-        setError(data.error ?? 'Error al registrarse')
+        setError(await registrationErrorMessage(res))
         return
       }
 
       setDone(true)
     } catch {
-      setError('No se pudo conectar con el servidor')
+      setError('No se pudo establecer conexión con el servicio de VÉRTICE. Verifica tu conexión e intenta nuevamente.')
     } finally {
       setLoading(false)
     }
@@ -117,7 +145,7 @@ export default function RegisterPage() {
           </div>
 
           {error && (
-            <div className="mb-6 flex items-start gap-3 border border-red/30 bg-red/5 px-4 py-3">
+            <div className="mb-6 flex items-start gap-3 border border-red/30 bg-red/5 px-4 py-3" role="alert">
               <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red" />
               <span className="font-mono text-xs text-red">{error}</span>
             </div>
@@ -126,10 +154,11 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {/* Email */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+              <label htmlFor="register-email" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
                 Correo electrónico
               </label>
               <input
+                id="register-email"
                 type="email"
                 required
                 autoComplete="email"
@@ -142,11 +171,12 @@ export default function RegisterPage() {
 
             {/* Password */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+              <label htmlFor="register-password" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
                 Contraseña
               </label>
               <div className="relative">
                 <input
+                  id="register-password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="new-password"
@@ -159,7 +189,7 @@ export default function RegisterPage() {
                   type="button"
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-tertiary hover:text-secondary"
                   onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Ocultar' : 'Mostrar'}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 >
                   {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -168,10 +198,11 @@ export default function RegisterPage() {
 
             {/* Cédula */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+              <label htmlFor="register-cedula" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
                 Cédula de ciudadanía
               </label>
               <input
+                id="register-cedula"
                 type="text"
                 required
                 inputMode="numeric"
@@ -183,16 +214,17 @@ export default function RegisterPage() {
                 placeholder="Solo dígitos, 6–10 caracteres"
               />
               <span className="font-mono text-[10px] text-tertiary">
-                Se almacena como hash SHA-256 — nunca en texto plano
+                Se protege mediante HMAC-SHA-256 con secreto del servidor — nunca en texto plano
               </span>
             </div>
 
             {/* Barrio */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+              <label htmlFor="register-neighborhood" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
                 Barrio <span className="text-tertiary/60">(opcional)</span>
               </label>
               <input
+                id="register-neighborhood"
                 type="text"
                 autoComplete="off"
                 value={form.neighborhood}
@@ -204,10 +236,11 @@ export default function RegisterPage() {
 
             {/* Localidad */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
+              <label htmlFor="register-locality" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">
                 Localidad <span className="text-tertiary/60">(opcional)</span>
               </label>
               <select
+                id="register-locality"
                 value={form.locality_id}
                 onChange={(e) => setForm(prev => ({ ...prev, locality_id: e.target.value === '' ? '' : Number(e.target.value) }))}
                 className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active"
