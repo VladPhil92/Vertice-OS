@@ -19,8 +19,9 @@ const CAMPAIGN_ROW = {
   slug: 'parque-del-barrio-abcd1234',
   summary: 'Recuperar el parque',
   description: 'Descripción larga de la campaña.',
-  category: 'infraestructura',
+  category: 'community',
   funding_model: 'donation',
+  funding_policy: 'flexible',
   status: 'draft',
   compliance_status: 'pending',
   goal_amount_cop: 1_000_000n,
@@ -28,7 +29,7 @@ const CAMPAIGN_ROW = {
   currency: 'COP',
   locality_id: null,
   neighborhood: null,
-  budget: { items: [] },
+  budget: [{ label: 'Materiales', amount_cop: 1_000_000 }],
   starts_at: null,
   ends_at: null,
   created_at: new Date('2026-09-01T00:00:00.000Z'),
@@ -40,22 +41,40 @@ beforeEach(() => {
 })
 
 describe('createCampaignDraft', () => {
-  it('inserts a draft campaign and serializes bigint amounts', async () => {
+  it('inserts a draft campaign and serializes bigint amounts and funding policy', async () => {
     mockQueryRaw.mockResolvedValue([CAMPAIGN_ROW])
 
     const result = await createCampaignDraft('citizen-1', {
       title: 'Parque del barrio',
-      summary: 'Recuperar el parque',
-      description: 'Descripción larga de la campaña.',
-      category: 'infraestructura',
+      summary: 'Recuperar el parque del barrio',
+      description: 'Descripción larga de la campaña para recuperar y mejorar el parque comunitario del barrio.',
+      category: 'community',
       funding_model: 'donation',
+      funding_policy: 'flexible',
       goal_amount_cop: 1_000_000,
-      budget: { items: [] },
-    } as never)
+      budget: [{ label: 'Materiales', amount_cop: 1_000_000 }],
+    })
 
     expect(result.goal_amount_cop).toBe(1_000_000)
     expect(result.raised_amount_cop).toBe(0)
+    expect(result.funding_policy).toBe('flexible')
     expect(result.starts_at).toBeNull()
+  })
+
+  it('defaults reward campaigns to all-or-nothing policy', async () => {
+    mockQueryRaw.mockResolvedValue([{ ...CAMPAIGN_ROW, funding_model: 'reward', funding_policy: 'all_or_nothing' }])
+
+    const result = await createCampaignDraft('citizen-1', {
+      title: 'Festival comunitario',
+      summary: 'Preventa para un festival comunitario',
+      description: 'Campaña de preventa comunitaria con recompensas para financiar la producción responsable del festival.',
+      category: 'culture',
+      funding_model: 'reward',
+      goal_amount_cop: 2_000_000,
+      budget: [{ label: 'Producción', amount_cop: 2_000_000 }],
+    })
+
+    expect(result.funding_policy).toBe('all_or_nothing')
   })
 })
 
@@ -67,6 +86,7 @@ describe('listOwnCampaigns', () => {
 
     expect(result).toHaveLength(2)
     expect(result[1].id).toBe('campaign-2')
+    expect(result[0].funding_policy).toBe('flexible')
   })
 })
 
