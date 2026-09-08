@@ -155,6 +155,9 @@ interface DashboardIdentityContextValue {
   refresh: (scope?: DashboardRuntimeScope) => Promise<void>
 }
 
+type RuntimeDomain = 'identity' | 'dashboard' | 'resolution'
+type DomainSequence = Record<RuntimeDomain, number>
+
 const DashboardIdentityContext = createContext<DashboardIdentityContextValue | null>(null)
 
 export function DashboardIdentityProvider({ children }: { children: ReactNode }) {
@@ -166,20 +169,31 @@ export function DashboardIdentityProvider({ children }: { children: ReactNode })
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const requestSequence = useRef(0)
+  const domainSequence = useRef<DomainSequence>({ identity: 0, dashboard: 0, resolution: 0 })
+  const activeRefreshes = useRef(0)
+  const mounted = useRef(true)
   const hasLoaded = useRef(false)
 
   const refresh = useCallback(async (scope: DashboardRuntimeScope = 'all') => {
-    const requestId = ++requestSequence.current
-    if (!hasLoaded.current) setLoading(true)
-    else setRefreshing(true)
-
-    if (scope === 'all' || scope === 'identity' || scope === 'dashboard') setError(null)
-    if (scope === 'all' || scope === 'resolution') setResolutionError(null)
-
     const wantsIdentity = scope === 'all' || scope === 'identity'
     const wantsDashboard = scope === 'all' || scope === 'dashboard' || scope === 'identity'
     const wantsResolution = scope === 'all' || scope === 'resolution'
+
+    const requestIds: Partial<DomainSequence> = {}
+    if (wantsIdentity) requestIds.identity = ++domainSequence.current.identity
+    if (wantsDashboard) requestIds.dashboard = ++domainSequence.current.dashboard
+    if (wantsResolution) requestIds.resolution = ++domainSequence.current.resolution
+
+    activeRefreshes.current += 1
+    if (!hasLoaded.current) setLoading(true)
+    else setRefreshing(true)
+
+    if (wantsIdentity || wantsDashboard) setError(null)
+    if (wantsResolution) setResolutionError(null)
+
+    const isCurrent = (domain: RuntimeDomain) => (
+      mounted.current && requestIds[domain] === domainSequence.current[domain]
+    )
 
     try {
       const tasks: Promise<void>[] = []
@@ -190,7 +204,7 @@ export function DashboardIdentityProvider({ children }: { children: ReactNode })
             apiFetch<DashboardCivicProfile>('/community/profile/me'),
             apiFetch<DashboardCivicAvatarState>('/community/profile/me/avatar'),
           ])
-          if (requestSequence.current !== requestId) return
+          if (!isCurrent('identity')) return
           setProfile(profileData)
           setAvatar(avatarData)
         })())
@@ -199,7 +213,7 @@ export function DashboardIdentityProvider({ children }: { children: ReactNode })
       if (wantsDashboard) {
         tasks.push((async () => {
           const dashboardData = await apiFetch<DashboardRuntimeSnapshot>('/dashboard/me')
-          if (requestSequence.current !== requestId) return
+          if (!isCurrent('dashboard')) return
           setDashboard(dashboardData)
         })())
       }
@@ -208,23 +222,28 @@ export function DashboardIdentityProvider({ children }: { children: ReactNode })
         tasks.push((async () => {
           try {
             const plan = await apiFetch<DashboardResolutionPlan>('/dashboard/me/resolution')
-            if (requestSequence.current !== requestId) return
+            if (!isCurrent('resolution')) return
             setResolutionPlan(plan)
           } catch (cause) {
-            if (requestSequence.current !== requestId) return
+            if (!isCurrent('resolution')) return
             setResolutionError(cause instanceof Error ? cause.message : 'No fue posible cargar el plan de resolución.')
           }
         })())
       }
 
       await Promise.all(tasks)
-      if (requestSequence.current !== requestId) return
-      hasLoaded.current = true
+      if (mounted.current) hasLoaded.current = true
     } catch (refreshError) {
-      if (requestSequence.current !== requestId) return
-      setError(refreshError instanceof Error ? refreshError.message : 'No fue posible cargar el runtime del dashboard.')
+      const relevantCurrent = (
+        (!wantsIdentity || isCurrent('identity'))
+        && (!wantsDashboard || isCurrent('dashboard'))
+      )
+      if (relevantCurrent) {
+        setError(refreshError instanceof Error ? refreshError.message : 'No fue posible cargar el runtime del dashboard.')
+      }
     } finally {
-      if (requestSequence.current === requestId) {
+      activeRefreshes.current = Math.max(0, activeRefreshes.current - 1)
+      if (mounted.current && activeRefreshes.current === 0) {
         setLoading(false)
         setRefreshing(false)
       }
@@ -232,9 +251,13 @@ export function DashboardIdentityProvider({ children }: { children: ReactNode })
   }, [])
 
   useEffect(() => {
+    mounted.current = true
     void refresh('all')
     return () => {
-      requestSequence.current += 1
+      mounted.current = false
+      domainSequence.current.identity += 1
+      domainSequence.current.dashboard += 1
+      domainSequence.current.resolution += 1
     }
   }, [refresh])
 
