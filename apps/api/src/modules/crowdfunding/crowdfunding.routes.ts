@@ -59,7 +59,6 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
     fundingModels: ALLOWED_FUNDING_MODELS,
     fundingPolicies: FUNDING_POLICIES,
     campaignStatuses: CAMPAIGN_STATUSES,
-    feePolicy: CROWDFUNDING_FEE_POLICY,
     guardrails: CROWDFUNDING_GUARDRAILS,
     feePolicy: CROWDFUNDING_FEE_POLICY,
     currency: 'COP',
