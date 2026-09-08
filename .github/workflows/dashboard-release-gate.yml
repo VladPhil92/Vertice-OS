@@ -11,6 +11,7 @@ on:
       - 'apps/web/e2e/dashboard-runtime.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
+      - 'apps/web/e2e/process-resilience.spec.ts'
       - 'apps/web/lib/api.ts'
       - 'apps/web/public/manifest.json'
       - 'apps/api/src/modules/dashboard/**'
@@ -27,6 +28,7 @@ on:
       - 'apps/web/e2e/dashboard-runtime.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
+      - 'apps/web/e2e/process-resilience.spec.ts'
       - 'apps/web/lib/api.ts'
       - 'apps/web/public/manifest.json'
       - 'apps/api/src/modules/dashboard/**'
@@ -105,6 +107,7 @@ jobs:
             e2e/dashboard-runtime.spec.ts \
             e2e/report-media.spec.ts \
             e2e/avatar-persistence.spec.ts \
+            e2e/process-resilience.spec.ts \
             --project=chromium 2>&1 | tee /tmp/vertice-dashboard-playwright.log
 
       - name: Print diagnostics on failure
