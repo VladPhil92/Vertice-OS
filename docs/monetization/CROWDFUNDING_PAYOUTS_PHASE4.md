@@ -12,13 +12,16 @@ Money never changes civic reputation, ranking, verification level, voting weight
 
 ## Provider contract
 
-The initial adapter targets the currently operational Wompi Pagos a Terceros v1 bank-account payout contract. BRE-B disbursements are deliberately deferred while Wompi documents that capability as forthcoming.
+The Phase IV adapter targets Wompi Pagos a Terceros **API v2 with BRE-B destinations**. Wompi currently documents sandbox key resolution, beneficiary preview and payout creation through BRE-B keys. This is preferred over traditional bank-account input because the payout can be addressed without VÉRTICE receiving or persisting the beneficiary's account number, bank or legal document.
 
 The adapter uses:
 
 - provider authentication headers (`x-api-key`, `user-principal-id`);
+- `business-application-id: WOMPI_PAYOUTS` for the v2 integration;
 - provider idempotency keys;
 - a configured Wompi source account;
+- `GET /v2/breb/keys/resolve/{key}` before execution;
+- `POST /v2/payouts` for the payout batch;
 - one provider batch per VÉRTICE payout request;
 - one beneficiary transaction per MVP payout batch;
 - provider-side batch/transaction queries for authoritative state;
@@ -26,16 +29,27 @@ The adapter uses:
 
 ## Data minimization
 
-Beneficiary bank destination fields are accepted only by the privileged payout request endpoint and are passed directly to the provider-bound request. VÉRTICE does **not** persist:
+The BRE-B key, beneficiary notification name/email and preview confirmation fields are accepted only by privileged endpoints and passed through the provider-bound flow. VÉRTICE does **not** persist:
 
+- BRE-B key value;
 - bank account number;
+- bank destination;
 - beneficiary legal ID;
 - beneficiary name;
 - beneficiary email;
 - raw payout webhook payload;
 - provider API secrets.
 
-VÉRTICE persists only a keyed HMAC destination fingerprint, bank provider identifier, account type, provider payout/transaction references, amount, operational status and sanitized failure/status metadata. `PAYOUT_DESTINATION_PEPPER` is a dedicated cryptographic domain and must not reuse `JWT_SECRET`.
+VÉRTICE persists only a keyed HMAC destination fingerprint, BRE-B key type, provider payout/transaction references, amount, operational status and sanitized failure/status metadata. `PAYOUT_DESTINATION_PEPPER` is a dedicated cryptographic domain and must not reuse `JWT_SECRET`.
+
+## Beneficiary preview and confirmation
+
+A payout is a two-step human-confirmed operation:
+
+1. `POST /billing/admin/finance/payouts/destinations/preview` resolves the BRE-B key against Wompi and returns the provider's masked holder name, financial entity, key type and masked key value. The preview is not persisted.
+2. The admin confirms that beneficiary and sends the masked holder name + financial-entity code back with the payout request. Immediately before creating the payout, VÉRTICE resolves the key again server-to-server and requires an exact match with that confirmation.
+
+If the key was changed, resolves to a different holder/entity, or the confirmation is stale, no payout ledger row or provider payment instruction is created.
 
 ## Eligibility gate
 
@@ -49,6 +63,7 @@ A payout request is rejected unless all conditions hold:
 6. The campaign beneficiary has a verified and eligible payout profile.
 7. No open/escalated financial risk flag exists for the campaign or beneficiary.
 8. There is positive reconciled balance available.
+9. The BRE-B destination has just been re-resolved and matches the admin's preview confirmation.
 
 The disbursable balance is calculated from `crowdfunding_contributions.status='paid'` and excludes platform tips. Already paid payouts are subtracted.
 
@@ -88,6 +103,7 @@ All payout execution/control endpoints remain under the existing live admin/supe
 
 - `GET /billing/admin/finance/payouts/status`
 - `GET /billing/admin/finance/payouts`
+- `POST /billing/admin/finance/payouts/destinations/preview`
 - `POST /billing/admin/finance/payouts/campaigns/:campaignId`
 - `POST /billing/admin/finance/payouts/:payoutRequestId/reconcile`
 - `POST /billing/admin/finance/payouts/:payoutRequestId/reconcile/enqueue`
@@ -118,32 +134,34 @@ Missing or partial payout configuration never prevents the civic API from bootin
 3. Configure the Wompi event URL to the public `/billing/webhooks/wompi-payouts` endpoint and provision the event secret.
 4. Configure a dedicated `PAYOUT_DESTINATION_PEPPER`.
 5. Keep `CROWDFUNDING_PAYOUTS_ENABLED=false` while connectivity/signature tests are executed.
-6. Verify provider health, idempotent creation, duplicate event handling and payout/transaction queries.
-7. Validate preparer/approver separation with a sandbox payout that reaches `PENDING_APPROVAL`, then approved/failed terminal paths.
-8. Record the external evidence through `/billing/admin/finance/payout-certification` with status `verified`.
-9. Enable the payout feature only in the environment being certified.
-10. Execute a bounded canary against a test campaign and reconcile until a provider terminal state is obtained.
+6. Verify BRE-B key resolution and confirm that VÉRTICE exposes only Wompi's masked preview.
+7. Verify provider idempotency, duplicate event handling and payout/transaction queries.
+8. Validate preparer/approver separation with a sandbox payout that reaches `PENDING_APPROVAL`, then approved/failed terminal paths.
+9. Record the external evidence through `/billing/admin/finance/payout-certification` with status `verified`.
+10. Enable the payout feature only in the environment being certified.
+11. Execute a bounded canary against a test campaign and reconcile until a provider terminal state is obtained.
 
 ## Production gate
 
 Do not enable production payout execution merely because the code is merged. Before `CROWDFUNDING_PAYOUTS_ENABLED=true` in production, operators must confirm:
 
 - Wompi Pagos a Terceros is activated for the production merchant;
+- production API v2/BRE-B is enabled for the account;
 - the correct production source account and limits are known;
 - preparer and approver responsibilities are assigned to distinct authorized operators;
 - the production webhook secret and callback are validated;
-- sandbox canaries passed for pending approval, approved, failed, duplicate webhook and provider-timeout scenarios;
+- sandbox canaries passed for beneficiary preview/confirmation, pending approval, approved, failed, duplicate webhook and provider-timeout scenarios;
 - the latest `wompi_payouts` certification is `verified` with external evidence;
 - no unresolved financial-risk alert affects the production canary campaign/beneficiary;
 - production starts with a small controlled canary before broader crowdfunding payout availability.
 
 ## Deferred
 
-- BRE-B payout execution, until the provider capability is generally available and separately certified.
-- automatic or scheduled payouts.
-- split payouts / multiple beneficiaries per campaign.
-- partial payouts / milestone releases.
-- payout reversal automation.
+- automatic or scheduled payouts;
+- split payouts / multiple beneficiaries per campaign;
+- partial payouts / milestone releases;
+- payout reversal automation;
+- direct bank-account fallback inside VÉRTICE;
 - investment, securities, profit-share or electoral crowdfunding.
 
 Those capabilities require separate policy, accounting, compliance and provider certification phases.
