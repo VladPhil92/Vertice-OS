@@ -4,8 +4,8 @@ import { CrowdfundingDashboardShortcut } from '@/components/dashboard/Crowdfundi
 export default function DashboardPage() {
   return (
     <>
-      <DashboardCommandCenterV2 />
       <CrowdfundingDashboardShortcut />
+      <DashboardCommandCenterV2 />
     </>
   )
 }
