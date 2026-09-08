@@ -17,13 +17,13 @@ import {
   getCommunityLeaderboard,
   getFollowState,
   getPublicCivicProfile,
-  listCommunityFeed,
   listFollowingFeed,
   removeActivityValidation,
   setActivityValidation,
   unfollowCivicProfile,
   updateCivicProfile,
 } from './community.service'
+import { listCommunityFeedResilient } from './community.resilience.service'
 import {
   confirmCivicAvatarUpload,
   createCivicAvatarUploadIntent,
@@ -33,8 +33,6 @@ import {
 } from './civic-avatar.service'
 
 export async function communityRoutes(app: FastifyInstance): Promise<void> {
-  // Public activity is privacy-safe: actors that have not opted into a public
-  // civic profile remain anonymous and never appear in the leaderboard.
   app.get('/feed', async (request, reply) => {
     const parsed = CommunityFeedQuerySchema.safeParse(request.query)
     if (!parsed.success) {
@@ -44,10 +42,11 @@ export async function communityRoutes(app: FastifyInstance): Promise<void> {
       })
     }
 
-    const data = await listCommunityFeed(parsed.data)
+    const result = await listCommunityFeedResilient(parsed.data)
     return reply.send({
-      data,
-      count: data.length,
+      data: result.data,
+      count: result.data.length,
+      availability: result.availability,
       scoring: {
         version: 'civic-action-v1',
         max_score: 100,
@@ -102,8 +101,6 @@ export async function communityRoutes(app: FastifyInstance): Promise<void> {
     })
   })
 
-  // Batch avatar lookup prevents N+1 requests in feed/ranking clients and only
-  // returns media for citizens who explicitly published their civic profile.
   app.get('/avatars', async (request, reply) => {
     const parsed = CivicAvatarBatchQuerySchema.safeParse(request.query)
     if (!parsed.success) {
@@ -157,9 +154,6 @@ export async function communityRoutes(app: FastifyInstance): Promise<void> {
       })
     }
 
-    // The policy attestation is deliberately separate from identity proofing.
-    // Browser face checks assist quality control but never create a biometric
-    // identity record and verification_level remains the source of truth.
     return reply.send(await confirmCivicAvatarUpload(
       request.citizen.sub,
       parsed.data.asset_id,
