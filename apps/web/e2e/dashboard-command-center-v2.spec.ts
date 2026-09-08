@@ -146,7 +146,7 @@ test.describe('Dashboard Command Center v2', () => {
     await expect(page.getByRole('heading', { name: 'Tu territorio' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Tu historial reciente' })).toBeVisible()
 
-    await expect(page.getByText('Recuperación del parque de Manga')).toBeVisible()
+    await expect(page.getByTestId('civic-action-hub').getByText('Recuperación del parque de Manga')).toBeVisible()
     await expect(page.getByText('Luminaria averiada en la avenida')).toBeVisible()
     await expect(page.getByText('Corredor peatonal seguro')).toBeVisible()
     await expect(page.getByTestId('action-resolution-plan')).toBeVisible()
