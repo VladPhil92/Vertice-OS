@@ -7,6 +7,7 @@ import {
   type IdempotentMutationResult,
 } from '../../lib/idempotency'
 import { createCampaignDraftSchema } from './crowdfunding.schema'
+import { getCampaignLifecycleForAdmin } from './crowdfunding.lifecycle.admin.service'
 import {
   getOwnCampaignLifecycle,
   reviewCampaignLifecycle,
@@ -85,6 +86,14 @@ export async function crowdfundingLifecycleRoutes(app: FastifyInstance): Promise
       }),
     })
     return sendMutation(reply, result)
+  })
+
+  app.get('/admin/lifecycle/campaigns/:campaignId', { preHandler: requireAdmin }, async (request, reply) => {
+    const params = campaignParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.status(400).send({ error: 'Campaña inválida', code: 'INVALID_CAMPAIGN_ID' })
+    }
+    return reply.send(await getCampaignLifecycleForAdmin(params.data.campaignId))
   })
 
   app.post('/admin/lifecycle/campaigns/:campaignId/review', { preHandler: requireAdmin }, async (request, reply) => {
