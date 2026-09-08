@@ -1,0 +1,28 @@
+# VÉRTICE OS — Code ownership
+#
+# The repository owner is the default reviewer while the maintainer team is
+# still small. As the team grows, replace or complement these entries with
+# dedicated GitHub teams (for example @vertice/security or @vertice/finance).
+
+* @VladPhil92
+
+# Security, identity and authority boundaries
+/apps/api/src/modules/auth/ @VladPhil92
+/apps/api/src/modules/identity/ @VladPhil92
+/docs/security/ @VladPhil92
+/infrastructure/ @VladPhil92
+/.github/workflows/ @VladPhil92
+
+# Financial / crowdfunding boundaries
+/apps/api/src/modules/crowdfunding/ @VladPhil92
+/apps/web/app/dashboard/crowdfunding/ @VladPhil92
+
+# Governance and civic decision boundaries
+/apps/api/src/modules/governance/ @VladPhil92
+/contracts/ @VladPhil92
+
+# Release and repository governance
+/.github/CODEOWNERS @VladPhil92
+/.github/pull_request_template.md @VladPhil92
+/docs/engineering/RELEASE_GOVERNANCE.md @VladPhil92
+/scripts/verify-release-governance.mjs @VladPhil92
