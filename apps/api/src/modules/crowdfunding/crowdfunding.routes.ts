@@ -45,6 +45,7 @@ import {
   getCampaignActivationReadiness,
   getCrowdfundingReadiness,
 } from './crowdfunding.readiness.service'
+import { assertCampaignContributionReady } from './crowdfunding.checkout-gate.service'
 import {
   previewCampaignPayoutDestination,
   registerVerifiedPayoutDestination,
@@ -180,6 +181,11 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
           details: body.success ? undefined : body.error.flatten(),
         })
       }
+
+      // Re-evaluate the beneficiary + payout path on every checkout. This is a
+      // live circuit breaker: an already-active campaign cannot keep taking
+      // money after financial readiness degrades.
+      await assertCampaignContributionReady(params.data.campaignId)
 
       const result = await executeIdempotentMutation({
         citizenId: request.citizen.sub,
