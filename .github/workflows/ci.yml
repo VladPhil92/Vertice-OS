@@ -164,6 +164,7 @@ jobs:
       # Toda vulnerabilidad high/critical sigue bloqueando. Las únicas
       # excepciones temporales son los dos GHSA sin parche de image-size,
       # restringidos al toolchain móvil Expo/Metro y con expiración explícita.
+      # Ver issue #99.
       - name: Escaneo de dependencias (npm audit)
         run: |
           pnpm install --frozen-lockfile
