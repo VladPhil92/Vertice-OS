@@ -7,10 +7,12 @@ commonLabels:
   app.kubernetes.io/managed-by: kustomize
   app.kubernetes.io/part-of: vertice-os
 
+# `vertice-secrets` is intentionally NOT generated from a tracked file.
+# Provision it separately from secrets.example.yaml, kubectl, External Secrets,
+# Vault or the cloud provider's secret manager before applying this base.
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml
   - postgres/pvc.yaml
   - postgres/deployment.yaml
   - postgres/service.yaml

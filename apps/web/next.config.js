@@ -4,6 +4,8 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  poweredByHeader: false,
+  reactStrictMode: true,
   // En Next 15 esta clave salió de `experimental` y perdió el prefijo
   // `serverComponents`. Bajo Next 14 el nombre correcto era
   // `experimental.serverComponentsExternalPackages`; usar el de 15 allí hacía
@@ -13,6 +15,8 @@ const nextConfig = {
   // outputFileTracingRoot también salió de `experimental` en Next 15.
   outputFileTracingRoot: path.join(__dirname, '../../'),
   images: {
+    // Prefer modern formats while preserving Next/Image content negotiation.
+    formats: ['image/avif', 'image/webp'],
     // remotePatterns replaces deprecated images.domains
     remotePatterns: [
       { protocol: 'https', hostname: 'ipfs.io' },
