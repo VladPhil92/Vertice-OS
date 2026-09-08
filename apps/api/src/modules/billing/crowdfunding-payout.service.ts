@@ -162,6 +162,51 @@ export async function previewCampaignPayoutDestination(input: {
   }
 }
 
+/**
+ * The beneficiary — never an admin — is the only one who can bind a BRE-B
+ * destination to their own payout profile. `requestCampaignPayout` requires
+ * an exact match against this fingerprint before moving money, so an admin
+ * session can execute a payout only to a destination the beneficiary
+ * themselves already resolved and confirmed here.
+ */
+export async function registerVerifiedPayoutDestination(input: {
+  citizenId: string
+  key: string
+  keyType: WompiBrebKeyType
+  confirmedHolderName: string
+  confirmedFinancialEntityCode: string
+}): Promise<{ registered: true; keyType: WompiBrebKeyType }> {
+  ensurePayoutProviderReady()
+  const normalizedKey = normalizeBrebKey(input.key, input.keyType)
+  const preview = await resolveWompiBrebKey({ key: normalizedKey, keyType: input.keyType })
+  if (
+    preview.holderName !== input.confirmedHolderName.trim()
+    || preview.financialEntity.code !== input.confirmedFinancialEntityCode.trim()
+    || preview.keyType !== input.keyType
+  ) {
+    throw httpError(
+      'La confirmación del destino ya no coincide con la resolución del proveedor.',
+      'PAYOUT_DESTINATION_CONFIRMATION_MISMATCH',
+      409,
+    )
+  }
+
+  const fingerprint = destinationFingerprint(normalizedKey, input.keyType)
+  const updated = await prisma.$executeRaw(Prisma.sql`
+    UPDATE crowdfunding_payout_profiles
+    SET destination_fingerprint = ${fingerprint}, destination_key_type = ${input.keyType}, updated_at = NOW()
+    WHERE citizen_id = ${input.citizenId}::uuid
+  `)
+  if (updated === 0) {
+    throw httpError(
+      'Solicita primero la habilitación de recaudo antes de registrar un destino.',
+      'PAYOUT_PROFILE_NOT_FOUND',
+      404,
+    )
+  }
+  return { registered: true, keyType: input.keyType }
+}
+
 async function latestPayoutCertificationVerified(): Promise<boolean> {
   const rows = await prisma.$queryRaw<Array<{ status: string }>>(Prisma.sql`
     SELECT status
@@ -190,7 +235,12 @@ async function preparePayoutLedger(input: {
       LIMIT 1
       FOR UPDATE
     `)
-    if (existing[0]) return { payout: existing[0], reused: true }
+    // A 'requested' row was inserted but never actually reached the provider
+    // (e.g. a crash between the insert and createWompiBrebPayout). Replaying
+    // it as "reused" without ever submitting would leave the campaign stuck
+    // forever, since the active-payout unique index blocks a fresh attempt.
+    // Only a row that has actually reached the provider is a true replay.
+    if (existing[0]) return { payout: existing[0], reused: existing[0].status !== 'requested' }
 
     const campaigns = await db.$queryRaw<Array<{
       id: string
@@ -249,14 +299,33 @@ async function preparePayoutLedger(input: {
     const profile = await db.$queryRaw<Array<{
       verification_status: string
       payout_status: string
+      destination_fingerprint: string | null
+      destination_key_type: string | null
     }>>(Prisma.sql`
-      SELECT verification_status, payout_status
+      SELECT verification_status, payout_status, destination_fingerprint, destination_key_type
       FROM crowdfunding_payout_profiles
       WHERE citizen_id = ${campaign.creator_citizen_id}::uuid
       LIMIT 1
     `)
     if (profile[0]?.verification_status !== 'verified' || profile[0]?.payout_status !== 'eligible') {
       throw httpError('El beneficiario no está habilitado para desembolsos.', 'PAYOUT_PROFILE_NOT_READY', 409)
+    }
+    // The admin-supplied destination was already re-resolved against Wompi
+    // and matched the admin's own confirmation (see requestCampaignPayout),
+    // but that alone only proves the key is real — not that it belongs to
+    // this beneficiary. It must also match the destination the beneficiary
+    // themselves registered on their profile (registerVerifiedPayoutDestination),
+    // or an admin session could redirect funds to an arbitrary destination.
+    if (
+      !profile[0].destination_fingerprint
+      || profile[0].destination_fingerprint !== input.destinationFingerprint
+      || profile[0].destination_key_type !== input.destinationKeyType
+    ) {
+      throw httpError(
+        'El destino del desembolso no coincide con el destino verificado del beneficiario.',
+        'PAYOUT_DESTINATION_NOT_VERIFIED',
+        409,
+      )
     }
 
     const risk = await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
@@ -446,8 +515,9 @@ export async function requestCampaignPayout(input: {
     }
   }
 
+  let created: Awaited<ReturnType<typeof createWompiBrebPayout>>
   try {
-    const created = await createWompiBrebPayout({
+    created = await createWompiBrebPayout({
       reference: prepared.payout.provider_reference,
       transactionReference: transactionReference(prepared.payout.id),
       idempotencyKey: key,
@@ -459,6 +529,29 @@ export async function requestCampaignPayout(input: {
         email: input.destination.email,
       },
     })
+  } catch (error) {
+    // The submission call itself never confirmed reaching the provider. Only
+    // here — before any confirmed submission exists — is it safe to mark a
+    // definitive (non-retryable) failure 'failed'; a retryable failure is
+    // genuinely ambiguous (the provider may have received it anyway).
+    const retryable = error instanceof WompiPayoutApiError && error.retryable
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE crowdfunding_payout_requests
+      SET status = ${retryable ? 'reconciliation_required' : 'failed'}, updated_at = NOW()
+      WHERE id = ${prepared.payout.id}::uuid
+    `)
+    await recordAuditEvent({
+      actorId: input.actorId,
+      action: 'finance.crowdfunding_payout_request',
+      targetType: 'crowdfunding_payout_request',
+      targetId: prepared.payout.id,
+      result: retryable ? 'reconciliation_required' : 'failed',
+      metadata: { campaignId: prepared.payout.campaign_id, destinationKind: 'breb' },
+    })
+    throw error
+  }
+
+  try {
     let providerPayoutId = created.payoutId
     if (!providerPayoutId) {
       providerPayoutId = (await findWompiPayoutByReference(prepared.payout.provider_reference))?.id ?? null
@@ -491,18 +584,26 @@ export async function requestCampaignPayout(input: {
     })
     return { id: synced.id, status: synced.status, amountCop: Number(synced.amount_cop), reused: false }
   } catch (error) {
-    const retryable = error instanceof WompiPayoutApiError && error.retryable
+    // The provider has already accepted the submission by this point (a
+    // payout batch exists at Wompi). Any failure past this line — a lookup
+    // error, a ledger mismatch, a network blip — must never be classified
+    // 'failed': that status is excluded from the active-campaign lock and
+    // would let a second payout be requested while this one may still
+    // complete at the provider. Only touch the row if it is still exactly
+    // where createWompiBrebPayout left it — updatePayoutFromProvider may
+    // have already moved it to a terminal state before a later step (e.g.
+    // the audit write) failed, and that must not be clobbered.
     await prisma.$executeRaw(Prisma.sql`
       UPDATE crowdfunding_payout_requests
-      SET status = ${retryable ? 'reconciliation_required' : 'failed'}, updated_at = NOW()
-      WHERE id = ${prepared.payout.id}::uuid
+      SET status = 'reconciliation_required', updated_at = NOW()
+      WHERE id = ${prepared.payout.id}::uuid AND status = 'requested'
     `)
     await recordAuditEvent({
       actorId: input.actorId,
       action: 'finance.crowdfunding_payout_request',
       targetType: 'crowdfunding_payout_request',
       targetId: prepared.payout.id,
-      result: retryable ? 'reconciliation_required' : 'failed',
+      result: 'reconciliation_required',
       metadata: { campaignId: prepared.payout.campaign_id, destinationKind: 'breb' },
     })
     throw error
@@ -579,6 +680,11 @@ export async function processWompiPayoutWebhook(input: {
       ? stringValue(transaction?.payoutId)
       : null
 
+  // A prior delivery of this exact signed event that ended 'failed' must be
+  // retried on the next delivery instead of being silently swallowed as a
+  // duplicate forever — that would strand the payout reconciliation path
+  // with no way back in. Any other existing state (received/processed/
+  // ignored) is a genuine duplicate and is left untouched.
   const inserted = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     INSERT INTO payout_webhook_events (
       provider, event_key, event_type, provider_resource_id, checksum,
@@ -587,7 +693,9 @@ export async function processWompiPayoutWebhook(input: {
       ${CROWDFUNDING_PAYOUT_PROVIDER}, ${verified.eventKey}, ${verified.event},
       ${providerPayoutId}, ${verified.checksum}, ${verified.timestamp}, 'received'
     )
-    ON CONFLICT (provider, event_key) DO NOTHING
+    ON CONFLICT (provider, event_key) DO UPDATE SET
+      status = 'received', processed_at = NULL
+      WHERE payout_webhook_events.status = 'failed'
     RETURNING id
   `)
   if (!inserted[0]) return { duplicate: true, processed: false }
