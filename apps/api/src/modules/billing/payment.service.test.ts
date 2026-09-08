@@ -380,6 +380,179 @@ describe('processMercadoPagoWebhook', () => {
 
     expect(result).toEqual({ duplicate: false, processed: true })
   })
+
+  const SUB_TX_ID = '550e8400-e29b-41d4-a716-446655440099'
+  const SUBSCRIPTION_TX_ROW = {
+    id: SUB_TX_ID,
+    citizen_id: 'citizen-1',
+    amount_cop: 15_000n,
+    metadata: { billing_cycle: 'monthly' },
+    status: 'pending',
+    provider_transaction_id: null,
+  }
+
+  it('records an authorized mandate for a known subscription checkout', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'evt-7' }])
+      .mockResolvedValueOnce([SUBSCRIPTION_TX_ROW])
+    mockGetMercadoPagoSubscription.mockResolvedValue({
+      id: 'psub-1',
+      status: 'authorized',
+      external_reference: `sub_${SUB_TX_ID}`,
+      payer_id: 'payer-1',
+      auto_recurring: { currency_id: 'COP', transaction_amount: 15_000 },
+    })
+
+    const result = await processMercadoPagoWebhook({
+      xSignature: 'sig', xRequestId: 'req', dataId: 'psub-1', body: { type: 'subscription_preapproval' },
+    })
+
+    expect(result).toEqual({ duplicate: false, processed: true })
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(3)
+  })
+
+  it('cancels the local ledger when the provider mandate is cancelled', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'evt-8' }])
+      .mockResolvedValueOnce([SUBSCRIPTION_TX_ROW])
+    mockGetMercadoPagoSubscription.mockResolvedValue({
+      id: 'psub-1',
+      status: 'cancelled',
+      external_reference: `sub_${SUB_TX_ID}`,
+      auto_recurring: { currency_id: 'COP', transaction_amount: 15_000 },
+    })
+
+    const result = await processMercadoPagoWebhook({
+      xSignature: 'sig', xRequestId: 'req', dataId: 'psub-1', body: { type: 'subscription_preapproval' },
+    })
+
+    expect(result).toEqual({ duplicate: false, processed: true })
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(3)
+  })
+
+  it('fails closed when the provider mandate amount does not match the local ledger', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'evt-9' }])
+      .mockResolvedValueOnce([SUBSCRIPTION_TX_ROW])
+    mockGetMercadoPagoSubscription.mockResolvedValue({
+      id: 'psub-1',
+      status: 'authorized',
+      external_reference: `sub_${SUB_TX_ID}`,
+      auto_recurring: { currency_id: 'COP', transaction_amount: 999_999 },
+    })
+
+    await expect(processMercadoPagoWebhook({
+      xSignature: 'sig', xRequestId: 'req', dataId: 'psub-1', body: { type: 'subscription_preapproval' },
+    })).rejects.toMatchObject({ statusCode: 409, code: 'PAYMENT_LEDGER_MISMATCH' })
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks a recurring subscription as past due on a rejected authorized payment', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'evt-10' }])
+      .mockResolvedValueOnce([SUBSCRIPTION_TX_ROW])
+    ;(getMercadoPagoAuthorizedPayment as jest.Mock).mockResolvedValue({
+      id: 'invoice-1',
+      preapproval_id: 'psub-2',
+      transaction_amount: 15_000,
+      currency_id: 'COP',
+      payment: { id: 'pay-1', status: 'rejected', status_detail: 'cc_rejected' },
+    })
+    mockGetMercadoPagoSubscription.mockResolvedValue({
+      id: 'psub-2',
+      status: 'authorized',
+      external_reference: `sub_${SUB_TX_ID}`,
+    })
+
+    const result = await processMercadoPagoWebhook({
+      xSignature: 'sig', xRequestId: 'req', dataId: 'invoice-1', body: { type: 'subscription_authorized_payment' },
+    })
+
+    expect(result).toEqual({ duplicate: false, processed: true })
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(3)
+  })
+
+  it('activates Pro on an approved recurring charge', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'evt-11' }])
+      .mockResolvedValueOnce([SUBSCRIPTION_TX_ROW])
+      .mockResolvedValueOnce([{ status: 'pending', provider_transaction_id: null }])
+      .mockResolvedValueOnce([{ id: 'sub-row-1' }])
+    ;(getMercadoPagoAuthorizedPayment as jest.Mock).mockResolvedValue({
+      id: 'invoice-2',
+      preapproval_id: 'psub-3',
+      transaction_amount: 15_000,
+      currency_id: 'COP',
+      payment: { id: 'pay-2', status: 'approved', status_detail: 'accredited' },
+      debit_date: '2026-09-01T00:00:00.000Z',
+    })
+    mockGetMercadoPagoSubscription.mockResolvedValue({
+      id: 'psub-3',
+      status: 'authorized',
+      external_reference: `sub_${SUB_TX_ID}`,
+      payer_id: 'payer-1',
+      next_payment_date: '2026-10-01T00:00:00.000Z',
+    })
+
+    const result = await processMercadoPagoWebhook({
+      xSignature: 'sig', xRequestId: 'req', dataId: 'invoice-2', body: { type: 'subscription_authorized_payment' },
+    })
+
+    expect(result).toEqual({ duplicate: false, processed: true })
+    expect(mockTransaction).toHaveBeenCalledTimes(1)
+  })
+
+  const CF_TX_ID = '660e8400-e29b-41d4-a716-446655440088'
+
+  it('applies a paid crowdfunding order to the campaign ledger', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'evt-12' }])
+      .mockResolvedValueOnce([{ amount_cop: 22_000n }])
+      .mockResolvedValueOnce([{
+        tx_amount: 22_000n, contribution_id: 'contrib-1', campaign_id: 'campaign-1', contribution_amount: 20_000n,
+      }])
+      .mockResolvedValueOnce([{ status: 'pending' }])
+    ;(getMercadoPagoOrder as jest.Mock).mockResolvedValue({
+      id: 'ord-1',
+      status: 'processed',
+      external_reference: `cf_${CF_TX_ID}`,
+      total_amount: '22000',
+      total_paid_amount: '22000',
+      currency: 'COP',
+    })
+
+    const result = await processMercadoPagoWebhook({
+      xSignature: 'sig', xRequestId: 'req', dataId: 'ord-1', body: { type: 'order' },
+    })
+
+    expect(result).toEqual({ duplicate: false, processed: true })
+    expect(mockTransaction).toHaveBeenCalledTimes(1)
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(4)
+  })
+
+  it('reverses a chargeback on a previously paid crowdfunding contribution', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'evt-13' }])
+      .mockResolvedValueOnce([{ amount_cop: 22_000n }])
+      .mockResolvedValueOnce([{
+        tx_amount: 22_000n, contribution_id: 'contrib-1', campaign_id: 'campaign-1', contribution_amount: 20_000n,
+      }])
+      .mockResolvedValueOnce([{ status: 'paid' }])
+    ;(getMercadoPagoPayment as jest.Mock).mockResolvedValue({
+      id: 'pay-3',
+      status: 'charged_back',
+      external_reference: `cf_${CF_TX_ID}`,
+      transaction_amount: 22_000,
+      currency_id: 'COP',
+    })
+
+    const result = await processMercadoPagoWebhook({
+      xSignature: 'sig', xRequestId: 'req', dataId: 'pay-3', body: { type: 'payment' },
+    })
+
+    expect(result).toEqual({ duplicate: false, processed: true })
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(4)
+  })
 })
 
 describe('createCrowdfundingContributionCheckout', () => {
