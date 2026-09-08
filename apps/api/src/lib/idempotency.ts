@@ -140,12 +140,13 @@ async function reserveReceipt(
   return inserted.length > 0
 }
 
-async function deleteExpiredReceipt(citizenId: string, scope: string, key: string): Promise<boolean> {
+async function deleteExpiredCompletedReceipt(citizenId: string, scope: string, key: string): Promise<boolean> {
   const deleted = await prisma.$executeRaw(Prisma.sql`
     DELETE FROM api_idempotency_receipts
     WHERE citizen_id = ${citizenId}::uuid
       AND scope = ${scope}
       AND idempotency_key = ${key}
+      AND state = 'completed'
       AND expires_at <= NOW()
   `)
   return deleted > 0
@@ -269,8 +270,12 @@ export async function executeIdempotentMutation<T>(
 
   if (!reserved) {
     let existing = await loadReceipt(options.citizenId, scope, keyInfo.key)
-    if (existing && existing.expires_at.getTime() <= Date.now()) {
-      const removed = await deleteExpiredReceipt(options.citizenId, scope, keyInfo.key)
+    if (
+      existing
+      && existing.state === 'completed'
+      && existing.expires_at.getTime() <= Date.now()
+    ) {
+      const removed = await deleteExpiredCompletedReceipt(options.citizenId, scope, keyInfo.key)
       if (removed) {
         reserved = await reserveReceipt(
           options.citizenId,
