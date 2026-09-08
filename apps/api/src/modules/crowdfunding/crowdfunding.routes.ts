@@ -1,8 +1,20 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth } from '../../middleware/auth'
-import { CROWDFUNDING_CATEGORIES, CROWDFUNDING_GUARDRAILS, ALLOWED_FUNDING_MODELS, CAMPAIGN_STATUSES } from './crowdfunding.policy'
+import { ENTITLEMENTS } from '../billing/billing.catalog'
+import { requireEntitlement } from '../billing/billing.middleware'
+import {
+  ALLOWED_FUNDING_MODELS,
+  CAMPAIGN_STATUSES,
+  CROWDFUNDING_CATEGORIES,
+  CROWDFUNDING_GUARDRAILS,
+} from './crowdfunding.policy'
 import { createCampaignDraftSchema } from './crowdfunding.schema'
-import { createCampaignDraft, listOwnCampaigns, listPublicCampaigns } from './crowdfunding.service'
+import {
+  createCampaignDraft,
+  getCampaignAnalytics,
+  listOwnCampaigns,
+  listPublicCampaigns,
+} from './crowdfunding.service'
 
 export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
   app.get('/config', async (_request, reply) => {
@@ -22,6 +34,14 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
   app.get('/me/campaigns', { preHandler: requireAuth }, async (request, reply) => {
     return reply.send({ campaigns: await listOwnCampaigns(request.citizen.sub) })
   })
+
+  app.get(
+    '/me/analytics',
+    { preHandler: requireEntitlement(ENTITLEMENTS.CAMPAIGN_ANALYTICS) },
+    async (request, reply) => {
+      return reply.send(await getCampaignAnalytics(request.citizen.sub))
+    },
+  )
 
   app.post('/campaigns', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = createCampaignDraftSchema.safeParse(request.body)
