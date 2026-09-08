@@ -10,6 +10,7 @@ on:
       - 'apps/web/e2e/dashboard.spec.ts'
       - 'apps/web/e2e/dashboard-runtime.spec.ts'
       - 'apps/web/e2e/dashboard-command-center-v2.spec.ts'
+      - 'apps/web/e2e/dashboard-operational-convergence.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
       - 'apps/web/e2e/process-resilience.spec.ts'
@@ -28,6 +29,7 @@ on:
       - 'apps/web/e2e/dashboard.spec.ts'
       - 'apps/web/e2e/dashboard-runtime.spec.ts'
       - 'apps/web/e2e/dashboard-command-center-v2.spec.ts'
+      - 'apps/web/e2e/dashboard-operational-convergence.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
       - 'apps/web/e2e/process-resilience.spec.ts'
@@ -108,6 +110,7 @@ jobs:
             e2e/dashboard.spec.ts \
             e2e/dashboard-runtime.spec.ts \
             e2e/dashboard-command-center-v2.spec.ts \
+            e2e/dashboard-operational-convergence.spec.ts \
             e2e/report-media.spec.ts \
             e2e/avatar-persistence.spec.ts \
             e2e/process-resilience.spec.ts \
