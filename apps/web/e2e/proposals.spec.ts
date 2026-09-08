@@ -69,8 +69,7 @@ test.describe('Proposals list', () => {
     )
 
     await page.goto('/dashboard/proposals')
-    const endorseBtn = page.getByRole('button', { name: /apoyar/i }).first()
-    await endorseBtn.click()
+    await page.getByTitle('Avalar esta propuesta').first().click()
     await expect(page.getByText('144')).toBeVisible()
   })
 
@@ -80,8 +79,7 @@ test.describe('Proposals list', () => {
     )
 
     await page.goto('/dashboard/proposals')
-    const endorseBtn = page.getByRole('button', { name: /apoyar/i }).first()
-    await endorseBtn.click()
+    await page.getByTitle('Avalar esta propuesta').first().click()
     await expect(page.getByText('143')).toBeVisible()
     await expect(page.getByText('144')).not.toBeVisible()
   })
@@ -112,7 +110,7 @@ test.describe('Create proposal', () => {
     await page.goto('/dashboard/proposals/new')
     const desc = page.getByLabel(/descripción/i)
     await desc.fill('Esta es mi propuesta ciudadana para mejorar Cartagena.')
-    await expect(page.getByText(/53/)).toBeVisible()
+    await expect(page.getByText('54/10 000')).toBeVisible()
   })
 
   test('validates minimum description length', async ({ page }) => {
