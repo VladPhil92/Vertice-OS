@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { addBrebKeyIssue, brebKeyTypeSchema } from '../billing/breb-key.schema'
 import {
   ALLOWED_FUNDING_MODELS,
   CROWDFUNDING_CATEGORIES,
@@ -64,6 +65,19 @@ export const payoutProfileReviewSchema = z.object({
   notes: z.string().trim().max(2_000).optional(),
 })
 
+export const payoutDestinationPreviewSchema = z.object({
+  keyType: brebKeyTypeSchema,
+  key: z.string().trim().min(1).max(254),
+}).superRefine(addBrebKeyIssue)
+
+export const payoutDestinationRegistrationSchema = z.object({
+  keyType: brebKeyTypeSchema,
+  key: z.string().trim().min(1).max(254),
+  confirmedHolderName: z.string().trim().min(2).max(180),
+  confirmedFinancialEntityCode: z.string().trim().min(1).max(20),
+}).superRefine(addBrebKeyIssue)
+
 export type CreateCampaignDraftInput = z.infer<typeof createCampaignDraftSchema>
 export type CampaignReviewInput = z.infer<typeof campaignReviewSchema>
 export type PayoutProfileReviewInput = z.infer<typeof payoutProfileReviewSchema>
+export type PayoutDestinationRegistrationInput = z.infer<typeof payoutDestinationRegistrationSchema>

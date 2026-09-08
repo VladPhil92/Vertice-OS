@@ -42,14 +42,21 @@ The BRE-B key, beneficiary notification name/email and preview confirmation fiel
 
 VÉRTICE persists only a keyed HMAC destination fingerprint, BRE-B key type, provider payout/transaction references, amount, operational status and sanitized failure/status metadata. `PAYOUT_DESTINATION_PEPPER` is a dedicated cryptographic domain and must not reuse `JWT_SECRET`.
 
+The same fingerprint shape is stored twice, for two different purposes: on `crowdfunding_payout_requests` (the destination used for one specific payout) and on `crowdfunding_payout_profiles` (the destination the beneficiary has registered as their own — see below). A payout request's fingerprint must match the profile's registered fingerprint before money moves.
+
 ## Beneficiary preview and confirmation
 
-A payout is a two-step human-confirmed operation:
+**The beneficiary — never an admin — is the only actor who can bind a BRE-B destination to their own payout profile.** An admin can request a payout, but only ever to whatever destination the beneficiary already resolved and confirmed themselves:
 
-1. `POST /billing/admin/finance/payouts/destinations/preview` resolves the BRE-B key against Wompi and returns the provider's masked holder name, financial entity, key type and masked key value. The preview is not persisted.
-2. The admin confirms that beneficiary and sends the masked holder name + financial-entity code back with the payout request. Immediately before creating the payout, VÉRTICE resolves the key again server-to-server and requires an exact match with that confirmation.
+1. `POST /crowdfunding/me/payout-destination/preview` (self-service, `requireVerified`) resolves a BRE-B key against Wompi and returns the provider's masked holder name, financial entity, key type and masked key value. The preview is not persisted.
+2. `POST /crowdfunding/me/payout-destination` (self-service) has the beneficiary confirm that masked holder name + financial-entity code. VÉRTICE re-resolves the key server-to-server, requires an exact match, and — only then — stores a keyed HMAC fingerprint of that destination on the beneficiary's `crowdfunding_payout_profiles` row.
 
-If the key was changed, resolves to a different holder/entity, or the confirmation is stale, no payout ledger row or provider payment instruction is created.
+The admin-facing payout request is then a second, independent confirmation of the *same* provider identity, not the source of truth for *whose* destination it is:
+
+3. `POST /billing/admin/finance/payouts/destinations/preview` resolves the BRE-B key against Wompi the same way, for the admin to see before requesting a payout.
+4. The admin sends the masked holder name + financial-entity code back with the payout request. VÉRTICE resolves the key again server-to-server and requires an exact match with that confirmation — **and** requires the resulting destination fingerprint to match the beneficiary's own registered one (step 2). A mismatch — including no registered destination at all — fails closed with `PAYOUT_DESTINATION_NOT_VERIFIED` before any payout ledger row or provider payment instruction is created.
+
+This closes a fund-diversion gap in the original design: previously an admin's confirmation was only checked against Wompi's resolution of whatever key the admin typed, never against the beneficiary's own verified destination, so any admin session could redirect a payout to an arbitrary BRE-B key as long as the beneficiary had *some* verified payout profile.
 
 ## Eligibility gate
 
@@ -64,6 +71,7 @@ A payout request is rejected unless all conditions hold:
 7. No open/escalated financial risk flag exists for the campaign or beneficiary.
 8. There is positive reconciled balance available.
 9. The BRE-B destination has just been re-resolved and matches the admin's preview confirmation.
+10. That same destination's fingerprint matches the one the beneficiary registered themselves via `POST /crowdfunding/me/payout-destination`.
 
 The disbursable balance is calculated from `crowdfunding_contributions.status='paid'` and excludes platform tips. Already paid payouts are subtracted.
 
@@ -81,6 +89,11 @@ A provider creation response never marks a payout `paid`. VÉRTICE re-fetches th
 
 A stale provider read cannot move a terminal local state back to an in-flight state, and a previously paid payout cannot be resurrected as failed/pending by an out-of-order event.
 
+Two related correctness properties:
+
+- **`failed` means definitively no money moved.** Only a failure in the submission call itself (before a provider payout batch exists) can be classified `failed`. Any failure once the provider has accepted the submission — a lookup error, a ledger mismatch, a transient fault while syncing — stays `reconciliation_required`, since `failed` is excluded from the one-active-payout-per-campaign lock and a second request could otherwise create a duplicate disbursement.
+- **A `requested` row that never reached the provider is retried, not replayed.** The idempotency key lookup only treats a prior row as a completed replay when its status shows the provider was actually contacted. A row stuck at `requested` (e.g. a crash between the local insert and the provider call) resumes submission on the next request with the same key instead of returning an unsubmitted result forever.
+
 ## Dual control
 
 Wompi's preparer/approver model is part of the operational design. VÉRTICE can prepare a payout request; provider-side approval remains an independent control and is not bypassed by the application. `PENDING_APPROVAL` is therefore an expected healthy state, not a failure.
@@ -96,6 +109,17 @@ Endpoint:
 The endpoint does not rely on a VÉRTICE browser/session token. It verifies Wompi's event checksum using the exact property paths and order declared in `signature.properties`, the event timestamp and the configured event secret. Event keys are deduplicated before processing.
 
 The signed event is only a trigger. After signature verification VÉRTICE performs a fresh server-to-server provider query and applies only that authoritative state to the payout ledger. Raw webhook bodies are not stored.
+
+Event deduplication distinguishes a true duplicate from a delivery worth retrying: a prior delivery of the exact same signed event that ended `failed` is reset and reprocessed, since otherwise a single processing failure would permanently strand that event's reconciliation. Any other prior state (`received`, `processed`, `ignored`) is left untouched.
+
+## Self-service beneficiary endpoints
+
+These are citizen-facing, not admin-facing, and require only `requireVerified`:
+
+- `POST /crowdfunding/me/payout-destination/preview`
+- `POST /crowdfunding/me/payout-destination`
+
+Registration requires an existing payout profile row (from `POST /crowdfunding/me/payout-readiness/request-review`); it does not itself grant `verified`/`eligible` status, which still requires admin KYC/KYB review.
 
 ## Admin control plane
 

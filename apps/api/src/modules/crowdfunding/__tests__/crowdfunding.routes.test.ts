@@ -46,6 +46,13 @@ jest.mock('../crowdfunding.compliance.service', () => ({
   reviewPayoutProfile: mockReviewPayoutProfile,
 }))
 
+const mockPreviewCampaignPayoutDestination = jest.fn()
+const mockRegisterVerifiedPayoutDestination = jest.fn()
+jest.mock('../../billing/crowdfunding-payout.service', () => ({
+  previewCampaignPayoutDestination: mockPreviewCampaignPayoutDestination,
+  registerVerifiedPayoutDestination: mockRegisterVerifiedPayoutDestination,
+}))
+
 jest.mock('../../../lib/idempotency', () => ({
   normalizeRequestedIdempotencyKey: (value: string | string[] | undefined): string | undefined => {
     const raw = Array.isArray(value) ? value[0] : value
@@ -306,6 +313,74 @@ describe('POST /crowdfunding/me/payout-readiness/request-review', () => {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('POST /crowdfunding/me/payout-destination/preview', () => {
+  it('returns the masked destination preview', async () => {
+    mockPreviewCampaignPayoutDestination.mockResolvedValue({ holderName: 'Juana Pérez' })
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination/preview',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { keyType: 'MAIL', key: 'juana@example.com' },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('returns 400 for a malformed BRE-B key', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination/preview',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { keyType: 'PHONE', key: 'not-a-phone' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(mockPreviewCampaignPayoutDestination).not.toHaveBeenCalled()
+  })
+
+  it('returns 401 without a token', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination/preview',
+      payload: { keyType: 'MAIL', key: 'juana@example.com' },
+    })
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+describe('POST /crowdfunding/me/payout-destination', () => {
+  const validBody = {
+    keyType: 'MAIL', key: 'juana@example.com',
+    confirmedHolderName: 'Juana Pérez', confirmedFinancialEntityCode: '1234',
+  }
+
+  it('registers the confirmed payout destination for the authenticated citizen', async () => {
+    mockRegisterVerifiedPayoutDestination.mockResolvedValue({ registered: true, keyType: 'MAIL' })
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: validBody,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockRegisterVerifiedPayoutDestination).toHaveBeenCalledWith(expect.objectContaining({
+      citizenId: CITIZEN_ID, key: 'juana@example.com', keyType: 'MAIL',
+    }))
+  })
+
+  it('returns 400 for a malformed BRE-B key', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { ...validBody, keyType: 'PHONE', key: 'not-a-phone' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(mockRegisterVerifiedPayoutDestination).not.toHaveBeenCalled()
+  })
+
+  it('returns 401 without a token', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination',
+      payload: validBody,
+    })
+    expect(res.statusCode).toBe(401)
   })
 })
 

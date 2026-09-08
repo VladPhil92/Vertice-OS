@@ -1,4 +1,4 @@
--- Crowdfunding monetization & flexible funding policy — Phase V
+-- Crowdfunding monetization — Phase V
 --
 -- Product policy:
 -- - verified social/emergency donation campaigns: 1.00% VÉRTICE fee;
@@ -6,54 +6,21 @@
 -- - reward/prepurchase campaigns: 3.50%;
 -- - platform tips remain optional and are excluded from the fee base;
 -- - the platform fee is deducted from contribution principal, never added as a
---   hidden surcharge to the donor;
--- - flexible campaigns may disburse settled balance before reaching the goal;
--- - reward campaigns default to all-or-nothing;
--- - milestone campaigns disburse only against verified milestone capacity.
-
--- Emergency becomes an explicit reviewable category rather than being hidden
--- inside the broad social category.
-ALTER TABLE crowdfunding_campaigns
-  DROP CONSTRAINT IF EXISTS crowdfunding_campaigns_category_check;
-
-ALTER TABLE crowdfunding_campaigns
-  ADD CONSTRAINT crowdfunding_campaigns_category_check CHECK (
-    category IN (
-      'social', 'emergency', 'community', 'culture', 'education', 'environment',
-      'animal_welfare', 'sports', 'public_space', 'technology_civic',
-      'social_entrepreneurship', 'heritage'
-    )
-  );
-
-ALTER TABLE crowdfunding_campaigns
-  ADD COLUMN IF NOT EXISTS funding_policy VARCHAR(24) NOT NULL DEFAULT 'flexible';
-
--- Existing reward/prepurchase campaigns inherit the safer all-or-nothing rule.
-UPDATE crowdfunding_campaigns
-SET funding_policy = 'all_or_nothing'
-WHERE funding_model = 'reward'
-  AND funding_policy = 'flexible';
-
-ALTER TABLE crowdfunding_campaigns
-  DROP CONSTRAINT IF EXISTS crowdfunding_campaigns_funding_policy_check;
-ALTER TABLE crowdfunding_campaigns
-  ADD CONSTRAINT crowdfunding_campaigns_funding_policy_check CHECK (
-    funding_policy IN ('flexible', 'all_or_nothing', 'milestone')
-  );
-
-ALTER TABLE crowdfunding_campaigns
-  DROP CONSTRAINT IF EXISTS crowdfunding_campaigns_reward_not_flexible_check;
-ALTER TABLE crowdfunding_campaigns
-  ADD CONSTRAINT crowdfunding_campaigns_reward_not_flexible_check CHECK (
-    funding_model <> 'reward' OR funding_policy <> 'flexible'
-  );
+--   hidden surcharge to the donor.
+--
+-- The `funding_policy` column, its value/category constraints and the
+-- reward-cannot-be-flexible rule were already introduced by migration
+-- 20260908143000_crowdfunding_category_policy_alignment. This migration adds
+-- only what that one did not: the funding-policy index, the flexible-payout
+-- unique index adjustment, and canonical fee enforcement.
 
 CREATE INDEX IF NOT EXISTS idx_crowdfunding_campaigns_funding_policy
   ON crowdfunding_campaigns (funding_policy, status, updated_at DESC);
 
 -- Phase IV permitted only one successful payout lifecycle per campaign. Flexible
 -- funding requires repeated withdrawals while preserving at-most-one in-flight
--- money movement for a campaign.
+-- money movement for a campaign. A previously paid payout must not block a new
+-- one, unlike Phase IV's all-or-nothing single-payout campaigns.
 DROP INDEX IF EXISTS crowdfunding_payout_requests_campaign_active;
 DROP INDEX IF EXISTS crowdfunding_payout_requests_campaign_inflight;
 CREATE UNIQUE INDEX crowdfunding_payout_requests_campaign_inflight

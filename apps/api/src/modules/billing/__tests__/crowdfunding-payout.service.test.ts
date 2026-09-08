@@ -29,6 +29,7 @@ jest.mock('../wompi-payouts.provider', () => {
   }
 })
 
+import { createHmac } from 'node:crypto'
 import { config } from '../../../config'
 import { prisma } from '../../../lib/prisma'
 import { recordAuditEvent } from '../../../lib/audit'
@@ -47,6 +48,7 @@ import {
   previewCampaignPayoutDestination,
   processWompiPayoutWebhook,
   reconcileCampaignPayout,
+  registerVerifiedPayoutDestination,
   requestCampaignPayout,
 } from '../crowdfunding-payout.service'
 import { verifyWompiPayoutWebhook } from '../wompi-payouts.provider'
@@ -78,7 +80,16 @@ const FUNDED_CAMPAIGN = {
   ends_at: null,
 }
 
-const VERIFIED_PROFILE = { verification_status: 'verified', payout_status: 'eligible' }
+const PAYOUT_DESTINATION_PEPPER = 'destination-pepper-with-at-least-thirty-two-characters'
+
+function testDestinationFingerprint(key: string, keyType: string): string {
+  const normalized = keyType === 'MAIL'
+    ? key.trim().toLowerCase()
+    : keyType === 'ALPHANUMERIC' || keyType === 'IDENTIFICATION'
+      ? key.trim().toUpperCase()
+      : key.trim()
+  return createHmac('sha256', PAYOUT_DESTINATION_PEPPER).update(`${keyType}|${normalized}`).digest('hex')
+}
 
 const DESTINATION = {
   key: 'juana@example.com',
@@ -89,6 +100,15 @@ const DESTINATION = {
   confirmedFinancialEntityCode: '1234',
 }
 
+const REGISTERED_FINGERPRINT = testDestinationFingerprint(DESTINATION.key, DESTINATION.keyType)
+
+const VERIFIED_PROFILE = {
+  verification_status: 'verified',
+  payout_status: 'eligible',
+  destination_fingerprint: REGISTERED_FINGERPRINT,
+  destination_key_type: DESTINATION.keyType,
+}
+
 const MATCHING_PREVIEW = {
   holderName: 'Juana Pérez',
   financialEntity: { name: 'Banco Ejemplo', code: '1234' },
@@ -97,7 +117,7 @@ const MATCHING_PREVIEW = {
 }
 
 beforeEach(() => {
-  jest.clearAllMocks()
+  jest.resetAllMocks()
   mockGetWompiPayoutConfigurationState.mockReturnValue('ready')
   ;(config as unknown as { CROWDFUNDING_PAYOUTS_ENABLED: boolean }).CROWDFUNDING_PAYOUTS_ENABLED = true
   mockExecuteRaw.mockResolvedValue(undefined)
@@ -146,6 +166,51 @@ describe('previewCampaignPayoutDestination', () => {
     const result = await previewCampaignPayoutDestination({ key: 'juana@example.com', keyType: 'MAIL' })
 
     expect(result).toEqual(MATCHING_PREVIEW)
+  })
+})
+
+describe('registerVerifiedPayoutDestination', () => {
+  const registration = {
+    citizenId: CREATOR_ID,
+    key: DESTINATION.key,
+    keyType: DESTINATION.keyType,
+    confirmedHolderName: DESTINATION.confirmedHolderName,
+    confirmedFinancialEntityCode: DESTINATION.confirmedFinancialEntityCode,
+  }
+
+  it('fails closed when the provider is not ready', async () => {
+    mockGetWompiPayoutConfigurationState.mockReturnValue('disabled')
+
+    await expect(registerVerifiedPayoutDestination(registration)).rejects.toMatchObject({
+      statusCode: 503, code: 'PAYOUT_PROVIDER_UNAVAILABLE',
+    })
+  })
+
+  it('rejects a confirmation that no longer matches the provider resolution', async () => {
+    mockResolveWompiBrebKey.mockResolvedValue({ ...MATCHING_PREVIEW, holderName: 'Otra Persona' })
+
+    await expect(registerVerifiedPayoutDestination(registration)).rejects.toMatchObject({
+      statusCode: 409, code: 'PAYOUT_DESTINATION_CONFIRMATION_MISMATCH',
+    })
+  })
+
+  it('rejects registration when the citizen has no payout profile yet', async () => {
+    mockExecuteRaw.mockResolvedValueOnce(0)
+
+    await expect(registerVerifiedPayoutDestination(registration)).rejects.toMatchObject({
+      statusCode: 404, code: 'PAYOUT_PROFILE_NOT_FOUND',
+    })
+  })
+
+  it('binds the confirmed destination fingerprint to the payout profile', async () => {
+    mockExecuteRaw.mockResolvedValueOnce(1)
+
+    const result = await registerVerifiedPayoutDestination(registration)
+
+    expect(result).toEqual({ registered: true, keyType: 'MAIL' })
+    expect(mockExecuteRaw).toHaveBeenCalledWith(expect.objectContaining({
+      values: expect.arrayContaining([REGISTERED_FINGERPRINT, 'MAIL', CREATOR_ID]),
+    }))
   })
 })
 
@@ -207,6 +272,26 @@ describe('requestCampaignPayout', () => {
 
     expect(result).toEqual({ id: PAYOUT_ID, status: 'paid', amountCop: 500_000, reused: true })
     expect(mockCreateWompiBrebPayout).not.toHaveBeenCalled()
+  })
+
+  it('resumes a stuck "requested" payout instead of replaying it unsubmitted', async () => {
+    // A crash between inserting the row and calling the provider must not
+    // leave the campaign permanently stuck: a retry with the same key has to
+    // actually reach the provider, not just echo back the unsubmitted row.
+    mockQueryRaw
+      .mockResolvedValueOnce([{ status: 'verified' }])
+      .mockResolvedValueOnce([{
+        id: PAYOUT_ID, campaign_id: CAMPAIGN_ID, beneficiary_citizen_id: CREATOR_ID,
+        provider_payout_id: null, provider_reference: 'vertice-ref-1',
+        amount_cop: 500_000n, status: 'requested', provider_status: null,
+      }])
+    mockCreateWompiBrebPayout.mockResolvedValue({ payoutId: null, status: 'PENDING', traceId: 'trace-1' })
+    mockFindWompiPayoutByReference.mockResolvedValue(null)
+
+    const result = await requestCampaignPayout({ ...baseInput, requestedIdempotencyKey: 'stuck-key-123' })
+
+    expect(mockCreateWompiBrebPayout).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ id: PAYOUT_ID, status: 'reconciliation_required', amountCop: 500_000, reused: false })
   })
 
   it('rejects when the campaign does not exist', async () => {
@@ -277,6 +362,35 @@ describe('requestCampaignPayout', () => {
 
     await expect(requestCampaignPayout(baseInput)).rejects.toMatchObject({
       statusCode: 409, code: 'PAYOUT_PROFILE_NOT_READY',
+    })
+  })
+
+  it('rejects when the beneficiary has not registered any payout destination', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ status: 'verified' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([FUNDED_CAMPAIGN])
+      .mockResolvedValueOnce([{ count: 0n }])
+      .mockResolvedValueOnce([{ verification_status: 'verified', payout_status: 'eligible', destination_fingerprint: null, destination_key_type: null }])
+
+    await expect(requestCampaignPayout(baseInput)).rejects.toMatchObject({
+      statusCode: 409, code: 'PAYOUT_DESTINATION_NOT_VERIFIED',
+    })
+  })
+
+  it('rejects when the admin-submitted destination does not match the beneficiary registered one', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ status: 'verified' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([FUNDED_CAMPAIGN])
+      .mockResolvedValueOnce([{ count: 0n }])
+      .mockResolvedValueOnce([{
+        verification_status: 'verified', payout_status: 'eligible',
+        destination_fingerprint: 'a'.repeat(64), destination_key_type: 'MAIL',
+      }])
+
+    await expect(requestCampaignPayout(baseInput)).rejects.toMatchObject({
+      statusCode: 409, code: 'PAYOUT_DESTINATION_NOT_VERIFIED',
     })
   })
 
@@ -391,6 +505,38 @@ describe('requestCampaignPayout', () => {
     expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
       action: 'finance.crowdfunding_payout_request', result: 'paid',
     }))
+  })
+
+  it('never marks a post-submission reconciliation failure as failed', async () => {
+    // The provider already has a real payout batch at this point (creation
+    // succeeded). A ledger-mismatch/lookup error here must stay
+    // reconciliation_required — 'failed' would let a second payout be
+    // requested for the same campaign while this one may still complete.
+    mockQueryRaw
+      .mockResolvedValueOnce([{ status: 'verified' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([FUNDED_CAMPAIGN])
+      .mockResolvedValueOnce([{ count: 0n }])
+      .mockResolvedValueOnce([VERIFIED_PROFILE])
+      .mockResolvedValueOnce([{ count: 0n }])
+      .mockResolvedValueOnce([{ paid_cop: 500_000n, disbursed_cop: 0n }])
+      .mockResolvedValueOnce([{
+        id: PAYOUT_ID, campaign_id: CAMPAIGN_ID, beneficiary_citizen_id: CREATOR_ID,
+        provider_payout_id: null, provider_reference: 'vertice-ref-1',
+        amount_cop: 500_000n, status: 'requested', provider_status: null,
+      }])
+    mockCreateWompiBrebPayout.mockResolvedValue({ payoutId: 'wpayout-1', status: 'TOTAL_PAYMENT', traceId: null })
+    mockGetWompiPayout.mockResolvedValue({ id: 'wpayout-1', reference: 'a-different-reference', status: 'TOTAL_PAYMENT' })
+    mockGetWompiPayoutTransactions.mockResolvedValue([])
+
+    await expect(requestCampaignPayout(baseInput)).rejects.toMatchObject({ code: 'PAYOUT_LEDGER_MISMATCH' })
+    expect(mockExecuteRaw).toHaveBeenCalledWith(expect.objectContaining({
+      strings: expect.arrayContaining([expect.stringContaining("SET status = 'reconciliation_required'")]),
+    }))
+    expect(mockExecuteRaw).not.toHaveBeenCalledWith(expect.objectContaining({
+      strings: expect.arrayContaining([expect.stringContaining("SET status = 'failed'")]),
+    }))
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ result: 'reconciliation_required' }))
   })
 
   it('marks the payout for reconciliation and audits it on a retryable provider error', async () => {
@@ -558,6 +704,43 @@ describe('processWompiPayoutWebhook', () => {
 
     expect(result).toEqual({ duplicate: true, processed: false })
     expect(mockExecuteRaw).not.toHaveBeenCalled()
+  })
+
+  it('resets a previously failed delivery of the same event for reprocessing instead of dropping it', async () => {
+    // A conflicting row that is still 'failed' must be revived — otherwise a
+    // signed event that failed once could never be reconciled again. Any
+    // other prior state (received/processed/ignored) stays untouched.
+    mockVerifyWompiPayoutWebhook.mockReturnValue({
+      event: 'payout.updated', data: { payout: { id: 'wpayout-1' } }, timestamp: '1', checksum: 'a'.repeat(64), eventKey: 'evt-key-retry',
+    })
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'webhook-evt-retry' }])
+      .mockResolvedValueOnce([{ id: PAYOUT_ID }])
+      .mockResolvedValueOnce([{
+        id: PAYOUT_ID, campaign_id: CAMPAIGN_ID, beneficiary_citizen_id: CREATOR_ID,
+        provider_payout_id: 'wpayout-1', provider_reference: 'vertice-ref-1',
+        amount_cop: 500_000n, status: 'processing', provider_status: 'PENDING',
+      }])
+      .mockResolvedValueOnce([{
+        id: PAYOUT_ID, campaign_id: CAMPAIGN_ID, beneficiary_citizen_id: CREATOR_ID,
+        provider_payout_id: 'wpayout-1', provider_reference: 'vertice-ref-1',
+        amount_cop: 500_000n, status: 'processing', provider_status: 'PENDING',
+      }])
+      .mockResolvedValueOnce([{
+        id: PAYOUT_ID, campaign_id: CAMPAIGN_ID, beneficiary_citizen_id: CREATOR_ID,
+        provider_payout_id: 'wpayout-1', provider_reference: 'vertice-ref-1',
+        amount_cop: 500_000n, status: 'paid', provider_status: 'TOTAL_PAYMENT',
+      }])
+    mockGetWompiPayout.mockResolvedValue({ id: 'wpayout-1', reference: 'vertice-ref-1', status: 'TOTAL_PAYMENT', amountInCents: 50_000_000 })
+    mockGetWompiPayoutTransactions.mockResolvedValue([{ id: 'tx-1', status: 'APPROVED', amountInCents: 50_000_000 }])
+
+    const result = await processWompiPayoutWebhook({ body: {} })
+    expect(result).toEqual({ duplicate: false, processed: true })
+
+    const insertQuery = mockQueryRaw.mock.calls[0]?.[0] as { strings?: string[] } | undefined
+    const insertSql = insertQuery?.strings?.join('') ?? ''
+    expect(insertSql).toContain('DO UPDATE SET')
+    expect(insertSql).toContain("status = 'failed'")
   })
 
   it('ignores events without a resolvable provider payout id', async () => {

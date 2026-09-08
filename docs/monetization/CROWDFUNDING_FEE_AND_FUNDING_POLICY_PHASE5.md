@@ -129,9 +129,10 @@ Campaign creation accepts optional `funding_policy`. If omitted:
 
 ## Production migration
 
-Apply:
+Apply, in order:
 
-`apps/api/prisma/migrations/20260908143000_crowdfunding_fee_funding_policy_phase5/migration.sql`
+1. `apps/api/prisma/migrations/20260908143000_crowdfunding_category_policy_alignment/migration.sql` — introduces the `funding_policy` column, its value/category constraints and the reward-cannot-be-flexible rule.
+2. `apps/api/prisma/migrations/20260908145000_crowdfunding_fee_funding_policy_phase5/migration.sql` — adds the funding-policy index, the flexible-payout in-flight index and canonical platform-fee enforcement.
 
 before enabling campaign checkout/payout traffic built against Phase V.
 

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { enqueueJob } from '../../lib/jobs'
 import { requireAdmin } from '../../middleware/auth'
+import { addBrebKeyIssue, brebKeyTypeSchema } from './breb-key.schema'
 import {
   buildAccountingExport,
   getFinanceOperationsStatus,
@@ -55,40 +56,6 @@ const payoutRequestParamsSchema = z.object({ payoutRequestId: uuidSchema })
 const payoutListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(250).default(100),
 })
-
-const brebKeyTypeSchema = z.enum([
-  'ALPHANUMERIC',
-  'MAIL',
-  'PHONE',
-  'IDENTIFICATION',
-  'ESTABLISHMENT_CODE',
-])
-
-type BrebKeyInput = {
-  keyType: z.infer<typeof brebKeyTypeSchema>
-  key: string
-}
-
-function validBrebKey(value: BrebKeyInput): boolean {
-  const key = value.key.trim()
-  switch (value.keyType) {
-    case 'ALPHANUMERIC': return /^@[A-Za-z0-9]{5,20}$/.test(key)
-    case 'MAIL': return z.string().email().safeParse(key).success
-    case 'PHONE': return /^3\d{9}$/.test(key)
-    case 'IDENTIFICATION': return /^[A-Za-z0-9]{1,18}$/.test(key)
-    case 'ESTABLISHMENT_CODE': return /^\d{8}$/.test(key)
-  }
-}
-
-function addBrebKeyIssue(value: BrebKeyInput, ctx: z.RefinementCtx): void {
-  if (!validBrebKey(value)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['key'],
-      message: 'Formato de llave BRE-B inválido para el tipo seleccionado',
-    })
-  }
-}
 
 const payoutPreviewBodySchema = z.object({
   keyType: brebKeyTypeSchema,

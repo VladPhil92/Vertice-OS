@@ -12,6 +12,7 @@ import {
   ALLOWED_FUNDING_MODELS,
   CAMPAIGN_STATUSES,
   CROWDFUNDING_CATEGORIES,
+  CROWDFUNDING_CATEGORY_CATALOG,
   CROWDFUNDING_FEE_POLICY,
   CROWDFUNDING_GUARDRAILS,
   FUNDING_POLICIES,
@@ -22,6 +23,8 @@ import {
   citizenIdParamsSchema,
   contributionCheckoutSchema,
   createCampaignDraftSchema,
+  payoutDestinationPreviewSchema,
+  payoutDestinationRegistrationSchema,
   payoutProfileReviewSchema,
 } from './crowdfunding.schema'
 import {
@@ -38,6 +41,10 @@ import {
   reviewCampaign,
   reviewPayoutProfile,
 } from './crowdfunding.compliance.service'
+import {
+  previewCampaignPayoutDestination,
+  registerVerifiedPayoutDestination,
+} from '../billing/crowdfunding-payout.service'
 
 function sendMutation<T>(reply: FastifyReply, result: IdempotentMutationResult<T>) {
   reply.header('Idempotency-Key', result.idempotencyKey)
@@ -48,6 +55,7 @@ function sendMutation<T>(reply: FastifyReply, result: IdempotentMutationResult<T
 export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
   app.get('/config', async (_request, reply) => reply.send({
     categories: CROWDFUNDING_CATEGORIES,
+    categoryCatalog: CROWDFUNDING_CATEGORY_CATALOG,
     fundingModels: ALLOWED_FUNDING_MODELS,
     fundingPolicies: FUNDING_POLICIES,
     campaignStatuses: CAMPAIGN_STATUSES,
@@ -68,6 +76,40 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/me/payout-readiness/request-review', { preHandler: requireVerified }, async (request, reply) => {
     return reply.send(await requestPayoutReview(request.citizen.sub))
+  })
+
+  // Self-service only: the beneficiary is the only one who may resolve and
+  // confirm the BRE-B destination bound to their own payout profile. An
+  // admin can request a payout, but only to whatever destination the
+  // beneficiary already verified here.
+  app.post('/me/payout-destination/preview', { preHandler: requireVerified }, async (request, reply) => {
+    const body = payoutDestinationPreviewSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({
+        error: 'Llave BRE-B inválida',
+        code: 'INVALID_BREB_DESTINATION',
+        details: body.error.flatten(),
+      })
+    }
+    return reply.send(await previewCampaignPayoutDestination(body.data))
+  })
+
+  app.post('/me/payout-destination', { preHandler: requireVerified }, async (request, reply) => {
+    const body = payoutDestinationRegistrationSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({
+        error: 'Destino de desembolso inválido',
+        code: 'INVALID_BREB_DESTINATION',
+        details: body.error.flatten(),
+      })
+    }
+    return reply.send(await registerVerifiedPayoutDestination({
+      citizenId: request.citizen.sub,
+      key: body.data.key,
+      keyType: body.data.keyType,
+      confirmedHolderName: body.data.confirmedHolderName,
+      confirmedFinancialEntityCode: body.data.confirmedFinancialEntityCode,
+    }))
   })
 
   app.get(
