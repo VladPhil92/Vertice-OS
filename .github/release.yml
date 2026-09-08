@@ -1,0 +1,49 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+    authors:
+      - dependabot
+  categories:
+    - title: 🚨 Security, identity and authority
+      labels:
+        - security
+        - identity
+        - auth
+    - title: 💳 Crowdfunding and financial rails
+      labels:
+        - crowdfunding
+        - payments
+        - finance
+    - title: 🏛 Civic governance and community
+      labels:
+        - governance
+        - community
+        - civic
+    - title: 📱 Mobile
+      labels:
+        - mobile
+    - title: 🌐 Web and dashboard
+      labels:
+        - web
+        - dashboard
+    - title: ⚙️ API, data and infrastructure
+      labels:
+        - api
+        - database
+        - infrastructure
+        - devops
+    - title: 🤖 Civic AI
+      labels:
+        - ai
+    - title: 🧪 Quality and release engineering
+      labels:
+        - testing
+        - ci
+        - release
+    - title: 📚 Documentation
+      labels:
+        - documentation
+    - title: Other Changes
+      labels:
+        - "*"
