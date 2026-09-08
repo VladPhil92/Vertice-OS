@@ -10,16 +10,14 @@ import {
 } from './blockchain'
 import { reconcileFinanceLedger } from '../modules/billing/finance-operations.service'
 import { reconcileCampaignPayout } from '../modules/billing/crowdfunding-payout.service'
-
-// Cola durable en Postgres para trabajo operacional que no debe perderse si el
-// proceso cae a mitad de camino. El worker reclama con FOR UPDATE SKIP LOCKED y
-// reintenta con backoff exponencial hasta max_attempts.
+import { publishScheduledCivicPublication } from '../modules/publishing/publishing.service'
 
 export type JobType =
   | 'mint_identity_badge'
   | 'record_voting_result'
   | 'reconcile_payment_ledger'
   | 'reconcile_crowdfunding_payout'
+  | 'publish_civic_update'
 
 export interface MintIdentityBadgePayload {
   citizenId: string
@@ -48,11 +46,16 @@ export interface ReconcileCrowdfundingPayoutPayload {
   requestedByCitizenId?: string | null
 }
 
+export interface PublishCivicUpdatePayload {
+  publicationId: string
+}
+
 type JobPayload =
   | MintIdentityBadgePayload
   | RecordVotingResultPayload
   | ReconcilePaymentLedgerPayload
   | ReconcileCrowdfundingPayoutPayload
+  | PublishCivicUpdatePayload
 
 interface JobRow {
   id: number
@@ -178,6 +181,10 @@ async function handleCrowdfundingPayoutReconciliation(payload: ReconcileCrowdfun
   })
 }
 
+async function handlePublishCivicUpdate(payload: PublishCivicUpdatePayload): Promise<void> {
+  await publishScheduledCivicPublication(payload.publicationId)
+}
+
 export async function runJob(job: JobRow): Promise<void> {
   try {
     switch (job.type) {
@@ -192,6 +199,9 @@ export async function runJob(job: JobRow): Promise<void> {
         break
       case 'reconcile_crowdfunding_payout':
         await handleCrowdfundingPayoutReconciliation(job.payload as ReconcileCrowdfundingPayoutPayload)
+        break
+      case 'publish_civic_update':
+        await handlePublishCivicUpdate(job.payload as PublishCivicUpdatePayload)
         break
     }
     await completeJob(job.id)
