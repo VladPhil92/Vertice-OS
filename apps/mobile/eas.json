@@ -9,10 +9,25 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "preview"
+      }
+    },
+    "preview-simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "production"
+      }
     }
   },
   "submit": {
