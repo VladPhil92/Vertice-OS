@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto'
 import { config } from '../../../config'
 import {
+  WompiPayoutApiError,
+  createWompiBrebPayout,
+  findWompiPayoutByReference,
+  getWompiPayout,
   getWompiPayoutConfigurationState,
+  getWompiPayoutTransactions,
+  resolveWompiBrebKey,
   verifyWompiPayoutWebhook,
 } from '../wompi-payouts.provider'
 
@@ -109,5 +115,141 @@ describe('verifyWompiPayoutWebhook', () => {
     }
 
     expect(() => verifyWompiPayoutWebhook({ body })).toThrow('Firma de payout inválida.')
+  })
+})
+
+describe('Wompi payout provider network contract', () => {
+  const originalFetch = global.fetch
+
+  beforeEach(() => {
+    mutableConfig.WOMPI_PAYOUTS_API_KEY = 'sandbox-key-with-enough-length'
+    mutableConfig.WOMPI_PAYOUTS_USER_PRINCIPAL_ID = '550e8400-e29b-41d4-a716-446655440001'
+    mutableConfig.WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID = '550e8400-e29b-41d4-a716-446655440002'
+    mutableConfig.WOMPI_PAYOUTS_EVENT_SECRET = 'signed-event-secret-with-enough-length'
+    mutableConfig.PAYOUT_DESTINATION_PEPPER = 'destination-pepper-with-at-least-thirty-two-characters'
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it('fails closed when the provider is not fully configured', async () => {
+    mutableConfig.WOMPI_PAYOUTS_API_KEY = undefined
+
+    await expect(getWompiPayout('payout-1')).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'PAYOUT_PROVIDER_UNAVAILABLE',
+    })
+  })
+
+  it('marks a network failure as retryable', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch
+
+    await expect(getWompiPayout('payout-1')).rejects.toMatchObject({ code: 'WOMPI_PAYOUT_API_ERROR', retryable: true })
+  })
+
+  it('marks a 5xx response as retryable and a 4xx response as definitive', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(null, { status: 500 })) as unknown as typeof fetch
+    await expect(getWompiPayout('payout-1')).rejects.toMatchObject({ retryable: true })
+
+    global.fetch = jest.fn().mockResolvedValue(new Response(null, { status: 404 })) as unknown as typeof fetch
+    await expect(getWompiPayout('payout-1')).rejects.toMatchObject({ retryable: false })
+  })
+
+  it('resolves a BRE-B key preview from the provider envelope', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        holderName: 'Juana Pérez',
+        financialEntity: { name: 'Banco Ejemplo', code: '1234' },
+        keyType: 'MAIL',
+        keyValue: 'juana@example.com',
+      },
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const preview = await resolveWompiBrebKey({ key: 'juana@example.com', keyType: 'MAIL' })
+
+    expect(preview).toEqual({
+      holderName: 'Juana Pérez',
+      financialEntity: { name: 'Banco Ejemplo', code: '1234' },
+      keyType: 'MAIL',
+      keyValue: 'juana@example.com',
+    })
+  })
+
+  it('rejects a BRE-B preview response missing required fields', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { holderName: 'Juana Pérez' },
+    }), { status: 200 })) as unknown as typeof fetch
+
+    await expect(resolveWompiBrebKey({ key: 'juana@example.com', keyType: 'MAIL' }))
+      .rejects.toBeInstanceOf(WompiPayoutApiError)
+  })
+
+  it('creates a BRE-B payout and forwards the idempotency key header', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { id: 'payout-99', status: 'PENDING_APPROVAL' },
+      meta: { trace_id: 'trace-1' },
+    }), { status: 200 }))
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await createWompiBrebPayout({
+      reference: 'vertice-ref-1',
+      transactionReference: 'vp-tx-1',
+      idempotencyKey: 'idem-key-1',
+      amountInCents: 500_000,
+      destination: { key: 'juana@example.com', keyType: 'MAIL', name: 'Juana Pérez', email: 'juana@example.com' },
+    })
+
+    expect(result).toEqual({ payoutId: 'payout-99', status: 'PENDING_APPROVAL', traceId: 'trace-1' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/payouts'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'idempotency-key': 'idem-key-1' }),
+      }),
+    )
+  })
+
+  it('finds a payout batch by reference among listed payouts', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        items: [
+          { id: 'payout-1', reference: 'other-ref', status: 'PENDING' },
+          { id: 'payout-2', reference: 'vertice-ref-1', status: 'PENDING_APPROVAL' },
+        ],
+      },
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const found = await findWompiPayoutByReference('vertice-ref-1')
+
+    expect(found).toEqual({ id: 'payout-2', reference: 'vertice-ref-1', status: 'PENDING_APPROVAL', amountInCents: undefined, totalTransactions: undefined })
+  })
+
+  it('returns null when no listed payout matches the reference', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({ data: { items: [] } }), { status: 200 })) as unknown as typeof fetch
+
+    expect(await findWompiPayoutByReference('missing-ref')).toBeNull()
+  })
+
+  it('rejects a payout lookup whose response cannot be parsed as a batch', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 200 })) as unknown as typeof fetch
+
+    await expect(getWompiPayout('payout-1')).rejects.toBeInstanceOf(WompiPayoutApiError)
+  })
+
+  it('lists payout transactions mapped from the provider envelope', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        transactions: [
+          { id: 'tx-1', status: 'APPROVED', amountInCents: 500_000 },
+          { id: 'tx-2', status: 'FAILED', failureReason: { code: 'INSUFFICIENT_FUNDS', message: 'No hay fondos' } },
+        ],
+      },
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const transactions = await getWompiPayoutTransactions('payout-1')
+
+    expect(transactions).toHaveLength(2)
+    expect(transactions[1].failureReason).toEqual({ code: 'INSUFFICIENT_FUNDS', message: 'No hay fondos' })
   })
 })
