@@ -27,4 +27,31 @@ export const createCampaignDraftSchema = z.object({
   }
 })
 
+export const campaignIdParamsSchema = z.object({
+  campaignId: z.string().uuid(),
+})
+
+export const citizenIdParamsSchema = z.object({
+  citizenId: z.string().uuid(),
+})
+
+export const contributionCheckoutSchema = z.object({
+  amount_cop: z.number().int().min(1_000).max(20_000_000),
+  platform_tip_cop: z.number().int().min(0).max(500_000).default(0),
+  is_anonymous: z.boolean().default(false),
+})
+
+export const campaignReviewSchema = z.object({
+  decision: z.enum(['approve', 'reject', 'suspend']),
+  notes: z.string().trim().max(2_000).optional(),
+})
+
+export const payoutProfileReviewSchema = z.object({
+  decision: z.enum(['approve', 'reject', 'suspend']),
+  provider_reference: z.string().trim().min(3).max(191).optional(),
+  notes: z.string().trim().max(2_000).optional(),
+})
+
 export type CreateCampaignDraftInput = z.infer<typeof createCampaignDraftSchema>
+export type CampaignReviewInput = z.infer<typeof campaignReviewSchema>
+export type PayoutProfileReviewInput = z.infer<typeof payoutProfileReviewSchema>
