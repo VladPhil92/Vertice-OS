@@ -8,17 +8,13 @@ import {
   recordProposalVoting,
   buildProposalContentHash,
 } from './blockchain'
+import { reconcileFinanceLedger } from '../modules/billing/finance-operations.service'
 
-// Cola durable en Postgres. Reemplaza el patrón "enviar y olvidar"
-// (`.catch(() => null)`) para las dos operaciones que antes fallaban en
-// silencio si el proceso caía a mitad de camino: emisión de badges SBT y
-// registro de resultados de votación en VotingRegistry. Un worker en el
-// mismo proceso de la API reclama trabajos con `FOR UPDATE SKIP LOCKED` y
-// reintenta con backoff exponencial hasta `max_attempts` antes de marcarlos
-// 'failed' — no requiere infraestructura adicional (Redis Streams, SQS, etc.),
-// solo la base de datos que ya existe.
+// Cola durable en Postgres para trabajo operacional que no debe perderse si el
+// proceso cae a mitad de camino. El worker reclama con FOR UPDATE SKIP LOCKED y
+// reintenta con backoff exponencial hasta max_attempts.
 
-export type JobType = 'mint_identity_badge' | 'record_voting_result'
+export type JobType = 'mint_identity_badge' | 'record_voting_result' | 'reconcile_payment_ledger'
 
 export interface MintIdentityBadgePayload {
   citizenId: string
@@ -38,7 +34,11 @@ export interface RecordVotingResultPayload {
   ipfsResultUri: string | null
 }
 
-type JobPayload = MintIdentityBadgePayload | RecordVotingResultPayload
+export interface ReconcilePaymentLedgerPayload {
+  requestedByCitizenId?: string | null
+}
+
+type JobPayload = MintIdentityBadgePayload | RecordVotingResultPayload | ReconcilePaymentLedgerPayload
 
 interface JobRow {
   id: number
@@ -48,20 +48,10 @@ interface JobRow {
   max_attempts: number
 }
 
-// Subconjunto de PrismaClient que también implementa Prisma.TransactionClient
-// — permite encolar un job dentro de la misma transacción que el cambio de
-// estado que lo origina, sin acoplar este módulo al tipo completo del cliente.
 interface SqlRunner {
   $queryRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: unknown[]): Promise<T>
 }
 
-/**
- * Encola un trabajo. Si se pasa `client` (un `tx` de `prisma.$transaction`),
- * el INSERT participa de esa transacción: si el resto de la transacción hace
- * rollback, el job nunca llega a existir — evita el caso en que el estado
- * cambia pero el trabajo que debía dispararse se pierde porque el proceso
- * cayó justo entre ambas operaciones.
- */
 export async function enqueueJob(
   type: JobType,
   payload: JobPayload,
@@ -72,9 +62,6 @@ export async function enqueueJob(
   `)
 }
 
-// Exportada además de usarse internamente por startJobWorker(): permite a los
-// tests ejercitar reclamo/ejecución/backoff sin depender de temporizadores
-// reales.
 export async function claimNextJob(): Promise<JobRow | null> {
   const rows = await prisma.$queryRaw<JobRow[]>(Prisma.sql`
     UPDATE jobs
@@ -120,8 +107,6 @@ async function failJob(id: number, attempts: number, maxAttempts: number, error:
   logger.error(`[jobs] job ${id} falló (intento ${attempts}/${maxAttempts}), reintenta en ${backoffSeconds}s: ${message}`)
 }
 
-// ── Handlers ────────────────────────────────────────────────────────────────
-
 async function handleMintIdentityBadge(payload: MintIdentityBadgePayload): Promise<void> {
   const tokenURI = buildCitizenBadgeURI(payload.did, 2)
   const tokenId = await mintCitizenBadge(payload.walletAddress, payload.did, tokenURI)
@@ -161,17 +146,28 @@ async function handleRecordVotingResult(payload: RecordVotingResultPayload): Pro
   }
 }
 
+async function handlePaymentLedgerReconciliation(payload: ReconcilePaymentLedgerPayload): Promise<void> {
+  const result = await reconcileFinanceLedger({
+    actorId: payload.requestedByCitizenId ?? null,
+    triggerKind: 'job',
+    limit: 100,
+  })
+  if (result.status === 'failed') {
+    throw new Error(`payment reconciliation run ${result.id} failed (${result.failed}/${result.scanned})`)
+  }
+}
+
 export async function runJob(job: JobRow): Promise<void> {
   try {
-    // El payload llega como JSONB crudo desde Postgres — su forma real solo
-    // está garantizada por lo que enqueueJob() escribió para cada JobType, de
-    // ahí el cast explícito en vez de un mapa de handlers tipado con `any`.
     switch (job.type) {
       case 'mint_identity_badge':
         await handleMintIdentityBadge(job.payload as MintIdentityBadgePayload)
         break
       case 'record_voting_result':
         await handleRecordVotingResult(job.payload as RecordVotingResultPayload)
+        break
+      case 'reconcile_payment_ledger':
+        await handlePaymentLedgerReconciliation(job.payload as ReconcilePaymentLedgerPayload)
         break
     }
     await completeJob(job.id)
@@ -181,16 +177,8 @@ export async function runJob(job: JobRow): Promise<void> {
   }
 }
 
-// ── Worker ─────────────────────────────────────────────────────────────────
-
 let stopped = true
 
-/**
- * Arranca un poller en el mismo proceso de la API. No hace falta un worker
- * separado ni infraestructura adicional para el volumen esperado en el
- * piloto — si el volumen crece, el mismo esquema de tabla sirve para mover
- * el consumo a un proceso dedicado sin cambiar el contrato de enqueueJob().
- */
 export function startJobWorker(intervalMs = 5000): () => void {
   stopped = false
 

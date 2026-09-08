@@ -32,6 +32,7 @@ import { eventsRoutes } from './modules/events/events.routes'
 import { notificationsRoutes } from './modules/notifications/notifications.routes'
 import { workflowRoutes } from './modules/workflows/workflow.routes'
 import { billingRoutes } from './modules/billing/billing.routes'
+import { financeOperationsRoutes } from './modules/billing/finance-operations.routes'
 import { crowdfundingRoutes } from './modules/crowdfunding/crowdfunding.routes'
 
 initSentry()
@@ -129,9 +130,6 @@ export function buildApp() {
     timestamp: new Date().toISOString(),
   }))
 
-  // PostgreSQL and Redis are the only deployment-blocking runtime dependencies.
-  // Neo4j and feature-scoped integrations can degrade independently and are
-  // surfaced below without leaking secrets, provider names, addresses or URLs.
   app.get('/health/ready', async (_request, reply) => {
     const [redisProbe, databaseProbe, neo4jProbe] = await Promise.allSettled([
       withTimeout('redis', redis.ping()),
@@ -158,9 +156,6 @@ export function buildApp() {
 
     const capabilities = getFeatureCapabilities()
     const healthy = checks.redis === 'ok' && checks.database === 'ok'
-    // "disabled" is a deliberate feature state and does not make the core API
-    // unhealthy. "misconfigured" means an operator enabled part of a feature
-    // but omitted another required value and should be visible as degradation.
     const featureDegraded = Object.values(capabilities).some((state) => state === 'misconfigured')
     const dependencyDegraded = checks.neo4j !== 'ok'
 
@@ -176,10 +171,6 @@ export function buildApp() {
     })
   })
 
-  // On-demand operational canary for CTG One federation. This endpoint never
-  // uses a real authorization code and never returns credentials or provider
-  // configuration. It exists to distinguish secret/configuration drift from
-  // network/provider failures without weakening the fail-closed auth path.
   app.get('/health/federation', async (_request, reply) => {
     const probe = await probeCtgOneFederation()
     return reply.status(probe.status === 'ready' ? 200 : 503).send({
@@ -194,8 +185,6 @@ export function buildApp() {
   app.register(mobileAuthRoutes, { prefix: '/auth/mobile' })
   app.register(superadminControlPlaneRoutes, { prefix: '/superadmin' })
   app.register(dashboardRoutes, { prefix: '/dashboard' })
-  // P1.0 keeps JSON certification administration outside the raw-body webhook
-  // parser while preserving the common identity provider namespace.
   app.register(identityProviderCertificationRoutes, { prefix: '/identity/provider-certifications' })
   app.register(identityProviderSessionRoutes, { prefix: '/identity/providers' })
   app.register(identityProviderWebhookRoutes, { prefix: '/identity/providers' })
@@ -210,6 +199,7 @@ export function buildApp() {
   app.register(workflowRoutes, { prefix: '/workflows' })
   app.register(notificationsRoutes, { prefix: '/notifications' })
   app.register(billingRoutes, { prefix: '/billing' })
+  app.register(financeOperationsRoutes, { prefix: '/billing/admin/finance' })
   app.register(crowdfundingRoutes, { prefix: '/crowdfunding' })
   app.register(eventsRoutes)
 
