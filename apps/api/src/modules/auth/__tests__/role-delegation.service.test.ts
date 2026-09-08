@@ -29,6 +29,11 @@ function sqlText(mock: jest.Mock, callIndex: number): string {
   return query?.strings?.join('') ?? query?.sql ?? ''
 }
 
+function sqlValues(mock: jest.Mock, callIndex: number): unknown[] {
+  const query = mock.mock.calls[callIndex]?.[0] as { values?: unknown[] } | undefined
+  return query?.values ?? []
+}
+
 beforeEach(() => {
   jest.resetAllMocks()
   mockTxCitizenFindUnique.mockResolvedValue({ id: 'target-id' })
@@ -45,11 +50,12 @@ describe('P2 safe role delegation', () => {
       .mockResolvedValueOnce([]) // advisory lock
       .mockResolvedValueOnce([{ role: 'citizen', source: 'session_baseline' }])
 
+    const reason = 'Necesita moderar evidencias del piloto'
     const result = await grantCitizenRole(
       'actor-id',
       'target-id',
       'moderator',
-      'Necesita moderar evidencias del piloto',
+      reason,
     )
 
     expect(result).toEqual({
@@ -59,9 +65,16 @@ describe('P2 safe role delegation', () => {
     })
     expect(sqlText(mockTxQueryRaw, 0)).toContain('pg_advisory_xact_lock')
     expect(sqlText(mockTxExecuteRaw, 0)).toContain('INSERT INTO citizen_role_grants')
-    expect(sqlText(mockTxExecuteRaw, 0)).toContain('superadmin_dashboard')
+    expect(sqlValues(mockTxExecuteRaw, 0)).toEqual(expect.arrayContaining([
+      'moderator',
+      'superadmin_dashboard',
+      'actor-id',
+    ]))
     expect(sqlText(mockTxExecuteRaw, 1)).toContain('INSERT INTO admin_audit_log')
-    expect(sqlText(mockTxExecuteRaw, 1)).toContain('role.grant')
+    expect(sqlValues(mockTxExecuteRaw, 1)).toEqual(expect.arrayContaining([
+      'role.grant',
+      reason,
+    ]))
     expect(mockTxCitizenUpdate).toHaveBeenCalledWith({
       where: { id: 'target-id' },
       data: { role: 'moderator' },
@@ -145,11 +158,12 @@ describe('P2 safe role delegation', () => {
         { role: 'moderator', source: 'superadmin_dashboard' },
       ])
 
+    const reason = 'Finalizó la responsabilidad de moderación'
     const result = await revokeCitizenRole(
       'actor-id',
       'target-id',
       'moderator',
-      'Finalizó la responsabilidad de moderación',
+      reason,
     )
 
     expect(result).toEqual({
@@ -161,7 +175,10 @@ describe('P2 safe role delegation', () => {
     expect(sqlText(mockTxExecuteRaw, 1)).toContain('UPDATE sessions')
     expect(sqlText(mockTxExecuteRaw, 1)).toContain("SET active_role = 'citizen'")
     expect(sqlText(mockTxExecuteRaw, 2)).toContain('INSERT INTO admin_audit_log')
-    expect(sqlText(mockTxExecuteRaw, 2)).toContain('role.revoke')
+    expect(sqlValues(mockTxExecuteRaw, 2)).toEqual(expect.arrayContaining([
+      'role.revoke',
+      reason,
+    ]))
     expect(mockTxCitizenUpdate).toHaveBeenCalledWith({
       where: { id: 'target-id' },
       data: { role: 'citizen' },
