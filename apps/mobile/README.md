@@ -14,7 +14,7 @@ Native iOS/Android client for VÉRTICE OS, built with Expo SDK 57, React Native 
 
 ```bash
 cp apps/mobile/.env.example apps/mobile/.env
-pnpm install
+pnpm install --frozen-lockfile
 pnpm mobile
 ```
 
@@ -45,7 +45,7 @@ The native surface reuses the canonical backend session service. It does not imp
 
 ### Phase 2A — Civic Core Parity
 
-The mobile app now exposes five primary tabs: Inicio, Acciones, Territorio, Gobernanza and Perfil.
+The mobile app exposes five primary tabs: Inicio, Acciones, Territorio, Gobernanza and Perfil.
 
 Implemented:
 
@@ -58,27 +58,54 @@ Implemented:
 - proposal endorsements through `POST /governance/proposals/:id/endorse`;
 - direct voting through `POST /governance/proposals/:id/vote`;
 - reconstructible public tally reads through `GET /governance/proposals/:id/tally`;
-- generated `Idempotency-Key` headers for critical native mutations.
+- retry-safe `Idempotency-Key` reuse for uncertain native mutations.
 
 The React Native client does not decide eligibility, reputation, voting authority, report status or verification. Those rules remain server-side.
 
-### Phase 2B — Native device capabilities
+### Phase 2B — Native Device & Territorial Evidence Core
 
-Still pending and intentionally isolated from 2A because these require native dependencies, permissions and build certification:
+Implemented in code:
 
-- camera/gallery capture and provider-backed media upload intents;
-- automatic device geolocation;
-- interactive territorial map;
-- push notifications and deep links to pending civic work;
-- richer action/report detail navigation;
-- native workflows, community feed and identity-assurance surfaces;
-- EAS device/simulator smoke evidence for both Android and iOS.
+- `expo-location` foreground-only permission and high-accuracy current-position capture;
+- report composer can populate explicit coordinates from the device GPS;
+- nearby territorial incidents using `GET /territorial/reports/nearby` with a 3 km radius;
+- `expo-image-picker` camera and photo-library capture for image evidence;
+- microphone permission disabled because this slice captures images only;
+- canonical provider-backed evidence flow: upload intent → direct provider upload → server confirmation → `media_asset_ids` on report creation;
+- fail-closed evidence behavior when Cloudflare Images is not operational;
+- deep-linkable report detail at `vertice://report/<id>` through the Expo Router `report/[id]` route;
+- report detail renders canonical location, evidence URLs and lifecycle timestamps;
+- external map handoff for the canonical coordinates;
+- permanent CI contract validates dependencies, config plugins, foreground-only location, media confirmation flow, TypeScript and Android/iOS Expo export.
+
+Privacy and authority constraints:
+
+- location is requested only when the citizen explicitly activates GPS; Phase 2B does not request background location;
+- a GPS coordinate is report evidence/context, not identity assurance or voting eligibility;
+- a local image URI is never treated as published evidence;
+- the server remains authoritative for media ownership, provider metadata and attachability;
+- these device capabilities do not change civic reputation formulas, authority or financial state.
+
+### Still external / not certified
+
+The following are deliberately not described as READY merely because adjacent code exists:
+
+- physical-device permission-prompt smoke tests on Android and iOS;
+- EAS preview binaries signed with real project credentials;
+- interactive in-app map SDK; Phase 2B currently provides proximity and external map handoff;
+- remote push delivery through APNs/FCM/Expo Push Service and notification token lifecycle;
+- production Cloudflare Images credentials/provider canary;
+- App Store / Play Store signing, privacy declarations and review;
+- native community/workflows/identity-assurance/crowdfunding parity.
 
 ## Quality gates
 
 ```bash
-pnpm mobile:typecheck
-pnpm --filter @vertice/mobile doctor
+node apps/mobile/scripts/verify-device-capabilities.mjs
+pnpm --filter @vertice/mobile typecheck
+pnpm --filter @vertice/mobile build
 ```
 
-The root CI also runs the workspace `lint`, `typecheck` and build contracts. Store submission remains an operator task because Apple/Google developer accounts, signing identities, privacy declarations and store metadata are external credentials/governance concerns.
+`Mobile Core Parity` runs the same dependency/config/type/export contract in CI with `pnpm install --frozen-lockfile`.
+
+Code that passes this gate is **IMPLEMENTED** and exportable. It is not automatically **READY** or **CERTIFIED** on physical devices, production media providers, push providers or app stores.
