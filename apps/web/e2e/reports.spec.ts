@@ -4,7 +4,7 @@
  */
 import { test, expect, type Page } from '@playwright/test'
 
-const API = 'http://localhost:4000'
+const API = '**/api'
 
 const MOCK_REPORTS = [
   {
@@ -33,14 +33,11 @@ async function setupAuth(page: Page) {
   await page.context().addCookies([
     { name: 'vertice_auth', value: '1', domain: 'localhost', path: '/' },
   ])
-  // localStorage is set after DOMContentLoaded
   await page.addInitScript(() => {
     localStorage.setItem('access_token', 'test-jwt-token')
     localStorage.setItem('citizen_id', '550e8400-e29b-41d4-a716-446655440000')
   })
 }
-
-// ─── Reports list ─────────────────────────────────────────────────────────────
 
 test.describe('Reports list', () => {
   test.beforeEach(async ({ page }) => {
@@ -82,7 +79,8 @@ test.describe('Reports list', () => {
   })
 
   test('shows error state when API fails', async ({ page }) => {
-    await page.route(`${API}/territorial/reports`, (route) =>
+    await page.unroute(`${API}/territorial/reports*`)
+    await page.route(`${API}/territorial/reports*`, (route) =>
       route.fulfill({ status: 500, json: { error: 'Internal error' } }),
     )
     await page.goto('/dashboard/reports')
@@ -95,12 +93,9 @@ test.describe('Reports list', () => {
   })
 })
 
-// ─── Create report ────────────────────────────────────────────────────────────
-
 test.describe('Create report', () => {
   test.beforeEach(async ({ page, context }) => {
     await setupAuth(page)
-    // Grant geolocation so the form isn't stuck in 'detecting' state
     await context.grantPermissions(['geolocation'])
     await context.setGeolocation({ latitude: 10.391, longitude: -75.4794 })
   })
@@ -131,7 +126,6 @@ test.describe('Create report', () => {
     })
 
     await page.goto('/dashboard/reports/new')
-
     await page.getByLabel(/categoría/i).selectOption('infraestructura')
     await page.getByLabel(/título/i).fill('Calle en mal estado cerca del mercado')
     await page.getByLabel(/descripción/i).fill(
