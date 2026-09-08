@@ -16,7 +16,21 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Vértice usa tu ubicación mientras reportas para asociar el incidente al lugar correcto."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Vértice accede a tus fotos solo cuando eliges evidencia para un reporte ciudadano.",
+          "cameraPermission": "Vértice usa la cámara solo cuando decides capturar evidencia para un reporte ciudadano.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
