@@ -13,6 +13,7 @@ import {
   changePassword,
 } from './auth.service'
 import { exchangeCtgOneFederation } from './federation.service'
+import { provisionCtgOneForCitizen } from './ctgone-provisioning.service'
 import {
   CITIZEN_ROLES,
   getRoleContext,
@@ -94,6 +95,15 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     reply.setCookie(REFRESH_COOKIE, refresh_token, cookieOpts)
     return reply.send(tokenResponse)
+  })
+
+  // Reverse ecosystem bridge. The browser proves its VÉRTICE session to this
+  // API; only the API speaks to CTG One over the existing service trust secret.
+  app.post('/ctgone/provision', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    return reply.send(await provisionCtgOneForCitizen(request.citizen.sub))
   })
 
   app.post('/refresh', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
