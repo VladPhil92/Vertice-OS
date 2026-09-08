@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, User, Loader, AlertCircle, Sparkles, RotateCcw } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { Send, Bot, User, Loader, AlertCircle, Sparkles, RotateCcw, MapPin, ShieldCheck } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { useDashboardRuntime } from '@/components/dashboard/DashboardIdentityProvider'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
-  intent?: string
   agent?: string
+  auditId?: string
   error?: boolean
 }
 
@@ -26,92 +26,67 @@ interface AIQueryResponse {
 
 const SESSION_STORAGE_KEY = 'vertice:ai:session_id'
 
-// ─── Suggested prompts ───────────────────────────────────────────────────────
-
 const SUGGESTED = [
-  { label: '¿Cómo presento un derecho de petición?', icon: '⚖️' },
-  { label: '¿Qué propuestas están en debate actualmente?', icon: '🗳️' },
-  { label: '¿Cuáles son los principales problemas territoriales?', icon: '🗺️' },
-  { label: 'Ayúdame a redactar una propuesta ciudadana', icon: '📝' },
+  { label: '¿Qué situaciones de mi territorio requieren atención?', icon: '🗺️', topic: 'territorial' },
+  { label: 'Ayúdame a mejorar una propuesta ciudadana', icon: '📝', topic: 'governance' },
+  { label: '¿Cómo preparo un derecho de petición?', icon: '⚖️', topic: 'legal' },
+  { label: 'Explícame cómo se evalúa evidencia e impacto en VÉRTICE', icon: '📊', topic: 'reputation' },
 ]
 
-// ─── Agent label map ──────────────────────────────────────────────────────────
-
 const AGENT_LABEL: Record<string, string> = {
-  territorial:  'Análisis Territorial',
-  governance:   'Gobernanza',
-  legal:        'Asesoría Legal',
-  reputation:   'Reputación',
-  policy:       'Política Pública',
-  router:       'IA Cívica',
+  territorial: 'Análisis territorial',
+  governance: 'Gobernanza',
+  legal: 'Asesoría legal',
+  reputation: 'Impacto y reputación',
+  policy: 'Política pública',
+  router: 'IA Cívica',
 }
-
-// ─── Message bubble ───────────────────────────────────────────────────────────
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user'
-
   return (
     <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      {!isUser && (
-        <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-gold/30 bg-gold/10">
-          <Bot size={13} className="text-gold" />
-        </div>
-      )}
-
-      <div className={`max-w-[78%] space-y-1 ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
-        {msg.agent && !isUser && (
-          <span className="font-mono text-[9px] uppercase tracking-widest text-tertiary">
-            {AGENT_LABEL[msg.agent] ?? msg.agent}
-          </span>
-        )}
-        <div
-          className={[
-            'rounded px-4 py-3 font-mono text-[12px] leading-relaxed',
-            isUser
-              ? 'bg-gold/15 text-primary'
-              : msg.error
-                ? 'border border-red/30 bg-red/5 text-red-400'
-                : 'border border-border bg-surface text-primary',
-          ].join(' ')}
-        >
-          {msg.error && <AlertCircle size={12} className="mb-1.5 inline mr-1.5" />}
+      {!isUser && <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#F1DEA5] bg-[#FFF8DF]"><Bot size={14} className="text-[#9A7000]" /></div>}
+      <div className={`flex max-w-[82%] flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+        {msg.agent && !isUser && <span className="text-[9px] font-extrabold uppercase tracking-[.1em] text-[#7B8799]">{AGENT_LABEL[msg.agent] ?? msg.agent}</span>}
+        <div className={isUser ? 'rounded-2xl rounded-tr-md bg-[#0A2A66] px-4 py-3 text-sm leading-6 text-white' : msg.error ? 'rounded-2xl rounded-tl-md border border-[#F0C7CB] bg-[#FFF7F8] px-4 py-3 text-sm leading-6 text-[#A51E2D]' : 'rounded-2xl rounded-tl-md border border-[#DCE5EF] bg-white px-4 py-3 text-sm leading-6 text-[#30435E]'}>
+          {msg.error && <AlertCircle size={13} className="mr-1 inline" />}
           <span className="whitespace-pre-wrap">{msg.content}</span>
         </div>
+        {msg.auditId && !isUser && <span className="font-mono text-[8px] text-[#9AA5B4]">audit {msg.auditId.slice(0, 12)}…</span>}
       </div>
-
-      {isUser && (
-        <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-border bg-surface">
-          <User size={13} className="text-secondary" />
-        </div>
-      )}
+      {isUser && <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#DCE5EF] bg-white"><User size={14} className="text-[#607087]" /></div>}
     </div>
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function AIAssistantPage() {
+  const searchParams = useSearchParams()
+  const { profile, territory, identityVerified } = useDashboardRuntime()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [topic, setTopic] = useState<string | null>(searchParams.get('topic'))
   const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef  = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const initializedPrompt = useRef(false)
 
-  // Restore session from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY)
     if (stored) setSessionId(stored)
-  }, [])
+    const prompt = searchParams.get('prompt')
+    if (prompt && !initializedPrompt.current) {
+      initializedPrompt.current = true
+      setInput(prompt.slice(0, 4000))
+    }
+  }, [searchParams])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const newConversation = useCallback(async () => {
     if (sessionId) {
-      apiFetch('/ai/session', { method: 'DELETE', body: JSON.stringify({ session_id: sessionId }) }).catch(() => null)
+      void apiFetch('/ai/session', { method: 'DELETE', body: JSON.stringify({ session_id: sessionId }) }).catch(() => null)
       localStorage.removeItem(SESSION_STORAGE_KEY)
     }
     setSessionId(null)
@@ -120,17 +95,13 @@ export default function AIAssistantPage() {
     inputRef.current?.focus()
   }, [sessionId])
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, nextTopic?: string) => {
     const trimmed = text.trim()
     if (!trimmed || loading) return
+    const effectiveTopic = nextTopic ?? topic ?? undefined
+    if (nextTopic) setTopic(nextTopic)
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: trimmed,
-    }
-
-    setMessages(prev => [...prev, userMsg])
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: trimmed }])
     setInput('')
     setLoading(true)
 
@@ -140,162 +111,69 @@ export default function AIAssistantPage() {
         body: JSON.stringify({
           message: trimmed,
           ...(sessionId ? { session_id: sessionId } : {}),
+          ...(profile?.neighborhood ? { neighborhood: profile.neighborhood } : {}),
+          ...(effectiveTopic ? { topic: effectiveTopic } : {}),
         }),
       })
-
-      // Persist new session_id from server
       if (res.session_id && res.session_id !== sessionId) {
         setSessionId(res.session_id)
         localStorage.setItem(SESSION_STORAGE_KEY, res.session_id)
       }
-
-      setMessages(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: res.response,
-          intent: res.intent,
-          agent: res.agent_used,
-        },
-      ])
-    } catch (e) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: (e as Error).message.includes('AI service')
-            ? 'El servicio de IA no está disponible en este momento. Por favor intenta más tarde.'
-            : (e as Error).message,
-          error: true,
-        },
-      ])
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: res.response, agent: res.agent_used, auditId: res.audit_id }])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No fue posible consultar la IA cívica.'
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message.includes('AI service') ? 'El servicio de IA no está disponible en este momento.' : message, error: true }])
     } finally {
       setLoading(false)
       inputRef.current?.focus()
     }
-  }, [sessionId, loading])
+  }, [loading, profile?.neighborhood, sessionId, topic])
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send(input)
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      void send(input)
     }
   }
 
-  const isEmpty = messages.length === 0
-
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col lg:h-screen">
-      {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-6 py-4">
-        <Sparkles size={16} className="text-gold" />
-        <div className="flex-1">
-          <h1 className="font-display text-[15px] font-semibold uppercase tracking-wide text-primary">
-            Asistente Cívico
-          </h1>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-tertiary">
-            Multi-agente · Cartagena{sessionId ? ' · Sesión activa' : ''}
-          </p>
+    <div data-testid="contextual-civic-ai" className="flex h-[calc(100vh-3.5rem)] flex-col bg-[#F7F9FC] lg:h-screen">
+      <header className="border-b border-[#E1E7EF] bg-white px-5 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-5xl items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF8DF] text-[#9A7000]"><Sparkles size={18} /></span>
+          <div className="min-w-0 flex-1"><h1 className="text-sm font-extrabold text-[#0A2A66]">Copiloto cívico</h1><div className="mt-1 flex flex-wrap items-center gap-2 text-[9px] font-semibold uppercase tracking-[.08em] text-[#7B8799]"><span className="inline-flex items-center gap-1"><MapPin size={10} /> {territory}</span>{identityVerified && <span className="inline-flex items-center gap-1 text-[#238A3B]"><ShieldCheck size={10} /> contexto verificado</span>}{sessionId && <span>sesión activa</span>}{topic && <span>· {topic}</span>}</div></div>
+          {messages.length > 0 && <button onClick={() => void newConversation()} disabled={loading} className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-[#DCE5EF] px-3 text-[10px] font-extrabold text-[#607087] disabled:opacity-50"><RotateCcw size={12} /> Nueva</button>}
         </div>
-        {messages.length > 0 && (
-          <button
-            onClick={newConversation}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 font-mono text-[10px] text-secondary transition hover:border-gold/30 hover:text-primary disabled:opacity-40"
-            title="Nueva conversación"
-          >
-            <RotateCcw size={11} />
-            Nueva
-          </button>
-        )}
-      </div>
+      </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        {isEmpty ? (
-          <div className="flex h-full flex-col items-center justify-center">
-            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-gold/20 bg-gold/5">
-              <Sparkles size={28} className="text-gold" />
-            </div>
-            <h2 className="mb-2 font-display text-lg font-semibold text-primary">
-              ¿En qué puedo ayudarte?
-            </h2>
-            <p className="mb-8 max-w-sm text-center font-mono text-[12px] text-secondary">
-              Pregúntame sobre propuestas, reportes territoriales, derechos ciudadanos o
-              cómo participar en la vida cívica de Cartagena.
-            </p>
-            <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">
-              {SUGGESTED.map(({ label, icon }) => (
-                <button
-                  key={label}
-                  onClick={() => send(label)}
-                  className="flex items-start gap-3 rounded border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-gold/30 hover:bg-gold/5"
-                >
-                  <span className="text-base">{icon}</span>
-                  <span className="font-mono text-[11px] leading-relaxed text-secondary">
-                    {label}
-                  </span>
-                </button>
-              ))}
+      <main className="flex-1 overflow-y-auto px-5 py-6 sm:px-6">
+        {messages.length === 0 ? (
+          <div className="mx-auto flex min-h-full max-w-3xl flex-col items-center justify-center py-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0A2A66] text-[#F5B700]"><Sparkles size={27} /></div>
+            <h2 className="mt-5 text-2xl font-extrabold text-[#0A2A66]">Pregunta con contexto de tu territorio</h2>
+            <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-[#607087]">La consulta usa tu barrio cuando está disponible y mantiene memoria de sesión. Para decisiones importantes, contrasta siempre la respuesta con fuentes y evidencia del expediente.</p>
+            <div className="mt-7 grid w-full gap-3 sm:grid-cols-2">
+              {SUGGESTED.map((suggestion) => <button key={suggestion.label} onClick={() => void send(suggestion.label, suggestion.topic)} className="flex items-start gap-3 rounded-2xl border border-[#DCE5EF] bg-white p-4 text-left transition hover:border-[#BFD0E8] hover:bg-[#F9FBFD]"><span className="text-lg">{suggestion.icon}</span><span className="text-xs font-semibold leading-5 text-[#43506A]">{suggestion.label}</span></button>)}
             </div>
           </div>
         ) : (
-          <div className="mx-auto max-w-2xl space-y-5">
-            {messages.map(msg => (
-              <MessageBubble key={msg.id} msg={msg} />
-            ))}
-
-            {loading && (
-              <div className="flex items-center gap-3">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-gold/30 bg-gold/10">
-                  <Bot size={13} className="text-gold" />
-                </div>
-                <div className="flex items-center gap-1.5 rounded border border-border bg-surface px-4 py-3">
-                  <Loader size={12} className="animate-spin text-gold" />
-                  <span className="font-mono text-[11px] text-tertiary">Procesando…</span>
-                </div>
-              </div>
-            )}
-
+          <div className="mx-auto max-w-3xl space-y-5">
+            {messages.map((message) => <MessageBubble key={message.id} msg={message} />)}
+            {loading && <div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF8DF]"><Bot size={14} className="text-[#9A7000]" /></div><div className="inline-flex items-center gap-2 rounded-2xl border border-[#DCE5EF] bg-white px-4 py-3 text-xs font-semibold text-[#607087]"><Loader size={13} className="animate-spin" /> Analizando contexto…</div></div>}
             <div ref={bottomRef} />
           </div>
         )}
-      </div>
+      </main>
 
-      {/* Input */}
-      <div className="border-t border-border bg-bg px-6 py-4">
-        <div className="mx-auto flex max-w-2xl items-end gap-3">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Escribe tu pregunta… (Enter para enviar, Shift+Enter para nueva línea)"
-            rows={1}
-            disabled={loading}
-            className="flex-1 resize-none rounded border border-border bg-surface px-4 py-3 font-mono text-[12px] text-primary placeholder-tertiary transition-colors focus:border-gold/50 focus:outline-none disabled:opacity-50"
-            style={{ maxHeight: '120px', overflowY: 'auto' }}
-            onInput={e => {
-              const el = e.currentTarget
-              el.style.height = 'auto'
-              el.style.height = `${Math.min(el.scrollHeight, 120)}px`
-            }}
-          />
-          <button
-            onClick={() => send(input)}
-            disabled={loading || !input.trim()}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border border-gold/40 bg-gold/10 text-gold transition-colors hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="Enviar"
-          >
-            {loading ? <Loader size={15} className="animate-spin" /> : <Send size={15} />}
-          </button>
+      <footer className="border-t border-[#E1E7EF] bg-white px-5 py-4 sm:px-6">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-end gap-3">
+            <textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} rows={1} disabled={loading} placeholder="Describe qué necesitas analizar…" className="min-h-12 flex-1 resize-none rounded-2xl border border-[#DCE5EF] bg-[#F9FBFD] px-4 py-3 text-sm font-medium text-[#0A2A66] outline-none placeholder:text-[#9AA5B4] focus:border-[#8EACD2] disabled:opacity-50" style={{ maxHeight: '140px', overflowY: 'auto' }} onInput={(event) => { const el = event.currentTarget; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 140)}px` }} />
+            <button onClick={() => void send(input)} disabled={loading || !input.trim()} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#0A2A66] text-white disabled:cursor-not-allowed disabled:opacity-40" aria-label="Enviar consulta">{loading ? <Loader size={16} className="animate-spin" /> : <Send size={16} />}</button>
+          </div>
+          <p className="mt-2 text-center text-[9px] font-semibold text-[#9AA5B4]">IA asistiva · trazabilidad por audit ID · no sustituye verificación humana ni asesoría profesional.</p>
         </div>
-        <p className="mt-2 text-center font-mono text-[9px] uppercase tracking-widest text-tertiary">
-          Las respuestas son generadas por IA · Verifica información importante
-        </p>
-      </div>
+      </footer>
     </div>
   )
 }
