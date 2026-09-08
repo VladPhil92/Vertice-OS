@@ -3,6 +3,7 @@ import {
   getCivicIdentityProviderActivationState,
   getCivicIdentityProofingIngressState,
 } from '../modules/identity/identity-provider-registry'
+import { getMercadoPagoConfigurationState } from '../modules/billing/mercadopago.provider'
 
 function unavailable(message: string, code: string): Error {
   return Object.assign(new Error(message), { statusCode: 503, code })
@@ -67,6 +68,8 @@ export interface FeatureCapabilities {
   ctg_one_federation: CapabilityState
   civic_identity_assurance: CapabilityState
   civic_identity_proofing_ingress: CapabilityState
+  payments: CapabilityState
+  crowdfunding_payments: CapabilityState
   civic_sbt: CapabilityState
   voting_registry: CapabilityState
 }
@@ -87,6 +90,7 @@ function contractCapability(
  * addresses, RPC URLs, or credentials.
  */
 export function getFeatureCapabilities(): FeatureCapabilities {
+  const payments = getMercadoPagoConfigurationState()
   return {
     civic_ai: config.AI_SERVICE_SECRET ? 'ready' : 'disabled',
     voting_crypto: config.VOTE_NULLIFIER_SECRET ? 'ready' : 'disabled',
@@ -94,6 +98,10 @@ export function getFeatureCapabilities(): FeatureCapabilities {
     ctg_one_federation: config.CTG_ONE_FEDERATION_SECRET ? 'ready' : 'disabled',
     civic_identity_assurance: getCivicIdentityProviderActivationState(),
     civic_identity_proofing_ingress: getCivicIdentityProofingIngressState(),
+    payments,
+    crowdfunding_payments: config.CROWDFUNDING_PAYMENTS_ENABLED
+      ? (payments === 'ready' ? 'ready' : 'misconfigured')
+      : 'disabled',
     civic_sbt: contractCapability(config.CIVIC_SBT_ADDRESS, true),
     voting_registry: contractCapability(config.VOTING_REGISTRY_ADDRESS, false),
   }
