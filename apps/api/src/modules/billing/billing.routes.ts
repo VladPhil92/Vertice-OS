@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { requireAuth } from '../../middleware/auth'
+import {
+  executeIdempotentMutation,
+  normalizeRequestedIdempotencyKey,
+} from '../../lib/idempotency'
 import { getBillingCatalog, getEffectiveBillingAccess } from './billing.service'
 import {
   cancelMyProSubscription,
@@ -30,9 +34,7 @@ function webhookDataId(request: FastifyRequest): string | undefined {
 }
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/plans', async (_request, reply) => {
-    return reply.send(getBillingCatalog())
-  })
+  app.get('/plans', async (_request, reply) => reply.send(getBillingCatalog()))
 
   app.get('/me', { preHandler: requireAuth }, async (request, reply) => {
     return reply.send(await getEffectiveBillingAccess(request.citizen.sub))
@@ -48,11 +50,24 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       })
     }
 
-    return reply.status(201).send(await createProCheckout(
-      request.citizen.sub,
-      parsed.data.billingCycle,
-      headerValue(request.headers['idempotency-key']),
-    ))
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: 'billing:pro-checkout',
+      payload: parsed.data,
+      requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+      successStatus: 201,
+      // The same effective key is forwarded to the payment ledger. This binds
+      // the generic API receipt to Mercado Pago checkout reconciliation instead
+      // of creating two unrelated idempotency domains.
+      operation: (effectiveKey) => createProCheckout(
+        request.citizen.sub,
+        parsed.data.billingCycle,
+        effectiveKey,
+      ),
+    })
+    reply.header('Idempotency-Key', result.idempotencyKey)
+    reply.header('Idempotency-Replayed', result.replayed ? 'true' : 'false')
+    return reply.status(result.statusCode).send(result.value)
   })
 
   app.post('/cancel', { preHandler: requireAuth }, async (request, reply) => {
@@ -63,8 +78,8 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await reconcileMyBilling(request.citizen.sub))
   })
 
-  // This endpoint is intentionally unauthenticated at the session layer: its
-  // authority is the provider-scoped HMAC signature, never a browser token.
+  // Provider webhook authority and deduplication remain provider-scoped. It is
+  // intentionally not routed through the citizen idempotency ledger.
   app.post('/webhooks/mercadopago', async (request, reply) => {
     const result = await processMercadoPagoWebhook({
       xSignature: headerValue(request.headers['x-signature']),

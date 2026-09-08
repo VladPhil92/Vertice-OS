@@ -1,5 +1,10 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 import { requireAdmin, requireAuth, requireVerified } from '../../middleware/auth'
+import {
+  executeIdempotentMutation,
+  normalizeRequestedIdempotencyKey,
+  type IdempotentMutationResult,
+} from '../../lib/idempotency'
 import { ENTITLEMENTS } from '../billing/billing.catalog'
 import { requireEntitlement } from '../billing/billing.middleware'
 import { createCrowdfundingContributionCheckout } from '../billing/payment.service'
@@ -32,24 +37,22 @@ import {
   reviewPayoutProfile,
 } from './crowdfunding.compliance.service'
 
-function headerValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value
+function sendMutation<T>(reply: FastifyReply, result: IdempotentMutationResult<T>) {
+  reply.header('Idempotency-Key', result.idempotencyKey)
+  reply.header('Idempotency-Replayed', result.replayed ? 'true' : 'false')
+  return reply.status(result.statusCode).send(result.value)
 }
 
 export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/config', async (_request, reply) => {
-    return reply.send({
-      categories: CROWDFUNDING_CATEGORIES,
-      fundingModels: ALLOWED_FUNDING_MODELS,
-      campaignStatuses: CAMPAIGN_STATUSES,
-      guardrails: CROWDFUNDING_GUARDRAILS,
-      currency: 'COP',
-    })
-  })
+  app.get('/config', async (_request, reply) => reply.send({
+    categories: CROWDFUNDING_CATEGORIES,
+    fundingModels: ALLOWED_FUNDING_MODELS,
+    campaignStatuses: CAMPAIGN_STATUSES,
+    guardrails: CROWDFUNDING_GUARDRAILS,
+    currency: 'COP',
+  }))
 
-  app.get('/campaigns', async (_request, reply) => {
-    return reply.send({ campaigns: await listPublicCampaigns() })
-  })
+  app.get('/campaigns', async (_request, reply) => reply.send({ campaigns: await listPublicCampaigns() }))
 
   app.get('/me/campaigns', { preHandler: requireAuth }, async (request, reply) => {
     return reply.send({ campaigns: await listOwnCampaigns(request.citizen.sub) })
@@ -66,9 +69,7 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     '/me/analytics',
     { preHandler: requireEntitlement(ENTITLEMENTS.CAMPAIGN_ANALYTICS) },
-    async (request, reply) => {
-      return reply.send(await getCampaignAnalytics(request.citizen.sub))
-    },
+    async (request, reply) => reply.send(await getCampaignAnalytics(request.citizen.sub)),
   )
 
   app.post('/campaigns', { preHandler: requireAuth }, async (request, reply) => {
@@ -81,12 +82,19 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
       })
     }
 
-    const campaign = await createCampaignDraft(request.citizen.sub, parsed.data)
-    return reply.status(201).send({
-      campaign,
-      nextStep: 'compliance_review',
-      activationRequiresReview: true,
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: 'crowdfunding:campaign:create',
+      payload: parsed.data,
+      requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+      successStatus: 201,
+      operation: async () => ({
+        campaign: await createCampaignDraft(request.citizen.sub, parsed.data),
+        nextStep: 'compliance_review' as const,
+        activationRequiresReview: true,
+      }),
     })
+    return sendMutation(reply, result)
   })
 
   app.post('/me/campaigns/:campaignId/activate', { preHandler: requireVerified }, async (request, reply) => {
@@ -111,14 +119,22 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
         })
       }
 
-      return reply.status(201).send(await createCrowdfundingContributionCheckout({
+      const result = await executeIdempotentMutation({
         citizenId: request.citizen.sub,
-        campaignId: params.data.campaignId,
-        amountCop: body.data.amount_cop,
-        platformTipCop: body.data.platform_tip_cop,
-        isAnonymous: body.data.is_anonymous,
-        requestedIdempotencyKey: headerValue(request.headers['idempotency-key']),
-      }))
+        scope: `crowdfunding:contribution-checkout:${params.data.campaignId}`,
+        payload: body.data,
+        requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+        successStatus: 201,
+        operation: (effectiveKey) => createCrowdfundingContributionCheckout({
+          citizenId: request.citizen.sub,
+          campaignId: params.data.campaignId,
+          amountCop: body.data.amount_cop,
+          platformTipCop: body.data.platform_tip_cop,
+          isAnonymous: body.data.is_anonymous,
+          requestedIdempotencyKey: effectiveKey,
+        }),
+      })
+      return sendMutation(reply, result)
     },
   )
 

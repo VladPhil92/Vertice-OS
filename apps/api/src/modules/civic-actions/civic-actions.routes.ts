@@ -1,5 +1,10 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 import { requireAuth, requireModerator, requireVerified } from '../../middleware/auth'
+import {
+  executeIdempotentMutation,
+  normalizeRequestedIdempotencyKey,
+  type IdempotentMutationResult,
+} from '../../lib/idempotency'
 import {
   CivicActionEvidenceSchema,
   CivicActionLeaderboardQuerySchema,
@@ -11,9 +16,9 @@ import {
   UpdateCivicActionSchema,
 } from './civic-actions.schema'
 import { CIVIC_REPUTATION_VERSION, CIVIC_SCORE_MAX } from './civic-actions.score'
+import { createCivicActionAtomically } from './civic-actions.create'
 import {
   addCivicActionEvidence,
-  createCivicAction,
   getCivicAction,
   getCivicActionLeaderboard,
   getCivicActionValidationState,
@@ -25,6 +30,16 @@ import {
   setCivicActionValidation,
   updateCivicAction,
 } from './civic-actions.service'
+
+function requestedKey(value: string | string[] | undefined): string | undefined {
+  return normalizeRequestedIdempotencyKey(value)
+}
+
+function sendMutation<T>(reply: FastifyReply, result: IdempotentMutationResult<T>) {
+  reply.header('Idempotency-Key', result.idempotencyKey)
+  reply.header('Idempotency-Replayed', result.replayed ? 'true' : 'false')
+  return reply.status(result.statusCode).send(result.value)
+}
 
 export async function civicActionsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async (request, reply) => {
@@ -51,9 +66,7 @@ export async function civicActionsRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/mine', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = CivicActionListQuerySchema.safeParse(request.query)
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'Parámetros inválidos' })
-    }
+    if (!parsed.success) return reply.status(400).send({ error: 'Parámetros inválidos' })
     const data = await listMyCivicActions(request.citizen.sub, parsed.data)
     return reply.send({ data, count: data.length })
   })
@@ -82,8 +95,16 @@ export async function civicActionsRoutes(app: FastifyInstance): Promise<void> {
         details: parsed.error.flatten().fieldErrors,
       })
     }
-    const action = await createCivicAction(request.citizen.sub, parsed.data)
-    return reply.status(201).send(action)
+
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: 'civic-action:create',
+      payload: parsed.data,
+      requestedKey: requestedKey(request.headers['idempotency-key']),
+      successStatus: 201,
+      operation: () => createCivicActionAtomically(request.citizen.sub, parsed.data),
+    })
+    return sendMutation(reply, result)
   })
 
   app.get('/:actionId', { preHandler: requireAuth }, async (request, reply) => {
@@ -114,9 +135,7 @@ export async function civicActionsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/:actionId/evidence', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = CivicActionParamsSchema.safeParse(request.params)
     if (!parsed.success) return reply.status(400).send({ error: 'Acción inválida' })
-    return reply.send({
-      data: await listCivicActionEvidence(parsed.data.actionId, request.citizen.sub),
-    })
+    return reply.send({ data: await listCivicActionEvidence(parsed.data.actionId, request.citizen.sub) })
   })
 
   app.post('/:actionId/evidence', {
@@ -131,11 +150,20 @@ export async function civicActionsRoutes(app: FastifyInstance): Promise<void> {
         details: body.success ? undefined : body.error.flatten().fieldErrors,
       })
     }
-    return reply.status(201).send(await addCivicActionEvidence(
-      request.citizen.sub,
-      params.data.actionId,
-      body.data,
-    ))
+
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: `civic-action:evidence:${params.data.actionId}`,
+      payload: body.data,
+      requestedKey: requestedKey(request.headers['idempotency-key']),
+      successStatus: 201,
+      operation: () => addCivicActionEvidence(
+        request.citizen.sub,
+        params.data.actionId,
+        body.data,
+      ),
+    })
+    return sendMutation(reply, result)
   })
 
   app.get('/:actionId/validations', async (request, reply) => {
@@ -166,10 +194,7 @@ export async function civicActionsRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/:actionId/validation', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = CivicActionParamsSchema.safeParse(request.params)
     if (!parsed.success) return reply.status(400).send({ error: 'Acción inválida' })
-    return reply.send(await removeCivicActionValidation(
-      request.citizen.sub,
-      parsed.data.actionId,
-    ))
+    return reply.send(await removeCivicActionValidation(request.citizen.sub, parsed.data.actionId))
   })
 
   app.post('/:actionId/review', {
@@ -184,10 +209,6 @@ export async function civicActionsRoutes(app: FastifyInstance): Promise<void> {
         details: body.success ? undefined : body.error.flatten().fieldErrors,
       })
     }
-    return reply.send(await reviewCivicAction(
-      request.citizen.sub,
-      params.data.actionId,
-      body.data,
-    ))
+    return reply.send(await reviewCivicAction(request.citizen.sub, params.data.actionId, body.data))
   })
 }

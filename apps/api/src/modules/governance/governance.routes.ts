@@ -1,5 +1,10 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 import { requireVerified, requireModerator } from '../../middleware/auth'
+import {
+  executeIdempotentMutation,
+  normalizeRequestedIdempotencyKey,
+  type IdempotentMutationResult,
+} from '../../lib/idempotency'
 import {
   CreateProposalSchema,
   ListProposalsSchema,
@@ -25,9 +30,13 @@ import { adminArchiveProposalSafely } from './governance.admin-security'
 import { advanceProposalStageSafely } from './governance.lifecycle'
 import { castVoteLedger } from './governance.vote-ledger'
 
-export async function governanceRoutes(app: FastifyInstance): Promise<void> {
-  // ── Públicos ──────────────────────────────────────────────────────────────
+function sendMutation<T>(reply: FastifyReply, result: IdempotentMutationResult<T>) {
+  reply.header('Idempotency-Key', result.idempotencyKey)
+  reply.header('Idempotency-Replayed', result.replayed ? 'true' : 'false')
+  return reply.status(result.statusCode).send(result.value)
+}
 
+export async function governanceRoutes(app: FastifyInstance): Promise<void> {
   app.get('/proposals', async (request, reply) => {
     const parsed = ListProposalsSchema.safeParse(request.query)
     if (!parsed.success) {
@@ -37,24 +46,17 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: proposals, count: proposals.length })
   })
 
-  app.get('/proposals/stats', async (_request, reply) => {
-    const stats = await getGovernanceStats()
-    return reply.send(stats)
-  })
+  app.get('/proposals/stats', async (_request, reply) => reply.send(await getGovernanceStats()))
 
   app.get('/proposals/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const proposal = await getProposalById(id)
-    return reply.send(proposal)
+    return reply.send(await getProposalById(id))
   })
 
   app.get('/proposals/:id/tally', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const tally = await getVoteTally(id)
-    return reply.send(tally)
+    return reply.send(await getVoteTally(id))
   })
-
-  // ── Requieren identidad verificada ──────────────────────────────────────
 
   app.post('/proposals', {
     preHandler: requireVerified,
@@ -64,8 +66,15 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const proposal = await createProposal(request.citizen.sub, parsed.data)
-    return reply.status(201).send(proposal)
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: 'governance:proposal:create',
+      payload: parsed.data,
+      requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+      successStatus: 201,
+      operation: () => createProposal(request.citizen.sub, parsed.data),
+    })
+    return sendMutation(reply, result)
   })
 
   app.post('/proposals/:id/endorse', {
@@ -73,8 +82,14 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     config: { rateLimit: { max: 50, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const result = await endorseProposal(id, request.citizen.sub)
-    return reply.send(result)
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: `governance:proposal:endorse:${id}`,
+      payload: {},
+      requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+      operation: () => endorseProposal(id, request.citizen.sub),
+    })
+    return sendMutation(reply, result)
   })
 
   app.post('/proposals/:id/vote', {
@@ -86,9 +101,15 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-
-    const receipt = await castVoteLedger(id, request.citizen.sub, parsed.data.vote_value)
-    return reply.status(201).send(receipt)
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: `governance:proposal:vote:${id}`,
+      payload: parsed.data,
+      requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+      successStatus: 201,
+      operation: () => castVoteLedger(id, request.citizen.sub, parsed.data.vote_value),
+    })
+    return sendMutation(reply, result)
   })
 
   app.patch('/proposals/:id/advance', {
@@ -100,11 +121,15 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const proposal = await advanceProposalStageSafely(id, request.citizen.sub, parsed.data)
-    return reply.send(proposal)
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: `governance:proposal:advance:${id}`,
+      payload: parsed.data,
+      requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+      operation: () => advanceProposalStageSafely(id, request.citizen.sub, parsed.data),
+    })
+    return sendMutation(reply, result)
   })
-
-  // ── Delegaciones ──────────────────────────────────────────────────────────
 
   app.post('/delegations', {
     preHandler: requireVerified,
@@ -114,13 +139,18 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const delegation = await createDelegation(request.citizen.sub, parsed.data)
-    return reply.status(201).send(delegation)
+    const result = await executeIdempotentMutation({
+      citizenId: request.citizen.sub,
+      scope: 'governance:delegation:create',
+      payload: parsed.data,
+      requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
+      successStatus: 201,
+      operation: () => createDelegation(request.citizen.sub, parsed.data),
+    })
+    return sendMutation(reply, result)
   })
 
-  app.get('/delegations/me', {
-    preHandler: requireVerified,
-  }, async (request, reply) => {
+  app.get('/delegations/me', { preHandler: requireVerified }, async (request, reply) => {
     const delegations = await getMyDelegations(request.citizen.sub)
     return reply.send({ data: delegations, count: delegations.length })
   })
@@ -134,10 +164,6 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ success: true })
   })
 
-  // ── Admin / Moderación ────────────────────────────────────────────────────
-
-  // Admin listing keeps the historical 200-row moderation queue until the UI
-  // gains explicit pagination, while validating the same filters as public list.
   app.get('/admin/proposals', {
     preHandler: requireModerator,
     config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
@@ -155,12 +181,9 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const proposal = await adminAdvanceProposalSafely(id, request.citizen.sub)
-    return reply.send(proposal)
+    return reply.send(await adminAdvanceProposalSafely(id, request.citizen.sub))
   })
 
-  // Archival is moderation only before a civic vote opens. Successful state
-  // mutation and its actor/reason audit row are committed atomically.
   app.post('/admin/proposals/:id/archive', {
     preHandler: requireModerator,
     config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
@@ -170,7 +193,6 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const proposal = await adminArchiveProposalSafely(id, request.citizen.sub, parsed.data.reason)
-    return reply.send(proposal)
+    return reply.send(await adminArchiveProposalSafely(id, request.citizen.sub, parsed.data.reason))
   })
 }

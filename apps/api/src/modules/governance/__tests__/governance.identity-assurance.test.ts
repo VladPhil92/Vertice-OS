@@ -38,6 +38,23 @@ jest.mock('../governance.vote-ledger', () => ({
   castVoteLedger: mockCastVote,
 }))
 
+jest.mock('../../../lib/idempotency', () => ({
+  normalizeRequestedIdempotencyKey: (value: string | string[] | undefined): string | undefined => {
+    const raw = Array.isArray(value) ? value[0] : value
+    return raw?.trim() || undefined
+  },
+  executeIdempotentMutation: async <T>(
+    options: IdempotentMutationOptions<T>,
+  ): Promise<IdempotentMutationResult<T>> => ({
+    value: await options.operation(options.requestedKey ?? 'test-idempotency-key'),
+    statusCode: options.successStatus ?? 200,
+    replayed: false,
+    idempotencyKey: options.requestedKey ?? 'test-idempotency-key',
+    keySource: options.requestedKey ? 'client' : 'derived',
+  }),
+}))
+
+import type { IdempotentMutationOptions, IdempotentMutationResult } from '../../../lib/idempotency'
 import { buildApp } from '../../../app'
 
 const app = buildApp()

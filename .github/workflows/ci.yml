@@ -46,7 +46,7 @@ jobs:
       - name: Typecheck (TypeScript + Python)
         run: pnpm typecheck
 
-  # ── Tests ─────────────────────────────────────────────────────────────[...]
+  # ── Tests ─────────────────────────────────────────────────────────────
   test:
     name: Tests
     runs-on: ubuntu-latest
@@ -108,7 +108,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://vertice:vertice_test@localhost:5432/vertice_test
         run: |
-          psql $DATABASE_URL -f infrastructure/db/init.sql
+          psql $DATABASE_URL -v ON_ERROR_STOP=1 -f infrastructure/db/init.sql
+          psql $DATABASE_URL -v ON_ERROR_STOP=1 -f apps/api/prisma/migrations/20260908111500_operation_idempotency_phase6/migration.sql
 
       # Igual que en el job de calidad: `pnpm test` incluye la tarea de
       # @vertice/ai, que ejecuta pytest.
@@ -144,7 +145,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./apps/api/coverage/lcov.info
 
-  # ── Security Scan ──────────────────────────────────────────────────────────[...]
+  # ── Security Scan ──────────────────────────────────────────────────────────
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -194,7 +195,7 @@ jobs:
           fi
           echo "✅ No hay archivos .env en el repositorio"
 
-  # ── Build ─────────────────────────────────────────────────────────────[...]
+  # ── Build ─────────────────────────────────────────────────────────────
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -225,7 +226,6 @@ jobs:
           docker build -t vertice-ai:${{ github.sha }} ./apps/ai
         if: github.ref == 'refs/heads/develop'
 
-  # ── Deploy Staging ──────────────────────────────────────────────────────────[...]
   # ── Deploy ────────────────────────────────────────────────────────────────
   #
   # No hay jobs de deploy-staging/deploy-production todavía. Los que existían
