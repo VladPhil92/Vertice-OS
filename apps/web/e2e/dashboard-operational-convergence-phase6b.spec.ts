@@ -51,7 +51,7 @@ const caseResponse = {
 test.describe('Dashboard operational convergence Phase 6b', () => {
   test('homepage exposes command search and role-adaptive actions', async ({ page }) => {
     await setupShell(page)
-    await page.route('**/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
+    await page.route('**/api/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
     await page.route('**/crowdfunding/me/payout-readiness', (route) => route.fulfill({ status: 200, json: { identity_verified: true, verification_status: 'verified', payout_status: 'eligible', can_request_review: false, can_activate_campaign: false } }))
     await page.route('**/crowdfunding/me/campaigns', (route) => route.fulfill({ status: 200, json: { campaigns: [] } }))
     await page.route('**/billing/me', (route) => route.fulfill({ status: 200, json: { plan: { code: 'free' }, subscription: null } }))
@@ -69,7 +69,7 @@ test.describe('Dashboard operational convergence Phase 6b', () => {
 
   test('notification inbox separates operational categories', async ({ page }) => {
     await setupShell(page)
-    await page.route('**/notifications', (route) => route.fulfill({
+    await page.route('**/api/notifications', (route) => route.fulfill({
       status: 200,
       json: {
         unread: 2,
@@ -90,7 +90,7 @@ test.describe('Dashboard operational convergence Phase 6b', () => {
 
   test('reputation presents evidence impact separately from legacy participation', async ({ page }) => {
     await setupShell(page)
-    await page.route('**/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
+    await page.route('**/api/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
     await page.route('**/auth/me', (route) => route.fulfill({ status: 200, json: { id: citizenId, did: 'did:vertice:test', email: 'lider@example.com', neighborhood: 'Manga', locality_id: 1, reputation_score: '60', verification_level: 2, created_at: '2026-01-01T00:00:00.000Z', last_active_at: null } }))
     await page.route('**/identity/status', (route) => route.fulfill({ status: 200, json: { citizen_id: citizenId, did: 'did:vertice:test', level: 2, level_name: 'contacto_verificado', can_vote: true, can_propose: true } }))
     await page.route('**/reputation/me/analytics', (route) => route.fulfill({ status: 200, json: { citizen_id: citizenId, score_history: [], community: { rank: 1, participants: 10, top_percent: 10 }, streak: { current_days: 1, active_dates: [] }, event_breakdown: [], generated_at: '2026-09-08T16:00:00.000Z' } }))
@@ -105,7 +105,7 @@ test.describe('Dashboard operational convergence Phase 6b', () => {
 
   test('AI copilot uses active territory and forwards neighborhood context', async ({ page }) => {
     await setupShell(page)
-    await page.route('**/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
+    await page.route('**/api/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
     const capturedBody: Record<string, unknown> = {}
     await page.route('**/ai/query', async (route) => {
       Object.assign(capturedBody, route.request().postDataJSON() as Record<string, unknown>)
@@ -122,7 +122,7 @@ test.describe('Dashboard operational convergence Phase 6b', () => {
 
   test('workflow triage exposes search and next action', async ({ page }) => {
     await setupShell(page)
-    await page.route('**/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
+    await page.route('**/api/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
     await page.route('**/workflows/cases?limit=25', (route) => route.fulfill({ status: 200, json: caseResponse }))
 
     await page.goto('/dashboard/workflows')
