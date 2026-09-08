@@ -84,6 +84,21 @@ export function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> 
   return execute<T>(path, options, true)
 }
 
+export function createIdempotencyKey(scope: string): string {
+  const entropy = Math.random().toString(36).slice(2, 10)
+  return `${scope}-${Date.now().toString(36)}-${entropy}`.slice(0, 120)
+}
+
+export function apiMutation<T>(path: string, scope: string, options: ApiOptions = {}): Promise<T> {
+  return apiFetch<T>(path, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Idempotency-Key': createIdempotencyKey(scope),
+    },
+  })
+}
+
 export async function loginMobile(email: string, password: string): Promise<MobileTokenResponse> {
   const token = await execute<MobileTokenResponse>('/auth/mobile/token', {
     method: 'POST',
