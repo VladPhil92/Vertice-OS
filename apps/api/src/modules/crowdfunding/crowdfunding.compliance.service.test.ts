@@ -210,11 +210,11 @@ describe('reviewPayoutProfile', () => {
 })
 
 describe('listComplianceQueue', () => {
-  it('lists pending campaigns and payout profiles in parallel', async () => {
+  it('lists formally submitted campaigns and payout profiles in parallel', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([{
         id: 'c1', creator_citizen_id: 'u1', title: 'X', category: 'infra', funding_model: 'donation',
-        goal_amount_cop: 100n, compliance_status: 'pending', status: 'draft', created_at: new Date('2026-09-01T00:00:00.000Z'),
+        goal_amount_cop: 100n, compliance_status: 'in_review', status: 'review', created_at: new Date('2026-09-01T00:00:00.000Z'),
       }])
       .mockResolvedValueOnce([{
         citizen_id: 'u2', verification_status: 'in_review', payout_status: 'disabled', requested_at: null,
@@ -222,6 +222,7 @@ describe('listComplianceQueue', () => {
 
     const result = await listComplianceQueue()
 
+    expect(result.campaigns[0].status).toBe('review')
     expect(result.campaigns[0].goal_amount_cop).toBe(100)
     expect(result.payout_profiles[0].requested_at).toBeNull()
   })
@@ -236,9 +237,18 @@ describe('reviewCampaign', () => {
     })
   })
 
-  it('approves a campaign', async () => {
+  it('does not approve a draft that was never submitted', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ id: 'campaign-1', status: 'draft', compliance_status: 'pending' }])
+
+    await expect(reviewCampaign('campaign-1', { decision: 'approve' } as never)).rejects.toMatchObject({
+      statusCode: 409, code: 'CAMPAIGN_NOT_IN_REVIEW',
+    })
+    expect(mockExecuteRaw).not.toHaveBeenCalled()
+  })
+
+  it('approves a formally submitted campaign', async () => {
     mockQueryRaw
-      .mockResolvedValueOnce([{ id: 'campaign-1' }])
+      .mockResolvedValueOnce([{ id: 'campaign-1', status: 'review', compliance_status: 'in_review' }])
       .mockResolvedValueOnce([{ id: 'campaign-1', status: 'verified', compliance_status: 'verified', review_notes: null }])
 
     const result = await reviewCampaign('campaign-1', { decision: 'approve' } as never)
@@ -247,9 +257,9 @@ describe('reviewCampaign', () => {
     expect(mockExecuteRaw).toHaveBeenCalledTimes(1)
   })
 
-  it('rejects a campaign', async () => {
+  it('rejects a campaign only with review notes', async () => {
     mockQueryRaw
-      .mockResolvedValueOnce([{ id: 'campaign-1' }])
+      .mockResolvedValueOnce([{ id: 'campaign-1', status: 'review', compliance_status: 'in_review' }])
       .mockResolvedValueOnce([{ id: 'campaign-1', status: 'review', compliance_status: 'rejected', review_notes: 'No cumple' }])
 
     const result = await reviewCampaign('campaign-1', { decision: 'reject', notes: 'No cumple' } as never)
@@ -257,12 +267,20 @@ describe('reviewCampaign', () => {
     expect(result.compliance_status).toBe('rejected')
   })
 
-  it('suspends a campaign for any other decision', async () => {
-    mockQueryRaw
-      .mockResolvedValueOnce([{ id: 'campaign-1' }])
-      .mockResolvedValueOnce([{ id: 'campaign-1', status: 'suspended', compliance_status: 'suspended', review_notes: null }])
+  it('requires notes before suspension', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ id: 'campaign-1', status: 'review', compliance_status: 'in_review' }])
 
-    const result = await reviewCampaign('campaign-1', { decision: 'suspend' } as never)
+    await expect(reviewCampaign('campaign-1', { decision: 'suspend' } as never)).rejects.toMatchObject({
+      statusCode: 400, code: 'CAMPAIGN_REVIEW_NOTES_REQUIRED',
+    })
+  })
+
+  it('suspends a campaign with a documented reason', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'campaign-1', status: 'review', compliance_status: 'in_review' }])
+      .mockResolvedValueOnce([{ id: 'campaign-1', status: 'suspended', compliance_status: 'suspended', review_notes: 'Riesgo documental detectado.' }])
+
+    const result = await reviewCampaign('campaign-1', { decision: 'suspend', notes: 'Riesgo documental detectado.' } as never)
 
     expect(result.status).toBe('suspended')
   })

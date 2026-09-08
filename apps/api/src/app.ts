@@ -34,6 +34,7 @@ import { workflowRoutes } from './modules/workflows/workflow.routes'
 import { billingRoutes } from './modules/billing/billing.routes'
 import { financeOperationsRoutes } from './modules/billing/finance-operations.routes'
 import { crowdfundingRoutes } from './modules/crowdfunding/crowdfunding.routes'
+import { crowdfundingLifecycleRoutes } from './modules/crowdfunding/crowdfunding.lifecycle.routes'
 
 initSentry()
 
@@ -201,6 +202,7 @@ export function buildApp() {
   app.register(billingRoutes, { prefix: '/billing' })
   app.register(financeOperationsRoutes, { prefix: '/billing/admin/finance' })
   app.register(crowdfundingRoutes, { prefix: '/crowdfunding' })
+  app.register(crowdfundingLifecycleRoutes, { prefix: '/crowdfunding' })
   app.register(eventsRoutes)
 
   return app

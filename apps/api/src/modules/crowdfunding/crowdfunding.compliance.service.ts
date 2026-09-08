@@ -140,8 +140,9 @@ export async function listComplianceQueue() {
       SELECT id, creator_citizen_id, title, category, funding_model, goal_amount_cop,
              compliance_status, status, created_at
       FROM crowdfunding_campaigns
-      WHERE compliance_status IN ('pending', 'in_review')
-      ORDER BY created_at ASC
+      WHERE status = 'review'
+        AND compliance_status = 'in_review'
+      ORDER BY submitted_for_review_at ASC NULLS LAST, created_at ASC
       LIMIT 100
     `),
     prisma.$queryRaw<Array<{
@@ -172,28 +173,41 @@ export async function listComplianceQueue() {
 }
 
 export async function reviewCampaign(campaignId: string, input: CampaignReviewInput) {
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT id
+  const rows = await prisma.$queryRaw<Array<{
+    id: string
+    status: string
+    compliance_status: string
+  }>>(Prisma.sql`
+    SELECT id, status, compliance_status
     FROM crowdfunding_campaigns
     WHERE id = ${campaignId}::uuid
     LIMIT 1
   `)
-  if (!rows[0]) throw httpError('Campaña no encontrada.', 'CAMPAIGN_NOT_FOUND', 404)
+  const campaign = rows[0]
+  if (!campaign) throw httpError('Campaña no encontrada.', 'CAMPAIGN_NOT_FOUND', 404)
+
+  if (input.decision !== 'suspend' && (campaign.status !== 'review' || campaign.compliance_status !== 'in_review')) {
+    throw httpError('La campaña debe enviarse formalmente a revisión antes de decidir.', 'CAMPAIGN_NOT_IN_REVIEW', 409)
+  }
+  if (input.decision !== 'approve' && !input.notes?.trim()) {
+    throw httpError('Rechazar o suspender requiere observaciones.', 'CAMPAIGN_REVIEW_NOTES_REQUIRED', 400)
+  }
 
   if (input.decision === 'approve') {
     await prisma.$executeRaw(Prisma.sql`
       UPDATE crowdfunding_campaigns
       SET compliance_status = 'verified', status = 'verified', review_notes = ${input.notes ?? null}, updated_at = NOW()
       WHERE id = ${campaignId}::uuid
-        AND status IN ('draft', 'review', 'verified')
-        AND compliance_status IN ('pending', 'in_review', 'verified')
+        AND status = 'review'
+        AND compliance_status = 'in_review'
     `)
   } else if (input.decision === 'reject') {
     await prisma.$executeRaw(Prisma.sql`
       UPDATE crowdfunding_campaigns
       SET compliance_status = 'rejected', status = 'review', review_notes = ${input.notes ?? null}, updated_at = NOW()
       WHERE id = ${campaignId}::uuid
-        AND status NOT IN ('active', 'funded', 'executing', 'verifying', 'completed')
+        AND status = 'review'
+        AND compliance_status = 'in_review'
     `)
   } else {
     await prisma.$executeRaw(Prisma.sql`
