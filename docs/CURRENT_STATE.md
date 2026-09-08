@@ -1,152 +1,137 @@
 # VÉRTICE OS — Current State
 
 > Snapshot técnico-funcional: **7 de septiembre de 2026**  
-> Basado en `main` P0.9 + evidence-backed external certification P1.0 en validación y convergencia de identidad del dashboard v9.
+> Baseline de modernización: Node.js 22.13+, pnpm 10, Next.js 15.5.24 y cliente nativo Expo SDK 57.
 
-Este documento separa tres categorías:
+Este documento clasifica el estado por evidencia:
 
-1. **Implementado:** existe en el código actual y forma parte del contrato activo del producto.
-2. **Integrado / pendiente de certificación:** existe código o integración, pero depende de proveedor, credenciales, infraestructura o validación productiva externa.
-3. **Planeado / arquitectónico:** idea o dirección futura; no debe asumirse como dependencia actual.
+- **✅ Implementado:** existe como contrato ejecutable en el repositorio.
+- **🟡 Integrado / pendiente de certificación:** existe código, pero la capacidad completa depende de credenciales, infraestructura, stores o evidencia externa.
+- **🧭 Planeado:** dirección de producto todavía no completa.
+- **⛔ No activo:** arquitectura histórica o componente retirado que no debe describirse como runtime actual.
 
 ---
 
-## 1. Producto implementado
+## 1. Plataforma activa
 
-### 1.1 Dashboard ciudadano
+### 1.1 Web y dashboard
 
-El dashboard autenticado es el centro de comando del ciudadano y expone:
+`apps/web` es la experiencia web/PWA sobre Next.js 15.5.24 y React 18. El dashboard autenticado funciona como centro de mando ciudadano e integra:
 
-- perfil e identidad;
-- retrato cívico público con separación estricta respecto de identity assurance;
-- sesión de identidad de UI compartida entre encabezado, sidebar y navegación móvil;
+- identidad/perfil cívico;
+- red social de gestión comunitaria;
+- acciones cívicas y evidencias;
 - reportes territoriales;
-- propuestas y gobernanza;
-- votos pendientes/elegibles;
-- control público y módulo legal;
+- propuestas, gobernanza y votaciones consultivas;
+- control público / legal;
 - reputación;
 - IA cívica;
-- expedientes cívicos (`/dashboard/workflows`);
-- notificaciones y eventos en tiempo real;
-- selector de rol por sesión;
-- panel de autoridad para superadmin.
+- workflows/expedientes;
+- notificaciones y tiempo real;
+- rol activo y superficies de autoridad.
 
-La API `GET /dashboard/me` separa actividad personal de indicadores generales de ciudad.
+`GET /dashboard/me` es el agregado principal para la actividad y atención del ciudadano. La web productiva conserva el contrato same-origin hacia `/api` para evitar enviar credenciales directamente a un origen Railway desde el navegador.
 
-La capa web `DashboardIdentityProvider` compone en memoria los contratos canónicos `/community/profile/me`, `/community/profile/me/avatar` y `/dashboard/me`. No persiste una segunda copia de identidad. `verification_level` continúa siendo la única fuente de verdad del distintivo de identidad verificada. Las mutaciones exitosas de perfil y avatar invalidan explícitamente el snapshot de sesión para propagar cambios sin recarga manual.
+La PWA dispone de manifest, service worker, offline fallback y web push. Peticiones `/api/*`, `/auth/*` y artefactos versionados de Next.js no se cachean en el service worker.
 
-### 1.2 Workflows cívicos
+### 1.2 App móvil nativa
 
-`civic_cases` preserva un caso ciudadano de extremo a extremo:
+`apps/mobile` existe desde esta actualización como workspace nativo independiente:
 
-`Reporte → IA → Propuesta → Debate → Votación → Decisión → Control`
+- Expo SDK 57;
+- React Native 0.86.3;
+- React 19.2.3;
+- Expo Router;
+- SecureStore;
+- EAS build profiles.
 
-El expediente conserva procedencia, ownership, referencias de IA/auditoría, propuesta vinculada y documento legal/control público vinculado. Los estados visibles derivan de las máquinas de estado canónicas de los módulos downstream.
+Primera fase funcional implementada:
 
-### 1.3 Federación CTG One
+- login nativo;
+- bootstrap de sesión;
+- refresh automático del access token;
+- command center ciudadano desde `/dashboard/me`;
+- reputación y atención pendiente;
+- métricas de acciones, reportes, propuestas, legal y workflows;
+- perfil;
+- pull-to-refresh;
+- logout con revocación server-side.
 
-El login ofrece `Continuar con CTG One` y reutiliza el flujo federado PKCE existente. VÉRTICE crea su propia sesión y no comparte cookies de dominio ni credenciales con CTG One.
+Clasificación: **🟡 primera fase funcional**. Todavía deben trasladarse a superficies nativas completas la red comunitaria, acciones/evidencias, mapa/reportes, workflows, gobernanza, notificaciones e identity assurance. La regla arquitectónica es reutilizar contratos de API existentes, no duplicar reglas cívicas dentro del cliente.
 
-La federación:
+### 1.3 Autenticación y autoridad
 
-- autentica;
-- puede vincular una identidad externa explícita;
-- **no** equivale automáticamente a civic identity assurance;
-- **no** debe enlazar cuentas locales por mera coincidencia de email.
+La autenticación mantiene dos transportes con una sola fuente de verdad de sesión:
 
-### 1.4 Autoridad y roles
+**Web**
+- `POST /auth/token`;
+- refresh token en cookie httpOnly;
+- access token de vida corta;
+- refresh vía `/auth/refresh`.
 
-Modelo activo:
+**Native**
+- `POST /auth/mobile/token`;
+- `POST /auth/mobile/refresh`;
+- `POST /auth/mobile/logout`;
+- refresh token persistido únicamente en Keychain/Keystore mediante SecureStore.
 
-- grants persistentes: `citizen`, `moderator`, `admin`, `superadmin`;
-- `active_role` por sesión;
-- JWT ligado a `session id`;
-- roles privilegiados revalidados contra la autoridad persistida;
-- bootstrap del superadmin raíz mediante autoridad federada server-managed de CTG One;
-- nuevos superadmins concedidos desde VÉRTICE después del bootstrap;
-- protección contra eliminación del último superadmin;
-- auditoría append-only de bootstrap, grants y cambios de rol.
+Ambos transportes reutilizan `loginCitizen`, `refreshAccessToken`, `revokeSession` y las sesiones persistentes de la API. No existe un segundo sistema de identidad móvil.
 
-### 1.5 Civic identity assurance P1.0
+El modelo de autoridad activo usa grants persistentes `citizen`, `moderator`, `admin`, `superadmin`, `active_role` por sesión y JWT ligado a `sid`. Los privilegios se revalidan contra autoridad viva y una sesión privilegiada no debe surgir desde `citizens.role` legacy.
 
-VÉRTICE distingue:
+### 1.4 Federación CTG One
+
+`Continuar con CTG One` usa intercambio federado con PKCE. VÉRTICE crea su propia sesión y no vincula cuentas únicamente por coincidencia de email.
+
+CTG One federation autentica, pero **no constituye por sí sola civic identity assurance**.
+
+### 1.5 Civic identity assurance
+
+La frontera de identidad fuerte permanece fail-closed y separa:
 
 - autenticación;
-- verificación de canal/contacto;
-- prueba fuerte de identidad cívica;
-- certificación operativa de provider;
-- evidencia durable del canary externo.
+- contacto verificado;
+- prueba de identidad cívica;
+- certificación operativa del provider;
+- evidencia durable de canary externo.
 
-`CIVIC_IDENTITY_ASSURANCE_PROVIDERS` es una allowlist explícita. Vacía significa fail-closed para el padrón de votación protegido. `ctg_one` no entra en la allowlist por defecto.
+El provider Veriff dispone de adapter, sesión, webhook nativo firmado, replay protection, lifecycle, certificación durable y controles administrativos en código. Clasificación productiva: **🟡 integrado / pendiente de credenciales y certificación externa real**.
 
-La frontera técnica implementada incluye:
+Un provider no puede habilitar elegibilidad de gobernanza únicamente por aparecer en configuración. Se requiere la cadena de promoción/certificación prevista por el sistema.
 
-- lifecycle durable `pending → review → verified / rejected / expired / revoked`;
-- ingress normalizado HMAC aislado por provider y key-id para adapters internos;
-- registry compile-time;
-- contrato de adapter nativo sobre bytes crudos;
-- replay distribuido y atómico respaldado por Redis;
-- harness adversarial P0.5;
-- canary de lifecycle P0.6;
-- ingress nativo P0.7 en `POST /identity/providers/:provider/webhook`;
-- procedencia auditable entre hop HMAC interno y webhook nativo;
-- adapter vendor-specific `veriff` P0.8;
-- verificación Veriff `x-auth-client` + HMAC-SHA256 sobre raw body;
-- normalización de decision webhook y user-defined status;
-- runtime readiness independiente de compile-time registration y policy allowlist;
-- bootstrap ciudadano de sesión Veriff en `POST /identity/providers/veriff/session`;
-- `GET /identity/providers/availability` para exponer disponibilidad sin secretos;
-- certification interlock P0.9 mediante `CIVIC_IDENTITY_CERTIFIED_PROVIDERS`;
-- **ledger durable P1.0 `civic_identity_provider_certifications`**;
-- certificación P1.0 construida solo desde receipts persistidos con `ingress_signature_version=2`;
-- validación `verified → revoked → expired`, subject binding, assurance y monotonicidad;
-- `evidence_digest` y `subject_binding_hash` SHA-256 sin persistir raw payloads;
-- controles superadmin para certificar/listar/revocar en `/identity/provider-certifications`;
-- auditoría administrativa de certificación y revocación;
-- `governance_eligible` para providers nativos exige certificación durable activa además de P0.9;
-- readiness administrativo separado para `registered`, `runtime_ready`, `promoted`, `evidence_certified`, `activated` y `governance_ready`.
+### 1.6 Gestión comunitaria y reputación
 
-### Estado Veriff
+La plataforma soporta perfil público, acciones cívicas, evidencia, resultados y reputación. El producto prioriza gestión social-comunitaria y trazabilidad sobre mecánicas de engagement manipulativas.
 
-`🟡 Integrado / pendiente de certificación externa real`.
+Reputación e identidad se mantienen separadas: una reputación alta no convierte una identidad en verificada.
 
-El código Veriff está preparado para Colombia, pero la autoridad sigue fail-closed mientras no existan las credenciales reales de una integración Veriff y no se ejecute el canary.
+### 1.7 Gobernanza
 
-P1.0 añade una garantía adicional: incluso si `veriff` aparece por error en las variables de promoción y governance allowlist, un proof nativo no puede producir `governance_eligible=true` sin una certificación durable construida desde eventos nativos autenticados ya persistidos.
-
-Las credenciales pueden configurarse sin añadir `veriff` a las allowlists, permitiendo sandbox y recepción de webhooks sin habilitar gobernanza.
-
-VÉRTICE no persiste payloads documentales/biométricos de Veriff. La certificación conserva solamente commitments criptográficos, event IDs, timestamps y metadata operativa mínima.
-
-Runbook: `docs/integrations/VERIFF.md`.
-
-### 1.6 Gobernanza
-
-La gobernanza implementada usa un padrón electoral congelado por propuesta. La selección del padrón se realiza al abrir la votación y se convierte en la autoridad de admisión durante la ventana electoral.
-
-El ledger canónico de democracia líquida coordina:
+La gobernanza usa padrón congelado por propuesta y ledger canónico de participación. Coordina:
 
 - voto directo;
-- participación delegada;
+- delegación;
 - nullifiers opacos;
 - prevención de doble influencia;
-- scopes `general`, `domain` y `proposal`;
 - precedencia determinística;
-- ventanas de validez;
 - override directo;
-- tally reconstruido desde registros durables.
+- tally reconstruible desde registros durables.
 
-### 1.7 API y datos
+Las votaciones de la plataforma son cívicas/consultivas salvo reconocimiento jurídico o institucional externo específico.
+
+### 1.8 API y datos
 
 API activa: **REST / Fastify 5**.
 
-Módulos actuales bajo `apps/api/src/modules`:
+Módulos activos incluyen:
 
 - `auth`
 - `dashboard`
 - `identity`
 - `territorial`
 - `governance`
+- `community`
+- `civic-actions`
 - `reputation`
 - `legal`
 - `ai`
@@ -154,113 +139,126 @@ Módulos actuales bajo `apps/api/src/modules`:
 - `notifications`
 - `events`
 
-Dependencias de datos:
+Datos:
 
-- PostgreSQL + PostGIS: estado canónico relacional/territorial y evidencia durable de certificación de providers;
-- Redis: sesiones, cache, rate limiting, pub/sub y replay distribuido de identity proofing;
-- Neo4j: grafo de reputación; degradable en readiness.
+- PostgreSQL + PostGIS: estado canónico relacional/territorial;
+- Redis: cache, rate limiting, pub/sub y soporte operacional;
+- Neo4j: grafo de reputación, degradable en readiness.
 
-### 1.8 IA
+### 1.9 IA
 
-`apps/ai` implementa siete agentes:
+`apps/ai` implementa agentes cívicos sobre FastAPI/LangGraph y una capa RAG con proveedores externos. La ausencia de proveedores opcionales no debe simular calidad semántica equivalente, pero puede degradarse de forma controlada según el contrato de cada feature.
 
-1. CitizenAgent
-2. GovernanceAgent
-3. PolicyAgent
-4. TerritorialAgent
-5. IntegrityAgent
-6. CommsAgent
-7. LegalAgent
+### 1.10 Blockchain
 
-El orquestador actual usa `claude-sonnet-4-6`.
+`contracts/` contiene Solidity/Hardhat para Polygon, incluidos `CivicSBT` y `VotingRegistry`.
 
-RAG:
+Clasificación: **🟡 código implementado; despliegue on-chain dependiente del entorno**.
 
-- Pinecone como vector store;
-- Voyage AI `voyage-3` para embeddings;
-- fallback determinístico para que ausencia de proveedores externos no tumbe el proceso, sin pretender calidad semántica equivalente.
-
-### 1.9 Tiempo real y observabilidad
-
-- SSE;
-- Redis pub/sub;
-- notificaciones internas;
-- Sentry;
-- `/health` y `/health/ready`;
-- PostgreSQL y Redis requeridos para readiness;
-- Neo4j degradable;
-- readiness de identity providers separa estado de adapter, credenciales, promoción, evidencia y autoridad final.
+PII y sentido individual del voto no deben almacenarse on-chain.
 
 ---
 
-## 2. Producción e infraestructura
+## 2. Actualización tecnológica de septiembre de 2026
+
+Remediaciones ya incorporadas en la rama de actualización:
+
+- corrección del parser regression que bloqueaba unit tests;
+- Next.js `15.5.23 → 15.5.24` por seguridad;
+- Node baseline `>=22.13`;
+- pnpm 10 como única autoridad de lockfile del monorepo;
+- eliminación de `contracts/package-lock.json`;
+- app nativa Expo/React Native;
+- contrato de autenticación móvil dedicado;
+- SecureStore para credenciales nativas;
+- hardening de Next.js (`poweredByHeader: false`, strict mode, formatos AVIF/WebP);
+- `secrets.yaml` retirado del tracking/Kustomize y sustituido por `secrets.example.yaml`;
+- documentación de auditoría en `TECHNOLOGY_REFRESH_2026-09-07.md`.
+
+No se ejecuta una migración inmediata a Next.js 16 dentro de esta misma fase. El parche 15.5.24 reduce el riesgo de seguridad manteniendo el blast radius controlado; una migración de major debe tener su propia matriz de regresión y métricas Web Vitals.
+
+---
+
+## 3. Infraestructura y producción
 
 ### Web
 
-- Next.js 15.5.23
-- Vercel
+- Next.js 15.5.24
+- Vercel como destino operativo documentado
+- producción browser API same-origin
 
 ### API
 
-- Fastify 5.11.2
-- Railway
-- Dockerfile como fuente de verdad
-- migraciones Prisma antes del arranque de Node
-- proceso ejecutado sin privilegios después de migración
+- Fastify 5
+- Railway como destino operativo documentado
+- Docker + migraciones Prisma + health/readiness
 
 ### AI
 
 - FastAPI
-- Railway
+- Railway como destino operativo documentado
 
-### Estado de certificación
+### Mobile
 
-Cada release debe distinguir:
+- Expo SDK 57 / EAS build profiles
+- la generación y publicación de binarios exige credenciales de Apple/Google y configuración externa del proyecto EAS
 
-- build/test verde;
-- deployment iniciado;
-- readiness confirmado;
-- dependencias externas certificadas.
+### Kubernetes
 
-No documentar `deployed` únicamente porque exista código o configuración IaC.
-
-Para Veriff, **integrado** significa que el adapter, sesión, firma, replay, lifecycle, interlock P0.9 y ledger P1.0 existen en código. **Activo para gobernanza** exige además credenciales reales, webhooks configurados, canary satisfactorio, registro durable P1.0 activo, promoción en `CIVIC_IDENTITY_CERTIFIED_PROVIDERS` y allowlist explícita en `CIVIC_IDENTITY_ASSURANCE_PROVIDERS`.
-
-La carga de avatar cívico se considera `🟡 Integrada / pendiente de certificación productiva` mientras Cloudflare Images no tenga credenciales y entrega verificadas en el entorno real. La sesión compartida del dashboard no cambia esa frontera: únicamente reutiliza el estado que las APIs canónicas ya autorizan.
+La base de Kustomize ya **no** crea un Secret desde un archivo trackeado. `vertice-secrets` debe provisionarse antes del apply mediante un secret manager, External Secrets, Vault o un proceso operacional equivalente.
 
 ---
 
-## 3. Blockchain
+## 4. Deuda y riesgos pendientes
 
-El repositorio contiene contratos Solidity/Hardhat para Polygon, incluidos `CivicSBT` y `VotingRegistry`, junto con scripts para local, Amoy y Polygon.
+### Ingeniería que puede continuar dentro del repositorio
 
-Clasificación actual: **código implementado; despliegue on-chain dependiente del entorno**.
+- descomponer componentes/rutas web demasiado grandes;
+- retirar árboles `legacy` una vez comprobadas referencias;
+- introducir presupuestos de bundle/asset size;
+- completar superficies móviles nativas de community, reports/map, workflows, governance, notifications e identity;
+- ampliar tests nativos y E2E;
+- evaluar Next.js 16 como migración separada;
+- consolidar documentación histórica que todavía describa arquitecturas no activas.
 
-No almacenar PII on-chain. Los datos personales y el sentido individual del voto deben permanecer fuera de cadena.
+### Acciones manuales / externas
+
+- activar protección de `main` y required checks;
+- provisionar secretos productivos;
+- validar readiness después del deploy en Vercel/Railway;
+- crear/configurar proyecto EAS;
+- gestionar Apple Developer / Google Play Console, signing y store metadata;
+- ejecutar canaries reales de proveedores de identidad;
+- certificar cualquier despliegue blockchain productivo.
 
 ---
 
-## 4. Componentes que NO son contrato operativo actual
+## 5. Componentes que no son contrato operativo actual
 
-- API Gateway GraphQL/Apollo Federation;
+No documentar como runtime actual salvo que vuelvan a implementarse explícitamente:
+
+- Apollo Federation/GraphQL gateway;
 - Governance Engine separado en Go;
 - MongoDB obligatorio;
 - Kafka obligatorio;
 - The Graph obligatorio;
-- integración productiva certificada con Registraduría;
+- integración certificada por defecto con Registraduría;
 - DAO de gobierno de plataforma;
 - ZKP productivo para cada voto;
-- wallet de Verifiable Credentials como requisito activo.
-
-La liveness/biometría deja de describirse como mera intención arquitectónica desde P0.8 porque Veriff está integrado como provider de IDV, pero **su uso productivo real continúa pendiente de integración contratada, credenciales reales y evidencia externa certificada P1.0**.
+- wallet de Verifiable Credentials como requisito universal.
 
 ---
 
-## 5. Convenciones para documentación futura
+## 6. Regla de release
 
-- `✅ Implementado`
-- `🟡 Integrado / pendiente de certificación`
-- `🧭 Planeado`
-- `⛔ No activo / retirado`
+`Código presente` ≠ `release certificado`.
 
-No usar “implementado” o “producción” para describir únicamente intención arquitectónica.
+Un release debe distinguir al menos:
+
+1. checks CI del commit;
+2. artefacto/build generado;
+3. deployment iniciado;
+4. readiness confirmado;
+5. canaries externos cuando la feature depende de terceros.
+
+La documentación nunca debe declarar una capacidad productiva únicamente porque exista código o IaC.
