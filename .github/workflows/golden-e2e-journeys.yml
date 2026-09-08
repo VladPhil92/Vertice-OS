@@ -20,9 +20,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -107,9 +105,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -126,10 +122,13 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infrastructure/db/init.sql
 
           # init.sql is the historical integration baseline. Golden journeys
-          # deliberately apply the exact forward schema slices used by the
-          # current runtime instead of pretending the baseline is current.
+          # apply the exact forward slices required by current runtime contracts.
           for migration in \
             apps/api/prisma/migrations/20260902233000_superadmin_role_authority/migration.sql \
+            apps/api/prisma/migrations/20260903013500_frozen_electorate_transition_hardening/migration.sql \
+            apps/api/prisma/migrations/20260903015000_civic_identity_proofing/migration.sql \
+            apps/api/prisma/migrations/20260903020500_frozen_voter_roll_identity_guard/migration.sql \
+            apps/api/prisma/migrations/20260903032000_civic_proof_provider_isolation/migration.sql \
             apps/api/prisma/migrations/20260906160000_civic_social_profiles/migration.sql \
             apps/api/prisma/migrations/20260906191500_civic_actions_core/migration.sql \
             apps/api/prisma/migrations/20260907223000_least_privilege_session_activation/migration.sql \
@@ -153,4 +152,6 @@ jobs:
           VOTE_NULLIFIER_SECRET: golden-vote-nullifier-secret-32-chars-minimum
           IDENTITY_PEPPER: golden-identity-pepper-32-chars-minimum
           DID_COMMITMENT_PEPPER: golden-did-commitment-pepper-32-chars-minimum
+          CIVIC_IDENTITY_ASSURANCE_PROVIDERS: trusted_kyc
+          CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: '{"trusted_kyc":{"golden-key":"golden-trusted-kyc-adapter-secret-32-characters-minimum"}}'
         run: pnpm --filter @vertice/api test -- golden-journeys.integration.test.ts --runInBand
