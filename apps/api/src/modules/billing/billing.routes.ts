@@ -8,6 +8,7 @@ import {
   processMercadoPagoWebhook,
   reconcileMyBilling,
 } from './payment.service'
+import { processWompiPayoutWebhook } from './crowdfunding-payout.service'
 
 const checkoutSchema = z.object({
   billingCycle: z.enum(['monthly', 'annual']),
@@ -69,6 +70,17 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       xSignature: headerValue(request.headers['x-signature']),
       xRequestId: headerValue(request.headers['x-request-id']),
       dataId: webhookDataId(request),
+      body: request.body,
+    })
+    return reply.status(200).send(result)
+  })
+
+  // Wompi payout events use their own signature contract. The signed event is
+  // only a trigger: the payout service re-fetches provider state server-to-
+  // server before mutating the local payout ledger.
+  app.post('/webhooks/wompi-payouts', async (request, reply) => {
+    const result = await processWompiPayoutWebhook({
+      xEventChecksum: headerValue(request.headers['x-event-checksum']),
       body: request.body,
     })
     return reply.status(200).send(result)
