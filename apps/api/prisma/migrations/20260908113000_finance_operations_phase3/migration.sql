@@ -25,6 +25,15 @@ CREATE TABLE IF NOT EXISTS payment_refund_requests (
 
 CREATE UNIQUE INDEX IF NOT EXISTS payment_refund_requests_idempotency_key
   ON payment_refund_requests (payment_transaction_id, idempotency_key);
+
+-- A full refund must never be issued twice merely because a second admin uses a
+-- different idempotency key while the first provider request is still settling.
+-- Failed requests may be retried; every non-failed refund state blocks a second
+-- full-refund attempt for the same transaction.
+CREATE UNIQUE INDEX IF NOT EXISTS payment_refund_requests_one_live_refund_per_tx
+  ON payment_refund_requests (payment_transaction_id)
+  WHERE status IN ('requested', 'processing', 'succeeded', 'reconciliation_required');
+
 CREATE INDEX IF NOT EXISTS idx_payment_refund_requests_status
   ON payment_refund_requests (status, created_at ASC);
 
