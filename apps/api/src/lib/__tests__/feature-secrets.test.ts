@@ -19,6 +19,13 @@ type MutableConfig = {
   CIVIC_SBT_ADDRESS?: string
   VOTING_REGISTRY_ADDRESS?: string
   DID_COMMITMENT_PEPPER?: string
+  WOMPI_PAYOUTS_ENV: 'sandbox' | 'production'
+  WOMPI_PAYOUTS_API_KEY?: string
+  WOMPI_PAYOUTS_USER_PRINCIPAL_ID?: string
+  WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID?: string
+  WOMPI_PAYOUTS_EVENT_SECRET?: string
+  PAYOUT_DESTINATION_PEPPER?: string
+  CROWDFUNDING_PAYOUTS_ENABLED: boolean
 }
 
 const mutableConfig = config as unknown as MutableConfig
@@ -36,6 +43,13 @@ const original = {
   CIVIC_SBT_ADDRESS: mutableConfig.CIVIC_SBT_ADDRESS,
   VOTING_REGISTRY_ADDRESS: mutableConfig.VOTING_REGISTRY_ADDRESS,
   DID_COMMITMENT_PEPPER: mutableConfig.DID_COMMITMENT_PEPPER,
+  WOMPI_PAYOUTS_ENV: mutableConfig.WOMPI_PAYOUTS_ENV,
+  WOMPI_PAYOUTS_API_KEY: mutableConfig.WOMPI_PAYOUTS_API_KEY,
+  WOMPI_PAYOUTS_USER_PRINCIPAL_ID: mutableConfig.WOMPI_PAYOUTS_USER_PRINCIPAL_ID,
+  WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID: mutableConfig.WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID,
+  WOMPI_PAYOUTS_EVENT_SECRET: mutableConfig.WOMPI_PAYOUTS_EVENT_SECRET,
+  PAYOUT_DESTINATION_PEPPER: mutableConfig.PAYOUT_DESTINATION_PEPPER,
+  CROWDFUNDING_PAYOUTS_ENABLED: mutableConfig.CROWDFUNDING_PAYOUTS_ENABLED,
 }
 
 beforeEach(() => {
@@ -52,6 +66,13 @@ beforeEach(() => {
   mutableConfig.CIVIC_SBT_ADDRESS = undefined
   mutableConfig.VOTING_REGISTRY_ADDRESS = undefined
   mutableConfig.DID_COMMITMENT_PEPPER = undefined
+  mutableConfig.WOMPI_PAYOUTS_ENV = 'sandbox'
+  mutableConfig.WOMPI_PAYOUTS_API_KEY = undefined
+  mutableConfig.WOMPI_PAYOUTS_USER_PRINCIPAL_ID = undefined
+  mutableConfig.WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID = undefined
+  mutableConfig.WOMPI_PAYOUTS_EVENT_SECRET = undefined
+  mutableConfig.PAYOUT_DESTINATION_PEPPER = undefined
+  mutableConfig.CROWDFUNDING_PAYOUTS_ENABLED = false
 })
 
 afterAll(() => {
@@ -88,6 +109,8 @@ describe('feature-scoped production configuration', () => {
       voting_registry: 'disabled',
       payments: 'disabled',
       crowdfunding_payments: 'disabled',
+      payouts: 'disabled',
+      crowdfunding_payouts: 'disabled',
     })
   })
 
@@ -126,5 +149,28 @@ describe('feature-scoped production configuration', () => {
     const capabilities = getFeatureCapabilities()
     expect(capabilities.civic_sbt).toBe('ready')
     expect(capabilities.voting_registry).toBe('ready')
+  })
+
+  it('keeps crowdfunding payouts disabled even when the Wompi adapter is configured', () => {
+    mutableConfig.WOMPI_PAYOUTS_API_KEY = 'sandbox-payout-key-with-enough-length'
+    mutableConfig.WOMPI_PAYOUTS_USER_PRINCIPAL_ID = '550e8400-e29b-41d4-a716-446655440001'
+    mutableConfig.WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID = '550e8400-e29b-41d4-a716-446655440002'
+    mutableConfig.WOMPI_PAYOUTS_EVENT_SECRET = 'sandbox-event-secret-with-length'
+    mutableConfig.PAYOUT_DESTINATION_PEPPER = 'payout-destination-pepper-with-32-characters'
+
+    const capabilities = getFeatureCapabilities()
+    expect(capabilities.payouts).toBe('ready')
+    expect(capabilities.crowdfunding_payouts).toBe('disabled')
+  })
+
+  it('reports payout execution ready only after explicit feature enablement', () => {
+    mutableConfig.WOMPI_PAYOUTS_API_KEY = 'sandbox-payout-key-with-enough-length'
+    mutableConfig.WOMPI_PAYOUTS_USER_PRINCIPAL_ID = '550e8400-e29b-41d4-a716-446655440001'
+    mutableConfig.WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID = '550e8400-e29b-41d4-a716-446655440002'
+    mutableConfig.WOMPI_PAYOUTS_EVENT_SECRET = 'sandbox-event-secret-with-length'
+    mutableConfig.PAYOUT_DESTINATION_PEPPER = 'payout-destination-pepper-with-32-characters'
+    mutableConfig.CROWDFUNDING_PAYOUTS_ENABLED = true
+
+    expect(getFeatureCapabilities().crowdfunding_payouts).toBe('ready')
   })
 })
