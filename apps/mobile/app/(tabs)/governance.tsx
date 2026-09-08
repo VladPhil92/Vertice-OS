@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch, apiMutation } from '../../lib/api'
-import type { ApiList, GovernanceProposal, VoteTally } from '../../types/api'
+import type { ApiList, EndorseResult, GovernanceProposal, VoteTally } from '../../types/api'
 
 type VoteValue = -1 | 0 | 1
 
@@ -43,8 +43,14 @@ export default function GovernanceScreen() {
   async function endorse(proposal: GovernanceProposal) {
     setBusyId(proposal.id)
     try {
-      await apiMutation(`/governance/proposals/${proposal.id}/endorse`, `mobile-endorse-${proposal.id}`, { method: 'POST', body: '{}' })
-      setProposals((current) => current.map((item) => item.id === proposal.id ? { ...item, endorsement_count: item.endorsement_count + 1 } : item))
+      const result = await apiMutation<EndorseResult>(
+        `/governance/proposals/${proposal.id}/endorse`,
+        `mobile-endorse-${proposal.id}`,
+        { method: 'POST', body: '{}' },
+      )
+      setProposals((current) => current.map((item) => item.id === proposal.id
+        ? { ...item, endorsement_count: result.endorsement_count, status: result.status }
+        : item))
     } catch (cause) {
       Alert.alert('No se pudo registrar el aval', cause instanceof Error ? cause.message : 'Intenta nuevamente.')
     } finally {
@@ -78,7 +84,7 @@ export default function GovernanceScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>GOBERNANZA CÍVICA</Text>
           <Text style={styles.title}>Propuestas y decisiones</Text>
-          <Text style={styles.subtitle}>Consulta iniciativas, avala propuestas y participa en votaciones cuando seas elegible.</Text>
+          <Text style={styles.subtitle}>Consulta iniciativas, avala propuestas en fases habilitadas y participa en votaciones cuando seas elegible.</Text>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -87,31 +93,38 @@ export default function GovernanceScreen() {
           {proposals.map((proposal) => {
             const tally = tallies[proposal.id]
             const busy = busyId === proposal.id
+            const canEndorse = proposal.status === 'idea' || proposal.status === 'draft'
+            const approvalPercentage = tally?.approval_percentage == null ? '—' : `${tally.approval_percentage}%`
+            const quorumLabel = tally?.quorum_reached == null
+              ? 'sin cálculo'
+              : tally.quorum_reached ? 'cumplido' : 'pendiente'
+
             return (
               <View key={proposal.id} style={styles.card}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.status}>{proposal.status}</Text>
+                  <Text style={styles.status}>{proposal.status.replace(/_/g, ' ')}</Text>
                   <Text style={styles.scope}>{proposal.scope}</Text>
                 </View>
                 <Text style={styles.cardTitle}>{proposal.title}</Text>
                 <Text style={styles.category}>{proposal.category.replace(/_/g, ' ')}</Text>
-                <Text style={styles.body}>{proposal.executive_summary?.trim() || proposal.description}</Text>
                 <View style={styles.metaRow}>
                   <Text style={styles.meta}>{proposal.endorsement_count} avales</Text>
-                  <Text style={styles.meta}>{proposal.comment_count} comentarios</Text>
+                  <Text style={styles.meta}>{proposal.total_votes} votos</Text>
                 </View>
 
                 {tally ? (
                   <View style={styles.tallyBox}>
                     <Text style={styles.tallyTitle}>Tally verificable · {tally.total_votes} participantes</Text>
                     <Text style={styles.tallyLine}>A favor {tally.approve_weighted} · En contra {tally.reject_weighted} · Abstención {tally.abstain_weighted}</Text>
-                    <Text style={styles.tallyLine}>Aprobación {tally.approval_percentage}% · Quórum {tally.quorum_met ? 'cumplido' : 'pendiente'}</Text>
+                    <Text style={styles.tallyLine}>Aprobación {approvalPercentage} · Quórum {quorumLabel}</Text>
                   </View>
                 ) : null}
 
-                <Pressable disabled={busy} style={styles.secondaryButton} onPress={() => void endorse(proposal)}>
-                  <Text style={styles.secondaryButtonText}>{busy ? 'Procesando…' : 'Avalar propuesta'}</Text>
-                </Pressable>
+                {canEndorse ? (
+                  <Pressable disabled={busy} style={styles.secondaryButton} onPress={() => void endorse(proposal)}>
+                    <Text style={styles.secondaryButtonText}>{busy ? 'Procesando…' : 'Avalar propuesta'}</Text>
+                  </Pressable>
+                ) : null}
 
                 {proposal.status === 'voting' ? (
                   <View style={styles.voteRow}>
@@ -150,7 +163,6 @@ const styles = StyleSheet.create({
   scope: { textTransform: 'uppercase', fontSize: 10, color: '#6D7168', fontWeight: '700' },
   cardTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' },
   category: { textTransform: 'capitalize', color: '#70746C', fontSize: 12 },
-  body: { color: '#343931', lineHeight: 20 },
   metaRow: { flexDirection: 'row', gap: 14 },
   meta: { color: '#596057', fontSize: 12 },
   tallyBox: { backgroundColor: '#E7E4D8', padding: 12, borderRadius: 12, gap: 4 },
