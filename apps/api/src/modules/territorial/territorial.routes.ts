@@ -1,6 +1,14 @@
 import type { FastifyInstance } from 'fastify'
 import { requireVerified, requireModerator } from '../../middleware/auth'
-import { CreateReportSchema, ListReportsSchema, NearbySchema, UpdateStatusSchema } from './territorial.schema'
+import {
+  AttachReportMediaSchema,
+  ConfirmReportMediaSchema,
+  CreateReportSchema,
+  ListReportsSchema,
+  NearbySchema,
+  ReportIdParamsSchema,
+  UpdateStatusSchema,
+} from './territorial.schema'
 import {
   createReport,
   listReports,
@@ -9,11 +17,13 @@ import {
   updateReportStatus,
   getTerritorialStats,
 } from './territorial.service'
+import {
+  attachReportEvidence,
+  confirmReportMediaUpload,
+  createReportMediaUploadIntent,
+} from './report-media.service'
 
 export async function territorialRoutes(app: FastifyInstance): Promise<void> {
-  // ── Públicos ──────────────────────────────────────────────────────────────
-
-  // GET /territorial/reports — listado con filtros opcionales
   app.get('/reports', async (request, reply) => {
     const parsed = ListReportsSchema.safeParse(request.query)
     if (!parsed.success) {
@@ -23,7 +33,6 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: reports, count: reports.length })
   })
 
-  // GET /territorial/reports/nearby — reportes cercanos por coordenadas
   app.get('/reports/nearby', async (request, reply) => {
     const parsed = NearbySchema.safeParse(request.query)
     if (!parsed.success) {
@@ -33,22 +42,41 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: reports, count: reports.length })
   })
 
-  // GET /territorial/stats — estadísticas agregadas por categoría
   app.get('/stats', async (_request, reply) => {
-    const stats = await getTerritorialStats()
-    return reply.send(stats)
+    return reply.send(await getTerritorialStats())
   })
 
-  // GET /territorial/reports/:id — detalle de un reporte
+  // Preserve the legacy route contract here: service-level lookup remains the
+  // authority for not-found behavior. New evidence mutations validate UUIDs.
   app.get('/reports/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const report = await getReportById(id)
-    return reply.send(report)
+    return reply.send(await getReportById(id))
   })
 
-  // ── Requieren identidad verificada (lvl ≥ 1) ──────────────────────────────
+  app.post('/media/upload-intent', {
+    preHandler: requireVerified,
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    return reply.send(await createReportMediaUploadIntent(request.citizen.sub))
+  })
 
-  // POST /territorial/reports — crear reporte
+  app.post('/media/confirm', {
+    preHandler: requireVerified,
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = ConfirmReportMediaSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Evidencia inválida',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+    return reply.send(await confirmReportMediaUpload(
+      request.citizen.sub,
+      parsed.data.media_asset_id,
+    ))
+  })
+
   app.post('/reports', {
     preHandler: requireVerified,
     config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
@@ -61,7 +89,25 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send(report)
   })
 
-  // PATCH /territorial/reports/:id/status — actualizar estado (solo moderadores)
+  app.post('/reports/:id/media', {
+    preHandler: requireVerified,
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const params = ReportIdParamsSchema.safeParse(request.params)
+    const body = AttachReportMediaSchema.safeParse(request.body)
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        error: 'Evidencia inválida',
+        details: body.success ? undefined : body.error.flatten().fieldErrors,
+      })
+    }
+    return reply.send(await attachReportEvidence(
+      request.citizen.sub,
+      params.data.id,
+      body.data.media_asset_ids,
+    ))
+  })
+
   app.patch('/reports/:id/status', {
     preHandler: requireModerator,
   }, async (request, reply) => {
@@ -70,13 +116,9 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const report = await updateReportStatus(id, parsed.data)
-    return reply.send(report)
+    return reply.send(await updateReportStatus(id, parsed.data))
   })
 
-  // ── Admin / Moderación ────────────────────────────────────────────────────
-
-  // GET /territorial/admin/reports — listar reportes con filtro de estado (cola de moderación)
   app.get('/admin/reports', {
     preHandler: requireModerator,
   }, async (request, reply) => {
