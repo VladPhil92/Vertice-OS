@@ -65,6 +65,57 @@ async function citizenEmail(citizenId: string): Promise<string> {
   return email
 }
 
+type SubscriptionCheckoutContext = {
+  transactionId: string
+  citizenId: string
+  amountCop: number
+  cycle: BillingCycle
+  status: string
+  providerTransactionId: string | null
+}
+
+async function subscriptionCheckoutContext(resource: MercadoPagoSubscription): Promise<SubscriptionCheckoutContext | null> {
+  const transactionId = transactionIdFromReference(resource.external_reference, 'sub_')
+  if (!transactionId) return null
+
+  const rows = await prisma.$queryRaw<Array<{
+    id: string
+    citizen_id: string | null
+    amount_cop: bigint
+    metadata: unknown
+    status: string
+    provider_transaction_id: string | null
+  }>>(Prisma.sql`
+    SELECT id, citizen_id, amount_cop, metadata, status, provider_transaction_id
+    FROM payment_transactions
+    WHERE id = ${transactionId}::uuid
+      AND kind = 'subscription'
+      AND provider = ${PROVIDER}
+    LIMIT 1
+  `)
+  const tx = rows[0]
+  if (!tx?.citizen_id) return null
+
+  const cycleRaw = metadataValue(tx.metadata, 'billing_cycle')
+  const cycle: BillingCycle = cycleRaw === 'annual' ? 'annual' : 'monthly'
+  const providerAmount = asNumber(resource.auto_recurring?.transaction_amount)
+  if (
+    (resource.auto_recurring?.currency_id && resource.auto_recurring.currency_id !== 'COP')
+    || (providerAmount !== null && providerAmount !== Number(tx.amount_cop))
+  ) {
+    throw httpError('El monto o moneda del proveedor no coincide con el ledger local.', 'PAYMENT_LEDGER_MISMATCH', 409)
+  }
+
+  return {
+    transactionId,
+    citizenId: tx.citizen_id,
+    amountCop: Number(tx.amount_cop),
+    cycle,
+    status: tx.status,
+    providerTransactionId: tx.provider_transaction_id,
+  }
+}
+
 export async function createProCheckout(
   citizenId: string,
   billingCycle: BillingCycle,
@@ -81,9 +132,9 @@ export async function createProCheckout(
     throw httpError('Idempotency-Key inválido.', 'INVALID_IDEMPOTENCY_KEY', 400)
   }
 
-  type Existing = { id: string; status: string; metadata: unknown; provider_transaction_id: string | null; created_at: Date }
+  type Existing = { id: string; status: string; metadata: unknown }
   const existingRows = await prisma.$queryRaw<Existing[]>(Prisma.sql`
-    SELECT id, status, metadata, provider_transaction_id, created_at
+    SELECT id, status, metadata
     FROM payment_transactions
     WHERE citizen_id = ${citizenId}::uuid
       AND kind = 'subscription'
@@ -96,7 +147,7 @@ export async function createProCheckout(
     if (typeof checkoutUrl === 'string' && checkoutUrl.startsWith('https://')) {
       return { transactionId: existing.id, checkoutUrl, provider: PROVIDER, reused: true }
     }
-    if (existing.status === 'pending') {
+    if (existing.status === 'pending' || existing.status === 'authorized') {
       throw httpError(
         'Existe un checkout pendiente de conciliación. Reintenta con la misma operación más tarde.',
         'PAYMENT_RECONCILIATION_REQUIRED',
@@ -111,7 +162,7 @@ export async function createProCheckout(
     WHERE citizen_id = ${citizenId}::uuid
       AND kind = 'subscription'
       AND provider = ${PROVIDER}
-      AND status = 'pending'
+      AND status IN ('pending', 'authorized')
       AND created_at > NOW() - INTERVAL '30 minutes'
     LIMIT 1
   `)
@@ -186,82 +237,70 @@ export async function cancelMyProSubscription(citizenId: string) {
     LIMIT 1
   `)
   const subscription = rows[0]
-  if (!subscription?.provider_subscription_id) {
-    throw httpError('No hay una suscripción Pro cancelable.', 'SUBSCRIPTION_NOT_FOUND', 404)
+  if (subscription?.provider_subscription_id) {
+    await provider.cancelSubscription(subscription.provider_subscription_id)
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE subscriptions
+      SET cancel_at_period_end = TRUE,
+          status = CASE
+            WHEN current_period_end IS NULL OR current_period_end <= NOW() THEN 'cancelled'
+            ELSE status
+          END,
+          updated_at = NOW()
+      WHERE id = ${subscription.id}::uuid
+    `)
+    return getEffectiveBillingAccess(citizenId)
   }
 
-  await provider.cancelSubscription(subscription.provider_subscription_id)
+  // A citizen can also cancel a provider mandate that was authorized but whose
+  // first charge has not yet been verified. This prevents a failed first charge
+  // from trapping the account in a duplicate-subscription state.
+  const pending = await prisma.$queryRaw<Array<{ id: string; provider_transaction_id: string | null }>>(Prisma.sql`
+    SELECT id, provider_transaction_id
+    FROM payment_transactions
+    WHERE citizen_id = ${citizenId}::uuid
+      AND kind = 'subscription'
+      AND provider = ${PROVIDER}
+      AND status IN ('pending', 'authorized')
+      AND provider_transaction_id IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+  `)
+  if (!pending[0]?.provider_transaction_id) {
+    throw httpError('No hay una suscripción Pro cancelable.', 'SUBSCRIPTION_NOT_FOUND', 404)
+  }
+  await provider.cancelSubscription(pending[0].provider_transaction_id)
   await prisma.$executeRaw(Prisma.sql`
-    UPDATE subscriptions
-    SET cancel_at_period_end = TRUE,
-        status = CASE
-          WHEN current_period_end IS NULL OR current_period_end <= NOW() THEN 'cancelled'
-          ELSE status
-        END,
-        updated_at = NOW()
-    WHERE id = ${subscription.id}::uuid
+    UPDATE payment_transactions SET status = 'cancelled', updated_at = NOW() WHERE id = ${pending[0].id}::uuid
   `)
   return getEffectiveBillingAccess(citizenId)
 }
 
 async function syncSubscription(resource: MercadoPagoSubscription): Promise<void> {
-  const transactionId = transactionIdFromReference(resource.external_reference, 'sub_')
-  if (!transactionId) return
+  const context = await subscriptionCheckoutContext(resource)
+  if (!context) return
 
-  type Tx = { id: string; citizen_id: string | null; amount_cop: bigint; metadata: unknown }
-  const txRows = await prisma.$queryRaw<Tx[]>(Prisma.sql`
-    SELECT id, citizen_id, amount_cop, metadata
-    FROM payment_transactions
-    WHERE id = ${transactionId}::uuid AND kind = 'subscription' AND provider = ${PROVIDER}
-    LIMIT 1
-  `)
-  const tx = txRows[0]
-  if (!tx?.citizen_id) return
-
-  const cycleRaw = metadataValue(tx.metadata, 'billing_cycle')
-  const cycle: BillingCycle = cycleRaw === 'annual' ? 'annual' : 'monthly'
-  const providerAmount = asNumber(resource.auto_recurring?.transaction_amount)
-  if (
-    resource.auto_recurring?.currency_id && resource.auto_recurring.currency_id !== 'COP'
-    || (providerAmount !== null && providerAmount !== Number(tx.amount_cop))
-  ) {
-    throw httpError('El monto/currency del proveedor no coincide con el ledger local.', 'PAYMENT_LEDGER_MISMATCH', 409)
-  }
-
+  // IMPORTANT: provider mandate authorization is not proof that money was
+  // collected. It is represented as `authorized`, which does not grant Pro.
+  // Pro is activated only by syncAuthorizedPayment() after an approved charge.
   if (resource.status === 'authorized') {
-    const periodEnd = resource.next_payment_date ? new Date(resource.next_payment_date) : fallbackPeriodEnd(cycle)
-    if (!Number.isFinite(periodEnd.getTime())) throw httpError('Periodo de suscripción inválido.', 'INVALID_PROVIDER_PERIOD', 409)
-
-    await prisma.$transaction(async (db) => {
-      await db.$executeRaw(Prisma.sql`
-        UPDATE payment_transactions
-        SET status = 'paid', occurred_at = COALESCE(occurred_at, NOW()), updated_at = NOW()
-        WHERE id = ${transactionId}::uuid
-      `)
-      const updated = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-        UPDATE subscriptions
-        SET status = 'active', plan_code = 'pro', billing_cycle = ${cycle},
-            provider_customer_id = ${resource.payer_id ? String(resource.payer_id) : null},
-            current_period_start = COALESCE(current_period_start, NOW()),
-            current_period_end = ${periodEnd}, cancel_at_period_end = FALSE,
-            last_provider_sync_at = NOW(), updated_at = NOW()
-        WHERE provider = ${PROVIDER} AND provider_subscription_id = ${resource.id}
-        RETURNING id
-      `)
-      if (!updated[0]) {
-        await db.$executeRaw(Prisma.sql`
-          INSERT INTO subscriptions (
-            citizen_id, plan_code, status, billing_cycle, provider,
-            provider_customer_id, provider_subscription_id,
-            current_period_start, current_period_end, cancel_at_period_end, last_provider_sync_at
-          ) VALUES (
-            ${tx.citizen_id}::uuid, 'pro', 'active', ${cycle}, ${PROVIDER},
-            ${resource.payer_id ? String(resource.payer_id) : null}, ${resource.id},
-            NOW(), ${periodEnd}, FALSE, NOW()
-          )
-        `)
-      }
+    const mandateMetadata = JSON.stringify({
+      mandate_status: 'authorized',
+      provider_customer_id: resource.payer_id ? String(resource.payer_id) : null,
     })
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE payment_transactions
+      SET status = CASE WHEN status = 'pending' THEN 'authorized' ELSE status END,
+          metadata = metadata || ${mandateMetadata}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${context.transactionId}::uuid
+    `)
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE subscriptions
+      SET provider_customer_id = ${resource.payer_id ? String(resource.payer_id) : null},
+          last_provider_sync_at = NOW(), updated_at = NOW()
+      WHERE provider = ${PROVIDER} AND provider_subscription_id = ${resource.id}
+    `)
     return
   }
 
@@ -276,62 +315,137 @@ async function syncSubscription(resource: MercadoPagoSubscription): Promise<void
     if (resource.status === 'cancelled') {
       await prisma.$executeRaw(Prisma.sql`
         UPDATE payment_transactions
-        SET status = CASE WHEN status = 'pending' THEN 'cancelled' ELSE status END, updated_at = NOW()
-        WHERE id = ${transactionId}::uuid
+        SET status = CASE WHEN status IN ('pending', 'authorized') THEN 'cancelled' ELSE status END,
+            updated_at = NOW()
+        WHERE id = ${context.transactionId}::uuid
       `)
     }
   }
 }
 
-async function syncAuthorizedPayment(invoice: MercadoPagoAuthorizedPayment): Promise<void> {
-  if (!invoice.preapproval_id) return
-  let subscriptions = await prisma.$queryRaw<Array<{ citizen_id: string; billing_cycle: BillingCycle | null }>>(Prisma.sql`
-    SELECT citizen_id, billing_cycle
-    FROM subscriptions
-    WHERE provider = ${PROVIDER} AND provider_subscription_id = ${invoice.preapproval_id}
-    LIMIT 1
-  `)
-  if (!subscriptions[0]) {
-    await syncSubscription(await getMercadoPagoSubscription(invoice.preapproval_id))
-    subscriptions = await prisma.$queryRaw<Array<{ citizen_id: string; billing_cycle: BillingCycle | null }>>(Prisma.sql`
-      SELECT citizen_id, billing_cycle FROM subscriptions
-      WHERE provider = ${PROVIDER} AND provider_subscription_id = ${invoice.preapproval_id}
-      LIMIT 1
-    `)
-  }
-  const subscription = subscriptions[0]
-  if (!subscription || !invoice.payment?.id) return
+async function activatePaidSubscription(
+  resource: MercadoPagoSubscription,
+  context: SubscriptionCheckoutContext,
+  invoice: MercadoPagoAuthorizedPayment,
+): Promise<void> {
+  if (!invoice.payment?.id) return
+  const paymentId = String(invoice.payment.id)
+  const periodEnd = resource.next_payment_date ? new Date(resource.next_payment_date) : fallbackPeriodEnd(context.cycle)
+  if (!Number.isFinite(periodEnd.getTime())) throw httpError('Periodo de suscripción inválido.', 'INVALID_PROVIDER_PERIOD', 409)
 
-  const amount = asNumber(invoice.transaction_amount)
-  if (amount === null || amount < 0 || (invoice.currency_id && invoice.currency_id !== 'COP')) {
-    throw httpError('Factura recurrente inválida.', 'PAYMENT_LEDGER_MISMATCH', 409)
-  }
-  const paymentStatus = invoice.payment.status === 'approved'
-    ? 'paid'
-    : invoice.payment.status === 'cancelled'
-      ? 'cancelled'
-      : invoice.payment.status === 'rejected'
-        ? 'failed'
-        : 'pending'
-  const renewalMetadata = JSON.stringify({
+  const paymentMetadata = JSON.stringify({
     invoice_id: String(invoice.id),
-    preapproval_id: invoice.preapproval_id,
+    preapproval_id: resource.id,
     status_detail: invoice.payment.status_detail ?? null,
   })
+
+  await prisma.$transaction(async (db) => {
+    const initial = await db.$queryRaw<Array<{ status: string; provider_transaction_id: string | null }>>(Prisma.sql`
+      SELECT status, provider_transaction_id
+      FROM payment_transactions
+      WHERE id = ${context.transactionId}::uuid
+      FOR UPDATE
+    `)
+
+    // The first approved charge closes the original checkout transaction. Later
+    // renewals become independent ledger rows keyed by the provider payment id.
+    if (initial[0]?.status === 'pending' || initial[0]?.status === 'authorized') {
+      await db.$executeRaw(Prisma.sql`
+        UPDATE payment_transactions
+        SET status = 'paid', provider_transaction_id = ${paymentId},
+            metadata = metadata || ${paymentMetadata}::jsonb,
+            occurred_at = COALESCE(occurred_at, ${invoice.debit_date ? new Date(invoice.debit_date) : new Date()}),
+            updated_at = NOW()
+        WHERE id = ${context.transactionId}::uuid
+      `)
+    } else if (initial[0]?.provider_transaction_id !== paymentId) {
+      await db.$executeRaw(Prisma.sql`
+        INSERT INTO payment_transactions (
+          citizen_id, kind, status, provider, provider_transaction_id,
+          amount_cop, currency, metadata, occurred_at
+        ) VALUES (
+          ${context.citizenId}::uuid, 'subscription', 'paid', ${PROVIDER}, ${paymentId},
+          ${context.amountCop}, 'COP', ${paymentMetadata}::jsonb,
+          ${invoice.debit_date ? new Date(invoice.debit_date) : new Date()}
+        )
+        ON CONFLICT (provider, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL
+        DO UPDATE SET status = 'paid', metadata = payment_transactions.metadata || EXCLUDED.metadata, updated_at = NOW()
+      `)
+    }
+
+    const updated = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      UPDATE subscriptions
+      SET status = 'active', plan_code = 'pro', billing_cycle = ${context.cycle},
+          provider_customer_id = ${resource.payer_id ? String(resource.payer_id) : null},
+          current_period_start = NOW(), current_period_end = ${periodEnd},
+          cancel_at_period_end = FALSE, last_provider_sync_at = NOW(), updated_at = NOW()
+      WHERE provider = ${PROVIDER} AND provider_subscription_id = ${resource.id}
+      RETURNING id
+    `)
+    if (!updated[0]) {
+      await db.$executeRaw(Prisma.sql`
+        INSERT INTO subscriptions (
+          citizen_id, plan_code, status, billing_cycle, provider,
+          provider_customer_id, provider_subscription_id,
+          current_period_start, current_period_end, cancel_at_period_end, last_provider_sync_at
+        ) VALUES (
+          ${context.citizenId}::uuid, 'pro', 'active', ${context.cycle}, ${PROVIDER},
+          ${resource.payer_id ? String(resource.payer_id) : null}, ${resource.id},
+          NOW(), ${periodEnd}, FALSE, NOW()
+        )
+      `)
+    }
+  })
+}
+
+async function syncAuthorizedPayment(invoice: MercadoPagoAuthorizedPayment): Promise<void> {
+  if (!invoice.preapproval_id || !invoice.payment?.id) return
+  const resource = await getMercadoPagoSubscription(invoice.preapproval_id)
+  const context = await subscriptionCheckoutContext(resource)
+  if (!context) return
+
+  const amount = asNumber(invoice.transaction_amount)
+  if (
+    amount === null
+    || amount !== context.amountCop
+    || (invoice.currency_id && invoice.currency_id !== 'COP')
+  ) {
+    throw httpError('Factura recurrente inválida o inconsistente con el plan contratado.', 'PAYMENT_LEDGER_MISMATCH', 409)
+  }
+
+  if (invoice.payment.status === 'approved') {
+    await activatePaidSubscription(resource, context, invoice)
+    return
+  }
+
+  const providerStatus = invoice.payment.status === 'cancelled'
+    ? 'cancelled'
+    : invoice.payment.status === 'rejected'
+      ? 'failed'
+      : 'pending'
+  const metadata = JSON.stringify({
+    last_invoice_id: String(invoice.id),
+    last_payment_status: invoice.payment.status ?? null,
+    last_status_detail: invoice.payment.status_detail ?? null,
+  })
   await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO payment_transactions (
-      citizen_id, kind, status, provider, provider_transaction_id,
-      amount_cop, currency, metadata, occurred_at
-    ) VALUES (
-      ${subscription.citizen_id}::uuid, 'subscription', ${paymentStatus}, ${PROVIDER}, ${String(invoice.payment.id)},
-      ${Math.round(amount)}, 'COP', ${renewalMetadata}::jsonb,
-      ${invoice.debit_date ? new Date(invoice.debit_date) : null}
-    )
-    ON CONFLICT (provider, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL
-    DO UPDATE SET status = EXCLUDED.status, metadata = payment_transactions.metadata || EXCLUDED.metadata, updated_at = NOW()
+    UPDATE payment_transactions
+    SET metadata = metadata || ${metadata}::jsonb,
+        status = CASE
+          WHEN ${providerStatus} = 'cancelled' AND status IN ('pending', 'authorized') THEN 'cancelled'
+          ELSE status
+        END,
+        updated_at = NOW()
+    WHERE id = ${context.transactionId}::uuid
   `)
-  if (paymentStatus === 'paid') {
-    await syncSubscription(await getMercadoPagoSubscription(invoice.preapproval_id))
+
+  if (providerStatus === 'failed') {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE subscriptions
+      SET status = CASE WHEN current_period_end IS NULL OR current_period_end <= NOW() THEN 'past_due' ELSE status END,
+          last_provider_sync_at = NOW(), updated_at = NOW()
+      WHERE provider = ${PROVIDER} AND provider_subscription_id = ${resource.id}
+    `)
   }
 }
 
@@ -344,14 +458,21 @@ function contributionStateFromProvider(status: string, paidEnough: boolean): 'pe
   return 'pending'
 }
 
-async function applyContributionState(transactionId: string, target: ReturnType<typeof contributionStateFromProvider>, providerAmount: number | null, currency: string | undefined) {
-  type Row = { tx_amount: bigint; contribution_id: string; campaign_id: string; contribution_amount: bigint; contribution_status: string }
+async function applyContributionState(
+  transactionId: string,
+  target: ReturnType<typeof contributionStateFromProvider>,
+  providerAmount: number | null,
+  currency: string | undefined,
+) {
+  type Row = { tx_amount: bigint; contribution_id: string; campaign_id: string; contribution_amount: bigint }
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT tx.amount_cop AS tx_amount, c.id AS contribution_id, c.campaign_id,
-           c.amount_cop AS contribution_amount, c.status AS contribution_status
+           c.amount_cop AS contribution_amount
     FROM payment_transactions tx
     JOIN crowdfunding_contributions c ON c.payment_transaction_id = tx.id
-    WHERE tx.id = ${transactionId}::uuid AND tx.kind = 'crowdfunding_contribution' AND tx.provider = ${PROVIDER}
+    WHERE tx.id = ${transactionId}::uuid
+      AND tx.kind = 'crowdfunding_contribution'
+      AND tx.provider = ${PROVIDER}
     LIMIT 1
   `)
   const row = rows[0]
@@ -368,7 +489,10 @@ async function applyContributionState(transactionId: string, target: ReturnType<
     if (!previous) return
 
     await db.$executeRaw(Prisma.sql`
-      UPDATE payment_transactions SET status = ${target}, occurred_at = CASE WHEN ${target} = 'paid' THEN COALESCE(occurred_at, NOW()) ELSE occurred_at END, updated_at = NOW()
+      UPDATE payment_transactions
+      SET status = ${target},
+          occurred_at = CASE WHEN ${target} = 'paid' THEN COALESCE(occurred_at, NOW()) ELSE occurred_at END,
+          updated_at = NOW()
       WHERE id = ${transactionId}::uuid
     `)
     await db.$executeRaw(Prisma.sql`
@@ -479,19 +603,25 @@ export async function processMercadoPagoWebhook(input: {
 
 export async function reconcileMyBilling(citizenId: string) {
   ensureProviderReady()
-  const resources = await prisma.$queryRaw<Array<{ provider_transaction_id: string }>>(Prisma.sql`
-    SELECT DISTINCT provider_transaction_id
+  const resources = await prisma.$queryRaw<Array<{ provider_subscription_id: string }>>(Prisma.sql`
+    SELECT provider_subscription_id
+    FROM subscriptions
+    WHERE citizen_id = ${citizenId}::uuid
+      AND provider = ${PROVIDER}
+      AND provider_subscription_id IS NOT NULL
+    UNION
+    SELECT provider_transaction_id AS provider_subscription_id
     FROM payment_transactions
     WHERE citizen_id = ${citizenId}::uuid
       AND kind = 'subscription'
       AND provider = ${PROVIDER}
+      AND status IN ('pending', 'authorized')
       AND provider_transaction_id IS NOT NULL
       AND created_at > NOW() - INTERVAL '400 days'
-    ORDER BY provider_transaction_id
     LIMIT 20
   `)
   for (const resource of resources) {
-    await syncSubscription(await getMercadoPagoSubscription(resource.provider_transaction_id))
+    await syncSubscription(await getMercadoPagoSubscription(resource.provider_subscription_id))
   }
   return getEffectiveBillingAccess(citizenId)
 }
@@ -506,21 +636,38 @@ export async function createCrowdfundingContributionCheckout(input: {
 }) {
   ensureProviderReady()
   if (!config.CROWDFUNDING_PAYMENTS_ENABLED) {
-    throw httpError('Los aportes monetarios están deshabilitados hasta completar certificación KYC/KYB y operación de desembolsos.', 'CROWDFUNDING_PAYMENTS_DISABLED', 503)
+    throw httpError(
+      'Los aportes monetarios están deshabilitados hasta completar certificación KYC/KYB y operación de desembolsos.',
+      'CROWDFUNDING_PAYMENTS_DISABLED',
+      503,
+    )
   }
   const idempotencyKey = input.requestedIdempotencyKey?.trim() || randomUUID()
-  if (!/^[A-Za-z0-9._:-]{8,80}$/.test(idempotencyKey)) throw httpError('Idempotency-Key inválido.', 'INVALID_IDEMPOTENCY_KEY', 400)
+  if (!/^[A-Za-z0-9._:-]{8,80}$/.test(idempotencyKey)) {
+    throw httpError('Idempotency-Key inválido.', 'INVALID_IDEMPOTENCY_KEY', 400)
+  }
 
-  type Campaign = { title: string; status: string; compliance_status: string; creator_citizen_id: string; ends_at: Date | null }
+  type Campaign = {
+    title: string
+    status: string
+    compliance_status: string
+    creator_citizen_id: string
+    ends_at: Date | null
+  }
   const campaigns = await prisma.$queryRaw<Campaign[]>(Prisma.sql`
     SELECT title, status, compliance_status, creator_citizen_id, ends_at
     FROM crowdfunding_campaigns WHERE id = ${input.campaignId}::uuid LIMIT 1
   `)
   const campaign = campaigns[0]
   if (!campaign) throw httpError('Campaña no encontrada.', 'CAMPAIGN_NOT_FOUND', 404)
-  if (campaign.status !== 'active' || campaign.compliance_status !== 'verified' || (campaign.ends_at && campaign.ends_at <= new Date())) {
+  if (
+    campaign.status !== 'active'
+    || campaign.compliance_status !== 'verified'
+    || (campaign.ends_at && campaign.ends_at <= new Date())
+  ) {
     throw httpError('La campaña no está habilitada para recibir aportes.', 'CAMPAIGN_NOT_PAYABLE', 409)
   }
+
   const payout = await prisma.$queryRaw<Array<{ verification_status: string; payout_status: string }>>(Prisma.sql`
     SELECT verification_status, payout_status
     FROM crowdfunding_payout_profiles
@@ -590,8 +737,13 @@ export async function createCrowdfundingContributionCheckout(input: {
       throw httpError('El aporte quedó pendiente de conciliación; no se generará un segundo cobro.', 'PAYMENT_RECONCILIATION_REQUIRED', 503)
     }
     await prisma.$transaction(async (db) => {
-      await db.$executeRaw(Prisma.sql`UPDATE payment_transactions SET status = 'failed', updated_at = NOW() WHERE id = ${created}::uuid`)
-      await db.$executeRaw(Prisma.sql`UPDATE crowdfunding_contributions SET status = 'failed', updated_at = NOW() WHERE payment_transaction_id = ${created}::uuid`)
+      await db.$executeRaw(Prisma.sql`
+        UPDATE payment_transactions SET status = 'failed', updated_at = NOW() WHERE id = ${created}::uuid
+      `)
+      await db.$executeRaw(Prisma.sql`
+        UPDATE crowdfunding_contributions SET status = 'failed', updated_at = NOW()
+        WHERE payment_transaction_id = ${created}::uuid
+      `)
     })
     throw error
   }
