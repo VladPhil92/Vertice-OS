@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import type { CampaignReviewInput, PayoutProfileReviewInput } from './crowdfunding.schema'
+import { getCampaignActivationReadiness } from './crowdfunding.readiness.service'
 
 function httpError(message: string, code: string, statusCode: number): Error {
   return Object.assign(new Error(message), { code, statusCode })
@@ -38,6 +39,9 @@ export async function getPayoutReadiness(citizenId: string) {
     verified_at: profile?.verified_at?.toISOString() ?? null,
     review_notes: profile?.review_notes ?? null,
     can_request_review: identityVerified && (!profile || ['pending', 'rejected'].includes(profile.verification_status)),
+    // Legacy/profile-only signal kept for compatibility. Actual campaign activation
+    // is gated by crowdfunding.readiness.service (identity + KYC/KYB + BRE-B +
+    // collection rail + payout provider + payout certification + campaign state).
     can_activate_campaign: identityVerified && profile?.verification_status === 'verified' && profile.payout_status === 'eligible',
   }
 }
@@ -232,12 +236,13 @@ export async function reviewCampaign(campaignId: string, input: CampaignReviewIn
 }
 
 export async function activateCampaign(citizenId: string, campaignId: string) {
-  const readiness = await getPayoutReadiness(citizenId)
-  if (!readiness.can_activate_campaign) {
+  const readiness = await getCampaignActivationReadiness(citizenId, campaignId)
+  if (!readiness.campaign.can_activate) {
+    const blocker = readiness.campaign.blockers[0] ?? readiness.funding.blockers[0]
     throw httpError(
-      'Antes de recaudar debes tener identidad y perfil de desembolso verificados.',
-      'PAYOUT_PROFILE_NOT_READY',
-      409,
+      blocker?.message ?? 'La campaña no cumple las condiciones operativas para activarse.',
+      blocker?.code ?? 'CAMPAIGN_ACTIVATION_NOT_READY',
+      blocker?.scope === 'platform' ? 503 : 409,
     )
   }
 
