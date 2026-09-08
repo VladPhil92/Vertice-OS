@@ -27,6 +27,16 @@ type CampaignRow = {
   updated_at: Date
 }
 
+type CampaignAnalyticsRow = {
+  campaign_count: bigint
+  active_campaign_count: bigint
+  completed_campaign_count: bigint
+  total_goal_cop: bigint
+  total_raised_cop: bigint
+  paid_contribution_count: bigint
+  known_supporter_count: bigint
+}
+
 function slugify(value: string): string {
   const normalized = value
     .normalize('NFD')
@@ -131,4 +141,43 @@ export async function listPublicCampaigns() {
   `)
 
   return rows.map(serializeCampaign)
+}
+
+export async function getCampaignAnalytics(citizenId: string) {
+  const rows = await prisma.$queryRaw<CampaignAnalyticsRow[]>(Prisma.sql`
+    SELECT
+      COUNT(*)::bigint AS campaign_count,
+      COUNT(*) FILTER (WHERE status IN ('verified', 'active', 'funded', 'executing', 'verifying'))::bigint AS active_campaign_count,
+      COUNT(*) FILTER (WHERE status = 'completed')::bigint AS completed_campaign_count,
+      COALESCE(SUM(goal_amount_cop), 0)::bigint AS total_goal_cop,
+      COALESCE(SUM(raised_amount_cop), 0)::bigint AS total_raised_cop,
+      (
+        SELECT COUNT(*)::bigint
+        FROM crowdfunding_contributions contribution
+        JOIN crowdfunding_campaigns owned_campaign ON owned_campaign.id = contribution.campaign_id
+        WHERE owned_campaign.creator_citizen_id = ${citizenId}::uuid
+          AND contribution.status = 'paid'
+      ) AS paid_contribution_count,
+      (
+        SELECT COUNT(DISTINCT contribution.contributor_citizen_id)::bigint
+        FROM crowdfunding_contributions contribution
+        JOIN crowdfunding_campaigns owned_campaign ON owned_campaign.id = contribution.campaign_id
+        WHERE owned_campaign.creator_citizen_id = ${citizenId}::uuid
+          AND contribution.status = 'paid'
+          AND contribution.contributor_citizen_id IS NOT NULL
+      ) AS known_supporter_count
+    FROM crowdfunding_campaigns
+    WHERE creator_citizen_id = ${citizenId}::uuid
+  `)
+
+  const row = rows[0]
+  return {
+    campaign_count: Number(row.campaign_count),
+    active_campaign_count: Number(row.active_campaign_count),
+    completed_campaign_count: Number(row.completed_campaign_count),
+    total_goal_cop: Number(row.total_goal_cop),
+    total_raised_cop: Number(row.total_raised_cop),
+    paid_contribution_count: Number(row.paid_contribution_count),
+    known_supporter_count: Number(row.known_supporter_count),
+  }
 }
