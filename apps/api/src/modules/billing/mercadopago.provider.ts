@@ -58,6 +58,12 @@ export interface MercadoPagoAuthorizedPayment {
   } | null
 }
 
+export interface MercadoPagoRefund {
+  id?: string | number | null
+  status?: string | null
+  amount?: string | number | null
+}
+
 export class MercadoPagoApiError extends Error {
   readonly code = 'MERCADOPAGO_API_ERROR'
   readonly statusCode = 503
@@ -224,6 +230,13 @@ export function getMercadoPagoSubscription(id: string) {
 
 export function getMercadoPagoOrder(id: string) {
   return mercadoPagoRequest<MercadoPagoOrder>(`/v1/orders/${encodeURIComponent(id)}`)
+}
+
+export function refundMercadoPagoOrder(orderId: string, idempotencyKey: string) {
+  return mercadoPagoRequest<MercadoPagoRefund>(`/v1/orders/${encodeURIComponent(orderId)}/refund`, {
+    method: 'POST',
+    idempotencyKey,
+  })
 }
 
 export function getMercadoPagoPayment(id: string) {
