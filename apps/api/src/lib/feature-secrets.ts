@@ -4,6 +4,7 @@ import {
   getCivicIdentityProofingIngressState,
 } from '../modules/identity/identity-provider-registry'
 import { getMercadoPagoConfigurationState } from '../modules/billing/mercadopago.provider'
+import { getWompiPayoutConfigurationState } from '../modules/billing/wompi-payouts.provider'
 
 function unavailable(message: string, code: string): Error {
   return Object.assign(new Error(message), { statusCode: 503, code })
@@ -70,6 +71,8 @@ export interface FeatureCapabilities {
   civic_identity_proofing_ingress: CapabilityState
   payments: CapabilityState
   crowdfunding_payments: CapabilityState
+  payouts: CapabilityState
+  crowdfunding_payouts: CapabilityState
   civic_sbt: CapabilityState
   voting_registry: CapabilityState
 }
@@ -91,6 +94,7 @@ function contractCapability(
  */
 export function getFeatureCapabilities(): FeatureCapabilities {
   const payments = getMercadoPagoConfigurationState()
+  const payouts = getWompiPayoutConfigurationState()
   return {
     civic_ai: config.AI_SERVICE_SECRET ? 'ready' : 'disabled',
     voting_crypto: config.VOTE_NULLIFIER_SECRET ? 'ready' : 'disabled',
@@ -101,6 +105,10 @@ export function getFeatureCapabilities(): FeatureCapabilities {
     payments,
     crowdfunding_payments: config.CROWDFUNDING_PAYMENTS_ENABLED
       ? (payments === 'ready' ? 'ready' : 'misconfigured')
+      : 'disabled',
+    payouts,
+    crowdfunding_payouts: config.CROWDFUNDING_PAYOUTS_ENABLED
+      ? (payouts === 'ready' ? 'ready' : 'misconfigured')
       : 'disabled',
     civic_sbt: contractCapability(config.CIVIC_SBT_ADDRESS, true),
     voting_registry: contractCapability(config.VOTING_REGISTRY_ADDRESS, false),
