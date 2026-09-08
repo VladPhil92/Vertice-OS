@@ -122,8 +122,22 @@ jobs:
         env:
           DATABASE_URL: postgresql://vertice:vertice_test@localhost:5432/vertice_test
         run: |
+          set -euo pipefail
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infrastructure/db/init.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/api/prisma/migrations/20260908111500_operation_idempotency_phase6/migration.sql
+
+          # init.sql is the historical integration baseline. Golden journeys
+          # deliberately apply the exact forward schema slices used by the
+          # current runtime instead of pretending the baseline is current.
+          for migration in \
+            apps/api/prisma/migrations/20260902233000_superadmin_role_authority/migration.sql \
+            apps/api/prisma/migrations/20260906160000_civic_social_profiles/migration.sql \
+            apps/api/prisma/migrations/20260906191500_civic_actions_core/migration.sql \
+            apps/api/prisma/migrations/20260907223000_least_privilege_session_activation/migration.sql \
+            apps/api/prisma/migrations/20260908111500_operation_idempotency_phase6/migration.sql
+          do
+            echo "Applying Golden schema slice: $migration"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
 
       - name: Run real API golden journeys
         env:
