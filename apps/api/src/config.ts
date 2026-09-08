@@ -98,6 +98,18 @@ const schema = z.object({
   MERCADOPAGO_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(30).max(900).default(300),
   CROWDFUNDING_PAYMENTS_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 
+  // ── Desembolsos (Wompi Pagos a Terceros) — capability separada ──────────
+  // El adapter puede certificarse en sandbox sin habilitar desembolsos reales.
+  // Los datos bancarios del beneficiario son transitorios: VÉRTICE persiste
+  // únicamente una huella HMAC y referencias no sensibles del proveedor.
+  WOMPI_PAYOUTS_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  WOMPI_PAYOUTS_API_KEY: z.string().min(16).optional(),
+  WOMPI_PAYOUTS_USER_PRINCIPAL_ID: z.string().uuid().optional(),
+  WOMPI_PAYOUTS_SOURCE_ACCOUNT_ID: z.string().uuid().optional(),
+  WOMPI_PAYOUTS_EVENT_SECRET: z.string().min(16).optional(),
+  PAYOUT_DESTINATION_PEPPER: z.string().min(32).optional(),
+  CROWDFUNDING_PAYOUTS_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+
   // ── Blockchain (Polygon) — capacidades opcionales ─────────────────
   POLYGON_RPC_URL:          z.string().url().optional(),
   POLYGON_PRIVATE_KEY:      z.string().optional(),

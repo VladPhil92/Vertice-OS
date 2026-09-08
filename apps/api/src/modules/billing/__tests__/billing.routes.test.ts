@@ -27,6 +27,11 @@ jest.mock('../payment.service', () => ({
   processMercadoPagoWebhook: mockProcessMercadoPagoWebhook,
 }))
 
+const mockProcessWompiPayoutWebhook = jest.fn()
+jest.mock('../crowdfunding-payout.service', () => ({
+  processWompiPayoutWebhook: mockProcessWompiPayoutWebhook,
+}))
+
 jest.mock('../../../lib/idempotency', () => ({
   normalizeRequestedIdempotencyKey: (value: string | string[] | undefined): string | undefined => {
     const raw = Array.isArray(value) ? value[0] : value
@@ -201,5 +206,24 @@ describe('POST /billing/webhooks/mercadopago', () => {
 
     expect(res.statusCode).toBe(200)
     expect(mockProcessMercadoPagoWebhook).toHaveBeenCalledWith(expect.objectContaining({ dataId: '999' }))
+  })
+})
+
+describe('POST /billing/webhooks/wompi-payouts', () => {
+  it('is reachable without a session token and forwards the checksum header', async () => {
+    mockProcessWompiPayoutWebhook.mockResolvedValue({ duplicate: false, processed: true })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/billing/webhooks/wompi-payouts',
+      headers: { 'x-event-checksum': 'a'.repeat(64) },
+      payload: { event: 'payout.updated' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockProcessWompiPayoutWebhook).toHaveBeenCalledWith({
+      xEventChecksum: 'a'.repeat(64),
+      body: { event: 'payout.updated' },
+    })
   })
 })

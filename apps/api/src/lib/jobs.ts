@@ -9,12 +9,17 @@ import {
   buildProposalContentHash,
 } from './blockchain'
 import { reconcileFinanceLedger } from '../modules/billing/finance-operations.service'
+import { reconcileCampaignPayout } from '../modules/billing/crowdfunding-payout.service'
 
 // Cola durable en Postgres para trabajo operacional que no debe perderse si el
 // proceso cae a mitad de camino. El worker reclama con FOR UPDATE SKIP LOCKED y
 // reintenta con backoff exponencial hasta max_attempts.
 
-export type JobType = 'mint_identity_badge' | 'record_voting_result' | 'reconcile_payment_ledger'
+export type JobType =
+  | 'mint_identity_badge'
+  | 'record_voting_result'
+  | 'reconcile_payment_ledger'
+  | 'reconcile_crowdfunding_payout'
 
 export interface MintIdentityBadgePayload {
   citizenId: string
@@ -38,7 +43,16 @@ export interface ReconcilePaymentLedgerPayload {
   requestedByCitizenId?: string | null
 }
 
-type JobPayload = MintIdentityBadgePayload | RecordVotingResultPayload | ReconcilePaymentLedgerPayload
+export interface ReconcileCrowdfundingPayoutPayload {
+  payoutRequestId: string
+  requestedByCitizenId?: string | null
+}
+
+type JobPayload =
+  | MintIdentityBadgePayload
+  | RecordVotingResultPayload
+  | ReconcilePaymentLedgerPayload
+  | ReconcileCrowdfundingPayoutPayload
 
 interface JobRow {
   id: number
@@ -157,6 +171,13 @@ async function handlePaymentLedgerReconciliation(payload: ReconcilePaymentLedger
   }
 }
 
+async function handleCrowdfundingPayoutReconciliation(payload: ReconcileCrowdfundingPayoutPayload): Promise<void> {
+  await reconcileCampaignPayout({
+    payoutRequestId: payload.payoutRequestId,
+    actorId: payload.requestedByCitizenId ?? null,
+  })
+}
+
 export async function runJob(job: JobRow): Promise<void> {
   try {
     switch (job.type) {
@@ -168,6 +189,9 @@ export async function runJob(job: JobRow): Promise<void> {
         break
       case 'reconcile_payment_ledger':
         await handlePaymentLedgerReconciliation(job.payload as ReconcilePaymentLedgerPayload)
+        break
+      case 'reconcile_crowdfunding_payout':
+        await handleCrowdfundingPayoutReconciliation(job.payload as ReconcileCrowdfundingPayoutPayload)
         break
     }
     await completeJob(job.id)
