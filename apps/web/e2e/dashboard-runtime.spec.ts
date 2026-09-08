@@ -95,6 +95,6 @@ test('coalesces dashboard consumers into one effective runtime read', async ({ p
 
   await expect(page.getByTestId('dashboard-experience-layer')).toBeVisible()
   await expect(page.getByRole('heading', { name: /convierte gestión en evidencia pública/i })).toBeVisible()
-  await expect(page.getByText('Ciudadano Runtime')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ciudadano Runtime' })).toBeVisible()
   await expect.poll(() => dashboardReads).toBe(1)
 })

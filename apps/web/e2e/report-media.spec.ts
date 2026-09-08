@@ -3,8 +3,9 @@ import { expect, test, type Page } from '@playwright/test'
 const MEDIA_ASSET_ID = '550e8400-e29b-41d4-a716-446655440010'
 
 async function setupAuth(page: Page) {
+  const baseURL = process.env.BASE_URL ?? 'http://localhost:3000'
   await page.context().addCookies([
-    { name: 'vertice_auth', value: '1', domain: 'localhost', path: '/' },
+    { name: 'vertice_auth', value: '1', url: baseURL },
   ])
   await page.addInitScript(() => {
     localStorage.setItem('access_token', 'test-jwt-token')
