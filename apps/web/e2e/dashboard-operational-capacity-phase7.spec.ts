@@ -30,19 +30,21 @@ const proAccess = {
 
 const usage = {
   planCode: 'pro',
+  period: { start: '2026-09-01', endExclusive: '2026-10-01', timezone: 'America/Bogota' },
   metrics: {
-    ai_requests: { metric: 'ai_requests', used: 14, limit: 500, remaining: 486, percent: 3, periodStart: '2026-09-01' },
-    evidence_storage_bytes: { metric: 'evidence_storage_bytes', used: 0, limit: 5242880000, remaining: 5242880000, percent: 0, periodStart: '2026-09-01' },
-    scheduled_posts: { metric: 'scheduled_posts', used: 2, limit: 100, remaining: 98, percent: 2, periodStart: '2026-09-01' },
+    aiRequestsPerMonth: { used: 14, limit: 500, remaining: 486, percent: 3, enforced: true, source: 'billing_usage_counters' },
+    activeProjects: { used: 5, limit: 50, remaining: 45, percent: 10, enforced: false, source: 'civic_actions' },
+    evidenceStorageMb: { used: null, limit: 5000, remaining: null, percent: null, enforced: false, source: 'capacity_only' },
+    scheduledPostsPerMonth: { used: 2, limit: 100, remaining: 98, percent: 2, enforced: true, source: 'billing_usage_counters' },
   },
-  generatedAt: '2026-09-08T18:00:00.000Z',
+  neutrality: { usageChangesReputation: false, subscriptionChangesReputation: false },
 }
 
 test.describe('Dashboard operational capacity Phase 7', () => {
   test('shows durable plan consumption and Pro operations', async ({ page }) => {
     await setupShell(page)
     await page.route('**/billing/me', (route) => route.fulfill({ status: 200, json: proAccess }))
-    await page.route('**/billing/usage', (route) => route.fulfill({ status: 200, json: usage }))
+    await page.route('**/billing/me/usage', (route) => route.fulfill({ status: 200, json: usage }))
     await page.route('**/publishing/scheduled', (route) => route.fulfill({ status: 200, json: { publications: [], count: 0 } }))
 
     await page.goto('/dashboard/operations')
@@ -61,13 +63,13 @@ test.describe('Dashboard operational capacity Phase 7', () => {
     let scheduledUsage = 2
 
     await page.route('**/billing/me', (route) => route.fulfill({ status: 200, json: proAccess }))
-    await page.route('**/billing/usage', (route) => route.fulfill({
+    await page.route('**/billing/me/usage', (route) => route.fulfill({
       status: 200,
       json: {
         ...usage,
         metrics: {
           ...usage.metrics,
-          scheduled_posts: { ...usage.metrics.scheduled_posts, used: scheduledUsage, remaining: 100 - scheduledUsage },
+          scheduledPostsPerMonth: { ...usage.metrics.scheduledPostsPerMonth, used: scheduledUsage, remaining: 100 - scheduledUsage },
         },
       },
     }))

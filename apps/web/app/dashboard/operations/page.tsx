@@ -18,18 +18,23 @@ type BillingAccess = {
 }
 
 type Metric = {
-  metric: 'ai_requests' | 'evidence_storage_bytes' | 'scheduled_posts'
-  used: number
+  used: number | null
   limit: number
-  remaining: number
-  percent: number
-  periodStart: string
+  remaining: number | null
+  percent: number | null
+  enforced: boolean
+  source: string
 }
 
 type UsageSnapshot = {
   planCode: 'free' | 'pro'
-  metrics: Record<Metric['metric'], Metric>
-  generatedAt: string
+  period: { start: string; endExclusive: string; timezone: string }
+  metrics: {
+    aiRequestsPerMonth: Metric
+    activeProjects: Metric
+    evidenceStorageMb: Metric
+    scheduledPostsPerMonth: Metric
+  }
 }
 
 type Publication = {
@@ -61,6 +66,7 @@ function MetricCard({ title, description, metric, formatter = formatNumber }: {
   metric: Metric
   formatter?: (value: number) => string
 }) {
+  const measured = metric.used !== null
   return (
     <article className="rounded-2xl border border-[#DCE5EF] bg-white p-5">
       <div className="flex items-start justify-between gap-4">
@@ -69,15 +75,19 @@ function MetricCard({ title, description, metric, formatter = formatNumber }: {
           <p className="mt-1 text-xs font-medium leading-5 text-[#607087]">{description}</p>
         </div>
         <div className="text-right text-xs font-black text-[#0A2A66]">
-          {formatter(metric.used)} / {formatter(metric.limit)}
+          {metric.used !== null ? `${formatter(metric.used)} / ${formatter(metric.limit)}` : `Capacidad: ${formatter(metric.limit)}`}
         </div>
       </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#EAF1FB]">
-        <div className="h-full rounded-full bg-[#0A2A66] transition-all" style={{ width: `${metric.percent}%` }} />
-      </div>
-      <div className="mt-2 text-[10px] font-bold uppercase tracking-[.08em] text-[#7B8799]">
-        {metric.percent}% usado · {formatter(metric.remaining)} disponible
-      </div>
+      {measured && (
+        <>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#EAF1FB]">
+            <div className="h-full rounded-full bg-[#0A2A66] transition-all" style={{ width: `${metric.percent}%` }} />
+          </div>
+          <div className="mt-2 text-[10px] font-bold uppercase tracking-[.08em] text-[#7B8799]">
+            {metric.percent}% usado · {formatter(metric.remaining ?? 0)} disponible
+          </div>
+        </>
+      )}
     </article>
   )
 }
@@ -100,7 +110,7 @@ export default function OperationsPage() {
     setError(null)
     const [nextAccess, nextUsage] = await Promise.all([
       apiFetch<BillingAccess>('/billing/me'),
-      apiFetch<UsageSnapshot>('/billing/usage'),
+      apiFetch<UsageSnapshot>('/billing/me/usage'),
     ])
     setAccess(nextAccess)
     setUsage(nextUsage)
@@ -214,14 +224,14 @@ export default function OperationsPage() {
 
       {usage && (
         <div className="mt-8 grid gap-4 lg:grid-cols-3">
-          <MetricCard title="IA cívica" description="Solicitudes de IA completadas durante el mes actual." metric={usage.metrics.ai_requests} />
+          <MetricCard title="IA cívica" description="Solicitudes de IA completadas durante el mes actual." metric={usage.metrics.aiRequestsPerMonth} />
           <MetricCard
             title="Almacenamiento de evidencia"
             description="Capacidad contratada. El consumo por bytes se habilitará cuando el proveedor exponga tamaño verificable del activo."
-            metric={usage.metrics.evidence_storage_bytes}
-            formatter={(bytes) => `${Math.round(bytes / 1024 / 1024)} MB`}
+            metric={usage.metrics.evidenceStorageMb}
+            formatter={(mb) => `${formatNumber(mb)} MB`}
           />
-          <MetricCard title="Automatizaciones" description="Publicaciones programadas creadas durante el mes." metric={usage.metrics.scheduled_posts} />
+          <MetricCard title="Automatizaciones" description="Publicaciones programadas creadas durante el mes." metric={usage.metrics.scheduledPostsPerMonth} />
         </div>
       )}
 

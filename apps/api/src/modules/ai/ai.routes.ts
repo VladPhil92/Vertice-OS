@@ -18,7 +18,7 @@ import {
 } from './ai.service'
 import { getReportById } from '../territorial/territorial.service'
 import { getProposalById } from '../governance/governance.service'
-import { releaseUsage, reserveUsage } from '../billing/billing.usage.service'
+import { runWithAiUsageQuota } from '../billing/billing.usage.service'
 
 type ConvTurn = { role: 'user' | 'assistant'; content: string }
 const CONV_NS = 'ai:conv'
@@ -33,16 +33,6 @@ async function loadHistory(sessionId: string, citizenId: string): Promise<ConvTu
 async function saveHistory(sessionId: string, citizenId: string, turns: ConvTurn[]): Promise<void> {
   const trimmed = turns.slice(-MAX_HISTORY)
   await setCache(CONV_NS, sessionId, { citizenId, turns: trimmed }, TTL.CONVERSATION)
-}
-
-async function withAiUsage<T>(citizenId: string, operation: () => Promise<T>): Promise<T> {
-  await reserveUsage(citizenId, 'ai_requests', 1)
-  try {
-    return await operation()
-  } catch (error) {
-    await releaseUsage(citizenId, 'ai_requests', 1).catch(() => undefined)
-    throw error
-  }
 }
 
 export async function aiRoutes(app: FastifyInstance): Promise<void> {
@@ -60,7 +50,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     const persisted = await loadHistory(sessionId, citizenId)
     const history = persisted.length > 0 ? persisted : (parsed.data.conversation_history ?? [])
 
-    const result = await withAiUsage(citizenId, () => civicQuery({
+    const result = await runWithAiUsageQuota(citizenId, () => civicQuery({
       message: parsed.data.message,
       locality: parsed.data.locality,
       neighborhood: parsed.data.neighborhood,
@@ -114,7 +104,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'No se encontraron reportes válidos', code: 'NO_VALID_REPORTS' })
     }
 
-    const result = await withAiUsage(request.citizen.sub, () => analyzeTerritorial({
+    const result = await runWithAiUsageQuota(request.citizen.sub, () => analyzeTerritorial({
       reports,
       locality: parsed.data.locality,
       neighborhood: parsed.data.neighborhood,
@@ -132,7 +122,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
     const proposal = await getProposalById(parsed.data.proposal_id)
-    const result = await withAiUsage(request.citizen.sub, () => synthesizeDebate({
+    const result = await runWithAiUsageQuota(request.citizen.sub, () => synthesizeDebate({
       proposal_title: proposal.title,
       proposal_description: proposal.description,
       category: proposal.category,
@@ -149,7 +139,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const result = await withAiUsage(request.citizen.sub, () => draftPolicy({
+    const result = await runWithAiUsageQuota(request.citizen.sub, () => draftPolicy({
       ...parsed.data,
       citizen_id: request.citizen.sub,
     }))
@@ -164,7 +154,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const result = await withAiUsage(request.citizen.sub, () => analyzeLegal({
+    const result = await runWithAiUsageQuota(request.citizen.sub, () => analyzeLegal({
       ...parsed.data,
       citizen_id: request.citizen.sub,
     }))

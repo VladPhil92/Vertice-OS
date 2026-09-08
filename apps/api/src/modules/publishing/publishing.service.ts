@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
-import { releaseUsage, reserveUsage } from '../billing/billing.usage.service'
+import { releaseScheduledPost, reserveScheduledPost } from '../billing/billing.usage.service'
 import type { ScheduleCivicPublicationInput } from './publishing.schema'
 
 export interface ScheduledCivicPublication {
@@ -75,7 +75,7 @@ export async function scheduleCivicPublication(
   input: ScheduleCivicPublicationInput,
 ): Promise<ScheduledCivicPublication> {
   await requirePublishedCivicProfile(citizenId)
-  await reserveUsage(citizenId, 'scheduled_posts', 1)
+  const reservation = await reserveScheduledPost(citizenId)
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -107,7 +107,7 @@ export async function scheduleCivicPublication(
 
     return serialize(result)
   } catch (error) {
-    await releaseUsage(citizenId, 'scheduled_posts', 1).catch(() => undefined)
+    await releaseScheduledPost(reservation).catch(() => undefined)
     throw error
   }
 }
