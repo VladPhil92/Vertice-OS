@@ -13,6 +13,7 @@ import {
   CAMPAIGN_STATUSES,
   CROWDFUNDING_CATEGORIES,
   CROWDFUNDING_FEE_POLICY,
+  CROWDFUNDING_CATEGORY_CATALOG,
   CROWDFUNDING_GUARDRAILS,
   FUNDING_POLICIES,
 } from './crowdfunding.policy'
@@ -54,6 +55,7 @@ function sendMutation<T>(reply: FastifyReply, result: IdempotentMutationResult<T
 export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
   app.get('/config', async (_request, reply) => reply.send({
     categories: CROWDFUNDING_CATEGORIES,
+    categoryCatalog: CROWDFUNDING_CATEGORY_CATALOG,
     fundingModels: ALLOWED_FUNDING_MODELS,
     fundingPolicies: FUNDING_POLICIES,
     campaignStatuses: CAMPAIGN_STATUSES,

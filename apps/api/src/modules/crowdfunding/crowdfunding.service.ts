@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { defaultFundingPolicy, PUBLIC_CAMPAIGN_STATUSES } from './crowdfunding.policy'
+import type { FundingPolicy } from './crowdfunding.policy'
 import type { CreateCampaignDraftInput } from './crowdfunding.schema'
 
 type CampaignRow = {
@@ -14,6 +15,7 @@ type CampaignRow = {
   category: string
   funding_model: string
   funding_policy: string
+  funding_policy: FundingPolicy
   status: string
   compliance_status: string
   goal_amount_cop: bigint
