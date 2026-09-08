@@ -21,11 +21,14 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: '#1C3D2E',
         tabBarInactiveTintColor: '#6D7168',
-        tabBarStyle: { minHeight: 64, paddingTop: 8, paddingBottom: 8 },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        tabBarStyle: { minHeight: 68, paddingTop: 8, paddingBottom: 8 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Inicio' }} />
+      <Tabs.Screen name="actions" options={{ title: 'Acciones' }} />
+      <Tabs.Screen name="reports" options={{ title: 'Territorio' }} />
+      <Tabs.Screen name="governance" options={{ title: 'Gobernanza' }} />
       <Tabs.Screen name="profile" options={{ title: 'Perfil' }} />
     </Tabs>
   )
