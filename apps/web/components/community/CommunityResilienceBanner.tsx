@@ -46,7 +46,7 @@ export function CommunityResilienceBanner() {
       <div className="flex items-start gap-3">
         <AlertTriangle size={17} className="mt-0.5 shrink-0 text-[#9B7200]" />
         <div>
-          <p className="text-xs font-black text-[#725500]">Red Cívica en modo de disponibilidad parcial</p>
+          <h2 className="text-xs font-black text-[#725500]">Red Cívica en modo de disponibilidad parcial</h2>
           <p className="mt-1 text-[11px] font-semibold leading-5 text-[#806C35]">
             {totalOutage
               ? 'Las fuentes principales no están respondiendo. Las demás funciones del Dashboard continúan disponibles.'
