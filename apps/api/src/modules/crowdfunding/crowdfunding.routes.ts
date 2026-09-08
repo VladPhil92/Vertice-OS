@@ -42,6 +42,11 @@ import {
   reviewPayoutProfile,
 } from './crowdfunding.compliance.service'
 import {
+  getCampaignActivationReadiness,
+  getCrowdfundingReadiness,
+} from './crowdfunding.readiness.service'
+import { assertCampaignContributionReady } from './crowdfunding.checkout-gate.service'
+import {
   previewCampaignPayoutDestination,
   registerVerifiedPayoutDestination,
 } from '../billing/crowdfunding-payout.service'
@@ -68,6 +73,18 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/me/campaigns', { preHandler: requireAuth }, async (request, reply) => {
     return reply.send({ campaigns: await listOwnCampaigns(request.citizen.sub) })
+  })
+
+  app.get('/me/readiness', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getCrowdfundingReadiness(request.citizen.sub))
+  })
+
+  app.get('/me/campaigns/:campaignId/readiness', { preHandler: requireAuth }, async (request, reply) => {
+    const params = campaignIdParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.status(400).send({ error: 'Campaña inválida', code: 'INVALID_CAMPAIGN_ID' })
+    }
+    return reply.send(await getCampaignActivationReadiness(request.citizen.sub, params.data.campaignId))
   })
 
   app.get('/me/payout-readiness', { preHandler: requireAuth }, async (request, reply) => {
@@ -164,6 +181,11 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
           details: body.success ? undefined : body.error.flatten(),
         })
       }
+
+      // Re-evaluate the beneficiary + payout path on every checkout. This is a
+      // live circuit breaker: an already-active campaign cannot keep taking
+      // money after financial readiness degrades.
+      await assertCampaignContributionReady(params.data.campaignId)
 
       const result = await executeIdempotentMutation({
         citizenId: request.citizen.sub,

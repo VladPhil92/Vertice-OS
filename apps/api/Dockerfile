@@ -1,7 +1,6 @@
-FROM node:20-alpine AS base
-# Prisma 5 requires a detectable OpenSSL/libssl runtime. node:20-alpine does
-# not guarantee it, which makes the schema/query engine fail before migrations
-# or the HTTP server can start.
+FROM node:22-alpine AS base
+# Prisma 5 requires a detectable OpenSSL/libssl runtime. Keep OpenSSL explicit
+# even on Node 22 Alpine so schema/query engines and migrations remain stable.
 RUN apk add --no-cache openssl \
   && corepack enable \
   && corepack prepare pnpm@10.11.0 --activate
@@ -55,7 +54,7 @@ ENV NODE_ENV=development
 CMD ["pnpm", "--filter", "@vertice/api", "dev"]
 
 # ── Production runner (MUST remain the final stage) ──────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # The production image also executes `prisma migrate deploy`; OpenSSL must be

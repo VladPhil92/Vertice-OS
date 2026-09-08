@@ -53,6 +53,18 @@ jest.mock('../../billing/crowdfunding-payout.service', () => ({
   registerVerifiedPayoutDestination: mockRegisterVerifiedPayoutDestination,
 }))
 
+const mockGetCrowdfundingReadiness = jest.fn()
+const mockGetCampaignActivationReadiness = jest.fn()
+jest.mock('../crowdfunding.readiness.service', () => ({
+  getCrowdfundingReadiness: mockGetCrowdfundingReadiness,
+  getCampaignActivationReadiness: mockGetCampaignActivationReadiness,
+}))
+
+const mockAssertCampaignContributionReady = jest.fn()
+jest.mock('../crowdfunding.checkout-gate.service', () => ({
+  assertCampaignContributionReady: mockAssertCampaignContributionReady,
+}))
+
 jest.mock('../../../lib/idempotency', () => ({
   normalizeRequestedIdempotencyKey: (value: string | string[] | undefined): string | undefined => {
     const raw = Array.isArray(value) ? value[0] : value
@@ -90,6 +102,7 @@ afterAll(() => app.close())
 beforeEach(() => {
   jest.resetAllMocks()
   mockPrismaQueryRaw.mockResolvedValue([{ ok: 1 }])
+  mockAssertCampaignContributionReady.mockResolvedValue(undefined)
 })
 
 describe('GET /crowdfunding/config', () => {

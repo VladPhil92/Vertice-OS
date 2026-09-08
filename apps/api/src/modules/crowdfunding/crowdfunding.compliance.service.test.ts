@@ -1,8 +1,12 @@
 jest.mock('../../lib/prisma', () => ({
   prisma: { $queryRaw: jest.fn(), $executeRaw: jest.fn() },
 }))
+jest.mock('./crowdfunding.readiness.service', () => ({
+  getCampaignActivationReadiness: jest.fn(),
+}))
 
 import { prisma } from '../../lib/prisma'
+import { getCampaignActivationReadiness } from './crowdfunding.readiness.service'
 import {
   activateCampaign,
   getPayoutReadiness,
@@ -14,6 +18,7 @@ import {
 
 const mockQueryRaw = prisma.$queryRaw as jest.Mock
 const mockExecuteRaw = prisma.$executeRaw as jest.Mock
+const mockCampaignActivationReadiness = getCampaignActivationReadiness as jest.Mock
 
 beforeEach(() => {
   jest.resetAllMocks()
@@ -59,7 +64,7 @@ describe('getPayoutReadiness', () => {
     expect(readiness.can_activate_campaign).toBe(false)
   })
 
-  it('reports full activation readiness once the payout profile is verified and eligible', async () => {
+  it('reports profile activation eligibility once the payout profile is verified and eligible', async () => {
     const requestedAt = new Date('2026-08-01T00:00:00.000Z')
     const verifiedAt = new Date('2026-08-05T00:00:00.000Z')
     mockQueryRaw
@@ -287,21 +292,33 @@ describe('reviewCampaign', () => {
 })
 
 describe('activateCampaign', () => {
-  it('rejects activation when payout readiness is not met', async () => {
-    mockQueryRaw
-      .mockResolvedValueOnce([{ verification_level: 0 }])
-      .mockResolvedValueOnce([])
+  it('rejects activation on the first platform/user readiness blocker', async () => {
+    mockCampaignActivationReadiness.mockResolvedValueOnce({
+      funding: { blockers: [] },
+      campaign: {
+        can_activate: false,
+        blockers: [{
+          code: 'COLLECTION_RAIL_DISABLED',
+          scope: 'platform',
+          message: 'El rail de cobro no está listo.',
+        }],
+      },
+    })
 
     await expect(activateCampaign('citizen-1', 'campaign-1')).rejects.toMatchObject({
-      statusCode: 409, code: 'PAYOUT_PROFILE_NOT_READY',
+      statusCode: 503, code: 'COLLECTION_RAIL_DISABLED',
     })
+    expect(mockQueryRaw).not.toHaveBeenCalled()
   })
 
   it('activates a campaign that meets every condition', async () => {
-    mockQueryRaw
-      .mockResolvedValueOnce([{ verification_level: 1 }])
-      .mockResolvedValueOnce([{ verification_status: 'verified', payout_status: 'eligible', requested_at: null, verified_at: null, review_notes: null }])
-      .mockResolvedValueOnce([{ id: 'campaign-1', status: 'active', starts_at: new Date('2026-09-01T00:00:00.000Z'), ends_at: null }])
+    mockCampaignActivationReadiness.mockResolvedValueOnce({
+      funding: { blockers: [] },
+      campaign: { can_activate: true, blockers: [] },
+    })
+    mockQueryRaw.mockResolvedValueOnce([{
+      id: 'campaign-1', status: 'active', starts_at: new Date('2026-09-01T00:00:00.000Z'), ends_at: null,
+    }])
 
     const result = await activateCampaign('citizen-1', 'campaign-1')
 
@@ -310,11 +327,12 @@ describe('activateCampaign', () => {
     })
   })
 
-  it('rejects activation when the campaign row does not satisfy the update conditions', async () => {
-    mockQueryRaw
-      .mockResolvedValueOnce([{ verification_level: 1 }])
-      .mockResolvedValueOnce([{ verification_status: 'verified', payout_status: 'eligible', requested_at: null, verified_at: null, review_notes: null }])
-      .mockResolvedValueOnce([])
+  it('rejects activation when the campaign row changes after readiness evaluation', async () => {
+    mockCampaignActivationReadiness.mockResolvedValueOnce({
+      funding: { blockers: [] },
+      campaign: { can_activate: true, blockers: [] },
+    })
+    mockQueryRaw.mockResolvedValueOnce([])
 
     await expect(activateCampaign('citizen-1', 'campaign-1')).rejects.toMatchObject({
       statusCode: 409, code: 'CAMPAIGN_NOT_ACTIVATABLE',
