@@ -4,7 +4,6 @@ import { enqueueJob } from '../../lib/jobs'
 import { requireAdmin } from '../../middleware/auth'
 import {
   buildAccountingExport,
-  certifyPayoutOperations,
   getFinanceOperationsStatus,
   listFinanceRiskFlags,
   reconcileFinanceLedger,
@@ -12,6 +11,15 @@ import {
   reviewFinanceRiskFlag,
   scanFinanceRisk,
 } from './finance-operations.service'
+import {
+  listCampaignPayouts,
+  reconcileCampaignPayout,
+  requestCampaignPayout,
+} from './crowdfunding-payout.service'
+import {
+  certifyCrowdfundingPayoutOperations,
+  getCrowdfundingPayoutOperationsStatus,
+} from './payout-operations.service'
 
 const uuidSchema = z.string().uuid()
 
@@ -39,6 +47,26 @@ const payoutCertificationSchema = z.object({
   status: z.enum(['pending', 'verified', 'rejected', 'suspended']),
   evidenceReference: z.string().trim().min(5).max(300).optional(),
   notes: z.string().trim().max(2000).optional(),
+})
+
+const payoutCampaignParamsSchema = z.object({ campaignId: uuidSchema })
+const payoutRequestParamsSchema = z.object({ payoutRequestId: uuidSchema })
+const payoutListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(250).default(100),
+})
+
+const payoutDestinationSchema = z.object({
+  legalIdType: z.enum(['CC', 'NIT', 'CE']),
+  legalId: z.string().trim().regex(/^[A-Za-z0-9.-]{4,20}$/),
+  bankId: uuidSchema,
+  accountType: z.enum(['AHORROS', 'CORRIENTE']),
+  accountNumber: z.string().trim().regex(/^\d{6,24}$/),
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().max(254),
+})
+
+const payoutRequestBodySchema = z.object({
+  destination: payoutDestinationSchema,
 })
 
 function headerValue(value: string | string[] | undefined): string | undefined {
@@ -124,6 +152,8 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
       .send(csv)
   })
 
+  // Phase IV certification is provider-specific. This intentionally no longer
+  // certifies the Mercado Pago collection rail as if it were the payout rail.
   app.post('/payout-certification', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = payoutCertificationSchema.safeParse(request.body)
     if (!parsed.success) {
@@ -133,11 +163,68 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
         details: parsed.error.flatten(),
       })
     }
-    return reply.status(201).send(await certifyPayoutOperations({
+    return reply.status(201).send(await certifyCrowdfundingPayoutOperations({
       actorId: request.citizen.sub,
       status: parsed.data.status,
       evidenceReference: parsed.data.evidenceReference,
       notes: parsed.data.notes,
     }))
+  })
+
+  app.get('/payouts/status', { preHandler: requireAdmin }, async (_request, reply) => {
+    return reply.send(await getCrowdfundingPayoutOperationsStatus())
+  })
+
+  app.get('/payouts', { preHandler: requireAdmin }, async (request, reply) => {
+    const parsed = payoutListQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Consulta de desembolsos inválida', code: 'INVALID_PAYOUT_QUERY' })
+    }
+    return reply.send({ payouts: await listCampaignPayouts(parsed.data.limit) })
+  })
+
+  // Sensitive beneficiary fields exist only in this request body and the
+  // provider-bound call. Services persist a keyed fingerprint, never account
+  // number, legal ID, name or email.
+  app.post('/payouts/campaigns/:campaignId', { preHandler: requireAdmin }, async (request, reply) => {
+    const params = payoutCampaignParamsSchema.safeParse(request.params)
+    const body = payoutRequestBodySchema.safeParse(request.body)
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        error: 'Solicitud de desembolso inválida',
+        code: 'INVALID_PAYOUT_REQUEST',
+        details: body.success ? undefined : body.error.flatten(),
+      })
+    }
+
+    return reply.status(202).send(await requestCampaignPayout({
+      actorId: request.citizen.sub,
+      campaignId: params.data.campaignId,
+      destination: body.data.destination,
+      requestedIdempotencyKey: headerValue(request.headers['idempotency-key']),
+    }))
+  })
+
+  app.post('/payouts/:payoutRequestId/reconcile', { preHandler: requireAdmin }, async (request, reply) => {
+    const params = payoutRequestParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.status(400).send({ error: 'Desembolso inválido', code: 'INVALID_PAYOUT_REQUEST_ID' })
+    }
+    return reply.send(await reconcileCampaignPayout({
+      payoutRequestId: params.data.payoutRequestId,
+      actorId: request.citizen.sub,
+    }))
+  })
+
+  app.post('/payouts/:payoutRequestId/reconcile/enqueue', { preHandler: requireAdmin }, async (request, reply) => {
+    const params = payoutRequestParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.status(400).send({ error: 'Desembolso inválido', code: 'INVALID_PAYOUT_REQUEST_ID' })
+    }
+    await enqueueJob('reconcile_crowdfunding_payout', {
+      payoutRequestId: params.data.payoutRequestId,
+      requestedByCitizenId: request.citizen.sub,
+    })
+    return reply.status(202).send({ queued: true })
   })
 }
