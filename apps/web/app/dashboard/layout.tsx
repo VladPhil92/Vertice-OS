@@ -20,6 +20,7 @@ import {
   X,
   GitBranch,
   Network,
+  HandCoins,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useServerEvents, type RealtimeEvent } from '@/lib/useServerEvents'
@@ -48,9 +49,10 @@ const NAV_SECTIONS = [
   {
     label: 'Participación',
     items: [
-      { href: '/dashboard/proposals',  label: 'Iniciativas',     icon: FileText,        exact: false, adminOnly: false, prefetch: false },
-      { href: '/dashboard/governance', label: 'Consultas',       icon: Vote,            exact: false, adminOnly: false, prefetch: false },
-      { href: '/dashboard/legal',      label: 'Control público', icon: Scale,           exact: false, adminOnly: false, prefetch: false },
+      { href: '/dashboard/proposals',    label: 'Iniciativas',          icon: FileText,  exact: false, adminOnly: false, prefetch: false },
+      { href: '/dashboard/crowdfunding', label: 'Recaudo comunitario',  icon: HandCoins, exact: false, adminOnly: false, prefetch: false },
+      { href: '/dashboard/governance',   label: 'Consultas',            icon: Vote,      exact: false, adminOnly: false, prefetch: false },
+      { href: '/dashboard/legal',        label: 'Control público',      icon: Scale,     exact: false, adminOnly: false, prefetch: false },
     ],
   },
   {
