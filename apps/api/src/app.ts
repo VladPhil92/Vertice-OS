@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import pkg from '../package.json'
 import helmet from '@fastify/helmet'
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
@@ -121,7 +122,7 @@ export function buildApp() {
 
   app.get('/health', async () => ({
     status: 'ok',
-    version: '0.2.0',
+    version: pkg.version,
     revision: deployedRevision(),
     timestamp: new Date().toISOString(),
   }))
@@ -167,7 +168,7 @@ export function buildApp() {
         : 'unavailable',
       checks,
       capabilities,
-      version: '0.2.0',
+      version: pkg.version,
       revision: deployedRevision(),
       timestamp: new Date().toISOString(),
     })
