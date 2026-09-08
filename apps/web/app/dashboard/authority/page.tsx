@@ -93,6 +93,8 @@ const ROLE_LABELS: Record<Role, string> = {
 }
 
 const EDITABLE_ROLES: Role[] = ['moderator', 'admin', 'superadmin']
+const MIN_REASON_LENGTH = 8
+const MAX_REASON_LENGTH = 500
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Crown }> = [
   { id: 'overview', label: 'Centro de control', icon: Crown },
@@ -143,6 +145,8 @@ export default function AuthorityPage() {
   const [health, setHealth] = useState<HealthState | null>(null)
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<UserRow[]>([])
+  const [originalRoles, setOriginalRoles] = useState<Record<string, Role[]>>({})
+  const [reasonDrafts, setReasonDrafts] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -205,7 +209,9 @@ export default function AuthorityPage() {
       }
       const data = await response.json() as { users?: UserRow[]; error?: string }
       if (!response.ok) throw new Error(data.error ?? 'No fue posible cargar los usuarios')
-      setUsers(data.users ?? [])
+      const loaded = data.users ?? []
+      setUsers(loaded)
+      setOriginalRoles(Object.fromEntries(loaded.map((user) => [user.id, user.roles])))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No fue posible cargar los usuarios')
     } finally {
@@ -233,28 +239,66 @@ export default function AuthorityPage() {
     }))
   }
 
+  function isDirty(user: UserRow): boolean {
+    const original = originalRoles[user.id] ?? []
+    return EDITABLE_ROLES.some((role) => user.roles.includes(role) !== original.includes(role))
+  }
+
   async function saveRoles(user: UserRow) {
     const token = localStorage.getItem('access_token')
     if (!token) return
+    const reason = (reasonDrafts[user.id] ?? '').trim()
+    if (reason.length < MIN_REASON_LENGTH || reason.length > MAX_REASON_LENGTH) {
+      setError(`El motivo debe tener entre ${MIN_REASON_LENGTH} y ${MAX_REASON_LENGTH} caracteres`)
+      return
+    }
+    const original = originalRoles[user.id] ?? []
+    const granted = EDITABLE_ROLES.filter((role) => user.roles.includes(role) && !original.includes(role))
+    const revoked = EDITABLE_ROLES.filter((role) => !user.roles.includes(role) && original.includes(role))
+    if (granted.length === 0 && revoked.length === 0) return
+
     setSavingId(user.id)
     setError('')
     setMessage('')
     try {
       const baseUrl = requireApiBaseUrl()
-      const response = await fetch(`${baseUrl}/auth/role-admin/users/${user.id}/roles`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: 'include',
-        body: JSON.stringify({ roles: user.roles }),
-      })
-      const data = await response.json() as { roles?: Role[]; error?: string }
-      if (!response.ok) throw new Error(data.error ?? 'No fue posible guardar los roles')
+      let finalRoles = user.roles
+      for (const role of granted) {
+        const response = await fetch(`${baseUrl}/auth/role-admin/users/${user.id}/grants`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: 'include',
+          body: JSON.stringify({ role, reason }),
+        })
+        const data = await response.json() as { roles?: Role[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? 'No fue posible conceder el rol')
+        finalRoles = data.roles ?? finalRoles
+      }
+      for (const role of revoked) {
+        const response = await fetch(`${baseUrl}/auth/role-admin/users/${user.id}/grants/${role}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: 'include',
+          body: JSON.stringify({ reason }),
+        })
+        const data = await response.json() as { roles?: Role[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? 'No fue posible revocar el rol')
+        finalRoles = data.roles ?? finalRoles
+      }
       setUsers((current) => current.map((item) => (
-        item.id === user.id ? { ...item, roles: data.roles ?? user.roles } : item
+        item.id === user.id ? { ...item, roles: finalRoles } : item
       )))
+      setOriginalRoles((current) => ({ ...current, [user.id]: finalRoles }))
+      setReasonDrafts((current) => {
+        const { [user.id]: _discard, ...rest } = current
+        return rest
+      })
       setMessage('Roles actualizados y registrados en auditoría.')
       await loadControlPlane()
     } catch (err) {
@@ -456,7 +500,11 @@ export default function AuthorityPage() {
                       })}
                       <button
                         type="button"
-                        disabled={savingId === user.id}
+                        disabled={
+                          savingId === user.id
+                          || !isDirty(user)
+                          || (reasonDrafts[user.id] ?? '').trim().length < MIN_REASON_LENGTH
+                        }
                         onClick={() => void saveRoles(user)}
                         className="rounded-lg bg-[#0A2A66] px-4 py-2 text-[11px] font-extrabold text-white disabled:opacity-50"
                       >
@@ -464,6 +512,18 @@ export default function AuthorityPage() {
                       </button>
                     </div>
                   </div>
+
+                  {isDirty(user) && (
+                    <div className="mt-3">
+                      <input
+                        value={reasonDrafts[user.id] ?? ''}
+                        onChange={(event) => setReasonDrafts((current) => ({ ...current, [user.id]: event.target.value }))}
+                        placeholder={`Motivo del cambio de rol (${MIN_REASON_LENGTH}-${MAX_REASON_LENGTH} caracteres, obligatorio)`}
+                        maxLength={MAX_REASON_LENGTH}
+                        className="w-full rounded-xl border border-[#D6DFEA] px-4 py-2.5 text-xs text-[#0A2A66] outline-none focus:border-[#4A90E2]"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
