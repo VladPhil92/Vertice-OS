@@ -33,12 +33,15 @@ jest.mock('../finance-operations.service', () => ({
 const mockListCampaignPayouts = jest.fn()
 const mockPreviewCampaignPayoutDestination = jest.fn()
 const mockReconcileCampaignPayout = jest.fn()
-const mockRequestCampaignPayout = jest.fn()
 jest.mock('../crowdfunding-payout.service', () => ({
   listCampaignPayouts: mockListCampaignPayouts,
   previewCampaignPayoutDestination: mockPreviewCampaignPayoutDestination,
   reconcileCampaignPayout: mockReconcileCampaignPayout,
-  requestCampaignPayout: mockRequestCampaignPayout,
+}))
+
+const mockRequestFlexibleCampaignPayout = jest.fn()
+jest.mock('../crowdfunding-flexible-payout.service', () => ({
+  requestFlexibleCampaignPayout: mockRequestFlexibleCampaignPayout,
 }))
 
 const mockCertifyCrowdfundingPayoutOperations = jest.fn()
@@ -284,15 +287,15 @@ describe('POST /finance/payouts/campaigns/:campaignId', () => {
     },
   }
 
-  it('requests a campaign payout', async () => {
-    mockRequestCampaignPayout.mockResolvedValue({ id: PAYOUT_ID, status: 'requested' })
+  it('requests a campaign payout through the flexible policy service', async () => {
+    mockRequestFlexibleCampaignPayout.mockResolvedValue({ id: PAYOUT_ID, status: 'requested' })
     const res = await app.inject({
       method: 'POST', url: `/billing/admin/finance/payouts/campaigns/${CAMPAIGN_ID}`,
       headers: { Authorization: `Bearer ${adminToken}`, 'idempotency-key': 'payout-key-1' },
       payload: validBody,
     })
     expect(res.statusCode).toBe(202)
-    expect(mockRequestCampaignPayout).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockRequestFlexibleCampaignPayout).toHaveBeenCalledWith(expect.objectContaining({
       campaignId: CAMPAIGN_ID, requestedIdempotencyKey: 'payout-key-1',
     }))
   })
@@ -304,7 +307,7 @@ describe('POST /finance/payouts/campaigns/:campaignId', () => {
       payload: validBody,
     })
     expect(res.statusCode).toBe(400)
-    expect(mockRequestCampaignPayout).not.toHaveBeenCalled()
+    expect(mockRequestFlexibleCampaignPayout).not.toHaveBeenCalled()
   })
 })
 
