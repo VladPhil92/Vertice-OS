@@ -18,10 +18,10 @@ function uniqueCitizen(seed: number) {
   }
 }
 
-function refreshCookie(response: { headers: Record<string, string | string[] | undefined> }): string {
+function refreshCookie(response: { headers: Record<string, number | string | string[] | undefined> }): string {
   const raw = response.headers['set-cookie']
   const value = Array.isArray(raw) ? raw[0] : raw
-  if (!value) throw new Error('Expected vertice_refresh Set-Cookie header')
+  if (typeof value !== 'string') throw new Error('Expected vertice_refresh Set-Cookie header')
   return value.split(';', 1)[0]
 }
 
