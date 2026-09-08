@@ -87,6 +87,11 @@ const schema = z.object({
   CLOUDFLARE_IMAGES_DELIVERY_URL: z.string().url().optional(),
   CLOUDFLARE_IMAGES_VARIANT: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).default('public'),
 
+  // Expo Push access token is optional. Without it, VÉRTICE can still use the
+  // standard Expo Push endpoint when project security does not require enhanced
+  // access. It is never exposed to the native client.
+  EXPO_PUSH_ACCESS_TOKEN: z.string().min(16).optional(),
+
   // ── Pagos (Mercado Pago) — capability opcional/fail-closed ───────────────
   // Ninguna credencial de pagos es core para arrancar la API. Si el set está
   // incompleto, /health/ready reporta degradación y los endpoints monetarios
