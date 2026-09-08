@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { addBrebKeyIssue, brebKeyTypeSchema } from '../billing/breb-key.schema'
-import { ALLOWED_FUNDING_MODELS, CROWDFUNDING_CATEGORIES } from './crowdfunding.policy'
 import {
   ALLOWED_FUNDING_MODELS,
   CROWDFUNDING_CATEGORIES,
