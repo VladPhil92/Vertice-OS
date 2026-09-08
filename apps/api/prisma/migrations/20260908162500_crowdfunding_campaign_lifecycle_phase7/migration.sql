@@ -120,3 +120,30 @@ BEFORE UPDATE OF status ON crowdfunding_campaigns
 FOR EACH ROW
 WHEN (OLD.status IS DISTINCT FROM NEW.status)
 EXECUTE FUNCTION enforce_crowdfunding_campaign_lifecycle_transition();
+
+-- The existing activation service remains the single business path for
+-- readiness checks. Record the successful verified -> active transition at the
+-- database boundary so it cannot disappear from the audit history if callers
+-- change later.
+CREATE OR REPLACE FUNCTION record_crowdfunding_campaign_activation_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO crowdfunding_campaign_lifecycle_events (
+    campaign_id, actor_citizen_id, event_type, revision_no,
+    from_status, to_status, from_compliance_status, to_compliance_status
+  ) VALUES (
+    NEW.id, NEW.creator_citizen_id, 'activated', NEW.revision_no,
+    OLD.status, NEW.status, OLD.compliance_status, NEW.compliance_status
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_crowdfunding_campaign_lifecycle_activation ON crowdfunding_campaigns;
+CREATE TRIGGER trg_crowdfunding_campaign_lifecycle_activation
+AFTER UPDATE OF status ON crowdfunding_campaigns
+FOR EACH ROW
+WHEN (OLD.status = 'verified' AND NEW.status = 'active')
+EXECUTE FUNCTION record_crowdfunding_campaign_activation_event();
