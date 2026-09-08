@@ -83,6 +83,7 @@ export async function uploadAndConfirmReportEvidence(
 ): Promise<ReportMediaState> {
   const intent = await apiFetch<ReportMediaUploadIntent>('/territorial/media/upload-intent', {
     method: 'POST',
+    body: '{}',
   })
 
   const form = new FormData()
