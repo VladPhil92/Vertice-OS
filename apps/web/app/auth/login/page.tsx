@@ -36,15 +36,10 @@ export default function LoginPage() {
       const data = await res.json() as { access_token: string; citizen_id: string; expires_in: number }
       localStorage.setItem('access_token', data.access_token)
       localStorage.setItem('citizen_id', data.citizen_id)
-      // Cookie readable by Next.js Edge Middleware — used for server-side route protection.
-      // Lifetime matches the refresh token (7 days); actual JWT validity enforced by the API.
       document.cookie = `vertice_auth=1; path=/; max-age=${7 * 24 * 3600}; SameSite=Strict`
 
       // Never redirect from a user-controlled query parameter after login.
-      // The previous `?next=` flow assigned arbitrary input to window.location,
-      // allowing an attacker to turn the trusted login page into an open redirect.
-      // Authenticated navigation resumes from the dashboard; internal deep-link
-      // restoration can later be reintroduced with a server-owned allowlist.
+      // Authenticated navigation resumes from the dashboard.
       window.location.assign('/dashboard')
     } catch (err) {
       setError(
@@ -116,10 +111,11 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#607087]">
+                <label htmlFor="login-email" className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#607087]">
                   Correo electrónico
                 </label>
                 <input
+                  id="login-email"
                   type="email"
                   required
                   autoComplete="email"
@@ -131,11 +127,12 @@ export default function LoginPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#607087]">
+                <label htmlFor="login-password" className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#607087]">
                   Contraseña
                 </label>
                 <div className="relative">
                   <input
+                    id="login-password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete="current-password"
@@ -160,28 +157,17 @@ export default function LoginPage() {
                 disabled={loading}
                 className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#0A2A66] px-5 py-3 text-xs font-extrabold text-white transition hover:bg-[#123B7A] disabled:opacity-50"
               >
-                {loading ? (
-                  <span>Verificando…</span>
-                ) : (
-                  <>
-                    <span>Ingresar</span>
-                    <ArrowRight size={14} />
-                  </>
-                )}
+                {loading ? <span>Verificando…</span> : <><span>Ingresar</span><ArrowRight size={14} /></>}
               </button>
             </form>
 
             <div className="mt-6 border-t border-[#E1E7EF] pt-6 text-center">
               <p className="text-xs font-semibold text-[#7B8799]">
                 ¿No tienes cuenta?{' '}
-                <Link href="/auth/register" className="font-extrabold text-[#0A2A66] hover:underline">
-                  Regístrate aquí
-                </Link>
+                <Link href="/auth/register" className="font-extrabold text-[#0A2A66] hover:underline">Regístrate aquí</Link>
               </p>
               <p className="mt-3 text-xs font-semibold text-[#7B8799]">
-                <Link href="/auth/forgot-password" className="hover:text-[#0A2A66]">
-                  ¿Olvidaste tu contraseña?
-                </Link>
+                <Link href="/auth/forgot-password" className="hover:text-[#0A2A66]">¿Olvidaste tu contraseña?</Link>
               </p>
             </div>
           </div>
