@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -13,28 +13,12 @@ import {
   Route,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import {
+  useDashboardRuntime,
+  type DashboardResolutionItem as CivicResolutionItem,
+} from '@/components/dashboard/DashboardIdentityProvider'
 
-type ResolutionStep = 'reopen_execution' | 'attach_evidence' | 'declare_result'
 type ResolutionPriority = 'urgent' | 'high' | 'normal'
-
-interface CivicResolutionItem {
-  id: string
-  title: string
-  status: string
-  updated_at: string
-  evidence_count: number
-  next_step: ResolutionStep
-  next_step_label: string
-  detail: string
-  follow_up_label: string
-  priority: ResolutionPriority
-  href: string
-}
-
-interface CivicResolutionPlan {
-  total: number
-  items: CivicResolutionItem[]
-}
 
 const STATUS_LABEL: Record<string, string> = {
   in_progress: 'En ejecución',
@@ -66,30 +50,17 @@ function formatDate(value: string): string {
 }
 
 export default function DashboardActionResolutionPlan() {
-  const [plan, setPlan] = useState<CivicResolutionPlan | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    resolutionPlan: plan,
+    resolutionError: error,
+    loading,
+    refresh,
+  } = useDashboardRuntime()
   const [workingId, setWorkingId] = useState<string | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [resultDrafts, setResultDrafts] = useState<Record<string, string>>({})
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState<string | null>(null)
-
-  const load = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true)
-    setError(null)
-    try {
-      setPlan(await apiFetch<CivicResolutionPlan>('/dashboard/me/resolution'))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No fue posible cargar el plan de resolución.')
-    } finally {
-      if (showLoading) setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
 
   function clearActionError(actionId: string) {
     setActionErrors((current) => {
@@ -111,7 +82,7 @@ export default function DashboardActionResolutionPlan() {
       })
       setConfirmingId(null)
       setNotice(`“${item.title}” volvió a ejecución. El plan fue recalculado.`)
-      await load(false)
+      await refresh('resolution')
     } catch (cause) {
       setActionErrors((current) => ({
         ...current,
@@ -146,7 +117,7 @@ export default function DashboardActionResolutionPlan() {
       setConfirmingId(null)
       setResultDrafts((current) => ({ ...current, [item.id]: '' }))
       setNotice(`Resultado declarado para “${item.title}”. El plan fue recalculado.`)
-      await load(false)
+      await refresh('resolution')
     } catch (cause) {
       setActionErrors((current) => ({
         ...current,
@@ -167,7 +138,7 @@ export default function DashboardActionResolutionPlan() {
             <AlertTriangle size={18} className="flex-shrink-0 text-[#D98B00]" />
             <span>No pudimos cargar el plan de resolución. El Centro Ciudadano sigue disponible.</span>
           </div>
-          <button type="button" onClick={() => void load()} className="inline-flex flex-shrink-0 items-center gap-1.5 font-extrabold text-[#0A2A66]">
+          <button type="button" onClick={() => void refresh('resolution')} className="inline-flex flex-shrink-0 items-center gap-1.5 font-extrabold text-[#0A2A66]">
             <RefreshCw size={14} /> Reintentar
           </button>
         </div>
