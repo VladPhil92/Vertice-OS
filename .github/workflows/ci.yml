@@ -161,13 +161,16 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      # Sin continue-on-error: una vulnerabilidad alta/crítica real debe
-      # bloquear el pipeline. Antes este step podía "pasar" en verde aunque
-      # pnpm audit encontrara hallazgos serios — el nombre del job mentía.
+      # Toda vulnerabilidad high/critical sigue bloqueando. Las únicas
+      # excepciones temporales son los dos GHSA sin parche de image-size,
+      # restringidos al toolchain móvil Expo/Metro y con expiración explícita.
       - name: Escaneo de dependencias (npm audit)
         run: |
           pnpm install --frozen-lockfile
-          pnpm audit --audit-level=high
+          node scripts/verify-image-size-risk-acceptance.mjs
+          pnpm audit --audit-level=high \
+            --ignore GHSA-w3rx-r6r6-pgpr \
+            --ignore GHSA-5p2g-fcmc-qvqq
 
       # Solo corre si el secreto está configurado — así una instalación sin
       # cuenta de Semgrep no bloquea el pipeline por un secreto ausente, pero
