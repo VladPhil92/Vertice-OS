@@ -13,6 +13,7 @@ import {
 } from './finance-operations.service'
 import {
   listCampaignPayouts,
+  previewCampaignPayoutDestination,
   reconcileCampaignPayout,
   requestCampaignPayout,
 } from './crowdfunding-payout.service'
@@ -55,18 +56,54 @@ const payoutListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(250).default(100),
 })
 
-const payoutDestinationSchema = z.object({
-  legalIdType: z.enum(['CC', 'NIT', 'CE']),
-  legalId: z.string().trim().regex(/^[A-Za-z0-9.-]{4,20}$/),
-  bankId: uuidSchema,
-  accountType: z.enum(['AHORROS', 'CORRIENTE']),
-  accountNumber: z.string().trim().regex(/^\d{6,24}$/),
-  name: z.string().trim().min(2).max(120),
-  email: z.string().trim().email().max(254),
-})
+const brebKeyTypeSchema = z.enum([
+  'ALPHANUMERIC',
+  'MAIL',
+  'PHONE',
+  'IDENTIFICATION',
+  'ESTABLISHMENT_CODE',
+])
+
+type BrebKeyInput = {
+  keyType: z.infer<typeof brebKeyTypeSchema>
+  key: string
+}
+
+function validBrebKey(value: BrebKeyInput): boolean {
+  const key = value.key.trim()
+  switch (value.keyType) {
+    case 'ALPHANUMERIC': return /^@[A-Za-z0-9]{5,20}$/.test(key)
+    case 'MAIL': return z.string().email().safeParse(key).success
+    case 'PHONE': return /^3\d{9}$/.test(key)
+    case 'IDENTIFICATION': return /^[A-Za-z0-9]{1,18}$/.test(key)
+    case 'ESTABLISHMENT_CODE': return /^\d{8}$/.test(key)
+  }
+}
+
+function addBrebKeyIssue(value: BrebKeyInput, ctx: z.RefinementCtx): void {
+  if (!validBrebKey(value)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['key'],
+      message: 'Formato de llave BRE-B inválido para el tipo seleccionado',
+    })
+  }
+}
+
+const payoutPreviewBodySchema = z.object({
+  keyType: brebKeyTypeSchema,
+  key: z.string().trim().min(1).max(254),
+}).superRefine(addBrebKeyIssue)
 
 const payoutRequestBodySchema = z.object({
-  destination: payoutDestinationSchema,
+  destination: z.object({
+    keyType: brebKeyTypeSchema,
+    key: z.string().trim().min(1).max(254),
+    name: z.string().trim().min(2).max(120),
+    email: z.string().trim().email().max(254),
+    confirmedHolderName: z.string().trim().min(2).max(180),
+    confirmedFinancialEntityCode: z.string().trim().min(1).max(20),
+  }).superRefine(addBrebKeyIssue),
 })
 
 function headerValue(value: string | string[] | undefined): string | undefined {
@@ -183,9 +220,23 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ payouts: await listCampaignPayouts(parsed.data.limit) })
   })
 
-  // Sensitive beneficiary fields exist only in this request body and the
-  // provider-bound call. Services persist a keyed fingerprint, never account
-  // number, legal ID, name or email.
+  // Resolve the BRE-B key first and show only Wompi's masked beneficiary data.
+  // Nothing is persisted by this preview endpoint.
+  app.post('/payouts/destinations/preview', { preHandler: requireAdmin }, async (request, reply) => {
+    const body = payoutPreviewBodySchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({
+        error: 'Llave BRE-B inválida',
+        code: 'INVALID_BREB_DESTINATION',
+        details: body.error.flatten(),
+      })
+    }
+    return reply.send(await previewCampaignPayoutDestination(body.data))
+  })
+
+  // The create call repeats provider resolution and requires the client to echo
+  // the masked holder/entity shown during preview. Sensitive key/name/email
+  // fields are provider-bound input only and are never returned or persisted.
   app.post('/payouts/campaigns/:campaignId', { preHandler: requireAdmin }, async (request, reply) => {
     const params = payoutCampaignParamsSchema.safeParse(request.params)
     const body = payoutRequestBodySchema.safeParse(request.body)
