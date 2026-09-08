@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ClipboardCheck, Network, UserRound } from 'lucide-react'
+import { CommunityResilienceBanner } from '@/components/community/CommunityResilienceBanner'
 
 const TABS = [
   { href: '/dashboard/community', label: 'Red cívica', icon: Network, exact: true },
@@ -33,6 +34,7 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
           })}
         </div>
       </div>
+      <CommunityResilienceBanner />
       {children}
     </div>
   )

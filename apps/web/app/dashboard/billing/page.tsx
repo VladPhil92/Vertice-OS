@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { ArrowRight, CheckCircle2, Crown, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { BillingUsagePanel } from '@/components/billing/BillingUsagePanel'
 
 type BillingAccess = {
   plan: {
@@ -184,6 +185,8 @@ export default function BillingPage() {
           {actionError ?? returnNotice}
         </div>
       )}
+
+      <BillingUsagePanel />
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.25fr_.75fr]">
         <section className={`rounded-[28px] border p-7 sm:p-8 ${isPro ? 'border-[#0A2A66] bg-[#0A2A66] text-white' : 'border-[#DCE5EF] bg-white text-[#0A2A66]'}`}>
