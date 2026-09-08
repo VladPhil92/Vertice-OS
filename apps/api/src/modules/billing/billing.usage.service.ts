@@ -32,13 +32,13 @@ function metricLimit(metric: UsageMetric, limits: {
 }
 
 function periodStartIso(): string {
-  const now = new Date()
-  return new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Bogota',
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)))
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-01`
 }
 
 export async function getBillingUsageSnapshot(citizenId: string): Promise<BillingUsageSnapshot> {
