@@ -69,7 +69,7 @@ test.describe('Proposals list', () => {
     )
 
     await page.goto('/dashboard/proposals')
-    await page.getByTitle('Avalar esta propuesta').first().click()
+    await page.getByRole('button', { name: /avalar propuesta: ciclovía/i }).click()
     await expect(page.getByText('144')).toBeVisible()
   })
 
@@ -79,7 +79,7 @@ test.describe('Proposals list', () => {
     )
 
     await page.goto('/dashboard/proposals')
-    await page.getByTitle('Avalar esta propuesta').first().click()
+    await page.getByRole('button', { name: /avalar propuesta: ciclovía/i }).click()
     await expect(page.getByText('143')).toBeVisible()
     await expect(page.getByText('144')).not.toBeVisible()
   })
