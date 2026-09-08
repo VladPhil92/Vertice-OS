@@ -5,13 +5,15 @@ import { recordAuditEvent } from '../../lib/audit'
 import { prisma } from '../../lib/prisma'
 import {
   WompiPayoutApiError,
-  createWompiBankPayout,
+  createWompiBrebPayout,
   findWompiPayoutByReference,
   getWompiPayout,
   getWompiPayoutConfigurationState,
   getWompiPayoutTransactions,
+  resolveWompiBrebKey,
   verifyWompiPayoutWebhook,
-  type WompiBankDestination,
+  type WompiBrebDestination,
+  type WompiBrebKeyType,
   type WompiPayoutTransaction,
 } from './wompi-payouts.provider'
 
@@ -38,14 +40,23 @@ type PayoutRow = {
   provider_status: string | null
 }
 
+type ConfirmedBrebDestination = WompiBrebDestination & {
+  confirmedHolderName: string
+  confirmedFinancialEntityCode: string
+}
+
 function httpError(message: string, code: string, statusCode: number): Error {
   return Object.assign(new Error(message), { code, statusCode })
 }
 
-function ensurePayoutExecutionReady(): void {
+function ensurePayoutProviderReady(): void {
   if (getWompiPayoutConfigurationState() !== 'ready') {
     throw httpError('El proveedor de desembolsos no está listo.', 'PAYOUT_PROVIDER_UNAVAILABLE', 503)
   }
+}
+
+function ensurePayoutExecutionReady(): void {
+  ensurePayoutProviderReady()
   if (!config.CROWDFUNDING_PAYOUTS_ENABLED) {
     throw httpError(
       'Los desembolsos están deshabilitados hasta completar la certificación operativa.',
@@ -67,12 +78,20 @@ function idempotencyKey(requested?: string): string {
   return value
 }
 
-function destinationFingerprint(destination: WompiBankDestination): string {
+function normalizeBrebKey(key: string, keyType: WompiBrebKeyType): string {
+  const value = key.trim()
+  if (keyType === 'MAIL') return value.toLowerCase()
+  if (keyType === 'ALPHANUMERIC') return value.toUpperCase()
+  if (keyType === 'IDENTIFICATION') return value.toUpperCase()
+  return value
+}
+
+function destinationFingerprint(key: string, keyType: WompiBrebKeyType): string {
   if (!config.PAYOUT_DESTINATION_PEPPER) {
     throw httpError('Falta configuración criptográfica de desembolsos.', 'PAYOUT_CRYPTO_UNAVAILABLE', 503)
   }
   return createHmac('sha256', config.PAYOUT_DESTINATION_PEPPER)
-    .update(`${destination.bankId}|${destination.accountType}|${destination.accountNumber}`)
+    .update(`${keyType}|${normalizeBrebKey(key, keyType)}`)
     .digest('hex')
 }
 
@@ -126,6 +145,23 @@ function isTerminal(status: LocalPayoutStatus): boolean {
   return ['paid', 'failed', 'not_approved', 'cancelled'].includes(status)
 }
 
+export async function previewCampaignPayoutDestination(input: {
+  key: string
+  keyType: WompiBrebKeyType
+}) {
+  ensurePayoutProviderReady()
+  const preview = await resolveWompiBrebKey({
+    key: normalizeBrebKey(input.key, input.keyType),
+    keyType: input.keyType,
+  })
+  return {
+    holderName: preview.holderName,
+    financialEntity: preview.financialEntity,
+    keyType: preview.keyType,
+    keyValue: preview.keyValue,
+  }
+}
+
 async function latestPayoutCertificationVerified(): Promise<boolean> {
   const rows = await prisma.$queryRaw<Array<{ status: string }>>(Prisma.sql`
     SELECT status
@@ -141,7 +177,8 @@ async function preparePayoutLedger(input: {
   actorId: string
   campaignId: string
   idempotencyKey: string
-  destination: WompiBankDestination
+  destinationFingerprint: string
+  destinationKeyType: WompiBrebKeyType
 }): Promise<{ payout: PayoutRow; reused: boolean }> {
   return prisma.$transaction(async (db) => {
     const existing = await db.$queryRaw<PayoutRow[]>(Prisma.sql`
@@ -256,12 +293,13 @@ async function preparePayoutLedger(input: {
       INSERT INTO crowdfunding_payout_requests (
         campaign_id, beneficiary_citizen_id, provider, provider_reference,
         idempotency_key, amount_cop, status, destination_kind,
-        destination_fingerprint, bank_provider_id, account_type, requested_by_citizen_id
+        destination_fingerprint, destination_key_type, preview_confirmed_at,
+        requested_by_citizen_id
       ) VALUES (
         ${campaign.id}::uuid, ${campaign.creator_citizen_id}::uuid,
         ${CROWDFUNDING_PAYOUT_PROVIDER}, ${reference}, ${input.idempotencyKey},
-        ${availableCop}, 'requested', 'bank', ${destinationFingerprint(input.destination)},
-        ${input.destination.bankId}::uuid, ${input.destination.accountType}, ${input.actorId}::uuid
+        ${availableCop}, 'requested', 'breb', ${input.destinationFingerprint},
+        ${input.destinationKeyType}, NOW(), ${input.actorId}::uuid
       )
       RETURNING id, campaign_id, beneficiary_citizen_id, provider_payout_id,
                 provider_reference, amount_cop, status, provider_status
@@ -362,7 +400,7 @@ async function payoutRowById(payoutRequestId: string): Promise<PayoutRow> {
 export async function requestCampaignPayout(input: {
   actorId: string
   campaignId: string
-  destination: WompiBankDestination
+  destination: ConfirmedBrebDestination
   requestedIdempotencyKey?: string
 }) {
   ensurePayoutExecutionReady()
@@ -373,12 +411,31 @@ export async function requestCampaignPayout(input: {
       503,
     )
   }
+
+  // Resolve immediately before money movement. The admin must echo the masked
+  // beneficiary identity shown by the preview endpoint; a changed key/holder or
+  // stale confirmation fails before any local payout row/provider instruction.
+  const normalizedKey = normalizeBrebKey(input.destination.key, input.destination.keyType)
+  const preview = await resolveWompiBrebKey({ key: normalizedKey, keyType: input.destination.keyType })
+  if (
+    preview.holderName !== input.destination.confirmedHolderName.trim()
+    || preview.financialEntity.code !== input.destination.confirmedFinancialEntityCode.trim()
+    || preview.keyType !== input.destination.keyType
+  ) {
+    throw httpError(
+      'La confirmación del beneficiario BRE-B ya no coincide con la resolución del proveedor.',
+      'PAYOUT_BENEFICIARY_CONFIRMATION_MISMATCH',
+      409,
+    )
+  }
+
   const key = idempotencyKey(input.requestedIdempotencyKey)
   const prepared = await preparePayoutLedger({
     actorId: input.actorId,
     campaignId: input.campaignId,
     idempotencyKey: key,
-    destination: input.destination,
+    destinationFingerprint: destinationFingerprint(normalizedKey, input.destination.keyType),
+    destinationKeyType: input.destination.keyType,
   })
   if (prepared.reused) {
     return {
@@ -390,12 +447,17 @@ export async function requestCampaignPayout(input: {
   }
 
   try {
-    const created = await createWompiBankPayout({
+    const created = await createWompiBrebPayout({
       reference: prepared.payout.provider_reference,
       transactionReference: transactionReference(prepared.payout.id),
       idempotencyKey: key,
       amountInCents: centsFromCop(Number(prepared.payout.amount_cop)),
-      destination: input.destination,
+      destination: {
+        key: normalizedKey,
+        keyType: input.destination.keyType,
+        name: input.destination.name,
+        email: input.destination.email,
+      },
     })
     let providerPayoutId = created.payoutId
     if (!providerPayoutId) {
@@ -425,7 +487,7 @@ export async function requestCampaignPayout(input: {
       targetType: 'crowdfunding_payout_request',
       targetId: synced.id,
       result: synced.status,
-      metadata: { campaignId: synced.campaign_id, amountCop: Number(synced.amount_cop) },
+      metadata: { campaignId: synced.campaign_id, amountCop: Number(synced.amount_cop), destinationKind: 'breb' },
     })
     return { id: synced.id, status: synced.status, amountCop: Number(synced.amount_cop), reused: false }
   } catch (error) {
@@ -441,7 +503,7 @@ export async function requestCampaignPayout(input: {
       targetType: 'crowdfunding_payout_request',
       targetId: prepared.payout.id,
       result: retryable ? 'reconciliation_required' : 'failed',
-      metadata: { campaignId: prepared.payout.campaign_id },
+      metadata: { campaignId: prepared.payout.campaign_id, destinationKind: 'breb' },
     })
     throw error
   }
@@ -483,12 +545,14 @@ export async function listCampaignPayouts(limit = 100) {
     status: string
     provider_status: string | null
     provider_reference: string
+    destination_key_type: string
     created_at: Date
     updated_at: Date
     completed_at: Date | null
   }>>(Prisma.sql`
     SELECT id, campaign_id, beneficiary_citizen_id, amount_cop, status,
-           provider_status, provider_reference, created_at, updated_at, completed_at
+           provider_status, provider_reference, destination_key_type,
+           created_at, updated_at, completed_at
     FROM crowdfunding_payout_requests
     ORDER BY created_at DESC
     LIMIT ${Math.min(Math.max(limit, 1), 250)}
