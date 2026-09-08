@@ -1,8 +1,9 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 import { requireAuth, requireModerator, requireVerified } from '../../middleware/auth'
 import {
   executeIdempotentMutation,
   normalizeRequestedIdempotencyKey,
+  type IdempotentMutationResult,
 } from '../../lib/idempotency'
 import {
   CivicActionEvidenceSchema,
@@ -34,10 +35,7 @@ function requestedKey(value: string | string[] | undefined): string | undefined 
   return normalizeRequestedIdempotencyKey(value)
 }
 
-function sendMutation<T>(
-  reply: Parameters<Parameters<FastifyInstance['post']>[2]>[1],
-  result: { value: T; statusCode: number; replayed: boolean; idempotencyKey: string },
-) {
+function sendMutation<T>(reply: FastifyReply, result: IdempotentMutationResult<T>) {
   reply.header('Idempotency-Key', result.idempotencyKey)
   reply.header('Idempotency-Replayed', result.replayed ? 'true' : 'false')
   return reply.status(result.statusCode).send(result.value)
