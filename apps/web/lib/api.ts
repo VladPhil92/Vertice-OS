@@ -16,6 +16,14 @@ export const BASE_URL = process.env.NODE_ENV === 'development'
   : '/api'
 
 export const DASHBOARD_IDENTITY_CHANGED_EVENT = 'vertice:dashboard-identity-changed'
+export const DASHBOARD_RUNTIME_INVALIDATED_EVENT = 'vertice:dashboard-runtime-invalidated'
+
+export type DashboardRuntimeScope = 'identity' | 'dashboard' | 'resolution' | 'notifications' | 'all'
+
+export interface DashboardRuntimeInvalidationDetail {
+  scope: DashboardRuntimeScope
+  sourcePath?: string
+}
 
 export function requireApiBaseUrl(): string {
   return BASE_URL
@@ -48,15 +56,26 @@ let refreshInFlight: Promise<string | null> | null = null
 
 /**
  * Deduplicación exclusivamente *in-flight* para lecturas idempotentes.
- *
- * El dashboard monta varias superficies independientes que consumen el mismo
- * contrato (`/dashboard/me`). Mantener aislamiento entre componentes es útil
- * para resiliencia, pero no debe traducirse en dos o tres requests idénticos
- * al mismo tiempo. Este mapa comparte únicamente la promesa activa y se limpia
- * al terminar: no es una caché de datos y, por tanto, no puede servir estado
- * cívico obsoleto después de una mutación.
  */
 const readInFlight = new Map<string, Promise<unknown>>()
+
+/**
+ * Phase 4 — Dashboard Runtime & Data Convergence.
+ *
+ * Las superficies principales del dashboard montan en paralelo y comparten
+ * contratos de lectura. Esta caché deliberadamente corta evita que cada capa
+ * cree su propia copia de red sin convertir el cliente en una caché persistente
+ * de estado cívico. Toda mutación relevante invalida de inmediato el dominio.
+ */
+const DASHBOARD_READ_CACHE_TTL_MS = 1_500
+const readCache = new Map<string, { value: unknown; expiresAt: number; scope: DashboardRuntimeScope }>()
+
+const DASHBOARD_CACHE_PATH_SCOPE: Record<string, DashboardRuntimeScope> = {
+  '/community/profile/me': 'identity',
+  '/community/profile/me/avatar': 'identity',
+  '/dashboard/me': 'dashboard',
+  '/dashboard/me/resolution': 'resolution',
+}
 
 async function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight
@@ -108,9 +127,72 @@ function changesDashboardIdentity(path: string, options: RequestInit): boolean {
   )
 }
 
+function dashboardMutationScope(path: string, options: RequestInit): DashboardRuntimeScope | null {
+  const method = (options.method ?? 'GET').toUpperCase()
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return null
+
+  if (changesDashboardIdentity(path, options)) return 'identity'
+  if (path === '/auth/roles/switch') return 'all'
+  if (path.startsWith('/notifications')) return 'notifications'
+
+  if (
+    path.startsWith('/civic-actions')
+    || path.startsWith('/territorial')
+    || path.startsWith('/proposals')
+    || path.startsWith('/governance')
+    || path.startsWith('/legal')
+    || path.startsWith('/workflows')
+  ) {
+    return 'all'
+  }
+
+  return null
+}
+
 function notifyDashboardIdentityChanged(): void {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new Event(DASHBOARD_IDENTITY_CHANGED_EVENT))
+}
+
+function scopeInvalidates(cacheScope: DashboardRuntimeScope, requested: DashboardRuntimeScope): boolean {
+  if (requested === 'all') return true
+  if (requested === 'identity') return cacheScope === 'identity' || cacheScope === 'dashboard'
+  return cacheScope === requested
+}
+
+export function invalidateDashboardRuntime(
+  scope: DashboardRuntimeScope = 'all',
+  sourcePath?: string,
+): void {
+  for (const [key, entry] of readCache.entries()) {
+    if (scopeInvalidates(entry.scope, scope)) readCache.delete(key)
+  }
+
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent<DashboardRuntimeInvalidationDetail>(
+    DASHBOARD_RUNTIME_INVALIDATED_EVENT,
+    { detail: { scope, sourcePath } },
+  ))
+}
+
+function getCachedRead<T>(key: string): T | null {
+  const entry = readCache.get(key)
+  if (!entry) return null
+  if (entry.expiresAt <= Date.now()) {
+    readCache.delete(key)
+    return null
+  }
+  return entry.value as T
+}
+
+function cacheRead<T>(key: string, path: string, value: T): void {
+  const scope = DASHBOARD_CACHE_PATH_SCOPE[path]
+  if (!scope) return
+  readCache.set(key, {
+    value,
+    scope,
+    expiresAt: Date.now() + DASHBOARD_READ_CACHE_TTL_MS,
+  })
 }
 
 async function executeApiRequest<T>(
@@ -171,11 +253,16 @@ export async function apiFetch<T = unknown>(
 
   if (!isDedupeEligible(rest)) {
     const result = await executeApiRequest<T>(path, isPublic, extraHeaders, rest)
+    const invalidationScope = dashboardMutationScope(path, rest)
     if (changesDashboardIdentity(path, rest)) notifyDashboardIdentityChanged()
+    if (invalidationScope) invalidateDashboardRuntime(invalidationScope, path)
     return result
   }
 
   const key = dedupeKey(path, isPublic, rest)
+  const cached = getCachedRead<T>(key)
+  if (cached !== null) return cached
+
   const active = readInFlight.get(key)
   if (active) return active as Promise<T>
 
@@ -183,7 +270,9 @@ export async function apiFetch<T = unknown>(
   readInFlight.set(key, request)
 
   try {
-    return await request
+    const result = await request
+    cacheRead(key, path, result)
+    return result
   } finally {
     if (readInFlight.get(key) === request) readInFlight.delete(key)
   }
