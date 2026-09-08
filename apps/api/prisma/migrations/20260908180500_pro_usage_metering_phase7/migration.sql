@@ -1,4 +1,4 @@
--- Phase 7 — durable quota metering for capacity-bearing product features.
+-- Phase 7 — durable quota metering and publishing automation.
 -- Civic reputation remains completely separate from this ledger.
 
 CREATE TABLE IF NOT EXISTS billing_usage_counters (
@@ -19,3 +19,28 @@ CREATE INDEX IF NOT EXISTS idx_billing_usage_period
 
 COMMENT ON TABLE billing_usage_counters IS
   'Monthly operational capacity counters. Never read by reputation or ranking logic.';
+
+CREATE TABLE IF NOT EXISTS scheduled_civic_publications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  citizen_id UUID NOT NULL REFERENCES citizens(id) ON DELETE CASCADE,
+  title VARCHAR(160) NOT NULL,
+  body TEXT NOT NULL,
+  neighborhood VARCHAR(120),
+  status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
+  scheduled_for TIMESTAMPTZ NOT NULL,
+  published_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT scheduled_civic_publications_status_check CHECK (
+    status IN ('scheduled', 'published', 'cancelled', 'failed')
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_civic_publications_owner
+  ON scheduled_civic_publications (citizen_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scheduled_civic_publications_due
+  ON scheduled_civic_publications (status, scheduled_for)
+  WHERE status = 'scheduled';
+
+COMMENT ON TABLE scheduled_civic_publications IS
+  'Plan-gated platform-native civic publishing queue. Publication never changes civic reputation by itself.';
