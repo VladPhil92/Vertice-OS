@@ -254,4 +254,181 @@ describe('POST /crowdfunding/campaigns/:campaignId/contributions/checkout', () =
     })
     expect(res.statusCode).toBe(403)
   })
+
+  it('returns 400 for an invalid campaign id or body', async () => {
+    mockGetEffectiveBillingAccess.mockResolvedValue({ plan: { code: 'free' } })
+
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/campaigns/not-a-uuid/contributions/checkout',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { amount_cop: -1 },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(mockCreateCrowdfundingContributionCheckout).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /crowdfunding/admin/review-queue', () => {
+  it('returns the compliance queue for an admin', async () => {
+    mockListComplianceQueue.mockResolvedValue({ campaigns: [], payout_profiles: [] })
+    const res = await app.inject({
+      method: 'GET', url: '/crowdfunding/admin/review-queue',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('returns 403 for a non-admin role', async () => {
+    const res = await app.inject({
+      method: 'GET', url: '/crowdfunding/admin/review-queue',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+  })
+})
+
+describe('POST /crowdfunding/admin/campaigns/:campaignId/review', () => {
+  it('reviews a campaign', async () => {
+    mockReviewCampaign.mockResolvedValue({ id: CAMPAIGN_ID, status: 'verified' })
+    const res = await app.inject({
+      method: 'POST', url: `/crowdfunding/admin/campaigns/${CAMPAIGN_ID}/review`,
+      headers: { Authorization: `Bearer ${adminToken}` },
+      payload: { decision: 'approve' },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('returns 400 for an invalid review payload', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/crowdfunding/admin/campaigns/${CAMPAIGN_ID}/review`,
+      headers: { Authorization: `Bearer ${adminToken}` },
+      payload: { decision: 'not-a-decision' },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+})
+
+describe('POST /crowdfunding/admin/payout-profiles/:citizenId/review', () => {
+  it('reviews a payout profile', async () => {
+    mockReviewPayoutProfile.mockResolvedValue({ verification_status: 'verified' })
+    const res = await app.inject({
+      method: 'POST', url: `/crowdfunding/admin/payout-profiles/${CITIZEN_ID}/review`,
+      headers: { Authorization: `Bearer ${adminToken}` },
+      payload: { decision: 'approve', provider_reference: 'ref-1' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockReviewPayoutProfile).toHaveBeenCalledWith(ADMIN_ID, CITIZEN_ID, expect.objectContaining({ decision: 'approve' }))
+  })
+
+  it('returns 400 for an invalid citizen id', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/admin/payout-profiles/not-a-uuid/review',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      payload: { decision: 'approve' },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+})
+
+describe('GET /crowdfunding/me/payout-readiness', () => {
+  it('returns payout readiness for the authenticated citizen', async () => {
+    mockGetPayoutReadiness.mockResolvedValue({ identity_verified: true })
+    const res = await app.inject({
+      method: 'GET', url: '/crowdfunding/me/payout-readiness',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('POST /crowdfunding/me/payout-readiness/request-review', () => {
+  it('requests a payout review', async () => {
+    mockRequestPayoutReview.mockResolvedValue({ verification_status: 'in_review' })
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-readiness/request-review',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('POST /crowdfunding/me/payout-destination/preview', () => {
+  it('returns the masked destination preview', async () => {
+    mockPreviewCampaignPayoutDestination.mockResolvedValue({ holderName: 'Juana Pérez' })
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination/preview',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { keyType: 'MAIL', key: 'juana@example.com' },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('returns 400 for a malformed BRE-B key', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination/preview',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { keyType: 'PHONE', key: 'not-a-phone' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(mockPreviewCampaignPayoutDestination).not.toHaveBeenCalled()
+  })
+
+  it('returns 401 without a token', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination/preview',
+      payload: { keyType: 'MAIL', key: 'juana@example.com' },
+    })
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+describe('POST /crowdfunding/me/payout-destination', () => {
+  const validBody = {
+    keyType: 'MAIL', key: 'juana@example.com',
+    confirmedHolderName: 'Juana Pérez', confirmedFinancialEntityCode: '1234',
+  }
+
+  it('registers the confirmed payout destination for the authenticated citizen', async () => {
+    mockRegisterVerifiedPayoutDestination.mockResolvedValue({ registered: true, keyType: 'MAIL' })
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: validBody,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockRegisterVerifiedPayoutDestination).toHaveBeenCalledWith(expect.objectContaining({
+      citizenId: CITIZEN_ID, key: 'juana@example.com', keyType: 'MAIL',
+    }))
+  })
+
+  it('returns 400 for a malformed BRE-B key', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination',
+      headers: { Authorization: `Bearer ${token}` },
+      payload: { ...validBody, keyType: 'PHONE', key: 'not-a-phone' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(mockRegisterVerifiedPayoutDestination).not.toHaveBeenCalled()
+  })
+
+  it('returns 401 without a token', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/crowdfunding/me/payout-destination',
+      payload: validBody,
+    })
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+describe('GET /crowdfunding/me/campaigns', () => {
+  it('lists campaigns owned by the authenticated citizen', async () => {
+    mockListOwnCampaigns.mockResolvedValue([{ id: CAMPAIGN_ID }])
+    const res = await app.inject({
+      method: 'GET', url: '/crowdfunding/me/campaigns',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockListOwnCampaigns).toHaveBeenCalledWith(CITIZEN_ID)
+  })
 })
