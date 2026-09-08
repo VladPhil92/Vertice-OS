@@ -44,3 +44,9 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_civic_publications_due
 
 COMMENT ON TABLE scheduled_civic_publications IS
   'Plan-gated platform-native civic publishing queue. Publication never changes civic reputation by itself.';
+
+ALTER TABLE civic_activity_validations
+  DROP CONSTRAINT IF EXISTS civic_activity_validations_type_check;
+ALTER TABLE civic_activity_validations
+  ADD CONSTRAINT civic_activity_validations_type_check
+  CHECK (activity_type IN ('report', 'proposal', 'publication'));
