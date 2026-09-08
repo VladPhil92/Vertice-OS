@@ -46,9 +46,12 @@ async function registerAndLogin(seed: number) {
   expect(registered.statusCode).toBe(201)
   const citizenId = (registered.json() as { citizen_id: string }).citizen_id
 
+  // This is a native-device lifecycle test. Authenticate through the same
+  // explicit-refresh-token contract used by the React Native client rather
+  // than the browser-oriented /auth/token surface.
   const login = await app.inject({
     method: 'POST',
-    url: '/auth/token',
+    url: '/auth/mobile/token',
     payload: { email: input.email, password: input.password },
   })
   expect(login.statusCode).toBe(200)
