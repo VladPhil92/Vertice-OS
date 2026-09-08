@@ -74,6 +74,10 @@ COPY --from=builder --chown=nodeapp:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/prisma ./apps/api/prisma
+# dist/app.js does `require('../package.json')` at runtime (health version) —
+# without this the production container throws MODULE_NOT_FOUND before
+# binding any route.
+COPY --from=builder --chown=nodeapp:nodejs /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/package.json ./packages/types/package.json
 COPY --from=builder --chown=nodeapp:nodejs /app/packages/types/dist ./packages/types/dist
 
