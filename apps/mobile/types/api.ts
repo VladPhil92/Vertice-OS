@@ -59,3 +59,125 @@ export interface CitizenDashboard {
   }
   generated_at: string
 }
+
+export type CivicActionStatus =
+  | 'proposed'
+  | 'preparing'
+  | 'in_progress'
+  | 'result_declared'
+  | 'under_verification'
+  | 'verified'
+  | 'not_completed'
+  | 'no_evidence'
+  | 'disputed'
+  | 'cancelled'
+
+export interface CivicActionSummary {
+  id: string
+  title: string
+  problem: string
+  objective: string
+  category: string
+  neighborhood: string | null
+  locality_id: number | null
+  beneficiaries_estimate: number | null
+  status: CivicActionStatus
+  evidence_count: number
+  civic_score: number
+  confidence_score: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CivicEvidence {
+  id: string
+  evidence_type: 'photo' | 'video' | 'document' | 'location' | 'external_record'
+  evidence_url: string
+  description: string | null
+  source_url: string | null
+  review_status: string
+  created_at: string
+}
+
+export type ReportCategory =
+  | 'infraestructura'
+  | 'servicios_publicos'
+  | 'seguridad'
+  | 'medio_ambiente'
+  | 'transporte'
+  | 'salud'
+  | 'educacion'
+  | 'cultura'
+  | 'otro'
+
+export type ReportStatus = 'open' | 'in_progress' | 'resolved' | 'rejected' | 'duplicate'
+
+export interface TerritorialReportSummary {
+  id: string
+  category: ReportCategory
+  title: string
+  description?: string
+  lat: number
+  lng: number
+  neighborhood: string | null
+  status: ReportStatus
+  urgency_score: number | null
+  media_urls: string[]
+  created_at: string
+}
+
+export type ProposalStatus =
+  | 'idea'
+  | 'draft'
+  | 'debate'
+  | 'voting'
+  | 'approved'
+  | 'rejected'
+  | 'archived'
+  | 'executed'
+  | 'failed_execution'
+  | 'quorum_failed'
+
+export type ProposalScope = 'neighborhood' | 'locality' | 'city' | 'regional' | 'national'
+
+export interface GovernanceProposal {
+  id: string
+  author_id: string | null
+  title: string
+  category: string
+  scope: ProposalScope
+  status: ProposalStatus
+  endorsement_count: number
+  total_votes: number
+  approve_votes_weighted: number
+  reject_votes_weighted: number
+  voting_ends_at: string | null
+  created_at: string
+}
+
+export interface EndorseResult {
+  proposal_id: string
+  endorsement_count: number
+  status: ProposalStatus
+  advanced: boolean
+}
+
+export interface VoteTally {
+  proposal_id: string
+  status: ProposalStatus
+  total_votes: number
+  approve_weighted: number
+  reject_weighted: number
+  abstain_weighted: number
+  quorum_required: number | null
+  approval_threshold: number | null
+  eligible_voters: number | null
+  quorum_reached: boolean | null
+  approval_percentage: number | null
+  voting_ends_at: string | null
+}
+
+export interface ApiList<T> {
+  data: T[]
+  count: number
+}

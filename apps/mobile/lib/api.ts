@@ -9,6 +9,13 @@ interface ApiOptions extends Omit<RequestInit, 'headers'> {
   public?: boolean
 }
 
+interface PendingMutationKey {
+  key: string
+  expiresAt: number
+}
+
+const MUTATION_KEY_TTL_MS = 24 * 60 * 60 * 1000
+const pendingMutationKeys = new Map<string, PendingMutationKey>()
 let refreshInFlight: Promise<string | null> | null = null
 
 async function parseError(response: Response): Promise<Error> {
@@ -82,6 +89,61 @@ async function execute<T>(path: string, options: ApiOptions, retryAuth: boolean)
 
 export function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   return execute<T>(path, options, true)
+}
+
+export function createIdempotencyKey(scope: string): string {
+  const entropy = Math.random().toString(36).slice(2, 10)
+  return `${scope}-${Date.now().toString(36)}-${entropy}`.slice(0, 120)
+}
+
+function hashMutationInput(value: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+function mutationFingerprint(path: string, scope: string, options: ApiOptions): string {
+  const method = (options.method ?? 'POST').toUpperCase()
+  const body = typeof options.body === 'string' ? options.body : options.body == null ? '' : String(options.body)
+  return `${scope}|${method}|${path}|${hashMutationInput(body)}`
+}
+
+function keyForMutation(fingerprint: string, scope: string): string {
+  const now = Date.now()
+  for (const [candidate, pending] of pendingMutationKeys) {
+    if (pending.expiresAt <= now) pendingMutationKeys.delete(candidate)
+  }
+
+  const existing = pendingMutationKeys.get(fingerprint)
+  if (existing) return existing.key
+
+  const key = createIdempotencyKey(scope)
+  pendingMutationKeys.set(fingerprint, { key, expiresAt: now + MUTATION_KEY_TTL_MS })
+  return key
+}
+
+export async function apiMutation<T>(path: string, scope: string, options: ApiOptions = {}): Promise<T> {
+  const fingerprint = mutationFingerprint(path, scope, options)
+  const idempotencyKey = keyForMutation(fingerprint, scope)
+
+  try {
+    const result = await apiFetch<T>(path, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Idempotency-Key': idempotencyKey,
+      },
+    })
+    pendingMutationKeys.delete(fingerprint)
+    return result
+  } catch (error) {
+    // Keep the key while the outcome is uncertain. A retry of the same
+    // method/path/payload reuses it, while an edited payload gets a new key.
+    throw error
+  }
 }
 
 export async function loginMobile(email: string, password: string): Promise<MobileTokenResponse> {

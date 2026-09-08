@@ -1,0 +1,48 @@
+name: Mobile Core Parity
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-core-parity.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-core-parity.yml'
+
+concurrency:
+  group: mobile-core-parity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-core-parity:
+    name: Mobile Core Parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck native client
+        run: pnpm --filter @vertice/mobile typecheck
+
+      - name: Export Android and iOS bundles
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+        run: pnpm --filter @vertice/mobile build
+
+      - name: Assert exported platform artifacts
+        run: |
+          test -d apps/mobile/dist/android
+          test -d apps/mobile/dist/ios
+          echo 'Mobile Phase 2A export contract: PASS'
+          echo 'This gate validates compilation/export only; it does not certify device permissions, store signing, push delivery or production providers.'
