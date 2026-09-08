@@ -11,6 +11,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           Moderación
         </Link>
         <Link
+          href="/dashboard/admin/crowdfunding"
+          className="rounded-t border border-b-0 border-border bg-surface px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-secondary transition-colors hover:border-gold/40 hover:text-gold"
+        >
+          Crowdfunding · Operaciones
+        </Link>
+        <Link
           href="/dashboard/admin/pilot"
           className="rounded-t border border-b-0 border-border bg-surface px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-secondary transition-colors hover:border-gold/40 hover:text-gold"
         >
