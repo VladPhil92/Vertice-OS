@@ -10,7 +10,12 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { apiFetch, DASHBOARD_IDENTITY_CHANGED_EVENT } from '@/lib/api'
+import {
+  apiFetch,
+  DASHBOARD_RUNTIME_INVALIDATED_EVENT,
+  type DashboardRuntimeInvalidationDetail,
+  type DashboardRuntimeScope,
+} from '@/lib/api'
 
 export type CivicProfileType = 'citizen' | 'social_leader' | 'candidate' | 'organization_rep' | 'public_official'
 
@@ -33,109 +38,276 @@ export interface DashboardCivicAvatarState {
   upload_enabled?: boolean
 }
 
-export interface DashboardIdentitySnapshot {
+export interface DashboardRuntimeSnapshot {
   profile: {
     id: string
     email: string
     neighborhood: string | null
     verification_level: number
   }
+  reputation: {
+    score: number
+    level: string
+    total_votes: number
+    total_proposals: number
+    total_reports: number
+    badges_count: number
+    endorsements_given: number
+  }
+  attention: {
+    pending_votes: Array<{ id: string; title: string; voting_ends_at: string | null }>
+    legal_needs_action: number
+    reports_in_progress: number
+    civic_actions_needing_evidence: number
+    total_items: number
+  }
+  mine: {
+    civic_actions: {
+      total: number
+      active: number
+      verified: number
+      needs_evidence: number
+      awaiting_verification: number
+      recent: Array<{
+        id: string
+        title: string
+        category: string
+        neighborhood: string | null
+        status: string
+        civic_score: number
+        confidence_score: number
+        evidence_count: number
+        updated_at: string
+      }>
+    }
+    reports: {
+      total: number
+      recent: Array<{
+        id: string
+        title: string
+        status: string
+        neighborhood: string | null
+        updated_at: string
+      }>
+    }
+    proposals: {
+      total: number
+      recent: Array<{
+        id: string
+        title: string
+        status: string
+        endorsement_count: number
+        total_votes: number
+        created_at: string
+      }>
+    }
+    workflows: {
+      total: number
+      active: number
+    }
+  }
+  city: {
+    reports: {
+      total_reports: number
+      by_category: Array<{ resolved_count: number }>
+    }
+    governance: {
+      by_status: Array<{ status: string; count: number }>
+    }
+  }
+  generated_at: string
+}
+
+export type DashboardIdentitySnapshot = DashboardRuntimeSnapshot
+
+export interface DashboardResolutionItem {
+  id: string
+  title: string
+  status: string
+  updated_at: string
+  evidence_count: number
+  next_step: 'reopen_execution' | 'attach_evidence' | 'declare_result'
+  next_step_label: string
+  detail: string
+  follow_up_label: string
+  priority: 'urgent' | 'high' | 'normal'
+  href: string
+}
+
+export interface DashboardResolutionPlan {
+  total: number
+  items: DashboardResolutionItem[]
 }
 
 interface DashboardIdentityContextValue {
   profile: DashboardCivicProfile | null
   avatar: DashboardCivicAvatarState | null
   dashboardIdentity: DashboardIdentitySnapshot | null
+  dashboard: DashboardRuntimeSnapshot | null
+  resolutionPlan: DashboardResolutionPlan | null
+  resolutionError: string | null
   displayName: string
   territory: string
   identityVerified: boolean
   loading: boolean
+  refreshing: boolean
   error: string | null
-  refresh: () => Promise<void>
+  refresh: (scope?: DashboardRuntimeScope) => Promise<void>
 }
+
+type RuntimeDomain = 'identity' | 'dashboard' | 'resolution'
+type DomainSequence = Record<RuntimeDomain, number>
 
 const DashboardIdentityContext = createContext<DashboardIdentityContextValue | null>(null)
 
 export function DashboardIdentityProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<DashboardCivicProfile | null>(null)
   const [avatar, setAvatar] = useState<DashboardCivicAvatarState | null>(null)
-  const [dashboardIdentity, setDashboardIdentity] = useState<DashboardIdentitySnapshot | null>(null)
+  const [dashboard, setDashboard] = useState<DashboardRuntimeSnapshot | null>(null)
+  const [resolutionPlan, setResolutionPlan] = useState<DashboardResolutionPlan | null>(null)
+  const [resolutionError, setResolutionError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const requestSequence = useRef(0)
+  const domainSequence = useRef<DomainSequence>({ identity: 0, dashboard: 0, resolution: 0 })
+  const activeRefreshes = useRef(0)
+  const mounted = useRef(true)
   const hasLoaded = useRef(false)
 
-  const refresh = useCallback(async () => {
-    const requestId = ++requestSequence.current
+  const refresh = useCallback(async (scope: DashboardRuntimeScope = 'all') => {
+    const wantsIdentity = scope === 'all' || scope === 'identity'
+    const wantsDashboard = scope === 'all' || scope === 'dashboard' || scope === 'identity'
+    const wantsResolution = scope === 'all' || scope === 'resolution'
+
+    const requestIds: Partial<DomainSequence> = {}
+    if (wantsIdentity) requestIds.identity = ++domainSequence.current.identity
+    if (wantsDashboard) requestIds.dashboard = ++domainSequence.current.dashboard
+    if (wantsResolution) requestIds.resolution = ++domainSequence.current.resolution
+
+    activeRefreshes.current += 1
     if (!hasLoaded.current) setLoading(true)
-    setError(null)
+    else setRefreshing(true)
+
+    if (wantsIdentity || wantsDashboard) setError(null)
+    if (wantsResolution) setResolutionError(null)
+
+    const isCurrent = (domain: RuntimeDomain) => (
+      mounted.current && requestIds[domain] === domainSequence.current[domain]
+    )
 
     try {
-      const [profileData, avatarData, dashboardData] = await Promise.all([
-        apiFetch<DashboardCivicProfile>('/community/profile/me'),
-        apiFetch<DashboardCivicAvatarState>('/community/profile/me/avatar'),
-        apiFetch<DashboardIdentitySnapshot>('/dashboard/me'),
-      ])
+      const tasks: Promise<void>[] = []
 
-      if (requestSequence.current !== requestId) return
-      setProfile(profileData)
-      setAvatar(avatarData)
-      setDashboardIdentity(dashboardData)
-      hasLoaded.current = true
+      if (wantsIdentity) {
+        tasks.push((async () => {
+          const [profileData, avatarData] = await Promise.all([
+            apiFetch<DashboardCivicProfile>('/community/profile/me'),
+            apiFetch<DashboardCivicAvatarState>('/community/profile/me/avatar'),
+          ])
+          if (!isCurrent('identity')) return
+          setProfile(profileData)
+          setAvatar(avatarData)
+        })())
+      }
+
+      if (wantsDashboard) {
+        tasks.push((async () => {
+          const dashboardData = await apiFetch<DashboardRuntimeSnapshot>('/dashboard/me')
+          if (!isCurrent('dashboard')) return
+          setDashboard(dashboardData)
+        })())
+      }
+
+      if (wantsResolution) {
+        tasks.push((async () => {
+          try {
+            const plan = await apiFetch<DashboardResolutionPlan>('/dashboard/me/resolution')
+            if (!isCurrent('resolution')) return
+            setResolutionPlan(plan)
+          } catch (cause) {
+            if (!isCurrent('resolution')) return
+            setResolutionError(cause instanceof Error ? cause.message : 'No fue posible cargar el plan de resolución.')
+          }
+        })())
+      }
+
+      await Promise.all(tasks)
+      if (mounted.current) hasLoaded.current = true
     } catch (refreshError) {
-      if (requestSequence.current !== requestId) return
-      setError(refreshError instanceof Error ? refreshError.message : 'No fue posible cargar la identidad del dashboard.')
+      const relevantCurrent = (
+        (!wantsIdentity || isCurrent('identity'))
+        && (!wantsDashboard || isCurrent('dashboard'))
+      )
+      if (relevantCurrent) {
+        setError(refreshError instanceof Error ? refreshError.message : 'No fue posible cargar el runtime del dashboard.')
+      }
     } finally {
-      if (requestSequence.current === requestId) setLoading(false)
+      activeRefreshes.current = Math.max(0, activeRefreshes.current - 1)
+      if (mounted.current && activeRefreshes.current === 0) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [])
 
   useEffect(() => {
-    void refresh()
+    mounted.current = true
+    void refresh('all')
     return () => {
-      requestSequence.current += 1
+      mounted.current = false
+      domainSequence.current.identity += 1
+      domainSequence.current.dashboard += 1
+      domainSequence.current.resolution += 1
     }
   }, [refresh])
 
   useEffect(() => {
-    const handleIdentityChanged = () => {
-      void refresh()
+    const handleRuntimeInvalidated = (event: Event) => {
+      const detail = (event as CustomEvent<DashboardRuntimeInvalidationDetail>).detail
+      void refresh(detail?.scope ?? 'all')
     }
-    window.addEventListener(DASHBOARD_IDENTITY_CHANGED_EVENT, handleIdentityChanged)
-    return () => window.removeEventListener(DASHBOARD_IDENTITY_CHANGED_EVENT, handleIdentityChanged)
+    window.addEventListener(DASHBOARD_RUNTIME_INVALIDATED_EVENT, handleRuntimeInvalidated)
+    return () => window.removeEventListener(DASHBOARD_RUNTIME_INVALIDATED_EVENT, handleRuntimeInvalidated)
   }, [refresh])
 
   const displayName = useMemo(() => {
     if (profile?.display_name?.trim()) return profile.display_name.trim()
-    const email = dashboardIdentity?.profile.email
+    const email = dashboard?.profile.email
     if (email) return email.split('@')[0] ?? 'Mi perfil cívico'
     return 'Mi perfil cívico'
-  }, [dashboardIdentity?.profile.email, profile?.display_name])
+  }, [dashboard?.profile.email, profile?.display_name])
 
   const territory = profile?.neighborhood
-    ?? dashboardIdentity?.profile.neighborhood
+    ?? dashboard?.profile.neighborhood
     ?? 'Cartagena de Indias'
-  const identityVerified = (dashboardIdentity?.profile.verification_level ?? 0) >= 1
+  const identityVerified = (dashboard?.profile.verification_level ?? 0) >= 1
 
   const value = useMemo<DashboardIdentityContextValue>(() => ({
     profile,
     avatar,
-    dashboardIdentity,
+    dashboardIdentity: dashboard,
+    dashboard,
+    resolutionPlan,
+    resolutionError,
     displayName,
     territory,
     identityVerified,
     loading,
+    refreshing,
     error,
     refresh,
   }), [
     avatar,
-    dashboardIdentity,
+    dashboard,
     displayName,
     error,
     identityVerified,
     loading,
     profile,
     refresh,
+    refreshing,
+    resolutionError,
+    resolutionPlan,
     territory,
   ])
 
@@ -153,3 +325,9 @@ export function useDashboardIdentity(): DashboardIdentityContextValue {
   }
   return context
 }
+
+/**
+ * Phase 4 semantic alias. Existing identity consumers remain source-compatible,
+ * while new dashboard surfaces can consume the complete shared runtime.
+ */
+export const useDashboardRuntime = useDashboardIdentity

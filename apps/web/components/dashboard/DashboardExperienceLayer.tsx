@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import Link from 'next/link'
 import {
   Activity,
@@ -18,29 +18,15 @@ import {
   Vote,
   type LucideIcon,
 } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
+import {
+  useDashboardRuntime,
+  type CivicProfileType,
+  type DashboardCivicProfile,
+  type DashboardRuntimeSnapshot,
+} from '@/components/dashboard/DashboardIdentityProvider'
 
-type CivicProfileType = 'citizen' | 'social_leader' | 'candidate' | 'organization_rep' | 'public_official'
-
-type DashboardResponse = {
-  profile: { neighborhood: string | null; verification_level: number }
-  attention: {
-    pending_votes: Array<{ id: string; title: string }>
-    legal_needs_action: number
-    reports_in_progress: number
-    civic_actions_needing_evidence: number
-  }
-}
-
-type CivicProfile = {
-  citizen_id: string
-  neighborhood: string | null
-  profile_type: CivicProfileType
-  bio: string | null
-  organization: string | null
-  public_profile: boolean
-}
-
+type DashboardResponse = Pick<DashboardRuntimeSnapshot, 'profile' | 'attention'>
+type CivicProfile = Pick<DashboardCivicProfile, 'citizen_id' | 'neighborhood' | 'profile_type' | 'bio' | 'organization' | 'public_profile'>
 type ExperienceData = { dashboard: DashboardResponse; civicProfile: CivicProfile }
 
 type RoleExperience = {
@@ -203,19 +189,11 @@ function buildActionItems(data: ExperienceData): ActionItem[] {
 }
 
 export default function DashboardExperienceLayer() {
-  const [data, setData] = useState<ExperienceData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    Promise.all([
-      apiFetch<DashboardResponse>('/dashboard/me'),
-      apiFetch<CivicProfile>('/community/profile/me'),
-    ])
-      .then(([dashboard, civicProfile]) => setData({ dashboard, civicProfile }))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
-  }, [])
-
+  const { dashboard, profile: civicProfile, loading } = useDashboardRuntime()
+  const data = useMemo<ExperienceData | null>(
+    () => dashboard && civicProfile ? { dashboard, civicProfile } : null,
+    [civicProfile, dashboard],
+  )
   const experience = ROLE_EXPERIENCE[data?.civicProfile.profile_type ?? 'citizen']
   const progress = useMemo(() => data ? completion(data) : null, [data])
   const tasks = useMemo(() => data ? buildActionItems(data) : [], [data])

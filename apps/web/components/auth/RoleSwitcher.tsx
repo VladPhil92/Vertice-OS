@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Crown, RefreshCw, ShieldCheck } from 'lucide-react'
-import { requireApiBaseUrl } from '@/lib/api'
+import { invalidateDashboardRuntime, requireApiBaseUrl } from '@/lib/api'
 
 type Role = 'citizen' | 'moderator' | 'admin' | 'superadmin'
 
@@ -68,10 +68,15 @@ export function RoleSwitcher({ onRoleChange }: { onRoleChange?: (role: Role) => 
       if (!response.ok || !data.access_token || !data.active_role) {
         throw new Error(data.error ?? 'No fue posible cambiar el rol')
       }
+
       localStorage.setItem('access_token', data.access_token)
       setContext({ ...context, active_role: data.active_role })
       onRoleChange?.(data.active_role)
-      window.location.reload()
+
+      // Phase 4: changing capability context no longer destroys the current
+      // dashboard session with a full-page reload. The shared runtime is
+      // invalidated and every subscribed surface refreshes against the new JWT.
+      invalidateDashboardRuntime('all', '/auth/roles/switch')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No fue posible cambiar el rol')
     } finally {
