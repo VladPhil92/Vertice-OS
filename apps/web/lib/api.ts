@@ -86,7 +86,6 @@ async function refreshAccessToken(): Promise<string | null> {
       const res = await fetch(`${baseUrl}/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
       })
       if (!res.ok) return null
 
@@ -195,6 +194,15 @@ function cacheRead<T>(key: string, path: string, value: T): void {
   })
 }
 
+function hasHeader(headers: Record<string, string>, headerName: string): boolean {
+  const normalized = headerName.toLowerCase()
+  return Object.keys(headers).some((name) => name.toLowerCase() === normalized)
+}
+
+function shouldDefaultToJson(body: BodyInit | null | undefined): boolean {
+  return typeof body === 'string' && body.length > 0
+}
+
 async function executeApiRequest<T>(
   path: string,
   isPublic: boolean,
@@ -204,9 +212,9 @@ async function executeApiRequest<T>(
   const baseUrl = requireApiBaseUrl()
 
   function buildHeaders(token: string | null): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...extraHeaders,
+    const headers: Record<string, string> = { ...extraHeaders }
+    if (shouldDefaultToJson(rest.body) && !hasHeader(headers, 'content-type')) {
+      headers['Content-Type'] = 'application/json'
     }
     if (!isPublic && token) headers.Authorization = `Bearer ${token}`
     return headers
