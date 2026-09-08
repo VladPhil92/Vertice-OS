@@ -7,11 +7,12 @@ import Link from 'next/link'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
 const NAV_LINKS = [
-  { label: 'Propósito', href: '#proposito' },
-  { label: 'Cómo funciona', href: '#como-funciona' },
-  { label: 'Qué puedes hacer', href: '#capacidades' },
-  { label: 'IA cívica', href: '#ia' },
-  { label: 'Visión', href: '#vision' },
+  { label: 'Propósito', href: '/#proposito' },
+  { label: 'Cómo funciona', href: '/#como-funciona' },
+  { label: 'Qué puedes hacer', href: '/#capacidades' },
+  { label: 'IA cívica', href: '/#ia' },
+  { label: 'Planes', href: '/pricing' },
+  { label: 'Visión', href: '/#vision' },
 ] as const
 
 export function Navbar() {
