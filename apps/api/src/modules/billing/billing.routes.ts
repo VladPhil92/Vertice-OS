@@ -6,6 +6,7 @@ import {
   normalizeRequestedIdempotencyKey,
 } from '../../lib/idempotency'
 import { getBillingCatalog, getEffectiveBillingAccess } from './billing.service'
+import { getBillingUsageSnapshot } from './billing.usage.service'
 import {
   cancelMyProSubscription,
   createProCheckout,
@@ -40,6 +41,10 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await getEffectiveBillingAccess(request.citizen.sub))
   })
 
+  app.get('/usage', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getBillingUsageSnapshot(request.citizen.sub))
+  })
+
   app.post('/checkout', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = checkoutSchema.safeParse(request.body)
     if (!parsed.success) {
@@ -56,9 +61,6 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       payload: parsed.data,
       requestedKey: normalizeRequestedIdempotencyKey(request.headers['idempotency-key']),
       successStatus: 201,
-      // The same effective key is forwarded to the payment ledger. This binds
-      // the generic API receipt to Mercado Pago checkout reconciliation instead
-      // of creating two unrelated idempotency domains.
       operation: (effectiveKey) => createProCheckout(
         request.citizen.sub,
         parsed.data.billingCycle,
@@ -78,8 +80,6 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await reconcileMyBilling(request.citizen.sub))
   })
 
-  // Provider webhook authority and deduplication remain provider-scoped. It is
-  // intentionally not routed through the citizen idempotency ledger.
   app.post('/webhooks/mercadopago', async (request, reply) => {
     const result = await processMercadoPagoWebhook({
       xSignature: headerValue(request.headers['x-signature']),
@@ -90,9 +90,6 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(200).send(result)
   })
 
-  // Wompi payout events use their own signature contract. The signed event is
-  // only a trigger: the payout service re-fetches provider state server-to-
-  // server before mutating the local payout ledger.
   app.post('/webhooks/wompi-payouts', async (request, reply) => {
     const result = await processWompiPayoutWebhook({
       xEventChecksum: headerValue(request.headers['x-event-checksum']),
