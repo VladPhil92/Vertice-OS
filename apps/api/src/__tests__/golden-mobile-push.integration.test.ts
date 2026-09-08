@@ -5,18 +5,39 @@ import { prisma } from '../lib/prisma'
 import { redis } from '../lib/redis'
 import { closeNeo4j } from '../lib/neo4j'
 
-const describeGolden = process.env.GOLDEN_API_JOURNEYS === '1' ? describe : describe.skip
 const app = buildApp()
 
 function uniqueCitizen(seed: number) {
   const suffix = `${Date.now()}${seed}`.slice(-9).padStart(9, '0')
   return {
-    email: `golden-push-${randomUUID()}@vertice.test`,
+    email: `push-${randomUUID()}@vertice.test`,
     password: 'GoldenPass123',
     cedula: suffix,
     neighborhood: 'Manga',
     locality_id: 1,
   }
+}
+
+async function ensurePushDeviceFixtureTable(): Promise<void> {
+  // The production source of truth is the SQL migration. Standard CI still
+  // boots from the historical init.sql baseline, so this test creates only the
+  // exact table contract it exercises. The Phase 2C structural gate separately
+  // asserts that the forward migration exists with ownership cleanup/indexing.
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS mobile_push_devices (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      citizen_id UUID NOT NULL REFERENCES citizens(id) ON DELETE CASCADE,
+      expo_push_token VARCHAR(255) NOT NULL UNIQUE,
+      platform VARCHAR(16) NOT NULL CHECK (platform IN ('ios', 'android')),
+      app_version VARCHAR(64),
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_error_code VARCHAR(80),
+      last_error_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
 }
 
 async function registerAndLogin(seed: number) {
@@ -35,8 +56,9 @@ async function registerAndLogin(seed: number) {
   return { citizenId, authorization: `Bearer ${accessToken}` }
 }
 
-describeGolden('Golden mobile push device lifecycle', () => {
+describe('Mobile push device lifecycle', () => {
   beforeAll(async () => {
+    await ensurePushDeviceFixtureTable()
     await app.ready()
   })
 
