@@ -21,8 +21,8 @@ const initialForm = {
   description: '',
   category: 'infraestructura' as ReportCategory,
   neighborhood: '',
-  lat: '10.3910',
-  lng: '-75.4794',
+  lat: '',
+  lng: '',
   address_reference: '',
 }
 
@@ -52,10 +52,20 @@ export default function ReportsScreen() {
   }
 
   async function createReport() {
-    const lat = Number(form.lat)
-    const lng = Number(form.lng)
-    if (form.title.trim().length < 10 || form.description.trim().length < 20 || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-      Alert.alert('Información incompleta', 'Completa título, descripción y coordenadas válidas.')
+    const latText = form.lat.trim()
+    const lngText = form.lng.trim()
+    const lat = Number(latText)
+    const lng = Number(lngText)
+    const coordinatesValid = Boolean(latText && lngText)
+      && Number.isFinite(lat)
+      && Number.isFinite(lng)
+      && lat >= -90
+      && lat <= 90
+      && lng >= -180
+      && lng <= 180
+
+    if (form.title.trim().length < 10 || form.description.trim().length < 20 || !coordinatesValid) {
+      Alert.alert('Información incompleta', 'Completa título, descripción y coordenadas explícitas válidas.')
       return
     }
 
@@ -120,11 +130,11 @@ export default function ReportsScreen() {
             </ScrollView>
             <TextInput style={styles.input} placeholder="Barrio" value={form.neighborhood} onChangeText={(neighborhood) => setForm((prev) => ({ ...prev, neighborhood }))} />
             <View style={styles.coordinates}>
-              <TextInput keyboardType="decimal-pad" style={[styles.input, styles.coordinateInput]} placeholder="Latitud" value={form.lat} onChangeText={(lat) => setForm((prev) => ({ ...prev, lat }))} />
-              <TextInput keyboardType="decimal-pad" style={[styles.input, styles.coordinateInput]} placeholder="Longitud" value={form.lng} onChangeText={(lng) => setForm((prev) => ({ ...prev, lng }))} />
+              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Latitud (ej. 10.39)" value={form.lat} onChangeText={(lat) => setForm((prev) => ({ ...prev, lat }))} />
+              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Longitud (ej. -75.48)" value={form.lng} onChangeText={(lng) => setForm((prev) => ({ ...prev, lng }))} />
             </View>
             <TextInput style={styles.input} placeholder="Referencia de dirección" value={form.address_reference} onChangeText={(address_reference) => setForm((prev) => ({ ...prev, address_reference }))} />
-            <Text style={styles.hint}>Phase 2A permite coordenadas manuales. Geolocalización automática, mapa y cámara entran en Phase 2B.</Text>
+            <Text style={styles.hint}>Debes indicar la ubicación de forma explícita. Geolocalización automática, mapa y cámara entran en Phase 2B.</Text>
             <Pressable disabled={saving} style={styles.submitButton} onPress={() => void createReport()}>
               <Text style={styles.submitButtonText}>{saving ? 'Enviando…' : 'Crear reporte'}</Text>
             </Pressable>
