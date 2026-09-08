@@ -1,8 +1,12 @@
 import { createCampaignDraftSchema } from './crowdfunding.schema'
 import {
+  CROWDFUNDING_FEE_POLICY,
   CROWDFUNDING_GUARDRAILS,
+  defaultFundingPolicy,
   isAllowedFundingModel,
   isInvestmentLikeFundingModel,
+  platformFeeBasisPoints,
+  platformFeeCop,
 } from './crowdfunding.policy'
 
 const validDraft = {
@@ -46,5 +50,62 @@ describe('crowdfunding policy', () => {
       budget: [{ label: 'Presupuesto sobredimensionado', amount_cop: 9_000_000 }],
     })
     expect(result.success).toBe(false)
+  })
+
+  it('defaults donations to flexible and rewards to all-or-nothing', () => {
+    expect(defaultFundingPolicy('donation')).toBe('flexible')
+    expect(defaultFundingPolicy('reward')).toBe('all_or_nothing')
+  })
+
+  it('does not allow reward/prepurchase campaigns to opt into flexible funding', () => {
+    const result = createCampaignDraftSchema.safeParse({
+      ...validDraft,
+      funding_model: 'reward',
+      funding_policy: 'flexible',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('allows milestone funding for donation campaigns', () => {
+    expect(createCampaignDraftSchema.safeParse({
+      ...validDraft,
+      funding_policy: 'milestone',
+    }).success).toBe(true)
+  })
+
+  it('charges 1% to verified social and emergency causes', () => {
+    expect(platformFeeBasisPoints({
+      category: 'social', fundingModel: 'donation', complianceStatus: 'verified',
+    })).toBe(100)
+    expect(platformFeeBasisPoints({
+      category: 'emergency', fundingModel: 'donation', complianceStatus: 'verified',
+    })).toBe(100)
+  })
+
+  it('charges 2.5% to standard donation/community/cultural/educational/civic campaigns', () => {
+    expect(platformFeeBasisPoints({
+      category: 'community', fundingModel: 'donation', complianceStatus: 'verified',
+    })).toBe(250)
+    expect(platformFeeBasisPoints({
+      category: 'education', fundingModel: 'donation', complianceStatus: 'verified',
+    })).toBe(250)
+  })
+
+  it('charges 3.5% to reward/prepurchase campaigns regardless of category', () => {
+    expect(platformFeeBasisPoints({
+      category: 'social', fundingModel: 'reward', complianceStatus: 'verified',
+    })).toBe(350)
+  })
+
+  it('does not grant the 1% social/emergency rate before verification', () => {
+    expect(platformFeeBasisPoints({
+      category: 'social', fundingModel: 'donation', complianceStatus: 'pending',
+    })).toBe(250)
+  })
+
+  it('calculates immutable COP fees using basis points', () => {
+    expect(platformFeeCop(100_000, CROWDFUNDING_FEE_POLICY.socialEmergencyVerifiedBps)).toBe(1_000)
+    expect(platformFeeCop(100_000, CROWDFUNDING_FEE_POLICY.standardDonationBps)).toBe(2_500)
+    expect(platformFeeCop(100_000, CROWDFUNDING_FEE_POLICY.rewardPrepurchaseBps)).toBe(3_500)
   })
 })

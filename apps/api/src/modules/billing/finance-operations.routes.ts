@@ -16,8 +16,8 @@ import {
   listCampaignPayouts,
   previewCampaignPayoutDestination,
   reconcileCampaignPayout,
-  requestCampaignPayout,
 } from './crowdfunding-payout.service'
+import { requestFlexibleCampaignPayout } from './crowdfunding-flexible-payout.service'
 import {
   certifyCrowdfundingPayoutOperations,
   getCrowdfundingPayoutOperationsStatus,
@@ -156,8 +156,6 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
       .send(csv)
   })
 
-  // Phase IV certification is provider-specific. This intentionally no longer
-  // certifies the Mercado Pago collection rail as if it were the payout rail.
   app.post('/payout-certification', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = payoutCertificationSchema.safeParse(request.body)
     if (!parsed.success) {
@@ -187,8 +185,6 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ payouts: await listCampaignPayouts(parsed.data.limit) })
   })
 
-  // Resolve the BRE-B key first and show only Wompi's masked beneficiary data.
-  // Nothing is persisted by this preview endpoint.
   app.post('/payouts/destinations/preview', { preHandler: requireAdmin }, async (request, reply) => {
     const body = payoutPreviewBodySchema.safeParse(request.body)
     if (!body.success) {
@@ -201,9 +197,6 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
     return reply.send(await previewCampaignPayoutDestination(body.data))
   })
 
-  // The create call repeats provider resolution and requires the client to echo
-  // the masked holder/entity shown during preview. Sensitive key/name/email
-  // fields are provider-bound input only and are never returned or persisted.
   app.post('/payouts/campaigns/:campaignId', { preHandler: requireAdmin }, async (request, reply) => {
     const params = payoutCampaignParamsSchema.safeParse(request.params)
     const body = payoutRequestBodySchema.safeParse(request.body)
@@ -215,7 +208,7 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
       })
     }
 
-    return reply.status(202).send(await requestCampaignPayout({
+    return reply.status(202).send(await requestFlexibleCampaignPayout({
       actorId: request.citizen.sub,
       campaignId: params.data.campaignId,
       destination: body.data.destination,
