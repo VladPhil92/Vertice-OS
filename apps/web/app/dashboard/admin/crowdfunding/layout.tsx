@@ -1,7 +1,6 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 
-export default function CrowdfundingAdminLayout({ children }: { children: ReactNode }) {
+export default function CrowdfundingAdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="border-b border-[#DCE5EF] bg-white/95 px-4 py-2.5 backdrop-blur sm:px-6 lg:px-8">
