@@ -211,10 +211,10 @@ export function evaluateCampaignReadiness(
   const canActivate = lifecycleReady && funding.ready_for_campaign_activation
   const canAcceptContributions = campaign.status === 'active'
     && campaign.compliance_status === 'verified'
-    && funding.platform.crowdfunding_collection === 'ready'
+    && funding.ready_for_campaign_activation
 
   const blockers = campaign.status === 'active'
-    ? funding.blockers.filter((blocker) => blocker.code.startsWith('COLLECTION_'))
+    ? funding.blockers
     : [...ownBlockers, ...(lifecycleReady ? funding.blockers : [])]
 
   return {
