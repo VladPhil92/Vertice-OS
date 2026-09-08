@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma'
 const PROVIDER = 'ctg_one'
 const CTG_ONE_PROVISION_URL = 'https://ctgone.com/api/federation/vertice/provision'
 const PROVISION_TIMEOUT_MS = 5_000
+const VERIFIED_CONTACT_LEVEL = 2
 
 type ProvisionResponse = {
   status?: unknown
@@ -45,10 +46,14 @@ export async function provisionCtgOneForCitizen(citizenId: string): Promise<{
     select: { providerSubject: true },
   })
 
+  // VÉRTICE defines verificationLevel >= 2 as verified contact. A native VÉRTICE
+  // account cannot bootstrap a confirmed CTG One email below that assurance floor.
+  // Accounts that originated in CTG One carry the canonical CTG subject instead;
+  // CTG One re-validates that subject and its own confirmed email server-side.
   const hasCanonicalCtgSubject = Boolean(externalIdentity?.providerSubject)
-  if (!hasCanonicalCtgSubject && citizen.verificationLevel < 1) {
+  if (!hasCanonicalCtgSubject && citizen.verificationLevel < VERIFIED_CONTACT_LEVEL) {
     throw federationError(
-      'Verifica tu identidad en VÉRTICE antes de crear tu cuenta CTG One desde esta plataforma',
+      'Verifica tu contacto en VÉRTICE antes de crear tu cuenta CTG One desde esta plataforma',
       403,
       'VERIFIED_IDENTITY_REQUIRED',
     )
@@ -75,8 +80,8 @@ export async function provisionCtgOneForCitizen(citizenId: string): Promise<{
         provider_subject: citizen.id,
         ctg_subject: externalIdentity?.providerSubject ?? null,
         email: citizen.email.trim().toLowerCase(),
-        email_verified: true,
-        assurance_level: Math.max(1, Math.min(4, citizen.verificationLevel)),
+        email_verified: hasCanonicalCtgSubject || citizen.verificationLevel >= VERIFIED_CONTACT_LEVEL,
+        assurance_level: Math.max(0, Math.min(4, citizen.verificationLevel)),
       }),
       signal: AbortSignal.timeout(PROVISION_TIMEOUT_MS),
     })
