@@ -193,12 +193,12 @@ test.describe('Citizen command center', () => {
 
     await expect(page.getByRole('heading', { name: /convierte gestión en evidencia pública/i })).toBeVisible()
     await expect(page.getByTestId('civic-action-hub')).toBeVisible()
-    await expect(page.getByText('Recuperación participativa del parque de Manga')).toBeVisible()
+    await expect(page.getByTestId('civic-action-hub').getByText('Recuperación participativa del parque de Manga')).toBeVisible()
     await expect(page.getByText(/seguidores, likes e impresiones no suman reputación/i)).toBeVisible()
 
     const createAction = page.getByRole('link', { name: /crear acción cívica/i }).first()
     await expect(createAction).toHaveAttribute('href', '/dashboard/community/actions/new')
-    await expect(page.getByRole('link', { name: /recuperación participativa del parque de manga/i })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /recuperación participativa del parque de manga/i }).first()).toHaveAttribute(
       'href',
       '/dashboard/community/actions/11111111-1111-4111-8111-111111111111',
     )
