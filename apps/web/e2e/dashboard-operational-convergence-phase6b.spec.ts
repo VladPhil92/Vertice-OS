@@ -106,9 +106,9 @@ test.describe('Dashboard operational convergence Phase 6b', () => {
   test('AI copilot uses active territory and forwards neighborhood context', async ({ page }) => {
     await setupShell(page)
     await page.route('**/notifications', (route) => route.fulfill({ status: 200, json: { notifications: [], unread: 0 } }))
-    let body: Record<string, unknown> | null = null
+    const capturedBody: Record<string, unknown> = {}
     await page.route('**/ai/query', async (route) => {
-      body = route.request().postDataJSON() as Record<string, unknown>
+      Object.assign(capturedBody, route.request().postDataJSON() as Record<string, unknown>)
       await route.fulfill({ status: 200, json: { response: 'Análisis territorial listo.', intent: 'territorial', agent_used: 'territorial', confidence: 0.9, audit_id: 'audit-phase6b', session_id: 'session-phase6b' } })
     })
 
@@ -116,8 +116,8 @@ test.describe('Dashboard operational convergence Phase 6b', () => {
     await expect(page.getByTestId('contextual-civic-ai')).toContainText('Manga')
     await page.getByLabel('Enviar consulta').click()
     await expect(page.getByText('Análisis territorial listo.')).toBeVisible()
-    expect(body?.neighborhood).toBe('Manga')
-    expect(body?.topic).toBe('territorial')
+    expect(capturedBody.neighborhood).toBe('Manga')
+    expect(capturedBody.topic).toBe('territorial')
   })
 
   test('workflow triage exposes search and next action', async ({ page }) => {
