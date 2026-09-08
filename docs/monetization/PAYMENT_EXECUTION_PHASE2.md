@@ -16,8 +16,9 @@ The first adapter is Mercado Pago. Provider-specific code remains behind the bil
 4. Browser leaves VÉRTICE for the provider checkout.
 5. Returning to VÉRTICE does **not** activate Pro.
 6. A signed provider webhook or explicit server-side reconciliation retrieves the current provider resource.
-7. Only verified `authorized` provider state activates/renews the local Pro subscription.
-8. Cancellation is sent to the provider first; local state never pretends cancellation succeeded when the provider call failed.
+7. Preapproval/mandate `authorized` changes the local checkout only to `authorized`; it does **not** grant Pro.
+8. Only an approved recurring charge (`subscription_authorized_payment` with provider payment status `approved`) activates or renews Pro.
+9. Cancellation is sent to the provider first; local state never pretends cancellation succeeded when the provider call failed.
 
 Launch prices remain:
 
@@ -89,12 +90,14 @@ For recurring preapprovals, if the network fails after the provider may have acc
 ### Subscription
 
 ```text
-pending -> paid
-pending -> cancelled
-pending -> failed
+pending -> authorized   # mandate accepted; no Pro entitlement yet
+authorized -> paid      # approved charge; Pro may become active
+pending|authorized -> cancelled
+renewal approved -> new paid ledger entry
+renewal failed -> subscription may become past_due after paid period expires
 ```
 
-Pro entitlements are derived from an `active` or `trialing` subscription whose period has not expired.
+Pro entitlements are derived from an `active` or `trialing` subscription whose period has not expired. An `authorized` checkout transaction alone is never sufficient.
 
 ### Crowdfunding contribution
 
@@ -171,7 +174,7 @@ POST /crowdfunding/campaigns/:campaignId/contributions/checkout
 4. Configure canonical HTTPS web URL and webhook URL.
 5. Configure Mercado Pago production access token and webhook secret in the deployment secret store, never in Git.
 6. Verify `/health/ready` reports `payments=ready`.
-7. Run a low-value Pro canary and confirm: local pending transaction -> provider checkout -> signed webhook/reconciliation -> active Pro.
+7. Run a low-value Pro canary and confirm: local pending transaction -> mandate authorized -> approved charge webhook -> active Pro.
 8. Test cancellation and renewal reconciliation.
 9. Complete KYC/KYB/payout operational certification.
 10. Only then set `CROWDFUNDING_PAYMENTS_ENABLED=true` and run a low-value crowdfunding canary.
