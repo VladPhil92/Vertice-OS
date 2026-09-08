@@ -21,6 +21,7 @@ jest.mock('../lib/neo4j', () => ({
   closeNeo4j: jest.fn(),
 }))
 
+import pkg from '../../package.json'
 import { buildApp } from '../app'
 
 const app = buildApp()
@@ -34,7 +35,7 @@ describe('GET /health', () => {
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.payload)
     expect(body.status).toBe('ok')
-    expect(body.version).toBe('0.1.0')
+    expect(body.version).toBe(pkg.version)
     expect(body.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
 
