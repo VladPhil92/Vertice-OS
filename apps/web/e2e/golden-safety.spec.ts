@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const API = 'http://localhost:4000'
+const API = '**/api'
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440000'
 const CAMPAIGN_ID = '550e8400-e29b-41d4-a716-446655440099'
 
