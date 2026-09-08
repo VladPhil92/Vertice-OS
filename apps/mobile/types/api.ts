@@ -126,6 +126,42 @@ export interface TerritorialReportSummary {
   created_at: string
 }
 
+export interface NearbyTerritorialReport extends TerritorialReportSummary {
+  description: string
+  distance_meters: number
+}
+
+export interface TerritorialReportDetail {
+  id: string
+  citizen_id: string | null
+  category: ReportCategory
+  subcategory: string | null
+  title: string
+  description: string
+  lat: number
+  lng: number
+  neighborhood: string | null
+  locality_id: number | null
+  address_reference: string | null
+  urgency_score: number | null
+  status: ReportStatus
+  media_urls: string[]
+  created_at: string
+  updated_at: string
+  resolved_at: string | null
+}
+
+export interface ReportMediaUploadIntent {
+  media_asset_id: string
+  upload_url: string
+}
+
+export interface ReportMediaState {
+  media_asset_id: string
+  url: string
+  status: 'confirmed' | 'attached'
+}
+
 export type ProposalStatus =
   | 'idea'
   | 'draft'
