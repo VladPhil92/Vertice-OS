@@ -35,6 +35,7 @@ import { billingRoutes } from './modules/billing/billing.routes'
 import { financeOperationsRoutes } from './modules/billing/finance-operations.routes'
 import { crowdfundingRoutes } from './modules/crowdfunding/crowdfunding.routes'
 import { crowdfundingLifecycleRoutes } from './modules/crowdfunding/crowdfunding.lifecycle.routes'
+import { publishingRoutes } from './modules/publishing/publishing.routes'
 
 initSentry()
 
@@ -72,19 +73,13 @@ export function buildApp() {
   })
 
   app.register(sensible)
-
-  app.register(helmet, {
-    contentSecurityPolicy: false,
-  })
-
+  app.register(helmet, { contentSecurityPolicy: false })
   app.register(cors, {
     origin: config.CORS_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   })
-
   app.register(cookie)
-
   app.register(jwt, {
     secret: config.JWT_SECRET,
     sign: { algorithm: 'HS256' },
@@ -203,6 +198,7 @@ export function buildApp() {
   app.register(financeOperationsRoutes, { prefix: '/billing/admin/finance' })
   app.register(crowdfundingRoutes, { prefix: '/crowdfunding' })
   app.register(crowdfundingLifecycleRoutes, { prefix: '/crowdfunding' })
+  app.register(publishingRoutes, { prefix: '/publishing' })
   app.register(eventsRoutes)
 
   return app

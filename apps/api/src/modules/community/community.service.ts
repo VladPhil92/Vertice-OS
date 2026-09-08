@@ -61,6 +61,17 @@ interface ProposalActivityRow extends ActorFields {
   created_at: Date
 }
 
+interface PublicationActivityRow extends ActorFields {
+  id: string
+  title: string
+  body: string
+  neighborhood: string | null
+  status: string
+  published_at: Date | null
+  created_at: Date
+  updated_at: Date
+}
+
 export interface CommunityValidationSummary {
   corroborations: number
   disputes: number
@@ -146,6 +157,19 @@ function clamp(value: number, min: number, max: number): number {
 
 function totalScore(dimensions: CivicScoreDimensions): number {
   return clamp(Object.values(dimensions).reduce((sum, value) => sum + value, 0), 0, 100)
+}
+
+function emptyScore(): CivicScoreDimensions {
+  return {
+    evidence: 0,
+    results: 0,
+    impact: 0,
+    validation: 0,
+    transparency: 0,
+    collaboration: 0,
+    continuity: 0,
+    confidence: 0,
+  }
 }
 
 function emptyCommunityValidation(): CommunityValidationSummary {
@@ -256,6 +280,28 @@ function proposalToActivity(row: ProposalActivityRow): CivicActivity {
   }
 }
 
+function publicationToActivity(row: PublicationActivityRow): CivicActivity {
+  const dimensions = emptyScore()
+  return {
+    id: row.id,
+    type: 'publication',
+    actor: publicActor(row),
+    title: row.title,
+    summary: row.body,
+    category: 'civic_update',
+    status: 'published',
+    neighborhood: row.neighborhood,
+    evidence_count: 0,
+    verification_state: 'declared',
+    civic_score: 0,
+    score_dimensions: dimensions,
+    community_validation: emptyCommunityValidation(),
+    created_at: row.created_at.toISOString(),
+    updated_at: (row.published_at ?? row.updated_at).toISOString(),
+    href: `/dashboard/community?publication=${row.id}`,
+  }
+}
+
 function actorProjection() {
   return Prisma.sql`
     actor.id::text AS actor_id,
@@ -319,7 +365,7 @@ async function loadActivities(
     ? Prisma.sql`AND actor.id::text IN (${Prisma.join(actorIds)}) AND actor.public_civic_profile = TRUE`
     : Prisma.empty
 
-  const reportRows = input.type === 'proposal' ? [] : await prisma.$queryRaw<ReportActivityRow[]>(Prisma.sql`
+  const reportRows = input.type && input.type !== 'report' ? [] : await prisma.$queryRaw<ReportActivityRow[]>(Prisma.sql`
     SELECT
       source.id::text,
       ${actorProjection()},
@@ -341,7 +387,7 @@ async function loadActivities(
     LIMIT ${fetchLimit}
   `)
 
-  const proposalRows = input.type === 'report' ? [] : await prisma.$queryRaw<ProposalActivityRow[]>(Prisma.sql`
+  const proposalRows = input.type && input.type !== 'proposal' ? [] : await prisma.$queryRaw<ProposalActivityRow[]>(Prisma.sql`
     SELECT
       source.id::text,
       ${actorProjection()},
@@ -365,7 +411,32 @@ async function loadActivities(
     LIMIT ${fetchLimit}
   `)
 
-  const activities = [...reportRows.map(reportToActivity), ...proposalRows.map(proposalToActivity)]
+  const publicationRows = input.type && input.type !== 'publication' ? [] : await prisma.$queryRaw<PublicationActivityRow[]>(Prisma.sql`
+    SELECT
+      source.id::text,
+      ${actorProjection()},
+      source.title,
+      source.body,
+      source.neighborhood,
+      source.status,
+      source.published_at,
+      source.created_at,
+      source.updated_at
+    FROM scheduled_civic_publications source
+    JOIN citizens actor ON actor.id = source.citizen_id
+    WHERE source.status = 'published'
+      AND source.published_at IS NOT NULL
+      ${neighborhoodFilter}
+      ${actorFilter}
+    ORDER BY source.published_at DESC
+    LIMIT ${fetchLimit}
+  `)
+
+  const activities = [
+    ...reportRows.map(reportToActivity),
+    ...proposalRows.map(proposalToActivity),
+    ...publicationRows.map(publicationToActivity),
+  ]
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, input.limit)
 
@@ -391,7 +462,9 @@ export async function listFollowingFeed(citizenId: string, input: CommunityFeedQ
 
 export async function getCommunityLeaderboard(input: CommunityLeaderboardQuery): Promise<CivicLeaderEntry[]> {
   const activities = await loadActivities({ limit: 100, neighborhood: input.neighborhood }, 500)
-  const publicActivities = activities.filter((activity) => activity.actor.public_profile && activity.actor.id)
+  const publicActivities = activities.filter((activity) => (
+    activity.type !== 'publication' && activity.actor.public_profile && activity.actor.id
+  ))
   const grouped = new Map<string, {
     citizen_id: string
     display_name: string
@@ -504,11 +577,12 @@ export async function getPublicCivicProfile(citizenId: string): Promise<PublicCi
     loadActivities({ limit: 12 }, 36, [citizenId]),
   ])
 
-  const actionsCount = recentActions.length
-  const verifiedActions = recentActions.filter((activity) => activity.verification_state === 'verified').length
-  const evidenceCount = recentActions.reduce((sum, activity) => sum + activity.evidence_count, 0)
+  const scoredActions = recentActions.filter((activity) => activity.type !== 'publication')
+  const actionsCount = scoredActions.length
+  const verifiedActions = scoredActions.filter((activity) => activity.verification_state === 'verified').length
+  const evidenceCount = scoredActions.reduce((sum, activity) => sum + activity.evidence_count, 0)
   const averageActionScore = actionsCount > 0
-    ? Math.round(recentActions.reduce((sum, activity) => sum + activity.civic_score, 0) / actionsCount)
+    ? Math.round(scoredActions.reduce((sum, activity) => sum + activity.civic_score, 0) / actionsCount)
     : 0
 
   return {
@@ -607,6 +681,17 @@ async function getActivityOwner(type: CommunityActivityType, activityId: string)
       LIMIT 1
     `)
     if (!rows[0]) throw Object.assign(new Error('Gestión no encontrada'), { statusCode: 404, code: 'CIVIC_ACTIVITY_NOT_FOUND' })
+    return rows[0].owner_id
+  }
+
+  if (type === 'publication') {
+    const rows = await prisma.$queryRaw<Array<{ owner_id: string | null }>>(Prisma.sql`
+      SELECT citizen_id::text AS owner_id
+      FROM scheduled_civic_publications
+      WHERE id = ${activityId}::uuid AND status = 'published'
+      LIMIT 1
+    `)
+    if (!rows[0]) throw Object.assign(new Error('Publicación no encontrada'), { statusCode: 404, code: 'CIVIC_ACTIVITY_NOT_FOUND' })
     return rows[0].owner_id
   }
 

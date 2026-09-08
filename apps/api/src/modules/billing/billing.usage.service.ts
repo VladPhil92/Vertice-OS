@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma'
 import { getEffectiveBillingAccess } from './billing.service'
 
 const AI_USAGE_METRIC = 'ai_request' as const
+const SCHEDULED_POST_METRIC = 'scheduled_post' as const
 const BILLING_TIMEZONE = 'America/Bogota' as const
 
 type UsageCounterRow = { used: number }
@@ -66,12 +67,20 @@ export async function getBillingUsage(citizenId: string, now = new Date()): Prom
   const access = await getEffectiveBillingAccess(citizenId)
   const period = usagePeriodBogota(now)
 
-  const [aiRows, projectRows] = await Promise.all([
+  const [aiRows, scheduledPostRows, projectRows] = await Promise.all([
     prisma.$queryRaw<UsageCounterRow[]>(Prisma.sql`
       SELECT used
       FROM billing_usage_counters
       WHERE citizen_id = ${citizenId}::uuid
         AND metric = ${AI_USAGE_METRIC}
+        AND period_start = ${period.start}::date
+      LIMIT 1
+    `),
+    prisma.$queryRaw<UsageCounterRow[]>(Prisma.sql`
+      SELECT used
+      FROM billing_usage_counters
+      WHERE citizen_id = ${citizenId}::uuid
+        AND metric = ${SCHEDULED_POST_METRIC}
         AND period_start = ${period.start}::date
       LIMIT 1
     `),
@@ -84,6 +93,7 @@ export async function getBillingUsage(citizenId: string, now = new Date()): Prom
   ])
 
   const aiUsed = Number(aiRows[0]?.used ?? 0)
+  const scheduledPostsUsed = Number(scheduledPostRows[0]?.used ?? 0)
   const activeProjects = Number(projectRows[0]?.count ?? 0)
 
   return {
@@ -93,7 +103,7 @@ export async function getBillingUsage(citizenId: string, now = new Date()): Prom
       aiRequestsPerMonth: metric(aiUsed, access.plan.limits.aiRequestsPerMonth, true, 'billing_usage_counters'),
       activeProjects: metric(activeProjects, access.plan.limits.activeProjects, false, 'civic_actions'),
       evidenceStorageMb: metric(null, access.plan.limits.evidenceStorageMb, false, 'capacity_only'),
-      scheduledPostsPerMonth: metric(null, access.plan.limits.scheduledPostsPerMonth, false, 'capacity_only'),
+      scheduledPostsPerMonth: metric(scheduledPostsUsed, access.plan.limits.scheduledPostsPerMonth, true, 'billing_usage_counters'),
     },
     neutrality: {
       usageChangesReputation: false,
@@ -158,4 +168,49 @@ export async function runWithAiUsageQuota<T>(
     await releaseAiRequest(reservation).catch(() => undefined)
     throw error
   }
+}
+
+export interface ScheduledPostReservation {
+  citizenId: string
+  periodStart: string
+  used: number
+  limit: number
+}
+
+export async function reserveScheduledPost(citizenId: string, now = new Date()): Promise<ScheduledPostReservation> {
+  const access = await getEffectiveBillingAccess(citizenId)
+  const limit = access.plan.limits.scheduledPostsPerMonth
+  const periodStart = usagePeriodBogota(now).start
+
+  const rows = await prisma.$queryRaw<UsageCounterRow[]>(Prisma.sql`
+    INSERT INTO billing_usage_counters (citizen_id, metric, period_start, used, updated_at)
+    VALUES (${citizenId}::uuid, ${SCHEDULED_POST_METRIC}, ${periodStart}::date, 1, NOW())
+    ON CONFLICT (citizen_id, metric, period_start)
+    DO UPDATE SET
+      used = billing_usage_counters.used + 1,
+      updated_at = NOW()
+    WHERE billing_usage_counters.used < ${limit}
+    RETURNING used
+  `)
+
+  const used = rows[0]?.used
+  if (used === undefined) {
+    throw Object.assign(new Error('Has alcanzado el límite mensual de publicaciones programadas de tu plan.'), {
+      statusCode: 429,
+      code: 'SCHEDULED_POST_QUOTA_EXCEEDED',
+      details: { limit, periodStart, planCode: access.plan.code },
+    })
+  }
+
+  return { citizenId, periodStart, used: Number(used), limit }
+}
+
+export async function releaseScheduledPost(reservation: ScheduledPostReservation): Promise<void> {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE billing_usage_counters
+    SET used = GREATEST(0, used - 1), updated_at = NOW()
+    WHERE citizen_id = ${reservation.citizenId}::uuid
+      AND metric = ${SCHEDULED_POST_METRIC}
+      AND period_start = ${reservation.periodStart}::date
+  `)
 }

@@ -65,7 +65,6 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
       { role: 'assistant', content: result.response },
     ]
     await saveHistory(sessionId, citizenId, newHistory)
-
     return reply.send({ ...result, session_id: sessionId })
   })
 
