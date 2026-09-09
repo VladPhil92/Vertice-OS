@@ -105,7 +105,10 @@ function validate(manifest, options) {
   }
 
   if (options.mode === 'strict') {
-    assert(manifest.release_sha !== ZERO_SHA, 'Strict certification cannot use the placeholder zero SHA.', errors)
+    assert(manifest.release_sha !== ZERO_SHA, 'Strict evidence validation cannot use the placeholder zero SHA.', errors)
+    if (validTimestamp(manifest.generated_at)) {
+      assert(Date.parse(manifest.generated_at) <= Date.now() + 5 * 60_000, 'generated_at cannot be in the future in strict mode.', errors)
+    }
     if (options.releaseSha) {
       assert(SHA_RE.test(options.releaseSha), '--release-sha must be a 40-character git SHA.', errors)
       assert(manifest.release_sha === options.releaseSha, `Manifest release_sha ${manifest.release_sha} does not match requested release SHA ${options.releaseSha}.`, errors)
@@ -141,7 +144,8 @@ function main() {
   }
 
   if (options.mode === 'strict') {
-    console.log(`VÉRTICE MARKET RELEASE evidence: CERTIFIED for ${manifest.release_sha}`)
+    console.log(`VÉRTICE external/operator evidence bundle: COMPLETE for ${manifest.release_sha}`)
+    console.log('This result is NOT by itself a market-release certification; exact-SHA automated gates must also be green.')
   } else {
     console.log('VÉRTICE market release evidence contract: PASS (structure only; NOT CERTIFIED)')
   }
