@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiFetch, loginMobile, logoutMobile } from '../lib/api'
 import { clearSessionTokens, getRefreshToken } from '../lib/session'
+import { revokeCurrentPushInstallation } from '../lib/push-engagement'
 import type { CitizenProfile } from '../types/api'
 
 interface AuthContextValue {
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    await revokeCurrentPushInstallation()
     await logoutMobile()
     setUser(null)
   }, [])
