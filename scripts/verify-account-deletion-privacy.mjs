@@ -15,6 +15,7 @@ function requireText(file, text) {
 
 const migration = read('apps/api/prisma/migrations/20260909184500_account_deletion_privacy_phase/migration.sql')
 const service = read('apps/api/src/modules/auth/account-deletion.service.ts')
+const billingDeletion = read('apps/api/src/modules/billing/account-deletion-billing.service.ts')
 const routes = read('apps/api/src/modules/auth/auth.routes.ts')
 const jobs = read('apps/api/src/lib/jobs.ts')
 const media = read('apps/api/src/modules/media/media-provider.ts')
@@ -42,6 +43,8 @@ for (const forbidden of ['email ', 'cedula_hash', 'password_hash', 'provider_sub
 }
 
 for (const text of [
+  'preflightDeletion(citizenId, sessionId)',
+  'prepareRecurringBillingForAccountDeletion(citizenId)',
   'pg_advisory_xact_lock',
   's.revoked_at IS NULL',
   's.expires_at > NOW()',
@@ -49,14 +52,23 @@ for (const text of [
   'ACCOUNT_DELETION_REAUTH_REQUIRED',
   'ROOT_ACCOUNT_DELETION_PROTECTED',
   'ACCOUNT_DELETION_AUTHORITY_TRANSFER_REQUIRED',
+  'ACCOUNT_DELETION_PAYOUT_RECONCILIATION_REQUIRED',
+  'crowdfunding_payout_requests',
   'DELETE FROM mobile_push_devices',
   'DELETE FROM external_identities',
   'DELETE FROM civic_identity_proof_events',
   'DELETE FROM civic_identity_proofs',
   'DELETE FROM civic_profile_follows',
   'DELETE FROM scheduled_civic_publications',
+  'DELETE FROM legal_documents',
   'UPDATE territorial_reports SET citizen_id = NULL',
   'UPDATE proposals SET author_id = NULL',
+  "status = 'suspended', compliance_status = 'suspended'",
+  'DELETE FROM crowdfunding_updates',
+  'UPDATE crowdfunding_contributions SET contributor_citizen_id = NULL',
+  'DELETE FROM subscriptions',
+  'DELETE FROM billing_usage_counters',
+  'UPDATE payment_transactions SET citizen_id = NULL',
   'email = NULL',
   'cedula_hash = NULL',
   'password_hash = NULL',
@@ -65,6 +77,16 @@ for (const text of [
   "'purge_deleted_identity_auxiliary'",
   'INSERT INTO account_deletion_requests',
 ]) requireText(service, text)
+
+for (const text of [
+  "status IN ('trialing', 'active', 'past_due')",
+  "kind = 'subscription'",
+  "status IN ('pending', 'authorized')",
+  'ACCOUNT_DELETION_BILLING_RECONCILIATION_REQUIRED',
+  'ACCOUNT_DELETION_BILLING_PROVIDER_UNAVAILABLE',
+  'ACCOUNT_DELETION_BILLING_CANCELLATION_FAILED',
+  'provider.cancelSubscription(externalId)',
+]) requireText(billingDeletion, text)
 
 for (const text of [
   "app.delete('/account'",
