@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireAdmin, requireAuth } from '../../middleware/auth'
 import { ENTITLEMENTS } from '../billing/billing.catalog'
 import { requireEntitlement } from '../billing/billing.middleware'
+import { getMyTerritory } from '../territories/territories.service'
 import { getCivicEvidenceAttentionQueue } from './dashboard.attention.service'
 import { buildCitizenOperationalCsv } from './dashboard.export.service'
 import { getCivicActionResolutionPlan } from './dashboard.resolution.service'
@@ -10,8 +11,22 @@ import { getPilotControlCenter } from './pilot.service'
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/me', { preHandler: requireAuth }, async (request, reply) => {
-    const dashboard = await getCitizenCommandCenter(request.citizen.sub)
-    return reply.send(dashboard)
+    const [dashboard, territory] = await Promise.all([
+      getCitizenCommandCenter(request.citizen.sub),
+      getMyTerritory(request.citizen.sub),
+    ])
+    return reply.send({
+      ...dashboard,
+      profile: {
+        ...dashboard.profile,
+        territory_code: territory.territory_code,
+        territory_name: territory.territory_name,
+        territory_level: territory.territory_level,
+        department_code: territory.department_code,
+        department_name: territory.department_name,
+        territory_activation_status: territory.activation_status,
+      },
+    })
   })
 
   app.get('/me/attention', { preHandler: requireAuth }, async (request, reply) => {

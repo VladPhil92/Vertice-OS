@@ -1,0 +1,106 @@
+name: National Platform Readiness
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/src/modules/territories/**'
+      - 'apps/api/src/modules/dashboard/dashboard.routes.ts'
+      - 'apps/api/src/app.ts'
+      - 'apps/api/src/index.ts'
+      - 'apps/api/src/modules/governance/governance.types.ts'
+      - 'apps/api/prisma/migrations/20260909033*/**'
+      - 'apps/web/app/dashboard/territory/**'
+      - 'apps/web/components/dashboard/DashboardIdentityProvider.tsx'
+      - 'scripts/national-platform-integration.sql'
+      - 'scripts/verify-national-platform-readiness.mjs'
+      - 'docs/engineering/NATIONAL_PLATFORM_READINESS_PHASE7A.md'
+      - '.github/workflows/national-platform-readiness.yml'
+      - 'package.json'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-platform-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  national-contract:
+    name: National Platform Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: vertice_national
+          POSTGRES_USER: vertice
+          POSTGRES_PASSWORD: vertice_national
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify national source contract
+        run: node scripts/verify-national-platform-readiness.mjs
+
+      - name: Typecheck national API and web surfaces
+        run: |
+          pnpm --filter @vertice/types build
+          pnpm --filter @vertice/api typecheck
+          pnpm --filter @vertice/web typecheck
+
+      - name: Initialize real PostGIS integration schema
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_national@localhost:5432/vertice_national
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infrastructure/db/init.sql
+
+          for migration in \
+            apps/api/prisma/migrations/20260906191500_civic_actions_core/migration.sql \
+            apps/api/prisma/migrations/20260909033000_national_territory_platform_phase7a/migration.sql \
+            apps/api/prisma/migrations/20260909033500_territory_assurance_guard_phase7a/migration.sql \
+            apps/api/prisma/migrations/20260909033600_territory_selection_assurance_reset/migration.sql \
+            apps/api/prisma/migrations/20260909033800_national_voter_roll_territory_interlock/migration.sql
+          do
+            echo "Applying Phase 7A schema slice: $migration"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Run national Postgres integrity contract
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_national@localhost:5432/vertice_national
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/national-platform-integration.sql
+
+      - name: Emit certification boundary
+        run: |
+          echo "National Platform Phase 7A contract: PASS"
+          echo "This proves source + Postgres territorial integrity for the exact SHA."
+          echo "It does not certify DANE runtime availability, verified residence providers, nationwide load, or GA Colombia."

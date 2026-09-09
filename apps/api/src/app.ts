@@ -23,6 +23,7 @@ import { identityProviderCertificationRoutes } from './modules/identity/identity
 import { identityProviderWebhookRoutes } from './modules/identity/identity-provider-webhook.routes'
 import { identityProviderSessionRoutes } from './modules/identity/identity-provider-session.routes'
 import { territorialRoutes } from './modules/territorial/territorial.routes'
+import { territoriesRoutes } from './modules/territories/territories.routes'
 import { governanceRoutes } from './modules/governance/governance.routes'
 import { reputationRoutes } from './modules/reputation/reputation.routes'
 import { communityRoutes } from './modules/community/community.routes'
@@ -220,6 +221,7 @@ export function buildApp() {
   app.register(identityProviderWebhookRoutes, { prefix: '/identity/providers' })
   app.register(identityRoutes, { prefix: '/identity' })
   app.register(territorialRoutes, { prefix: '/territorial' })
+  app.register(territoriesRoutes, { prefix: '/territories' })
   app.register(governanceRoutes, { prefix: '/governance' })
   app.register(reputationRoutes, { prefix: '/reputation' })
   app.register(communityRoutes, { prefix: '/community' })

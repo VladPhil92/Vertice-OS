@@ -44,6 +44,12 @@ export interface DashboardRuntimeSnapshot {
     email: string
     neighborhood: string | null
     verification_level: number
+    territory_code: string | null
+    territory_name: string | null
+    territory_level: string | null
+    department_code: string | null
+    department_name: string | null
+    territory_activation_status: string | null
   }
   reputation: {
     score: number
@@ -277,9 +283,11 @@ export function DashboardIdentityProvider({ children }: { children: ReactNode })
     return 'Mi perfil cívico'
   }, [dashboard?.profile.email, profile?.display_name])
 
-  const territory = profile?.neighborhood
+  // National-by-default: never invent Cartagena for an unbound citizen.
+  const territory = dashboard?.profile.territory_name
+    ?? profile?.neighborhood
     ?? dashboard?.profile.neighborhood
-    ?? 'Cartagena de Indias'
+    ?? 'Selecciona tu municipio'
   const identityVerified = (dashboard?.profile.verification_level ?? 0) >= 1
 
   const value = useMemo<DashboardIdentityContextValue>(() => ({
