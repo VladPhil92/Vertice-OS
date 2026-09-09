@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -12,6 +12,9 @@ interface FollowingFeedResponse {
   count: number
   scope: 'following'
 }
+
+const DEFAULT_SCORING_NOTE =
+  'El score prioriza evidencia y resultados. Seguidores, likes y popularidad no suman puntos.'
 
 const TYPE_LABEL: Record<string, string> = {
   report: 'Reporte',
@@ -34,20 +37,30 @@ export default function CommunityScreen() {
   const [degraded, setDegraded] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scoringNote, setScoringNote] = useState(DEFAULT_SCORING_NOTE)
+  const latestScopeRef = useRef<FeedScope>('discover')
 
   const load = useCallback(async (nextScope: FeedScope) => {
+    latestScopeRef.current = nextScope
     setError(null)
     try {
       if (nextScope === 'discover') {
         const response = await apiFetch<CommunityFeedResponse>('/community/feed?limit=40')
+        if (latestScopeRef.current !== nextScope) return
         setActivities(response.data)
         setDegraded(response.availability.degraded)
+        setScoringNote(response.scoring.note)
       } else {
         const response = await apiFetch<FollowingFeedResponse>('/community/following/feed?limit=40')
+        if (latestScopeRef.current !== nextScope) return
         setActivities(response.data)
         setDegraded(false)
+        setScoringNote(DEFAULT_SCORING_NOTE)
       }
     } catch (cause) {
+      if (latestScopeRef.current !== nextScope) return
+      setActivities([])
+      setDegraded(false)
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar la actividad comunitaria.')
     }
   }, [])
@@ -96,9 +109,7 @@ export default function CommunityScreen() {
         </View>
 
         <View style={styles.neutralityNote}>
-          <Text style={styles.neutralityText}>
-            El score prioriza evidencia y resultados verificados. Seguidores, likes e impresiones no suman reputación.
-          </Text>
+          <Text style={styles.neutralityText}>{scoringNote}</Text>
         </View>
 
         {degraded ? (

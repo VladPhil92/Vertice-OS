@@ -260,10 +260,16 @@ export interface CommunityFeedAvailability {
   degraded: boolean
 }
 
+export interface CommunityFeedScoring {
+  version: string
+  note: string
+}
+
 export interface CommunityFeedResponse {
   data: CivicActivity[]
   count: number
   availability: CommunityFeedAvailability
+  scoring: CommunityFeedScoring
 }
 
 export interface CivicProfile {
