@@ -3,6 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch } from '../../lib/api'
+import { useAuth } from '../../providers/AuthProvider'
 import type { PublicCityFeedItem, PublicCityOverview } from '../../types/api'
 
 const ACTIVATION_LABEL: Record<string, string> = {
@@ -35,6 +36,7 @@ function Metric({ label, value }: { label: string; value: number }) {
 }
 
 export default function PublicCityScreen() {
+  const { user, loading: authLoading } = useAuth()
   const params = useLocalSearchParams<{ code?: string | string[] }>()
   const code = useMemo(() => {
     const raw = Array.isArray(params.code) ? params.code[0] : params.code
@@ -73,6 +75,15 @@ export default function PublicCityScreen() {
   async function refresh() {
     setRefreshing(true)
     try { await load() } finally { setRefreshing(false) }
+  }
+
+  function openActivation() {
+    if (authLoading) return
+    if (user) {
+      router.push('/territory/activate')
+      return
+    }
+    router.push({ pathname: '/(auth)/sign-in', params: { next: 'territory-activate' } })
   }
 
   return (
@@ -137,8 +148,8 @@ export default function PublicCityScreen() {
                 </View>
               </View>
               {overview.launch.accepting_interest ? (
-                <Pressable accessibilityRole="button" onPress={() => router.push('/territory/activate')} style={styles.primaryButton}>
-                  <Text style={styles.primaryButtonText}>Quiero ayudar a activar mi ciudad</Text>
+                <Pressable accessibilityRole="button" disabled={authLoading} onPress={openActivation} style={[styles.primaryButton, authLoading && styles.disabled]}>
+                  <Text style={styles.primaryButtonText}>{user ? 'Quiero ayudar a activar mi ciudad' : 'Iniciar sesión para ayudar'}</Text>
                 </Pressable>
               ) : (
                 <View style={styles.pausedCard}>
@@ -222,4 +233,5 @@ const styles = StyleSheet.create({
   boundaryCard: { borderRadius: 18, padding: 17, backgroundColor: '#E7EFE9' },
   boundaryText: { color: '#3E5547', lineHeight: 21 },
   boundaryStrong: { fontWeight: '800' },
+  disabled: { opacity: 0.5 },
 })
