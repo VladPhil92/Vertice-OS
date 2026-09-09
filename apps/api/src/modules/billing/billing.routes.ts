@@ -7,6 +7,7 @@ import {
 } from '../../lib/idempotency'
 import { getBillingCatalog, getEffectiveBillingAccess } from './billing.service'
 import { getBillingUsage } from './billing.usage.service'
+import { assertFinancialCapabilityEnabled } from './finance-control-plane.service'
 import {
   cancelMyProSubscription,
   createProCheckout,
@@ -54,6 +55,10 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
         details: parsed.error.flatten(),
       })
     }
+
+    // Phase IV emergency stop blocks only a NEW payment instruction. Existing
+    // subscriptions can still be cancelled/reconciled and webhooks still run.
+    await assertFinancialCapabilityEnabled('pro_checkout')
 
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
