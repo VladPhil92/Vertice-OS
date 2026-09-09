@@ -1,0 +1,78 @@
+name: Production Hardening Contract
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/**'
+      - 'infrastructure/kubernetes/api/**'
+      - 'scripts/verify-production-hardening.mjs'
+      - 'package.json'
+      - '.github/workflows/production-hardening.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/**'
+      - 'infrastructure/kubernetes/api/**'
+      - 'scripts/verify-production-hardening.mjs'
+      - 'package.json'
+      - '.github/workflows/production-hardening.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-hardening-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-safety:
+    name: Production Runtime Safety Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          # pull_request defaults to GitHub's ephemeral merge ref. Phase 5
+          # certification must instead execute against the immutable submitted
+          # head SHA; push/workflow_dispatch fall back to github.sha.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Keep package-manager bootstrap identical to the canonical CI pipeline.
+      # pnpm/action-setup reads the repository packageManager declaration before
+      # setup-node initializes the pnpm cache.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: 'pnpm'
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify production hardening contract
+        run: pnpm hardening:verify
+
+      - name: Build shared types
+        run: pnpm --filter @vertice/types build
+
+      - name: Typecheck API
+        run: pnpm --filter @vertice/api typecheck
+
+      - name: Run runtime safety tests
+        run: pnpm --filter @vertice/api test -- --runInBand src/__tests__/runtime-readiness.test.ts src/__tests__/health.test.ts
+
+      - name: Build API
+        run: pnpm --filter @vertice/api build
+
+      - name: Emit certification boundary
+        run: |
+          echo "Production hardening contract: PASS"
+          echo "This gate proves source-level runtime safety, deterministic tests and API compilation for this SHA."
+          echo "It does NOT prove that the SHA is deployed, that external providers are reachable, or that a production canary is CERTIFIED."

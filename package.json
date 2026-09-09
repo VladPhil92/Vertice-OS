@@ -16,6 +16,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "typecheck": "turbo run typecheck",
     "governance:verify": "node scripts/verify-release-governance.mjs",
+    "hardening:verify": "node scripts/verify-production-hardening.mjs",
     "mobile": "pnpm --filter @vertice/mobile start",
     "mobile:android": "pnpm --filter @vertice/mobile android",
     "mobile:ios": "pnpm --filter @vertice/mobile ios",
