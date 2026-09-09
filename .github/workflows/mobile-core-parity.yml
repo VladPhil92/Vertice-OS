@@ -32,24 +32,43 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify native device capability contract
+      - name: Verify native device and engagement contract
         run: node apps/mobile/scripts/verify-device-capabilities.mjs
 
       - name: Typecheck native client
         run: pnpm --filter @vertice/mobile typecheck
 
-      - name: Resolve Expo public configuration
-        run: pnpm --filter @vertice/mobile exec expo config --type public > /tmp/vertice-expo-config.json
+      - name: Resolve Expo public configuration without external credentials
+        run: pnpm --filter @vertice/mobile exec expo config --type public > /tmp/vertice-expo-config-default.json
+
+      - name: Resolve Expo public configuration with build-time provider inputs
+        env:
+          EAS_PROJECT_ID: 00000000-0000-0000-0000-000000000000
+          GOOGLE_MAPS_API_KEY: phase2c-ci-placeholder
+        run: |
+          pnpm --filter @vertice/mobile exec expo config --type public > /tmp/vertice-expo-config-provider.json
+          node - <<'NODE'
+          const fs = require('fs')
+          const config = JSON.parse(fs.readFileSync('/tmp/vertice-expo-config-provider.json', 'utf8'))
+          if (config.extra?.eas?.projectId !== '00000000-0000-0000-0000-000000000000') {
+            throw new Error('EAS project id was not injected into resolved Expo config')
+          }
+          if (config.android?.config?.googleMaps?.apiKey !== 'phase2c-ci-placeholder') {
+            throw new Error('Android Google Maps API key was not injected into resolved Expo config')
+          }
+          NODE
 
       - name: Export Android and iOS bundles
         env:
           EXPO_PUBLIC_API_URL: https://api.example.invalid
+          EAS_PROJECT_ID: 00000000-0000-0000-0000-000000000000
+          GOOGLE_MAPS_API_KEY: phase2c-ci-placeholder
         run: pnpm --filter @vertice/mobile build
 
       - name: Assert exported platform artifacts
         run: |
           test -d apps/mobile/dist/android
           test -d apps/mobile/dist/ios
-          echo 'Mobile Phase 2B build/config contract: PASS'
-          echo 'This gate validates dependency lock, config plugins, TypeScript and Expo export.'
-          echo 'It does not certify physical-device permission prompts, Cloudflare production credentials, push delivery, store signing or app review.'
+          echo 'Mobile Phase 2C build/config contract: PASS'
+          echo 'This gate validates frozen dependencies, permissions/plugins, map/push routing contracts, dynamic Expo config, TypeScript and Android/iOS export.'
+          echo 'It does not certify physical-device permission prompts, APNs/FCM delivery, production Google Maps credentials, signed EAS builds or app-store review.'
