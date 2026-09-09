@@ -48,8 +48,9 @@ This document separates work that can be completed and evidenced by repository a
 - [x] Mobile Domain Parity source/type/export gate.
 - [x] Account Deletion Privacy source/unit/type/export gate.
 - [x] Cartagena same-SHA production canary infrastructure.
+- [x] Market Release Certification evidence schema and fail-closed verifier.
 
-These gates can prove source/build/integration/runtime properties when the required infrastructure already exists. They cannot create or attest third-party credentials, legal approvals or physical-device evidence.
+These gates can prove source/build/integration/runtime properties when the required infrastructure already exists. They cannot create or attest third-party credentials, legal approvals or physical-device evidence. The Market Release Certification framework makes those external requirements machine-verifiable once real evidence exists; it never fabricates that evidence.
 
 ## B. Operator/external completion — mandatory human boundary
 
@@ -153,6 +154,8 @@ Repository drafts/checklists can be automated, but the organization must approve
 - [ ] closed/open testing as required;
 - [ ] Google Play production submission/review.
 
+The completed external/operator results above are recorded through the controlled evidence manifest described in `MARKET_RELEASE_CERTIFICATION.md`. A pending or blocked item must remain pending/blocked; source code or configuration presence cannot be used as a substitute for observation.
+
 ## C. Final certification rule
 
 VÉRTICE may be described as `CERTIFIED FOR MARKET RELEASE` only when the release SHA satisfies all repository gates that apply **and** all mandatory external/operator evidence above has been completed.
@@ -182,7 +185,10 @@ Mercado Pago bounded canary          PASS
 Wompi/BRE-B bounded payout canary    PASS
 Backup/restore drill                 PASS
 Legal approval                       APPROVED
-Store submissions                    APPROVED
+App Store release                    APPROVED
+Google Play release                  APPROVED
 ```
+
+The strict Market Release Certification evidence gate must pass for that exact release SHA. It remains a companion to, not a replacement for, the existing automated CI/security/runtime gates.
 
 Until then, use evidence-specific states (`IMPLEMENTED`, `INTEGRATED`, `DEPLOYED`, `READY`, `CERTIFIED`) rather than a generic “100%”.
