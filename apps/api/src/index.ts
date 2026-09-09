@@ -65,6 +65,9 @@ async function loadModules() {
     const jobsModule = await import('./lib/jobs')
     console.error('[boot] loaded ./lib/jobs')
 
+    const territoriesModule = await import('./modules/territories/territories.service')
+    console.error('[boot] loaded ./modules/territories/territories.service')
+
     console.error('[boot] all modules loaded ok')
 
     return {
@@ -74,6 +77,7 @@ async function loadModules() {
       redis,
       closeNeo4j: neo4jModule.closeNeo4j,
       startJobWorker: jobsModule.startJobWorker,
+      refreshDivipolaCatalogBestEffort: territoriesModule.refreshDivipolaCatalogBestEffort,
     }
   } catch (err) {
     console.error('[fatal] import-time error while loading modules', err)
@@ -82,7 +86,15 @@ async function loadModules() {
 }
 
 async function main() {
-  const { buildApp, config, prisma, redis, closeNeo4j, startJobWorker } = await loadModules()
+  const {
+    buildApp,
+    config,
+    prisma,
+    redis,
+    closeNeo4j,
+    startJobWorker,
+    refreshDivipolaCatalogBestEffort,
+  } = await loadModules()
 
   console.error('[boot] main() start, PORT=', config.PORT, 'HOST=', config.HOST)
   const app = buildApp()
@@ -123,6 +135,14 @@ async function main() {
 
   const stopJobWorker = startJobWorker()
   app.log.info('[jobs] worker started')
+
+  // National catalog hydration is deliberately best-effort and starts only
+  // after the HTTP runtime is already serving. DANE/DIVIPOLA is an authoritative
+  // data source, not a serving-readiness dependency. Bootstrap nodes keep
+  // VÉRTICE usable if the public source is temporarily unavailable.
+  if (config.NODE_ENV === 'production') {
+    void refreshDivipolaCatalogBestEffort()
+  }
 
   let shuttingDown = false
   const shutdown = async (signal: string) => {
