@@ -3,6 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, Vie
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch, apiMutation } from '../../lib/api'
+import { useAuth } from '../../providers/AuthProvider'
 import type {
   ApiList,
   MyTerritory,
@@ -31,6 +32,7 @@ const STATUS_LABEL: Record<TerritoryInterestStatus, string> = {
 }
 
 export default function TerritoryActivationScreen() {
+  const { user, loading: authLoading } = useAuth()
   const [territory, setTerritory] = useState<MyTerritory | null>(null)
   const [interests, setInterests] = useState<TerritoryActivationInterest[]>([])
   const [role, setRole] = useState<TerritoryInterestRole>('ambassador')
@@ -43,6 +45,10 @@ export default function TerritoryActivationScreen() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
     setError(null)
     try {
       const [current, currentInterests] = await Promise.all([
@@ -56,22 +62,34 @@ export default function TerritoryActivationScreen() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      setLoading(false)
+      router.replace({ pathname: '/(auth)/sign-in', params: { next: 'territory-activate' } })
+      return
+    }
+    void load()
+  }, [authLoading, user, load])
 
-  const activeInterestForSelectedRole = useMemo(
-    () => interests.find((interest) => interest.interest_role === role && interest.status !== 'withdrawn'),
+  const blockingInterestForSelectedRole = useMemo(
+    () => interests.find(
+      (interest) => interest.interest_role === role
+        && (interest.status === 'pending' || interest.status === 'approved'),
+    ),
     [interests, role],
   )
 
   async function refresh() {
+    if (!user) return
     setRefreshing(true)
     try { await load() } finally { setRefreshing(false) }
   }
 
   async function submit() {
-    if (!territory?.territory_code || saving || activeInterestForSelectedRole) return
+    if (!user || !territory?.territory_code || saving || blockingInterestForSelectedRole) return
     setSaving(true)
     setNotice(null)
     setError(null)
@@ -95,6 +113,7 @@ export default function TerritoryActivationScreen() {
   }
 
   async function withdraw(interest: TerritoryActivationInterest) {
+    if (!user) return
     setBusyInterestId(interest.id)
     setNotice(null)
     setError(null)
@@ -111,6 +130,16 @@ export default function TerritoryActivationScreen() {
     } finally {
       setBusyInterestId(null)
     }
+  }
+
+  if (authLoading || !user) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <View style={styles.authGate}>
+          <Text style={styles.muted}>Verificando sesión ciudadana…</Text>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -199,22 +228,22 @@ export default function TerritoryActivationScreen() {
               />
               <Text style={styles.counter}>{message.length}/500</Text>
 
-              {activeInterestForSelectedRole ? (
+              {blockingInterestForSelectedRole ? (
                 <View style={styles.infoCard}>
-                  <Text style={styles.infoText}>Ya tienes una manifestación activa para este tipo de participación: {STATUS_LABEL[activeInterestForSelectedRole.status]}.</Text>
+                  <Text style={styles.infoText}>Ya tienes una manifestación activa para este tipo de participación: {STATUS_LABEL[blockingInterestForSelectedRole.status]}.</Text>
                 </View>
               ) : null}
 
               <Pressable
                 accessibilityRole="button"
-                disabled={saving || Boolean(activeInterestForSelectedRole)}
+                disabled={saving || Boolean(blockingInterestForSelectedRole)}
                 onPress={() => void submit()}
-                style={[styles.primaryButton, (saving || activeInterestForSelectedRole) && styles.disabled]}
+                style={[styles.primaryButton, (saving || Boolean(blockingInterestForSelectedRole)) && styles.disabled]}
               >
                 <Text style={styles.primaryButtonText}>{saving ? 'Registrando…' : 'Registrar mi interés'}</Text>
               </Pressable>
               <Text style={styles.helper}>
-                Una aprobación no te añade automáticamente a una cohorte. Esa asignación es un proceso superadmin separado, explícito y auditable.
+                Una aprobación no te añade automáticamente a una cohorte. Esa asignación es un proceso superadmin separado, explícito y auditable. Un interés no aprobado puede volver a manifestarse.
               </Text>
             </View>
 
@@ -265,6 +294,7 @@ export default function TerritoryActivationScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
+  authGate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   content: { padding: 20, paddingBottom: 44, gap: 16 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 6, paddingRight: 12 },
   backText: { color: '#24573E', fontWeight: '700' },
