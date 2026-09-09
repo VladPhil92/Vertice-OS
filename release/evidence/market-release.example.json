@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "release_sha": "0000000000000000000000000000000000000000",
+  "generated_at": "2026-09-09T00:00:00.000Z",
+  "release_candidate": "market-release-candidate",
+  "evidence": [
+    { "id": "production_web_api_sha_match", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Confirm deployed Web/API revision matches release_sha." },
+    { "id": "health_live", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Production /health/live." },
+    { "id": "health_ready", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Production /health/ready." },
+    { "id": "health_release", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Production /health/release." },
+    { "id": "same_sha_runtime_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Same-SHA production canary evidence." },
+    { "id": "android_signed_physical_smoke", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Signed production-representative Android build on physical hardware." },
+    { "id": "ios_signed_physical_smoke", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Signed production-representative iOS build on physical hardware." },
+    { "id": "account_deletion_physical_smoke", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Delete account in-app; confirm auth/push are dead and cleanup completes." },
+    { "id": "veriff_external_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Authenticated production decision lifecycle." },
+    { "id": "cloudflare_images_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Physical upload/confirm/delivery canary." },
+    { "id": "cloudflare_deletion_purge_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Provider asset actually removed after account deletion." },
+    { "id": "mercadopago_bounded_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Bounded real COP checkout, authenticated webhook, settlement and controlled refund." },
+    { "id": "wompi_breb_payout_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Bounded real payout plus provider/bank reconciliation." },
+    { "id": "backup_restore_drill", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Documented restore drill against release-compatible data." },
+    { "id": "legal_approval", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Terms, privacy/Habeas Data, retention, community, crowdfunding and KYC/KYB approvals." },
+    { "id": "app_store_release_approval", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "App Store production review approval." },
+    { "id": "google_play_release_approval", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Google Play production review approval." }
+  ]
+}
