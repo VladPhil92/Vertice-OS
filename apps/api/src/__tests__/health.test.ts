@@ -51,6 +51,21 @@ describe('GET /health', () => {
   })
 })
 
+describe('GET /health/live', () => {
+  it('returns process liveness without probing network dependencies', async () => {
+    mockRedisPing.mockClear()
+    mockPrismaQueryRaw.mockClear()
+    mockVerifyConnectivity.mockClear()
+
+    const res = await app.inject({ method: 'GET', url: '/health/live' })
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.payload).status).toBe('ok')
+    expect(mockRedisPing).not.toHaveBeenCalled()
+    expect(mockPrismaQueryRaw).not.toHaveBeenCalled()
+    expect(mockVerifyConnectivity).not.toHaveBeenCalled()
+  })
+})
+
 describe('GET /health/ready', () => {
   beforeEach(() => {
     mockRedisPing.mockResolvedValue('PONG')
@@ -109,6 +124,37 @@ describe('GET /health/ready', () => {
     expect(body.checks.neo4j).toBe('fail')
     expect(body.checks.redis).toBe('ok')
     expect(body.checks.database).toBe('ok')
+  })
+})
+
+describe('GET /health/release', () => {
+  beforeEach(() => {
+    mockRedisPing.mockResolvedValue('PONG')
+    mockPrismaQueryRaw.mockResolvedValue([{ '?column?': 1 }])
+    mockVerifyConnectivity.mockResolvedValue({})
+  })
+
+  it('returns a traceable release decision without exposing secrets', async () => {
+    const res = await app.inject({ method: 'GET', url: '/health/release' })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.payload)
+    expect(body.status).toBe('ready')
+    expect(body.serving_status).toBe('ok')
+    expect(body.blockers).toEqual([])
+    expect(body.checks).toEqual({ redis: 'ok', database: 'ok', neo4j: 'ok' })
+    expect(res.payload).not.toContain('test-secret-with-at-least-32-characters-ok')
+    expect(res.payload).not.toContain('test-proofing-adapter-secret-32-chars')
+  })
+
+  it('fails closed for release promotion when a core dependency is unavailable', async () => {
+    mockPrismaQueryRaw.mockRejectedValueOnce(new Error('connection refused'))
+
+    const res = await app.inject({ method: 'GET', url: '/health/release' })
+    expect(res.statusCode).toBe(503)
+    const body = JSON.parse(res.payload)
+    expect(body.status).toBe('blocked')
+    expect(body.serving_status).toBe('unavailable')
+    expect(body.blockers).toContain('dependency:database')
   })
 })
 
