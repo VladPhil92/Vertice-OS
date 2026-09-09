@@ -10,6 +10,8 @@ const required = [
   'apps/mobile/app/(auth)/sign-in.tsx',
   'apps/mobile/app/territory/select.tsx',
   'apps/web/app/auth/register/page.tsx',
+  'apps/web/app/auth/login/page.tsx',
+  'apps/web/e2e/auth.spec.ts',
   'docs/engineering/NATIONAL_ACCOUNT_ONBOARDING_PHASE7E.md',
 ]
 
@@ -26,6 +28,8 @@ const mobileRegister = fs.readFileSync(required[5], 'utf8')
 const mobileSignIn = fs.readFileSync(required[6], 'utf8')
 const selector = fs.readFileSync(required[7], 'utf8')
 const webRegister = fs.readFileSync(required[8], 'utf8')
+const webLogin = fs.readFileSync(required[9], 'utf8')
+const authE2e = fs.readFileSync(required[10], 'utf8')
 
 if (!authRoutes.includes("app.post('/register'")) throw new Error('Canonical /auth/register route is missing')
 if (!authRoutes.includes('RegisterSchema.safeParse')) throw new Error('Canonical registration must keep RegisterSchema validation')
@@ -56,11 +60,30 @@ for (const forbidden of [
 ]) {
   if (webRegister.includes(forbidden)) throw new Error(`National web registration must not hardcode Cartagena locality context: ${forbidden}`)
 }
-for (const token of ['/auth/register', 'selector territorial nacional', 'autodeclarada', 'HMAC-SHA-256']) {
+for (const token of ['/auth/register', 'selector territorial nacional', 'autodeclarada', 'HMAC-SHA-256', 'intent=territory-onboarding']) {
   if (!webRegister.includes(token)) throw new Error(`Web national registration missing contract token: ${token}`)
 }
 
-const onboardingSurfaces = [registration, provider, mobileRegister, mobileSignIn, webRegister].join('\n')
+for (const token of [
+  "const TERRITORY_ONBOARDING_INTENT = 'territory-onboarding'",
+  "searchParams.get('intent') === TERRITORY_ONBOARDING_INTENT",
+  "? '/dashboard/territory'",
+  ": '/dashboard'",
+]) {
+  if (!webLogin.includes(token)) throw new Error(`Web login missing allowlisted continuation contract: ${token}`)
+}
+if (webLogin.includes("window.location.assign(searchParams.get('next')")) {
+  throw new Error('Web login must never redirect directly to a user-controlled next URL')
+}
+for (const token of [
+  'ignores a client supplied next target after login',
+  'allows only the fixed territorial onboarding intent after login',
+  "'/auth/login?intent=territory-onboarding'",
+]) {
+  if (!authE2e.includes(token)) throw new Error(`Golden auth suite missing safe continuation evidence: ${token}`)
+}
+
+const onboardingSurfaces = [registration, provider, mobileRegister, mobileSignIn, webRegister, webLogin].join('\n')
 for (const forbidden of [
   'verification_level =',
   'territory_assurance_level =',
