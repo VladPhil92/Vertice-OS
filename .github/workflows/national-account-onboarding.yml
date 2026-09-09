@@ -8,6 +8,8 @@ on:
       - 'apps/mobile/lib/registration.ts'
       - 'apps/mobile/providers/AuthProvider.tsx'
       - 'apps/web/app/auth/register/**'
+      - 'apps/web/app/auth/login/**'
+      - 'apps/web/e2e/auth.spec.ts'
       - 'apps/api/src/modules/auth/**'
       - 'scripts/verify-national-account-onboarding.mjs'
       - 'docs/engineering/NATIONAL_ACCOUNT_ONBOARDING_PHASE7E.md'
@@ -77,4 +79,5 @@ jobs:
         run: |
           echo 'National Account Onboarding Phase 7E contract: PASS'
           echo 'This proves exact-SHA source/type/auth/build/export coherence.'
+          echo 'Golden E2E separately proves the safe territorial intent in the browser journey.'
           echo 'It does not prove physical-device store readiness, external identity-provider certification, or verified territorial residence.'
