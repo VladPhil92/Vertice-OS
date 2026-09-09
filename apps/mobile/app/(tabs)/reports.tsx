@@ -3,6 +3,7 @@ import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, 
 import MapView, { Marker } from 'react-native-maps'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { TerritorialMap } from '../../components/TerritorialMap'
 import { apiFetch, apiMutation } from '../../lib/api'
 import {
   getCurrentReportCoordinates,
@@ -170,6 +171,8 @@ export default function ReportsScreen() {
             <Text style={styles.eyebrow}>TERRITORIO</Text>
             <Text style={styles.title}>Mapa ciudadano</Text>
             <Text style={styles.subtitle}>Incidencias públicas, proximidad y evidencia sobre una superficie territorial nativa.</Text>
+            <Text style={styles.title}>Reportes ciudadanos</Text>
+            <Text style={styles.subtitle}>Mapa nativo, GPS, proximidad y evidencia fotográfica conectados al registro territorial canónico.</Text>
           </View>
           <Pressable style={styles.primaryButton} onPress={() => setShowCreate((value) => !value)}>
             <Text style={styles.primaryButtonText}>{showCreate ? 'Cerrar' : 'Reportar'}</Text>
@@ -210,6 +213,8 @@ export default function ReportsScreen() {
 
         {currentCoordinates ? (
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Mapa de incidencias · 3 km</Text>
+            <TerritorialMap center={currentCoordinates} reports={nearbyReports} onOpenReport={openReport} />
             <Text style={styles.sectionTitle}>Cerca de ti</Text>
             <View style={styles.list}>
               {nearbyReports.map((report) => (

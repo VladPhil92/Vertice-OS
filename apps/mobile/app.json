@@ -36,6 +36,7 @@
         {
           "defaultChannel": "civic-updates",
           "color": "#17382A"
+          "enableBackgroundRemoteNotifications": false
         }
       ]
     ],

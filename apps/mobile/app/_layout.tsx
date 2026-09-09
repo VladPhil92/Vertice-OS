@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context'
 import { AuthProvider } from '../providers/AuthProvider'
 import { EngagementBridge } from '../providers/EngagementBridge'
+import { NotificationBridge } from '../components/NotificationBridge'
 
 export default function RootLayout() {
   return (
@@ -10,6 +11,7 @@ export default function RootLayout() {
       <AuthProvider>
         <StatusBar style="auto" />
         <EngagementBridge />
+        <NotificationBridge />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />

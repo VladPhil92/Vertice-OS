@@ -10,7 +10,8 @@
     "build": "expo export --platform android --output-dir dist/android && expo export --platform ios --output-dir dist/ios",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "doctor": "npx expo-doctor@latest"
+    "doctor": "npx expo-doctor@latest",
+    "release:verify": "node scripts/verify-device-release.mjs"
   },
   "dependencies": {
     "expo": "~57.0.17",

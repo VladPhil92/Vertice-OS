@@ -156,3 +156,4 @@ jobs:
           CIVIC_IDENTITY_ASSURANCE_PROVIDERS: trusted_kyc
           CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: '{"trusted_kyc":{"golden-key":"golden-trusted-kyc-adapter-secret-32-characters-minimum"}}'
         run: pnpm --filter @vertice/api test -- golden-journeys.integration.test.ts golden-territorial.integration.test.ts golden-governance.integration.test.ts golden-mobile-engagement.integration.test.ts --runInBand
+        run: pnpm --filter @vertice/api test -- golden-journeys.integration.test.ts golden-territorial.integration.test.ts golden-governance.integration.test.ts golden-mobile-push.integration.test.ts --runInBand
