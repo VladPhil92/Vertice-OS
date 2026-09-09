@@ -1,0 +1,80 @@
+name: National Account Onboarding
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/mobile/app/(auth)/**'
+      - 'apps/mobile/lib/registration.ts'
+      - 'apps/mobile/providers/AuthProvider.tsx'
+      - 'apps/web/app/auth/register/**'
+      - 'apps/api/src/modules/auth/**'
+      - 'scripts/verify-national-account-onboarding.mjs'
+      - 'docs/engineering/NATIONAL_ACCOUNT_ONBOARDING_PHASE7E.md'
+      - '.github/workflows/national-account-onboarding.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-account-onboarding-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  onboarding-contract:
+    name: National Account Onboarding Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Phase 7E source contract
+        run: node scripts/verify-national-account-onboarding.mjs
+
+      - name: Typecheck API, web and mobile
+        run: |
+          pnpm --filter @vertice/types build
+          pnpm --filter @vertice/api typecheck
+          pnpm --filter @vertice/web typecheck
+          pnpm --filter @vertice/mobile typecheck
+
+      - name: Run canonical auth tests
+        run: |
+          pnpm --filter @vertice/api test -- --runInBand \
+            src/modules/auth/__tests__/auth.routes.test.ts \
+            src/modules/auth/__tests__/auth.service.test.ts \
+            src/modules/auth/__tests__/mobile-auth-contract.test.ts
+
+      - name: Build web production bundle
+        run: pnpm --filter @vertice/web build
+
+      - name: Export Android bundle
+        run: pnpm --filter @vertice/mobile exec expo export --platform android --output-dir dist/phase7e-android
+
+      - name: Export iOS bundle
+        run: pnpm --filter @vertice/mobile exec expo export --platform ios --output-dir dist/phase7e-ios
+
+      - name: Emit certification boundary
+        run: |
+          echo 'National Account Onboarding Phase 7E contract: PASS'
+          echo 'This proves exact-SHA source/type/auth/build/export coherence.'
+          echo 'It does not prove physical-device store readiness, external identity-provider certification, or verified territorial residence.'
