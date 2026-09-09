@@ -30,6 +30,13 @@
           "cameraPermission": "Vértice usa la cámara solo cuando decides capturar evidencia para un reporte ciudadano.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "civic-updates",
+          "color": "#17382A"
+        }
       ]
     ],
     "experiments": {
