@@ -37,16 +37,24 @@ if (!authSchema.includes('PasswordSchema')) throw new Error('Registration must p
 if (!authService.includes('hashCedula(input.cedula)')) throw new Error('Cedula must remain server-side hashed')
 if (authService.includes('cedula: input.cedula')) throw new Error('Raw cedula must never be persisted by registration')
 
-for (const token of ["'/auth/register'", 'loginMobile(normalized.email, normalized.password)']) {
-  if (!registration.includes(token)) throw new Error(`Mobile registration must reuse canonical identity/session flow: ${token}`)
+for (const token of [
+  "'/auth/register'",
+  'loginMobile(normalized.email, normalized.password)',
+  'PostRegistrationLoginRequiredError',
+  "code = 'ACCOUNT_CREATED_LOGIN_REQUIRED'",
+]) {
+  if (!registration.includes(token)) throw new Error(`Mobile registration must preserve canonical/recovery flow: ${token}`)
 }
 if (registration.includes('/auth/mobile/register')) throw new Error('Phase 7E must not introduce a second mobile registration endpoint')
 
-for (const token of ['signUp:', 'registerAndLoginMobile', "router.replace('/territory/select')", 'HMAC-SHA-256']) {
+for (const token of ['signUp:', 'registerAndLoginMobile', "router.replace('/territory/select')", 'HMAC-SHA-256', 'isPostRegistrationLoginRequiredError', "next: 'territory-select'", "created: '1'"]) {
   const surface = token === 'signUp:' || token === 'registerAndLoginMobile' ? provider : mobileRegister
   if (!surface.includes(token)) throw new Error(`Mobile onboarding missing contract token: ${token}`)
 }
 if (!mobileSignIn.includes("router.push('/(auth)/register')")) throw new Error('Mobile sign-in must expose account creation')
+for (const token of ["requestedNext === 'territory-select'", "router.replace('/territory/select')", 'Tu cuenta ya fue creada']) {
+  if (!mobileSignIn.includes(token)) throw new Error(`Mobile sign-in missing post-registration recovery token: ${token}`)
+}
 if (!selector.includes("'/territories/me'")) throw new Error('Onboarding must continue into canonical territory selection')
 if (!selector.includes('autodeclarada')) throw new Error('Territory selection must remain explicitly self-asserted')
 
