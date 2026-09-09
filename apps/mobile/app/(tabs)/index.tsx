@@ -23,14 +23,20 @@ export default function DashboardScreen() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      const [dashboardResponse, notificationResponse] = await Promise.all([
-        apiFetch<CitizenDashboard>('/dashboard/me'),
-        apiFetch<{ count: number }>('/notifications/unread-count'),
-      ])
+      const dashboardResponse = await apiFetch<CitizenDashboard>('/dashboard/me')
       setDashboard(dashboardResponse)
-      setUnreadNotifications(notificationResponse.count)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar el panel.')
+      return
+    }
+
+    // Engagement is an auxiliary delivery surface. A notifications outage must
+    // never make the citizen command center unavailable.
+    try {
+      const notificationResponse = await apiFetch<{ count: number }>('/notifications/unread-count')
+      setUnreadNotifications(notificationResponse.count)
+    } catch {
+      setUnreadNotifications(0)
     }
   }, [])
 
