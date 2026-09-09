@@ -218,6 +218,101 @@ export interface ApiList<T> {
   count: number
 }
 
+export type CivicProfileType = 'citizen' | 'social_leader' | 'candidate' | 'organization_rep' | 'public_official'
+export type CommunityActivityType = 'report' | 'proposal' | 'publication'
+export type CommunityValidationStance = 'corroborate' | 'dispute'
+
+export interface CommunityValidationSummary {
+  corroborations: number
+  disputes: number
+  total: number
+}
+
+export interface CivicActivity {
+  id: string
+  type: CommunityActivityType
+  actor: {
+    id: string | null
+    display_name: string
+    neighborhood: string | null
+    actor_kind: CivicProfileType
+    organization: string | null
+    public_profile: boolean
+    platform_reputation_score: number | null
+  }
+  title: string
+  summary: string
+  category: string
+  status: string
+  neighborhood: string | null
+  evidence_count: number
+  verification_state: 'declared' | 'evidence_backed' | 'verified'
+  civic_score: number
+  community_validation: CommunityValidationSummary
+  created_at: string
+  updated_at: string
+  href: string
+}
+
+export interface CommunityFeedAvailability {
+  reports: 'available' | 'degraded'
+  proposals: 'available' | 'degraded'
+  degraded: boolean
+}
+
+export interface CommunityFeedScoring {
+  version: string
+  note: string
+}
+
+export interface CommunityFeedResponse {
+  data: CivicActivity[]
+  count: number
+  availability: CommunityFeedAvailability
+  scoring: CommunityFeedScoring
+}
+
+export interface CivicProfile {
+  citizen_id: string
+  display_name: string | null
+  neighborhood: string | null
+  profile_type: CivicProfileType
+  bio: string | null
+  organization: string | null
+  public_profile: boolean
+  reputation_score: number
+}
+
+export interface PublicCivicProfile extends CivicProfile {
+  follower_count: number
+  actions_count: number
+  verified_actions: number
+  evidence_count: number
+  average_action_score: number
+  recent_actions: CivicActivity[]
+}
+
+export interface FollowState {
+  following: boolean
+  follower_count: number
+}
+
+export interface CivicLeaderEntry {
+  citizen_id: string
+  display_name: string
+  neighborhood: string | null
+  actor_kind: CivicProfileType
+  organization: string | null
+  leader_score: number
+  platform_reputation_score: number
+  actions_count: number
+  verified_actions: number
+  evidence_count: number
+  average_action_score: number
+  verification_rate: number
+  rank: number
+}
+
 export type TerritoryActivationStatus =
   | 'available'
   | 'emerging'

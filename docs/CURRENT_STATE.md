@@ -45,19 +45,18 @@ La PWA dispone de manifest, service worker, offline fallback y web push. Peticio
 - SecureStore;
 - EAS build profiles.
 
-Primera fase funcional implementada:
+Superficies nativas implementadas a la fecha de este snapshot:
 
-- login nativo;
-- bootstrap de sesión;
-- refresh automático del access token;
-- command center ciudadano desde `/dashboard/me`;
-- reputación y atención pendiente;
-- métricas de acciones, reportes, propuestas, legal y workflows;
-- perfil;
-- pull-to-refresh;
-- logout con revocación server-side.
+- login nativo, bootstrap de sesión y refresh automático del access token;
+- command center ciudadano desde `/dashboard/me`, reputación y atención pendiente;
+- acciones cívicas: creación, listado propio y adjunto de evidencia (`/civic-actions`);
+- reportes territoriales con mapa embebido (`react-native-maps`) y envío de evidencia georreferenciada;
+- gobernanza: listado y detalle de propuestas;
+- notificaciones push (Expo) con registro/baja de dispositivo, bandeja de notificaciones y enrutamiento a pantalla;
+- **Comunidad/feed (Phase 2D-1):** feed público y "siguiendo", ranking cívico, perfil público con seguir/dejar de seguir — ver `docs/engineering/MOBILE_CORE_PARITY_PHASE2D.md`;
+- perfil, pull-to-refresh y logout con revocación server-side.
 
-Clasificación: **🟡 primera fase funcional**. Todavía deben trasladarse a superficies nativas completas la red comunitaria, acciones/evidencias, mapa/reportes, workflows, gobernanza, notificaciones e identity assurance. La regla arquitectónica es reutilizar contratos de API existentes, no duplicar reglas cívicas dentro del cliente.
+Clasificación: **🟡 primera fase funcional, en expansión de paridad**. Siguiendo el orden de construcción definido en Phase 2C, todavía faltan las superficies nativas de: workflows/expedientes cívicos, Identity Assurance (preservando la frontera de certificación del proveedor) y seguimiento de campañas/readiness de crowdfunding. La regla arquitectónica es reutilizar contratos de API existentes, no duplicar reglas cívicas dentro del cliente.
 
 ### 1.3 Autenticación y autoridad
 

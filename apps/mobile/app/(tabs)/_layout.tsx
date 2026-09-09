@@ -26,6 +26,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Inicio' }} />
+      <Tabs.Screen name="community" options={{ title: 'Comunidad' }} />
       <Tabs.Screen name="actions" options={{ title: 'Acciones' }} />
       <Tabs.Screen name="reports" options={{ title: 'Territorio' }} />
       <Tabs.Screen name="governance" options={{ title: 'Gobernanza' }} />
