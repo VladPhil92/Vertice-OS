@@ -1,8 +1,14 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { enqueueJob } from '../../lib/jobs'
-import { requireAdmin } from '../../middleware/auth'
+import { requireAdmin, requireSuperadmin } from '../../middleware/auth'
 import { addBrebKeyIssue, brebKeyTypeSchema } from './breb-key.schema'
+import {
+  FINANCIAL_CAPABILITIES,
+  assertFinancialCapabilityEnabled,
+  getFinanceCommandCenter,
+  setFinancialEmergencyStop,
+} from './finance-control-plane.service'
 import {
   buildAccountingExport,
   getFinanceOperationsStatus,
@@ -24,6 +30,13 @@ import {
 } from './payout-operations.service'
 
 const uuidSchema = z.string().uuid()
+const financialCapabilitySchema = z.enum(FINANCIAL_CAPABILITIES)
+
+const controlParamsSchema = z.object({ capability: financialCapabilitySchema })
+const controlBodySchema = z.object({
+  emergencyStop: z.boolean(),
+  reason: z.string().trim().min(8).max(500).optional(),
+})
 
 const refundParamsSchema = z.object({ transactionId: uuidSchema })
 const refundBodySchema = z.object({
@@ -80,6 +93,34 @@ function headerValue(value: string | string[] | undefined): string | undefined {
 export async function financeOperationsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/status', { preHandler: requireAdmin }, async (_request, reply) => {
     return reply.send(await getFinanceOperationsStatus())
+  })
+
+  app.get('/command-center', { preHandler: requireAdmin }, async (_request, reply) => {
+    return reply.send(await getFinanceCommandCenter())
+  })
+
+  app.put('/controls/:capability', { preHandler: requireSuperadmin }, async (request, reply) => {
+    const params = controlParamsSchema.safeParse(request.params)
+    const body = controlBodySchema.safeParse(request.body)
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        error: 'Control financiero inválido',
+        code: 'INVALID_FINANCE_CONTROL',
+        details: body.success ? undefined : body.error.flatten(),
+      })
+    }
+    if (body.data.emergencyStop && !body.data.reason) {
+      return reply.status(422).send({
+        error: 'Activar un emergency stop exige una razón operativa.',
+        code: 'FINANCE_CONTROL_REASON_REQUIRED',
+      })
+    }
+    return reply.send(await setFinancialEmergencyStop({
+      actorId: request.citizen.sub,
+      capability: params.data.capability,
+      emergencyStop: body.data.emergencyStop,
+      reason: body.data.reason,
+    }))
   })
 
   app.post('/reconcile', { preHandler: requireAdmin }, async (request, reply) => {
@@ -207,6 +248,10 @@ export async function financeOperationsRoutes(app: FastifyInstance): Promise<voi
         details: body.success ? undefined : body.error.flatten(),
       })
     }
+
+    // Stops NEW payout instructions only. Existing provider instructions can
+    // still be reconciled while the emergency stop is active.
+    await assertFinancialCapabilityEnabled('crowdfunding_payouts')
 
     return reply.status(202).send(await requestFlexibleCampaignPayout({
       actorId: request.citizen.sub,
