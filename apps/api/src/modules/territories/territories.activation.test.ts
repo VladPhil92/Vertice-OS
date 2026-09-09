@@ -124,6 +124,20 @@ describe('reviewActivationInterest', () => {
     })).rejects.toMatchObject({ statusCode: 409, code: 'ACTIVATION_INTEREST_WITHDRAWN' })
   })
 
+  it('fails closed if withdrawal wins the race after the preliminary read', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([BASE_ROW])
+      .mockResolvedValueOnce([])
+
+    await expect(reviewActivationInterest({
+      actorId: '550e8400-e29b-41d4-a716-446655440002',
+      interestId: BASE_ROW.id,
+      status: 'approved',
+      reason: 'Meets operational activation review criteria.',
+    })).rejects.toMatchObject({ statusCode: 409, code: 'ACTIVATION_INTEREST_WITHDRAWN' })
+    expect(mockAudit).not.toHaveBeenCalled()
+  })
+
   it('approves interest without assigning a cohort or any authority', async () => {
     mockQueryRaw
       .mockResolvedValueOnce([BASE_ROW])
