@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/mobile/app/city/**'
       - 'apps/mobile/app/territory/**'
+      - 'apps/mobile/app/(auth)/sign-in.tsx'
       - 'apps/mobile/app/(tabs)/index.tsx'
       - 'apps/mobile/app/(tabs)/profile.tsx'
       - 'apps/mobile/app/_layout.tsx'
