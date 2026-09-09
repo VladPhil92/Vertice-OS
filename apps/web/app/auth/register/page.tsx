@@ -60,7 +60,7 @@ export default function RegisterPage() {
           <p className="mb-8 font-mono text-sm leading-6 text-secondary">
             Tu cuenta nacional ya existe. Ingresa y selecciona tu municipio o distrito para personalizar VÉRTICE. Esa selección será autodeclarada y no equivale a residencia cívica verificada.
           </p>
-          <Link href="/auth/login?next=/dashboard/territory" className="btn-primary">Ingresar y elegir territorio</Link>
+          <Link href="/auth/login?intent=territory-onboarding" className="btn-primary">Ingresar y elegir territorio</Link>
         </motion.div>
       </div>
     )
