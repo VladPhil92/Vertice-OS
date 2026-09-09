@@ -61,6 +61,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared TypeScript contracts
+        run: pnpm --filter @vertice/types build
+
       - name: Typecheck API and web command center
         run: |
           pnpm --filter @vertice/api typecheck
