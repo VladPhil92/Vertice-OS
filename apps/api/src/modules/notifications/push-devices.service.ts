@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
-import { config } from '../../config'
 
 export type PushPlatform = 'android' | 'ios'
 
@@ -130,9 +129,10 @@ export async function dispatchPushNotification(
     'Accept-Encoding': 'gzip, deflate',
     'Content-Type': 'application/json',
   }
-  if (config.EXPO_PUSH_ACCESS_TOKEN) {
-    headers.Authorization = `Bearer ${config.EXPO_PUSH_ACCESS_TOKEN}`
-  }
+  // Optional feature-scoped secret for projects that enable Expo Push Access Tokens.
+  // Its absence must never prevent the API from booting or in-app notifications from working.
+  const accessToken = process.env.EXPO_PUSH_ACCESS_TOKEN?.trim()
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
 
   const response = await fetch(EXPO_PUSH_ENDPOINT, {
     method: 'POST',
