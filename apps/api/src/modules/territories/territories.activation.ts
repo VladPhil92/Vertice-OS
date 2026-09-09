@@ -185,14 +185,21 @@ export async function reviewActivationInterest(params: {
     throw makeError('Una manifestación retirada no puede aprobarse', 409, 'ACTIVATION_INTEREST_WITHDRAWN')
   }
 
+  // The state predicate makes withdrawal terminal even if it races this review
+  // after the preliminary read. An empty RETURNING means the citizen won that
+  // race and the review must fail closed rather than overwrite `withdrawn`.
   const rows = await prisma.$queryRaw<InterestRow[]>(Prisma.sql`
     UPDATE territory_activation_interests
     SET status = ${params.status}, reviewed_by = ${params.actorId}::uuid,
         reviewed_at = NOW(), updated_at = NOW()
     WHERE id = ${params.interestId}::uuid
+      AND status <> 'withdrawn'
     RETURNING id::text, territory_code, citizen_id::text, interest_role, status,
               message, reviewed_by::text, reviewed_at, created_at, updated_at
   `)
+  if (!rows[0]) {
+    throw makeError('La manifestación fue retirada antes de completar la revisión', 409, 'ACTIVATION_INTEREST_WITHDRAWN')
+  }
 
   await recordAuditEvent({
     actorId: params.actorId,
