@@ -125,6 +125,7 @@ async function preflightDeletion(citizenId: string, sessionId: string): Promise<
  * - A current, non-revoked server-side session is required.
  * - External recurring billing mandates are cancelled before identity erasure.
  * - Open payout lifecycles block erasure until reconciliation is complete.
+ * - Delegated voting/social influence is revoked in the erasure transaction.
  * - This is not a reversible account suspension.
  * - Direct identifiers and credentials are removed in the same transaction.
  * - Public social/publishing surfaces are removed or made non-public.
@@ -138,8 +139,6 @@ export async function deleteCitizenAccount(
   sessionId: string,
   source: AccountDeletionSource,
 ): Promise<AccountDeletionReceipt> {
-  // Validate destructive-operation authority before touching an external
-  // recurring mandate. The transaction below repeats every security check.
   await preflightDeletion(citizenId, sessionId)
   await prepareRecurringBillingForAccountDeletion(citizenId)
 
@@ -208,6 +207,12 @@ export async function deleteCitizenAccount(
       WHERE citizen_id = ${citizenId}::uuid
     `)
     await tx.$executeRaw(Prisma.sql`
+      UPDATE delegations
+      SET is_active = FALSE, revoked_at = COALESCE(revoked_at, NOW())
+      WHERE (delegator_id = ${citizenId}::uuid OR delegate_id = ${citizenId}::uuid)
+        AND is_active = TRUE
+    `)
+    await tx.$executeRaw(Prisma.sql`
       DELETE FROM mobile_push_devices WHERE citizen_id = ${citizenId}::uuid
     `)
     await tx.$executeRaw(Prisma.sql`
@@ -227,6 +232,15 @@ export async function deleteCitizenAccount(
     `)
     await tx.$executeRaw(Prisma.sql`
       DELETE FROM territory_activation_interests WHERE citizen_id = ${citizenId}::uuid
+    `)
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM civic_activity_validations WHERE citizen_id = ${citizenId}::uuid
+    `)
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM civic_action_validations WHERE citizen_id = ${citizenId}::uuid
+    `)
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM civic_action_collaborators WHERE citizen_id = ${citizenId}::uuid
     `)
 
     await tx.$executeRaw(Prisma.sql`
@@ -259,9 +273,6 @@ export async function deleteCitizenAccount(
       WHERE author_id = ${citizenId}::uuid
     `)
 
-    -- Stop every creator-owned campaign from accepting new money after the
-    -- creator's identity disappears. Completed/investigation records remain in
-    -- their terminal/audit state. A lifecycle event records automatic suspension.
     await tx.$executeRaw(Prisma.sql`
       WITH target AS (
         SELECT id, revision_no, status AS from_status, compliance_status AS from_compliance_status
@@ -294,9 +305,13 @@ export async function deleteCitizenAccount(
       WHERE contributor_citizen_id = ${citizenId}::uuid
     `)
 
-    -- Recurring mandates were cancelled before this transaction. Entitlement
-    -- rows can now be removed, while accounting transactions are retained with
-    -- their direct citizen link severed.
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE payment_transactions
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE citizen_id = ${citizenId}::uuid
+        AND kind = 'subscription'
+        AND status IN ('pending', 'authorized')
+    `)
     await tx.$executeRaw(Prisma.sql`
       DELETE FROM subscriptions WHERE citizen_id = ${citizenId}::uuid
     `)
