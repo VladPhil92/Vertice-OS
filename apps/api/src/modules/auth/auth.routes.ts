@@ -97,8 +97,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(tokenResponse)
   })
 
-  // Reverse ecosystem bridge. The browser proves its VÉRTICE session to this
-  // API; only the API speaks to CTG One over the existing service trust secret.
   app.post('/ctgone/provision', {
     preHandler: requireAuth,
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
@@ -130,14 +128,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(profile)
   })
 
-  // Roles assigned to the current identity and the active role of this session.
   app.get('/roles', { preHandler: requireAuth }, async (request, reply) => {
     const context = await getRoleContext(request.citizen.sub, request.citizen.sid)
     return reply.send(context)
   })
 
-  // Switching role always rotates the short-lived access token and persists the
-  // active role on the server-side session. A client cannot activate an ungranted role.
   app.post('/roles/switch', {
     preHandler: requireAuth,
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
@@ -147,9 +142,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await switchSessionRole(app, request.citizen, parsed.data.role))
   })
 
-  // P2 role authority plane. Search is deliberately bounded and email is only
-  // a discovery/display field; citizen UUID is the mutation target. All role
-  // mutations require an explicitly activated live Superadmin session.
   app.get('/role-admin/users', {
     preHandler: requireSuperadmin,
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
@@ -159,9 +151,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ users: await listCitizensForRoleAdmin(parsed.data.q) })
   })
 
-  // Grant and revoke are intentionally separate operations. The former batch
-  // replace endpoint made provenance ambiguous and could not express *why* a
-  // specific role changed. Every mutation now requires a human-readable reason.
   app.post('/role-admin/users/:citizenId/grants', {
     preHandler: requireSuperadmin,
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
@@ -176,6 +165,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     const result = await grantCitizenRole(
       request.citizen.sub,
+      request.citizen.sid,
       params.data.citizenId,
       body.data.role,
       body.data.reason,
@@ -197,6 +187,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply.send(await revokeCitizenRole(
       request.citizen.sub,
+      request.citizen.sid,
       params.data.citizenId,
       params.data.role,
       body.data.reason,
