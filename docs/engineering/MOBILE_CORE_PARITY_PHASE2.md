@@ -10,150 +10,149 @@ Phase 2 is split deliberately:
 
 - **2A — Civic Core Parity:** API-backed actions, evidence, territorial reporting and governance participation.
 - **2B — Native Device & Territorial Evidence Core:** foreground GPS, proximity, camera/gallery evidence, server-confirmed media and deep-linkable report details.
-- **2C — Device Release & Engagement Certification:** embedded map, remote push lifecycle, EAS preview/device evidence and physical-device release certification.
+- **2C — Device Release & Engagement Core:** embedded native map, durable push-device lifecycle, canonical notification inbox, safe notification deep links and reproducible EAS preview profiles.
 
-This split prevents provider credentials, APNs/FCM configuration or physical-device availability from being misrepresented as completed product work.
+External provider credentials and physical-device evidence remain a certification boundary. Code merged to `main` can be `IMPLEMENTED + exportable` without being called `READY` or `CERTIFIED` for production mobile distribution.
 
-## Phase 2A delivery
+## Phase 2A — Civic Core Parity
 
-### Actions
+Native users can work with their own civic actions, create verified actions, attach evidence, discover territorial reports, create reports, discover proposals, endorse, vote and read canonical tallies. Eligibility, identity assurance, frozen electorate, delegation precedence, reputation and financial state remain backend authority.
 
-Native users can:
+Critical native mutations reuse `Idempotency-Key` while the same method/path/payload operation has an uncertain outcome. Authentication continues through `/auth/mobile/*`, SecureStore and server-side session authority.
 
-1. read their own civic actions from `/civic-actions/mine`;
-2. create an action through the canonical verified API;
-3. attach evidence by URL;
-4. observe evidence count, civic score and confidence as separate signals.
-
-No reputation formula exists in the app. Mobile only renders server state.
-
-### Territory
-
-Native users can:
-
-1. read public reports;
-2. create a verified georeferenced report;
-3. set category, neighborhood, coordinates and address reference;
-4. rely on backend idempotency for retry safety.
-
-### Governance
-
-Native users can:
-
-1. discover public proposals;
-2. endorse only in backend-supported phases;
-3. vote with the canonical `-1 | 0 | 1` ledger contract while a proposal is in voting state;
-4. read the canonical tally and `quorum_reached` state.
-
-Eligibility, civic identity assurance, frozen electorate, delegation precedence and no-double-influence guarantees remain exclusively backend concerns.
-
-## Native mutation contract
-
-Critical mutations reuse `Idempotency-Key` while a same method/path/payload operation has an uncertain outcome. The mobile client does not locally fake successful actions, reports, endorsements or votes when the API fails.
-
-Authentication continues through `/auth/mobile/*`, SecureStore and server-side session authority.
-
-## Phase 2B delivery
+## Phase 2B — Native Device & Territorial Evidence Core
 
 ### Foreground geolocation
 
-The territorial client now uses `expo-location` only on explicit citizen action:
+The territorial client uses `expo-location` only on explicit citizen action:
 
 1. request foreground permission;
 2. acquire a high-accuracy current position;
-3. populate the report coordinates;
+3. populate report coordinates;
 4. preserve manual coordinate editing;
 5. query `/territorial/reports/nearby` within 3 km.
 
-Phase 2B does not request background location. Coordinates are territorial context/evidence and do not create identity assurance, civic authority or voting eligibility.
+No background location is requested. Location is territorial context and never identity assurance, reputation or voting authority.
 
 ### Native evidence capture
 
-The client now uses `expo-image-picker` for image evidence:
+The client uses `expo-image-picker` to capture/select an image, obtains a server upload intent, uploads directly to the media provider, confirms the provider asset through the API and submits only a confirmed `media_asset_id` with the report mutation. Local URIs are never considered durable evidence.
 
-1. request camera or media-library permission when the citizen chooses the corresponding action;
-2. capture/select one image and preview its local URI;
-3. request `/territorial/media/upload-intent`;
-4. upload the image directly to the provider URL;
-5. call `/territorial/media/confirm`;
-6. submit only the confirmed `media_asset_id` with the canonical report mutation.
+The server remains authoritative for provider asset identity, ownership, purpose metadata and delivery URL. If report creation has an uncertain outcome, the confirmed media asset is reused so the retry payload and idempotency key remain stable.
 
-The local URI is never considered durable evidence. The server validates provider asset identity, citizen ownership, purpose metadata and delivery URL before the asset becomes attachable.
+### Deep-linkable report detail
 
-Microphone permission is disabled because this Phase 2B slice handles image evidence, not audio/video recording.
+The route `report/[id]` renders canonical report detail and evidence and supports the `vertice://` application scheme.
 
-### Proximity and report detail
+## Phase 2C — Device Release & Engagement Core
 
-The native territorial experience now includes:
+### Embedded territorial map
 
-- current-position proximity view backed by `/territorial/reports/nearby`;
-- distance display for nearby incidents;
-- dynamic Expo Router route `report/[id]`;
-- deep-link scheme `vertice://` inherited from the app configuration;
-- canonical detail fetch through `/territorial/reports/:id`;
-- evidence image rendering;
-- lifecycle timestamps;
-- external map handoff using the report's canonical coordinates.
+The Territorio screen now renders an in-app `react-native-maps` surface:
 
-This is a useful geo experience but not an embedded map SDK. An in-app map remains Phase 2C.
+- Cartagena is the deterministic fallback region;
+- recent public reports are rendered as markers before GPS is enabled;
+- after explicit foreground GPS permission, the map recenters on the citizen and renders the `/territorial/reports/nearby` 3 km result;
+- marker callouts navigate to the canonical report detail;
+- map coordinates remain presentation/context only and do not alter report authority.
 
-## Phase 2B privacy and security invariants
+Android production tiles require a Google Maps SDK key supplied at build time through `GOOGLE_MAPS_API_KEY`. The key is not hardcoded. It must be restricted in Google Cloud to `com.ctgone.verticeos` and the production signing certificate.
 
-- Foreground location only; no background tracking.
-- Location permission is requested in response to a citizen action.
-- Camera/library permission is scoped to evidence capture.
-- Location is not identity assurance.
-- Local image URIs are not public evidence.
-- Provider-backed evidence fails closed when storage is unavailable.
-- The server remains authoritative for media ownership and report attachment.
-- Phase 2B does not alter reputation formulas, governance authority or financial state.
-- Code presence does not certify physical-device behavior or external providers.
+### Durable push-device lifecycle
 
-## Phase 2B quality contract
+The backend adds `mobile_push_devices` with a citizen-scoped, revocable installation registry. An installation stores:
 
-`apps/mobile/scripts/verify-device-capabilities.mjs` asserts that:
+- opaque `installation_id`;
+- Expo push delivery token;
+- `android | ios` platform;
+- active/revoked lifecycle timestamps.
 
-- `expo-location` and `expo-image-picker` stay locked to the approved Expo SDK 57 line;
-- foreground location permission copy remains configured;
-- camera/photo permission copy remains configured;
-- microphone permission remains disabled;
-- background-location permission is absent;
-- report deep-link routing remains registered;
-- proximity and provider-confirmed media contracts remain referenced by the native client.
+Push tokens are delivery addresses only. They confer no civic identity, assurance, reputation, governance authority or financial permission.
 
-The `Mobile Core Parity` workflow additionally performs:
+Authenticated endpoints:
 
-1. `pnpm install --frozen-lockfile`;
-2. device-capability contract verification;
+- `POST /notifications/push-devices` registers/rebinds an installation and supports token rotation;
+- `DELETE /notifications/push-devices/:installationId` revokes the current citizen's installation idempotently.
+
+The existing Redis notification ledger remains canonical. `createNotification` performs remote push only as best-effort fan-out after the canonical notification has been persisted. Expo/APNs/FCM failure therefore cannot roll back or redefine civic state.
+
+### Notification inbox and safe navigation
+
+The native app now includes a canonical inbox backed by `/notifications`, mark-read and mark-all-read APIs. Dashboard unread count is auxiliary: if the notification subsystem degrades, the citizen command center still loads.
+
+Remote notification taps accept only known internal paths. Protocol-relative (`//...`) and external-scheme (`...://...`) targets are rejected before navigation. Supported targets route to known report, territory, civic-action, governance, inbox or dashboard surfaces.
+
+The client handles both foreground/background response events and cold-start notification responses.
+
+### EAS release profiles
+
+`eas.json` now defines:
+
+- development internal dev client;
+- Android internal preview APK;
+- iOS simulator preview profile;
+- production auto-increment profile.
+
+`app.config.js` injects `EAS_PROJECT_ID` and `GOOGLE_MAPS_API_KEY` only from build-time environment. Absence of those values does not break local/CI export; instead remote push registration reports configuration missing and production map credentials remain an external release dependency.
+
+## Phase 2C quality and Golden contracts
+
+`apps/mobile/scripts/verify-device-capabilities.mjs` now asserts:
+
+- approved SDK 57 versions of location, image picker, device, notifications and maps;
+- foreground-only location and image-only evidence permissions;
+- notification channel configuration;
+- native map and report markers;
+- push registration/revocation endpoints;
+- rejection of external notification URLs;
+- warm and cold notification-response handling;
+- native inbox and EAS preview profiles;
+- environment-injected EAS project ID and Google Maps key contract.
+
+`Mobile Core Parity` performs:
+
+1. frozen-lockfile install;
+2. structural Phase 2C contract verification;
 3. mobile TypeScript validation;
-4. Expo public configuration resolution;
-5. Android export;
-6. iOS export;
-7. exported artifact directory assertions.
+4. Expo config resolution with no provider credentials;
+5. Expo config resolution with deterministic provider placeholders and assertions;
+6. Android/iOS export;
+7. artifact assertions.
 
-Passing these gates means **IMPLEMENTED + exportable**, not physical-device or app-store certification.
+Golden API journey **GJ-08** uses the real API + Postgres integration environment to prove:
 
-## Phase 2C next order
+`authenticated citizen → register installation → rotate Expo token on same installation → one active durable row → revoke → repeated revoke remains safe`.
 
-1. introduce an embedded map surface only after choosing and documenting the map provider/runtime policy;
-2. implement remote push token registration/lifecycle and APNs/FCM/Expo delivery without making delivery authority client-side;
-3. deep-link notification actions into report/action/governance detail routes;
-4. produce signed EAS preview artifacts with the real Expo project/credentials;
-5. execute Android and iOS physical-device permission, GPS, camera, media upload and deep-link smoke tests;
-6. execute a production Cloudflare Images canary;
-7. only then move mobile device capabilities from `IMPLEMENTED` to `READY`/`CERTIFIED`.
+## Phase 2C status semantics
 
-## Definition of done — Phase 2B
+After merge with all CI/review gates green:
 
-- foreground GPS and proximity code present;
-- camera/library image evidence code present;
-- media provider intent/confirm flow preserved;
-- report detail route/deep link present;
-- dependency lock reproducible;
-- structural device-capability contract green;
-- TypeScript green;
-- Android/iOS Expo exports green;
-- monorepo CI and Golden journeys remain green;
-- no unresolved P1/P2 review defect in the Phase 2B PR.
+- embedded map code: **IMPLEMENTED**;
+- push registration and backend fan-out: **IMPLEMENTED**;
+- native inbox and safe deep-link handling: **IMPLEMENTED**;
+- EAS preview profiles: **IMPLEMENTED**;
+- Android/iOS JS/native export contract: **INTEGRATED**.
 
-External provider credentials, physical-device tests and stores are explicitly excluded from 2B completion and remain release-certification dependencies.
+Do **not** promote to `READY`/`CERTIFIED` until external evidence exists for the same release candidate:
+
+1. real Expo project configured with `EAS_PROJECT_ID`;
+2. restricted Android Google Maps key configured;
+3. APNs/FCM/Expo project credentials operational;
+4. signed EAS Android preview installed on a physical Android device;
+5. signed EAS iOS preview installed on a physical iPhone;
+6. permission/GPS/map/camera/media/deep-link smoke passes on both platforms;
+7. real push is received and opens the intended internal screen on both platforms;
+8. Cloudflare Images production canary passes from a physical device;
+9. store signing/privacy declarations and submission metadata are reviewed.
+
+## Invariants across Phase 2
+
+- React Native never decides civic eligibility, authority or reputation.
+- Financial state never influences civic authority.
+- GPS is not identity assurance.
+- Local image URIs are not durable evidence.
+- Push delivery is not canonical state.
+- Engagement outages do not block core civic functionality.
+- External notification URLs are not navigable.
+- Provider credentials are never committed to the repository.
+- Build/export success is not equivalent to physical-device or app-store certification.
