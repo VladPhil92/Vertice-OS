@@ -95,7 +95,9 @@ test.describe('Financial Operations Command Center Phase 4', () => {
     await expect(page.getByRole('heading', { name: 'Command Center financiero' })).toBeVisible()
     await expect(page.getByText('Pagado últimas 24h')).toBeVisible()
     await expect(page.getByText(/420\.000/)).toBeVisible()
-    await expect(page.getByText('Mercado Pago')).toBeVisible()
+    // exact: true — the certification boundary footnote also mentions
+    // "Mercado Pago" in running prose, so a substring match is ambiguous.
+    await expect(page.getByText('Mercado Pago', { exact: true })).toBeVisible()
     await expect(page.getByText('Wompi BRE-B')).toBeVisible()
     await expect(page.getByText(/requires_external_canary/)).toBeVisible()
     await expect(page.getByText('stalePaymentsClear: ATTENTION')).toBeVisible()
