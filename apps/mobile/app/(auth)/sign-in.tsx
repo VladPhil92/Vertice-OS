@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../providers/AuthProvider'
 
 export default function SignInScreen() {
   const { signIn } = useAuth()
+  const params = useLocalSearchParams<{ next?: string | string[] }>()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -21,7 +22,8 @@ export default function SignInScreen() {
     setError(null)
     try {
       await signIn(email.trim().toLowerCase(), password)
-      router.replace('/(tabs)')
+      const requestedNext = Array.isArray(params.next) ? params.next[0] : params.next
+      router.replace(requestedNext === 'territory-activate' ? '/territory/activate' : '/(tabs)')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible iniciar sesión.')
     } finally {
