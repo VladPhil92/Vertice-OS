@@ -50,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared TypeScript packages
+        run: pnpm --filter @vertice/types build
+
       - name: Verify privacy source contract
         run: node scripts/verify-account-deletion-privacy.mjs
 
