@@ -25,15 +25,11 @@ export default function SignInScreen() {
     try {
       await signIn(email.trim().toLowerCase(), password)
       const requestedNext = Array.isArray(params.next) ? params.next[0] : params.next
-      if (requestedNext === 'territory-activate') {
-        router.replace('/territory/activate')
-        return
-      }
       if (requestedNext === 'territory-select') {
         router.replace('/territory/select')
         return
       }
-      router.replace('/(tabs)')
+      router.replace(requestedNext === 'territory-activate' ? '/territory/activate' : '/(tabs)')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible iniciar sesión.')
     } finally {
