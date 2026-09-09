@@ -1,6 +1,6 @@
 # VÉRTICE OS Mobile
 
-Native iOS/Android client for VÉRTICE OS, built with Expo SDK 57, React Native 0.86 and Expo Router.
+Native iOS/Android client for VÉRTICE OS, built with Expo SDK 57, React Native 0.86.3, React 19.2.3 and Expo Router.
 
 ## Runtime baseline
 
@@ -22,13 +22,15 @@ pnpm mobile
 
 ## Authentication boundary
 
-Browser sessions continue to use `/auth/*`. Native clients use `/auth/mobile/token`, `/auth/mobile/refresh` and `/auth/mobile/logout`, backed by the canonical server session service. Access/refresh tokens are stored with `expo-secure-store`; React Native does not implement a second identity store.
+Browser sessions use `/auth/*`. Native clients use `/auth/mobile/token`, `/auth/mobile/refresh` and `/auth/mobile/logout`, backed by the same canonical server session service. Access/refresh tokens are stored with `expo-secure-store`; React Native does not implement a second identity store.
+
+National onboarding reuses canonical `/auth/register`, then the native session flow and `/territory/select`. Account creation never grants civic identity assurance, territory assurance, reputation or authority.
 
 ## Phase 2A — Civic Core Parity
 
-The five primary tabs are Inicio, Acciones, Territorio, Gobernanza and Perfil. Native users can create/read civic actions, attach evidence, create georeferenced territorial reports, discover proposals, endorse, vote and read canonical tallies. Eligibility, reputation, voting authority, frozen electorate and all domain rules remain server-side.
+Primary navigation covers Inicio, Comunidad, Acciones, Territorio, Gobernanza and Perfil. Native users can create/read civic actions, attach evidence, create georeferenced territorial reports, discover proposals, endorse, vote and read canonical tallies. Eligibility, reputation, voting authority, frozen electorate and all domain rules remain server-side.
 
-Critical native mutations reuse `Idempotency-Key` while the same method/path/payload has an uncertain outcome.
+Critical native mutations reuse the platform idempotency contract.
 
 ## Phase 2B — Device & Territorial Evidence Core
 
@@ -37,9 +39,8 @@ Implemented:
 - foreground-only `expo-location` GPS requested only on explicit citizen action;
 - nearby reports through `/territorial/reports/nearby` within 3 km;
 - camera/photo-library image evidence with `expo-image-picker`;
-- direct provider upload intent → provider upload → server confirmation → confirmed `media_asset_id`;
+- direct provider upload intent → provider upload → server confirmation → confirmed media asset;
 - fail-closed provider-backed evidence;
-- retry-safe reuse of a confirmed media asset;
 - deep-linkable report detail at `report/[id]` and `vertice://` scheme;
 - canonical report evidence/location/lifecycle rendering.
 
@@ -49,70 +50,112 @@ GPS does not create identity assurance, authority, reputation or voting eligibil
 
 Implemented in code:
 
-### Embedded territorial map
+- embedded territorial map with `react-native-maps`;
+- current-position and nearby-report markers;
+- Android Maps API key injected only at build time;
+- `expo-notifications` with explicit opt-in;
+- durable authenticated push-device lifecycle;
+- notification inbox, read/read-all and safe internal deep links;
+- EAS preview / preview-simulator / production profiles.
 
-- `react-native-maps` embedded in the Territorio workspace;
-- current-position marker supplied by the native location provider;
-- public nearby reports rendered as markers;
-- 3 km visual radius aligned with `/territorial/reports/nearby`;
-- callout-to-report navigation;
-- Android Maps API key injected only through `GOOGLE_MAPS_ANDROID_API_KEY` at build time; no key is committed.
+Push is best-effort transport, never authoritative civic state.
 
-### Remote notifications
+## Phase 2D — Native Domain Parity
 
-- `expo-notifications` with foreground presentation policy;
-- notification permission requested only from the explicit Perfil opt-in control;
-- no background remote-notification entitlement in this phase;
-- Expo push token acquired with the real EAS project id when configured;
-- authenticated registration at `POST /notifications/devices`;
-- authenticated deactivation at `DELETE /notifications/devices`;
-- server-side durable device registry in PostgreSQL;
-- globally unique push token reassignment on account changes to prevent cross-account notification leakage on shared devices;
-- `DeviceNotRegistered` destinations are disabled;
-- notification delivery is best-effort and never part of the authoritative civic transaction;
-- native notification inbox with read/read-all state;
-- push responses route to report, governance, profile or notification inbox destinations through Expo Router.
+### 2D-1 — Community / social graph
 
-### EAS release profiles
+Implemented:
 
-- `preview`: internal Android APK / device-oriented distribution;
-- `preview-simulator`: internal iOS simulator build;
-- `production`: auto-incrementing production profile;
-- runtime project id is injected through `EAS_PROJECT_ID` rather than hard-coded.
+- public Discover feed;
+- Following feed;
+- civic leaderboard;
+- public civic profile;
+- follow/unfollow;
+- server-provided scoring neutrality note.
+
+Followers, likes, impressions and community-validation volume do not manufacture civic reputation.
+
+### 2D-2 — Workflows / civic cases
+
+Implemented:
+
+- `/workflows` list from `GET /workflows/cases`;
+- `/workflows/[id]` detail from `GET /workflows/cases/:id`;
+- canonical stage, report, analysis, proposal and control state;
+- handoff to the source report.
+
+The native client does not calculate workflow stage or civic authority.
+
+### 2D-3 — Civic Identity Assurance
+
+Implemented:
+
+- `/identity` assurance status;
+- proofing history;
+- provider availability;
+- HTTPS-only Veriff hosted-session handoff.
+
+Starting a provider session does not establish assurance. The backend remains fail-closed until verified contact, provider ingress, active proof and external provider certification all pass.
+
+### 2D-4 — Crowdfunding tracking/readiness
+
+Implemented:
+
+- `/crowdfunding` user/platform readiness;
+- blocker visibility;
+- owned campaign progress;
+- campaign lifecycle/readiness visibility.
+
+This mobile slice intentionally does not execute checkout, activation, payout, BRE-B destination mutation, settlement/refund reconciliation or admin compliance decisions. Financial authority remains server-side.
+
+See `docs/engineering/MOBILE_DOMAIN_PARITY_PHASE2D2_4.md`.
+
+## National territorial parity
+
+The native client supports:
+
+- national account creation;
+- municipality/district selection;
+- public city node;
+- voluntary activation interest;
+- safe continuation after registration/session recovery.
+
+Territory selection is self-asserted product context, not verified residence or governance authority.
 
 ## Release state semantics
 
-Passing repository CI means the Phase 2C code is **IMPLEMENTED + exportable**. It does not prove external release readiness.
+Repository CI can prove **IMPLEMENTED + exportable + exact-SHA coherent**. It cannot prove physical-device or third-party certification.
 
-Before moving the native client to **READY/CERTIFIED**, operators must provide evidence for all applicable items:
+Before the native client can be called READY/CERTIFIED, operators must provide evidence for all applicable items:
 
-1. link the app to the real EAS project and configure `EAS_PROJECT_ID`;
-2. configure/restrict the Android Maps key for package `com.ctgone.verticeos` and signing certificate;
-3. configure Android/iOS push credentials through EAS/APNs/FCM;
-4. install signed preview builds on real Android and iOS devices;
-5. smoke GPS permission/accuracy, map rendering, camera/gallery, media upload, notification opt-in, foreground/background notification delivery and deep-link routing;
-6. execute a production Cloudflare Images canary;
-7. complete store signing, privacy declarations and store metadata.
+1. real EAS project and `EAS_PROJECT_ID`;
+2. Android/iOS signing ownership;
+3. restricted Google Maps production key;
+4. APNs/FCM/EAS push credentials;
+5. signed preview installations on real Android and iOS devices;
+6. physical smoke for signup/login, territory, GPS, map, camera/gallery, media, push/deep links, Community, Workflows, Identity and Crowdfunding readiness;
+7. production Cloudflare Images canary;
+8. production Veriff external canary where identity assurance is enabled;
+9. App Store and Google Play metadata/privacy/signing/review.
 
-No fake credentials or environment bypasses are permitted to satisfy these gates.
+No fake credentials or environment bypasses may satisfy these gates.
 
 ## Configuration
 
-`apps/mobile/.env.example` documents build/runtime variables. Real `GOOGLE_MAPS_ANDROID_API_KEY` and EAS credentials are secrets/build configuration and must not be committed.
-
-The API optionally accepts `EXPO_PUSH_ACCESS_TOKEN` when Expo enhanced push security is enabled. That value is server-only and must never appear in `EXPO_PUBLIC_*` variables.
+`apps/mobile/.env.example` documents runtime/build variables. Real Maps keys, EAS credentials and provider secrets must not be committed. `EXPO_PUSH_ACCESS_TOKEN` is server-only and must never appear in `EXPO_PUBLIC_*` variables.
 
 ## Quality gates
 
 ```bash
 node apps/mobile/scripts/verify-device-capabilities.mjs
 node apps/mobile/scripts/verify-device-release.mjs
+node scripts/verify-mobile-domain-parity.mjs
 pnpm --filter @vertice/mobile typecheck
 pnpm --filter @vertice/mobile build
 ```
 
-CI runs both Mobile Core Parity and Mobile Device Release Contract with `pnpm install --frozen-lockfile`, Expo public/introspected configuration validation, TypeScript and Android/iOS export.
+CI separates Mobile Core Parity, Mobile Device Release Contract and Mobile Domain Parity so source/build evidence cannot be confused with physical-device/provider certification.
 
-## Remaining native domain parity
+## Remaining work
 
-Device/engagement infrastructure is no longer the main missing code surface. Subsequent mobile work should focus on Community, Workflows, Identity Assurance and Crowdfunding while keeping all authority and financial rules server-side.
+The remaining native release debt is now predominantly **external/operational**, not missing domain surface code: signing, real devices, stores, production credentials and provider canaries. Repository-level refinements may continue, but they are no longer prerequisites for baseline domain parity.
