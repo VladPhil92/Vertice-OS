@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
 import { requireAuth } from '../../middleware/auth'
 import { publish } from '../../lib/pubsub'
 import {
@@ -7,8 +8,48 @@ import {
   markAllRead,
   unreadCount,
 } from './notifications.service'
+import { registerPushDevice, revokePushDevice } from './push-devices.service'
+
+const PushDeviceSchema = z.object({
+  installation_id: z.string().regex(/^[A-Za-z0-9_-]{12,128}$/),
+  expo_push_token: z.string().regex(/^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/),
+  platform: z.enum(['android', 'ios']),
+})
 
 export async function notificationsRoutes(app: FastifyInstance): Promise<void> {
+  // ── POST /notifications/push-devices — registrar instalación móvil ────────
+
+  app.post('/push-devices', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 20, timeWindow: '1 min' } },
+  }, async (request, reply) => {
+    const parsed = PushDeviceSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Registro de dispositivo push inválido',
+        code: 'INVALID_PUSH_DEVICE',
+      })
+    }
+
+    const device = await registerPushDevice(request.citizen.sub, parsed.data)
+    return reply.send(device)
+  })
+
+  // ── DELETE /notifications/push-devices/:installationId — revocar ─────────
+
+  app.delete('/push-devices/:installationId', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 20, timeWindow: '1 min' } },
+  }, async (request, reply) => {
+    const { installationId } = request.params as { installationId: string }
+    if (!/^[A-Za-z0-9_-]{12,128}$/.test(installationId)) {
+      return reply.status(400).send({ error: 'Instalación inválida', code: 'INVALID_INSTALLATION_ID' })
+    }
+
+    await revokePushDevice(request.citizen.sub, installationId)
+    // Idempotent revocation: a repeated logout must not reveal whether a token existed.
+    return reply.send({ ok: true })
+  })
 
   // ── GET /notifications — lista de notificaciones del ciudadano ────────────
 
