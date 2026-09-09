@@ -1,0 +1,67 @@
+name: Mobile Device Release Contract
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'apps/api/src/modules/notifications/**'
+      - 'apps/api/prisma/migrations/**mobile_push_devices/**'
+      - '.github/workflows/mobile-device-release.yml'
+      - 'pnpm-lock.yaml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/mobile/**'
+      - 'apps/api/src/modules/notifications/**'
+      - 'apps/api/prisma/migrations/**mobile_push_devices/**'
+      - '.github/workflows/mobile-device-release.yml'
+      - 'pnpm-lock.yaml'
+
+concurrency:
+  group: mobile-device-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-device-release:
+    name: Mobile Device Release Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Phase 2C structural contract
+        run: node apps/mobile/scripts/verify-device-release.mjs
+
+      - name: Typecheck native client
+        run: pnpm --filter @vertice/mobile typecheck
+
+      - name: Resolve public Expo configuration
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+        run: pnpm --filter @vertice/mobile exec expo config --type public > /tmp/expo-public.json
+
+      - name: Introspect native config plugins
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+        run: pnpm --filter @vertice/mobile exec expo config --type introspect > /tmp/expo-introspect.json
+
+      - name: Export Android and iOS bundles
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+        run: pnpm --filter @vertice/mobile build
+
+      - name: Assert exported artifacts
+        run: |
+          test -d apps/mobile/dist/android
+          test -d apps/mobile/dist/ios
+          echo 'Mobile Phase 2C compile/export contract: PASS'
+          echo 'This workflow does NOT certify Google Maps credentials, EAS project linkage, APNs/FCM credentials, signed preview installation, or physical-device delivery.'

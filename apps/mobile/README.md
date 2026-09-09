@@ -18,94 +18,101 @@ pnpm install --frozen-lockfile
 pnpm mobile
 ```
 
-Set `EXPO_PUBLIC_API_URL` to an API origin reachable by the device. Android Emulator normally reaches the host through `http://10.0.2.2:4000`; iOS Simulator can use `http://localhost:4000`. Production must use HTTPS.
+`EXPO_PUBLIC_API_URL` must point to an API origin reachable by the device. Production and signed preview builds must use HTTPS.
 
 ## Authentication boundary
 
-The browser continues to use the `/auth/*` cookie contract. Native clients use the dedicated `/auth/mobile/*` surface:
+Browser sessions continue to use `/auth/*`. Native clients use `/auth/mobile/token`, `/auth/mobile/refresh` and `/auth/mobile/logout`, backed by the canonical server session service. Access/refresh tokens are stored with `expo-secure-store`; React Native does not implement a second identity store.
 
-- `POST /auth/mobile/token`
-- `POST /auth/mobile/refresh`
-- `POST /auth/mobile/logout`
+## Phase 2A — Civic Core Parity
 
-The native surface reuses the canonical backend session service. It does not implement a second identity store. Access and refresh tokens are persisted with `expo-secure-store` so they remain in the OS-backed Keychain/Keystore rather than AsyncStorage or a WebView/localStorage bridge.
+The five primary tabs are Inicio, Acciones, Territorio, Gobernanza and Perfil. Native users can create/read civic actions, attach evidence, create georeferenced territorial reports, discover proposals, endorse, vote and read canonical tallies. Eligibility, reputation, voting authority, frozen electorate and all domain rules remain server-side.
 
-## Current mobile scope
+Critical native mutations reuse `Idempotency-Key` while the same method/path/payload has an uncertain outcome.
 
-### Native baseline
-
-- secure sign-in and session bootstrap;
-- automatic access-token refresh and 401 recovery;
-- citizen command-center view backed by `GET /dashboard/me`;
-- reputation and attention summary;
-- citizen profile;
-- pull-to-refresh;
-- server-side session revocation on logout;
-- EAS development, preview and production build profiles.
-
-### Phase 2A — Civic Core Parity
-
-The mobile app exposes five primary tabs: Inicio, Acciones, Territorio, Gobernanza and Perfil.
+## Phase 2B — Device & Territorial Evidence Core
 
 Implemented:
 
-- personal civic-action workspace using `GET /civic-actions/mine`;
-- verified civic-action creation through `POST /civic-actions`;
-- evidence attachment by public URL through `POST /civic-actions/:actionId/evidence`;
-- public territorial-report list through `GET /territorial/reports`;
-- verified georeferenced report creation through `POST /territorial/reports`;
-- public proposal discovery through `GET /governance/proposals`;
-- proposal endorsements through `POST /governance/proposals/:id/endorse`;
-- direct voting through `POST /governance/proposals/:id/vote`;
-- reconstructible public tally reads through `GET /governance/proposals/:id/tally`;
-- retry-safe `Idempotency-Key` reuse for uncertain native mutations.
+- foreground-only `expo-location` GPS requested only on explicit citizen action;
+- nearby reports through `/territorial/reports/nearby` within 3 km;
+- camera/photo-library image evidence with `expo-image-picker`;
+- direct provider upload intent → provider upload → server confirmation → confirmed `media_asset_id`;
+- fail-closed provider-backed evidence;
+- retry-safe reuse of a confirmed media asset;
+- deep-linkable report detail at `report/[id]` and `vertice://` scheme;
+- canonical report evidence/location/lifecycle rendering.
 
-The React Native client does not decide eligibility, reputation, voting authority, report status or verification. Those rules remain server-side.
+GPS does not create identity assurance, authority, reputation or voting eligibility. Local image URIs are never treated as durable/public evidence.
 
-### Phase 2B — Native Device & Territorial Evidence Core
+## Phase 2C — Device Release & Engagement Core
 
 Implemented in code:
 
-- `expo-location` foreground-only permission and high-accuracy current-position capture;
-- report composer can populate explicit coordinates from the device GPS;
-- nearby territorial incidents using `GET /territorial/reports/nearby` with a 3 km radius;
-- `expo-image-picker` camera and photo-library capture for image evidence;
-- microphone permission disabled because this slice captures images only;
-- canonical provider-backed evidence flow: upload intent → direct provider upload → server confirmation → `media_asset_ids` on report creation;
-- fail-closed evidence behavior when Cloudflare Images is not operational;
-- deep-linkable report detail at `vertice://report/<id>` through the Expo Router `report/[id]` route;
-- report detail renders canonical location, evidence URLs and lifecycle timestamps;
-- external map handoff for the canonical coordinates;
-- permanent CI contract validates dependencies, config plugins, foreground-only location, media confirmation flow, TypeScript and Android/iOS Expo export.
+### Embedded territorial map
 
-Privacy and authority constraints:
+- `react-native-maps` embedded in the Territorio workspace;
+- current-position marker supplied by the native location provider;
+- public nearby reports rendered as markers;
+- 3 km visual radius aligned with `/territorial/reports/nearby`;
+- callout-to-report navigation;
+- Android Maps API key injected only through `GOOGLE_MAPS_ANDROID_API_KEY` at build time; no key is committed.
 
-- location is requested only when the citizen explicitly activates GPS; Phase 2B does not request background location;
-- a GPS coordinate is report evidence/context, not identity assurance or voting eligibility;
-- a local image URI is never treated as published evidence;
-- the server remains authoritative for media ownership, provider metadata and attachability;
-- these device capabilities do not change civic reputation formulas, authority or financial state.
+### Remote notifications
 
-### Still external / not certified
+- `expo-notifications` with foreground presentation policy;
+- notification permission requested only from the explicit Perfil opt-in control;
+- no background remote-notification entitlement in this phase;
+- Expo push token acquired with the real EAS project id when configured;
+- authenticated registration at `POST /notifications/devices`;
+- authenticated deactivation at `DELETE /notifications/devices`;
+- server-side durable device registry in PostgreSQL;
+- globally unique push token reassignment on account changes to prevent cross-account notification leakage on shared devices;
+- `DeviceNotRegistered` destinations are disabled;
+- notification delivery is best-effort and never part of the authoritative civic transaction;
+- native notification inbox with read/read-all state;
+- push responses route to report, governance, profile or notification inbox destinations through Expo Router.
 
-The following are deliberately not described as READY merely because adjacent code exists:
+### EAS release profiles
 
-- physical-device permission-prompt smoke tests on Android and iOS;
-- EAS preview binaries signed with real project credentials;
-- interactive in-app map SDK; Phase 2B currently provides proximity and external map handoff;
-- remote push delivery through APNs/FCM/Expo Push Service and notification token lifecycle;
-- production Cloudflare Images credentials/provider canary;
-- App Store / Play Store signing, privacy declarations and review;
-- native community/workflows/identity-assurance/crowdfunding parity.
+- `preview`: internal Android APK / device-oriented distribution;
+- `preview-simulator`: internal iOS simulator build;
+- `production`: auto-incrementing production profile;
+- runtime project id is injected through `EAS_PROJECT_ID` rather than hard-coded.
+
+## Release state semantics
+
+Passing repository CI means the Phase 2C code is **IMPLEMENTED + exportable**. It does not prove external release readiness.
+
+Before moving the native client to **READY/CERTIFIED**, operators must provide evidence for all applicable items:
+
+1. link the app to the real EAS project and configure `EAS_PROJECT_ID`;
+2. configure/restrict the Android Maps key for package `com.ctgone.verticeos` and signing certificate;
+3. configure Android/iOS push credentials through EAS/APNs/FCM;
+4. install signed preview builds on real Android and iOS devices;
+5. smoke GPS permission/accuracy, map rendering, camera/gallery, media upload, notification opt-in, foreground/background notification delivery and deep-link routing;
+6. execute a production Cloudflare Images canary;
+7. complete store signing, privacy declarations and store metadata.
+
+No fake credentials or environment bypasses are permitted to satisfy these gates.
+
+## Configuration
+
+`apps/mobile/.env.example` documents build/runtime variables. Real `GOOGLE_MAPS_ANDROID_API_KEY` and EAS credentials are secrets/build configuration and must not be committed.
+
+The API optionally accepts `EXPO_PUSH_ACCESS_TOKEN` when Expo enhanced push security is enabled. That value is server-only and must never appear in `EXPO_PUBLIC_*` variables.
 
 ## Quality gates
 
 ```bash
 node apps/mobile/scripts/verify-device-capabilities.mjs
+node apps/mobile/scripts/verify-device-release.mjs
 pnpm --filter @vertice/mobile typecheck
 pnpm --filter @vertice/mobile build
 ```
 
-`Mobile Core Parity` runs the same dependency/config/type/export contract in CI with `pnpm install --frozen-lockfile`.
+CI runs both Mobile Core Parity and Mobile Device Release Contract with `pnpm install --frozen-lockfile`, Expo public/introspected configuration validation, TypeScript and Android/iOS export.
 
-Code that passes this gate is **IMPLEMENTED** and exportable. It is not automatically **READY** or **CERTIFIED** on physical devices, production media providers, push providers or app stores.
+## Remaining native domain parity
+
+Device/engagement infrastructure is no longer the main missing code surface. Subsequent mobile work should focus on Community, Workflows, Identity Assurance and Crowdfunding while keeping all authority and financial rules server-side.
