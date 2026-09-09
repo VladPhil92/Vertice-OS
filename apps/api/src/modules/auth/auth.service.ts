@@ -83,9 +83,6 @@ export async function loginCitizen(
     throw Object.assign(new Error('Credenciales inválidas'), { statusCode: 401, code: 'INVALID_CREDENTIALS' })
   }
 
-  // P0 privilege provenance: citizens.role is a legacy projection only. A new
-  // local session always starts from the citizen baseline; elevated authority
-  // must already exist as an explicit live grant and be selected via role switch.
   const activeRole = await ensureBaselineRoleGrants(citizen.id, 'citizen')
   const refreshToken = generateRefreshToken()
   const session = await prisma.session.create({
@@ -134,8 +131,6 @@ export async function refreshAccessToken(
     throw Object.assign(new Error('Sesión inválida o expirada'), { statusCode: 401, code: 'INVALID_SESSION' })
   }
 
-  // Never resurrect authority from citizens.role during refresh. The session's
-  // active role survives only when getRoleContext confirms a live grant.
   await ensureBaselineRoleGrants(session.citizen.id, 'citizen')
   const roleContext = await getRoleContext(session.citizen.id, session.id)
   await setSessionActiveRole(session.id, session.citizen.id, roleContext.active_role)
@@ -270,6 +265,19 @@ export async function requestPasswordReset(email: string): Promise<void> {
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
   const citizenId = await redis.getdel(`${PWD_RESET_PREFIX}:${token}`)
   if (!citizenId) {
+    throw Object.assign(new Error('Token inválido o expirado'), {
+      statusCode: 400,
+      code: 'INVALID_RESET_TOKEN',
+    })
+  }
+
+  // A reset token may have been issued before an irreversible account erasure.
+  // Consuming it must never write credentials back into a deleted identity.
+  const account = await prisma.citizen.findUnique({
+    where: { id: citizenId },
+    select: { id: true, isActive: true },
+  })
+  if (!account?.isActive) {
     throw Object.assign(new Error('Token inválido o expirado'), {
       statusCode: 400,
       code: 'INVALID_RESET_TOKEN',

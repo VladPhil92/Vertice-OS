@@ -117,6 +117,31 @@ export async function deleteImageAsset(assetId: string): Promise<void> {
       headers: providerHeaders(),
     })
   } catch {
-    // Cleanup is best-effort. Callers must clear authoritative DB references first.
+    // Ordinary UI cleanup remains best-effort. Privacy erasure uses
+    // purgeImageAssetStrict() so failures enter the durable job retry path.
+  }
+}
+
+/**
+ * Strict deletion used by privacy/account-erasure jobs. Unlike normal media
+ * replacement cleanup, this function must fail closed so the jobs worker keeps
+ * retrying instead of falsely certifying that an external biometric-like image
+ * has been purged.
+ */
+export async function purgeImageAssetStrict(assetId: string): Promise<void> {
+  if (!assetId) return
+  requireProvider()
+
+  const response = await fetch(`${providerBaseUrl()}/images/v1/${encodeURIComponent(assetId)}`, {
+    method: 'DELETE',
+    headers: providerHeaders(),
+  })
+
+  if (response.status === 404) return
+  if (!response.ok) {
+    throw Object.assign(new Error(`No fue posible eliminar el activo externo (${response.status}).`), {
+      statusCode: 502,
+      code: 'MEDIA_PROVIDER_DELETE_FAILED',
+    })
   }
 }

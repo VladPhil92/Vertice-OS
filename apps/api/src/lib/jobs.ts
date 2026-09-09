@@ -2,6 +2,9 @@ import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { config } from '../config'
 import { logger } from './logger'
+import { redis } from './redis'
+import { delCache } from './cache'
+import { runCypher } from './neo4j'
 import {
   mintCitizenBadge,
   buildCitizenBadgeURI,
@@ -11,6 +14,7 @@ import {
 import { reconcileFinanceLedger } from '../modules/billing/finance-operations.service'
 import { reconcileCampaignPayout } from '../modules/billing/crowdfunding-payout.service'
 import { publishScheduledCivicPublication } from '../modules/publishing/publishing.service'
+import { purgeImageAssetStrict } from '../modules/media/media-provider'
 
 export type JobType =
   | 'mint_identity_badge'
@@ -18,6 +22,7 @@ export type JobType =
   | 'reconcile_payment_ledger'
   | 'reconcile_crowdfunding_payout'
   | 'publish_civic_update'
+  | 'purge_deleted_identity_auxiliary'
 
 export interface MintIdentityBadgePayload {
   citizenId: string
@@ -50,12 +55,18 @@ export interface PublishCivicUpdatePayload {
   publicationId: string
 }
 
+export interface PurgeDeletedIdentityAuxiliaryPayload {
+  citizenId: string
+  avatarAssetIds: string[]
+}
+
 type JobPayload =
   | MintIdentityBadgePayload
   | RecordVotingResultPayload
   | ReconcilePaymentLedgerPayload
   | ReconcileCrowdfundingPayoutPayload
   | PublishCivicUpdatePayload
+  | PurgeDeletedIdentityAuxiliaryPayload
 
 interface JobRow {
   id: number
@@ -185,6 +196,28 @@ async function handlePublishCivicUpdate(payload: PublishCivicUpdatePayload): Pro
   await publishScheduledCivicPublication(payload.publicationId)
 }
 
+async function handleDeletedIdentityAuxiliaryPurge(
+  payload: PurgeDeletedIdentityAuxiliaryPayload,
+): Promise<void> {
+  for (const assetId of payload.avatarAssetIds) {
+    await purgeImageAssetStrict(assetId)
+  }
+
+  // Notifications and profile cache are non-authoritative but can contain
+  // display data. They are deleted as part of the durable retryable purge.
+  await Promise.all([
+    redis.del(`vertice:notif:${payload.citizenId}`),
+    delCache('profile', payload.citizenId),
+  ])
+
+  // Neo4j is a derived graph projection. Removing the node prevents the old DID
+  // from surviving account erasure in a secondary store.
+  await runCypher(
+    'MATCH (c:Citizen {id: $id}) DETACH DELETE c',
+    { id: payload.citizenId },
+  )
+}
+
 export async function runJob(job: JobRow): Promise<void> {
   try {
     switch (job.type) {
@@ -202,6 +235,9 @@ export async function runJob(job: JobRow): Promise<void> {
         break
       case 'publish_civic_update':
         await handlePublishCivicUpdate(job.payload as PublishCivicUpdatePayload)
+        break
+      case 'purge_deleted_identity_auxiliary':
+        await handleDeletedIdentityAuxiliaryPurge(job.payload as PurgeDeletedIdentityAuxiliaryPayload)
         break
     }
     await completeJob(job.id)

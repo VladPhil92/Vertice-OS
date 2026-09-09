@@ -25,6 +25,7 @@ import {
   grantCitizenRole,
   revokeCitizenRole,
 } from './role-delegation.service'
+import { deleteCitizenAccount } from './account-deletion.service'
 import { config } from '../../config'
 
 const REFRESH_COOKIE = 'vertice_refresh'
@@ -44,6 +45,10 @@ const CitizenIdParamsSchema = z.object({ citizenId: z.string().uuid() })
 const CitizenRoleParamsSchema = z.object({
   citizenId: z.string().uuid(),
   role: DelegableRoleSchema,
+})
+const AccountDeletionSchema = z.object({
+  confirmation: z.literal('ELIMINAR'),
+  source: z.enum(['web', 'mobile', 'api']).optional().default('api'),
 })
 
 const cookieOpts = {
@@ -126,6 +131,34 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get('/me', { preHandler: requireAuth }, async (request, reply) => {
     const profile = await getCitizenProfile(request.citizen.sub)
     return reply.send(profile)
+  })
+
+  app.delete('/account', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = AccountDeletionSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Confirma la eliminación escribiendo ELIMINAR.',
+        code: 'ACCOUNT_DELETION_CONFIRMATION_REQUIRED',
+      })
+    }
+    if (!request.citizen.sid) {
+      return reply.status(401).send({
+        error: 'Vuelve a iniciar sesión antes de eliminar tu cuenta.',
+        code: 'ACCOUNT_DELETION_REAUTH_REQUIRED',
+      })
+    }
+
+    const receipt = await deleteCitizenAccount(
+      request.citizen.sub,
+      request.citizen.sid,
+      parsed.data.source,
+    )
+
+    reply.clearCookie(REFRESH_COOKIE, { path: '/auth' })
+    return reply.send(receipt)
   })
 
   app.get('/roles', { preHandler: requireAuth }, async (request, reply) => {

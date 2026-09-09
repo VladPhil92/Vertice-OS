@@ -5,12 +5,22 @@ import { clearSessionTokens, getRefreshToken } from '../lib/session'
 import { deactivatePushRegistration } from '../lib/push-notifications'
 import type { CitizenProfile } from '../types/api'
 
+export interface AccountDeletionReceipt {
+  request_id: string
+  status: 'completed'
+  completed_at: string
+  retention_policy_version: string
+  retained_categories: string[]
+  auxiliary_cleanup_queued: boolean
+}
+
 interface AuthContextValue {
   user: CitizenProfile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, cedula: string) => Promise<void>
   signOut: () => Promise<void>
+  deleteAccount: () => Promise<AccountDeletionReceipt>
   refreshProfile: () => Promise<void>
 }
 
@@ -67,14 +77,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
   }, [])
 
+  const deleteAccount = useCallback(async () => {
+    // Remove the device subscription first while the authenticated session is
+    // still live. The server-side erasure repeats this deletion authoritatively.
+    try {
+      await deactivatePushRegistration()
+    } catch {
+      // Account erasure must not depend on Expo availability.
+    }
+
+    try {
+      const receipt = await apiFetch<AccountDeletionReceipt>('/auth/account', {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmation: 'ELIMINAR', source: 'mobile' }),
+      })
+      await clearSessionTokens()
+      setUser(null)
+      return receipt
+    } catch (error) {
+      throw error
+    }
+  }, [])
+
   const value = useMemo<AuthContextValue>(() => ({
     user,
     loading,
     signIn,
     signUp,
     signOut,
+    deleteAccount,
     refreshProfile,
-  }), [user, loading, signIn, signUp, signOut, refreshProfile])
+  }), [user, loading, signIn, signUp, signOut, deleteAccount, refreshProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

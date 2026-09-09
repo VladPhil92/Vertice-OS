@@ -137,6 +137,23 @@ export default function ProfileScreen() {
           <Text style={styles.secondaryButtonText}>Actualizar perfil</Text>
         </Pressable>
 
+        <View style={styles.privacyCard}>
+          <View style={styles.notificationCopy}>
+            <Text style={styles.privacyTitle}>Privacidad y datos</Text>
+            <Text style={styles.notificationBody}>
+              Puedes eliminar tu cuenta directamente desde VÉRTICE. El proceso borra credenciales e identidad personal y explica qué registros deben conservarse de forma seudonimizada.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => router.push('/account-deletion')}
+            style={({ pressed }) => [styles.deleteAccountButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.deleteAccountButtonText}>Eliminar mi cuenta</Text>
+          </Pressable>
+        </View>
+
         <Pressable
           accessibilityRole="button"
           disabled={busy}
@@ -169,8 +186,10 @@ const styles = StyleSheet.create({
   territoryButton: { minHeight: 46, marginTop: 3, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#FFFFFF' },
   territoryButtonText: { color: '#17382A', fontWeight: '800' },
   notificationCard: { borderRadius: 20, padding: 16, backgroundColor: '#E7E4D8', gap: 12 },
+  privacyCard: { borderRadius: 20, padding: 16, backgroundColor: '#F4ECE9', gap: 12 },
   notificationCopy: { gap: 5 },
   notificationTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' },
+  privacyTitle: { fontSize: 17, fontWeight: '800', color: '#812F2F' },
   notificationBody: { color: '#565D54', lineHeight: 19 },
   pushButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#AEB7AF', backgroundColor: '#FFFFFF' },
   pushButtonActive: { backgroundColor: '#17382A', borderColor: '#17382A' },
@@ -178,6 +197,8 @@ const styles = StyleSheet.create({
   pushButtonTextActive: { color: '#FFFFFF' },
   secondaryButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1, borderColor: '#B9BDB5' },
   secondaryButtonText: { fontWeight: '700', color: '#263228' },
+  deleteAccountButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#B76A63', backgroundColor: '#FFFFFF' },
+  deleteAccountButtonText: { fontWeight: '800', color: '#812F2F' },
   dangerButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#F4DFDC' },
   dangerButtonText: { fontWeight: '700', color: '#812F2F' },
   pressed: { opacity: 0.82 },

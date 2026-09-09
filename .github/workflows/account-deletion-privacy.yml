@@ -1,0 +1,91 @@
+name: Account Deletion Privacy
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/src/modules/auth/**'
+      - 'apps/api/src/modules/billing/account-deletion-billing.service.ts'
+      - 'apps/api/src/modules/billing/__tests__/account-deletion-billing.service.test.ts'
+      - 'apps/api/src/lib/jobs.ts'
+      - 'apps/api/src/modules/media/media-provider.ts'
+      - 'apps/api/prisma/migrations/**'
+      - 'apps/mobile/app/account-deletion.tsx'
+      - 'apps/mobile/app/(tabs)/profile.tsx'
+      - 'apps/mobile/providers/AuthProvider.tsx'
+      - 'apps/web/app/account-deletion/**'
+      - 'apps/web/app/dashboard/privacy/**'
+      - 'scripts/verify-account-deletion-privacy.mjs'
+      - '.github/workflows/account-deletion-privacy.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-deletion-privacy-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  account-deletion-privacy:
+    name: Account Deletion Privacy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared TypeScript packages
+        run: pnpm --filter @vertice/types build
+
+      - name: Verify privacy source contract
+        run: node scripts/verify-account-deletion-privacy.mjs
+
+      - name: Run account deletion unit tests
+        run: >-
+          pnpm --filter @vertice/api test --
+          account-deletion.service.test.ts
+          account-deletion-billing.service.test.ts
+          --runInBand
+
+      - name: Typecheck API
+        run: pnpm --filter @vertice/api typecheck
+
+      - name: Typecheck mobile
+        run: pnpm --filter @vertice/mobile typecheck
+
+      - name: Typecheck web
+        run: pnpm --filter @vertice/web typecheck
+
+      - name: Export Android account-deletion surface
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+        run: pnpm --filter @vertice/mobile exec expo export --platform android --output-dir dist/privacy-android
+
+      - name: Export iOS account-deletion surface
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+        run: pnpm --filter @vertice/mobile exec expo export --platform ios --output-dir dist/privacy-ios
+
+      - name: Emit certification boundary
+        run: |
+          echo 'Account Deletion Privacy: PASS'
+          echo 'This proves exact-SHA source, unit-test, typecheck and native export coherence.'
+          echo 'It does not replace external App Store / Play Console review or production-provider purge canaries.'

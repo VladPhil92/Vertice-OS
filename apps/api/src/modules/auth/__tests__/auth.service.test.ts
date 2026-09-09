@@ -77,6 +77,7 @@ beforeEach(() => {
   ;(bcrypt.compare as jest.Mock).mockResolvedValue(true)
   ;(prisma.$queryRaw as jest.Mock).mockResolvedValue([])
   ;(prisma.$executeRaw as jest.Mock).mockResolvedValue(1)
+  mockCitizen.findUnique.mockResolvedValue({ id: 'citizen-uuid', isActive: true })
   mockSession.create.mockResolvedValue({ id: 'session-uuid' })
   mockApp.jwt.sign = jest.fn().mockReturnValue('mock.access.token')
 })
@@ -322,6 +323,10 @@ describe('resetPassword', () => {
     await resetPassword('valid-token', 'NuevaClave123')
 
     expect(mockRedisGetdel).toHaveBeenCalledWith('vertice:pwd_reset:valid-token')
+    expect(mockCitizen.findUnique).toHaveBeenCalledWith({
+      where: { id: 'citizen-uuid' },
+      select: { id: true, isActive: true },
+    })
     expect(bcrypt.hash).toHaveBeenCalledWith('NuevaClave123', expect.any(Number))
     expect(prisma.$transaction).toHaveBeenCalledTimes(1)
     expect((prisma.$transaction as jest.Mock).mock.calls[0][0]).toHaveLength(2) // update + revoke sessions
@@ -335,6 +340,20 @@ describe('resetPassword', () => {
       statusCode: 400,
       code: 'INVALID_RESET_TOKEN',
     })
+    expect(mockCitizen.findUnique).not.toHaveBeenCalled()
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('rechaza un token emitido antes de que la cuenta fuera eliminada', async () => {
+    mockRedisGetdel.mockResolvedValueOnce('deleted-citizen')
+    mockCitizen.findUnique.mockResolvedValueOnce({ id: 'deleted-citizen', isActive: false })
+
+    await expect(resetPassword('stale-before-deletion', 'NuevaClave123')).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'INVALID_RESET_TOKEN',
+    })
+
+    expect(bcrypt.hash).not.toHaveBeenCalled()
     expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 
