@@ -4,6 +4,8 @@ import { requireAuth, requireSuperadmin } from '../../middleware/auth'
 import { getTerritoryFeed } from './territories.feed'
 import { getNationalActivationRanking } from './territories.ranking'
 import { territoryLaunchOperationsRoutes } from './territories.operations.routes'
+import { territoryPublicRoutes } from './territories.public.routes'
+import { territoryCitizenActivationRoutes } from './territories.activation.routes'
 import {
   ACTIVATION_STATUSES,
   TERRITORY_LEVELS,
@@ -38,9 +40,10 @@ const RankingQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).d
 const FeedQuery = z.object({ limit: z.coerce.number().int().min(1).max(30).default(12) })
 
 export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
-  // Register the Phase 7B control plane before the generic /:code routes.
-  // All mutations inside this subtree require live superadmin authority.
+  // Register specific Phase 7B/7C subtrees before the generic /:code routes.
   await app.register(territoryLaunchOperationsRoutes, { prefix: '/admin/operations' })
+  await app.register(territoryPublicRoutes, { prefix: '/public' })
+  await app.register(territoryCitizenActivationRoutes, { prefix: '/activation' })
 
   app.get('/', async (request, reply) => {
     const parsed = ListQuery.safeParse(request.query)
