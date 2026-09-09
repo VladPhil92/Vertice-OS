@@ -1,0 +1,98 @@
+name: Golden Financial Integrity
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/billing/**'
+      - 'apps/api/src/modules/crowdfunding/**'
+      - 'apps/api/src/__tests__/golden-financial-integrity.integration.test.ts'
+      - 'apps/api/prisma/migrations/**'
+      - '.github/workflows/golden-financial-integrity.yml'
+      - 'docs/monetization/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/src/modules/billing/**'
+      - 'apps/api/src/modules/crowdfunding/**'
+      - 'apps/api/src/__tests__/golden-financial-integrity.integration.test.ts'
+      - 'apps/api/prisma/migrations/**'
+      - '.github/workflows/golden-financial-integrity.yml'
+      - 'docs/monetization/**'
+
+concurrency:
+  group: golden-finance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golden-financial-integrity:
+    name: Golden Financial Integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: vertice_finance_test
+          POSTGRES_USER: vertice
+          POSTGRES_PASSWORD: vertice_finance_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize exact financial schema slices
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_finance_test@localhost:5432/vertice_finance_test
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infrastructure/db/init.sql
+
+          for migration in \
+            apps/api/prisma/migrations/20260907234500_monetization_foundation/migration.sql \
+            apps/api/prisma/migrations/20260908023500_payment_execution_phase2/migration.sql \
+            apps/api/prisma/migrations/20260908113000_finance_operations_phase3/migration.sql \
+            apps/api/prisma/migrations/20260908121500_crowdfunding_payouts_phase4/migration.sql \
+            apps/api/prisma/migrations/20260908140500_crowdfunding_payout_destination_binding/migration.sql \
+            apps/api/prisma/migrations/20260908143000_crowdfunding_category_policy_alignment/migration.sql \
+            apps/api/prisma/migrations/20260908145000_crowdfunding_fee_funding_policy_phase5/migration.sql
+          do
+            echo "Applying Golden Finance schema slice: $migration"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Run Golden financial integrity journey
+        env:
+          GOLDEN_FINANCE_JOURNEYS: '1'
+          NODE_ENV: test
+          DATABASE_URL: postgresql://vertice:vertice_finance_test@localhost:5432/vertice_finance_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: golden-finance-jwt-secret-with-at-least-32-characters
+          CORS_ORIGIN: http://localhost:3000
+          MERCADOPAGO_ACCESS_TOKEN: golden-finance-access-token-not-a-real-provider-secret
+          MERCADOPAGO_WEBHOOK_SECRET: golden-finance-webhook-secret-not-real
+          PAYMENTS_WEB_URL: https://web.example.invalid
+          PAYMENTS_WEBHOOK_URL: https://api.example.invalid/billing/webhooks/mercadopago
+          CROWDFUNDING_PAYMENTS_ENABLED: 'true'
+          CROWDFUNDING_PAYOUTS_ENABLED: 'false'
+        run: pnpm --filter @vertice/api test -- golden-financial-integrity.integration.test.ts --runInBand
+
+      - name: Record certification boundary
+        run: |
+          echo 'Golden Financial Integrity: PASS'
+          echo 'This gate certifies internal ledger/fee/reversal/payout-balance invariants with Postgres and a synthetic signed Mercado Pago contract.'
+          echo 'It does NOT certify Mercado Pago, Wompi/BRE-B, production credentials, real settlement, real refunds, or real payouts.'
