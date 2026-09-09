@@ -23,9 +23,12 @@ spec:
         app: vertice-os
         component: api
     spec:
+      # Must exceed the API's bounded 15s shutdown deadline so Fastify can stop
+      # accepting traffic and close Postgres/Redis/Neo4j before SIGKILL.
+      terminationGracePeriodSeconds: 30
       containers:
         - name: api
-          image: ghcr.io/vladphil92/vertice-api:latest  # Replace with versioned tag in CI/CD
+          image: ghcr.io/vladphil92/vertice-api:latest  # Replace with versioned tag/digest in CI/CD before production use
           imagePullPolicy: Always
           ports:
             - containerPort: 4000
@@ -35,14 +38,17 @@ spec:
                 name: vertice-config
             - secretRef:
                 name: vertice-secrets
+          # Liveness must never depend on Postgres/Redis/Neo4j. Restarting a
+          # healthy process because a dependency is down amplifies incidents.
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 4000
             initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
+          # Serving readiness is fail-closed only for core dependencies.
           readinessProbe:
             httpGet:
               path: /health/ready
