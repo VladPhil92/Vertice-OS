@@ -1,0 +1,95 @@
+name: Market Release Certification Evidence
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'release/evidence/**'
+      - 'scripts/verify-market-release-evidence.mjs'
+      - 'docs/engineering/MARKET_RELEASE_CERTIFICATION.md'
+      - 'docs/engineering/MARKET_RELEASE_COMPLETION.md'
+      - '.github/workflows/market-release-certification.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'release/evidence/**'
+      - 'scripts/verify-market-release-evidence.mjs'
+      - 'docs/engineering/MARKET_RELEASE_CERTIFICATION.md'
+      - 'docs/engineering/MARKET_RELEASE_COMPLETION.md'
+      - '.github/workflows/market-release-certification.yml'
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: 'Exact 40-character release SHA being certified'
+        required: true
+        type: string
+      manifest_path:
+        description: 'Path to completed evidence manifest'
+        required: true
+        default: 'release/evidence/market-release.json'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-release-certification-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  evidence-contract:
+    if: github.event_name != 'workflow_dispatch'
+    name: Market Release Evidence Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate evidence schema and required categories
+        run: node scripts/verify-market-release-evidence.mjs --mode structure --manifest release/evidence/market-release.example.json
+
+      - name: Emit certification boundary
+        run: |
+          echo 'Market release evidence contract: PASS'
+          echo 'This is schema/source validation only. It does NOT certify VÉRTICE for market release.'
+
+  strict-certification:
+    if: github.event_name == 'workflow_dispatch'
+    name: Strict Market Release Certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout evidence branch/ref
+        uses: actions/checkout@v4
+
+      - name: Validate target SHA format
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          if ! printf '%s' "$RELEASE_SHA" | grep -Eq '^[0-9a-fA-F]{40}$'; then
+            echo 'release_sha must be an exact 40-character git SHA' >&2
+            exit 1
+          fi
+
+      - name: Ensure target release commit exists in repository
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$RELEASE_SHA"
+          git cat-file -e "$RELEASE_SHA^{commit}"
+
+      - name: Verify completed external/operator evidence
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+        run: node scripts/verify-market-release-evidence.mjs --mode strict --manifest "$MANIFEST_PATH" --release-sha "$RELEASE_SHA"
+
+      - name: Emit strict evidence result
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          echo "External/operator evidence bundle is complete for $RELEASE_SHA."
+          echo 'Existing exact-SHA CI/security/runtime gates remain mandatory and must also be green before release promotion.'
