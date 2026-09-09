@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch } from '../../lib/api'
 import type { CitizenDashboard } from '../../types/api'
@@ -15,13 +16,19 @@ function MetricCard({ label, value }: { label: string; value: string | number })
 
 export default function DashboardScreen() {
   const [dashboard, setDashboard] = useState<CitizenDashboard | null>(null)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
     try {
-      setDashboard(await apiFetch<CitizenDashboard>('/dashboard/me'))
+      const [dashboardResponse, notificationResponse] = await Promise.all([
+        apiFetch<CitizenDashboard>('/dashboard/me'),
+        apiFetch<{ count: number }>('/notifications/unread-count'),
+      ])
+      setDashboard(dashboardResponse)
+      setUnreadNotifications(notificationResponse.count)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar el panel.')
     }
@@ -44,10 +51,16 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
       >
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>CENTRO DE MANDO CIUDADANO</Text>
-          <Text style={styles.title}>Tu actividad cívica, en un solo lugar.</Text>
-          <Text style={styles.subtitle}>{dashboard?.profile.neighborhood ?? 'Cartagena de Indias'}</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>CENTRO DE MANDO CIUDADANO</Text>
+            <Text style={styles.title}>Tu actividad cívica, en un solo lugar.</Text>
+            <Text style={styles.subtitle}>{dashboard?.profile.neighborhood ?? 'Cartagena de Indias'}</Text>
+          </View>
+          <Pressable style={styles.notificationButton} onPress={() => router.push('/notifications' as never)}>
+            <Text style={styles.notificationButtonLabel}>Avisos</Text>
+            {unreadNotifications > 0 ? <Text style={styles.notificationBadge}>{unreadNotifications}</Text> : null}
+          </Pressable>
         </View>
 
         {error ? (
@@ -100,10 +113,14 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
   content: { padding: 20, paddingBottom: 40, gap: 24 },
-  header: { paddingTop: 8, gap: 8 },
+  headerRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  header: { flex: 1, paddingTop: 8, gap: 8 },
   eyebrow: { fontSize: 12, letterSpacing: 1.8, fontWeight: '700', color: '#697068' },
   title: { fontSize: 30, lineHeight: 36, fontWeight: '700', color: '#11130F' },
   subtitle: { fontSize: 15, color: '#6D7168' },
+  notificationButton: { backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: '#DAD7CC' },
+  notificationButtonLabel: { color: '#17382A', fontWeight: '700', fontSize: 12 },
+  notificationBadge: { minWidth: 22, textAlign: 'center', backgroundColor: '#17382A', color: '#FFFFFF', borderRadius: 999, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 2, fontSize: 11, fontWeight: '800' },
   errorCard: { borderRadius: 16, padding: 16, backgroundColor: '#FBE9E7', gap: 4 },
   errorTitle: { fontWeight: '700', color: '#7C2D2D' },
   errorText: { color: '#7C2D2D', lineHeight: 20 },
