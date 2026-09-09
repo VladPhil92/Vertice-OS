@@ -1,0 +1,77 @@
+name: National Citizen Activation
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/src/modules/territories/**'
+      - 'apps/api/prisma/migrations/20260909113000_national_citizen_activation_phase7c/**'
+      - 'apps/web/app/cities/**'
+      - 'apps/web/app/dashboard/territory/**'
+      - 'apps/web/app/dashboard/admin/national/**'
+      - 'scripts/verify-national-citizen-activation.mjs'
+      - 'docs/engineering/NATIONAL_CITIZEN_ACTIVATION_PHASE7C.md'
+      - '.github/workflows/national-citizen-activation.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-citizen-activation-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  citizen-activation-contract:
+    name: National Citizen Activation Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Phase 7C source contract
+        run: node scripts/verify-national-citizen-activation.mjs
+
+      - name: Typecheck API and web surfaces
+        run: |
+          pnpm --filter @vertice/types build
+          pnpm --filter @vertice/api typecheck
+          pnpm --filter @vertice/web typecheck
+
+      - name: Run Phase 7C domain tests
+        run: |
+          pnpm --filter @vertice/api test -- --runInBand \
+            src/modules/territories/territories.public.test.ts \
+            src/modules/territories/territories.activation.test.ts
+
+      - name: Verify migration safety boundary
+        run: |
+          set -euo pipefail
+          file='apps/api/prisma/migrations/20260909113000_national_citizen_activation_phase7c/migration.sql'
+          grep -q 'territory_activation_interests' "$file"
+          grep -q "status IN ('pending','approved','declined','withdrawn')" "$file"
+          ! grep -Eq 'citizen_role_grants|reputation_events|proposal_voter_roll' "$file"
+
+      - name: Emit certification boundary
+        run: |
+          echo 'National Citizen Activation Phase 7C contract: PASS'
+          echo 'This proves source/type/domain boundaries for the exact SHA.'
+          echo 'It does not prove same-SHA production runtime smoke, real cohort staffing, verified residence, or national GA.'
