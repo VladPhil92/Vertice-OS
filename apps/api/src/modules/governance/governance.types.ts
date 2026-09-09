@@ -52,8 +52,10 @@ export interface Proposal {
   executive_summary: string | null
   category: string
   scope: ProposalScope
-  // Territorio — snapshot del autor tomado en creación; determina el
-  // electorado elegible cuando scope = neighborhood/locality.
+  // Territory is snapshotted at creation. locality/neighborhood preserve the
+  // legacy Cartagena sub-city contract; territory_code identifies the national
+  // municipality/district context for city/regional isolation.
+  territory_code: string | null
   locality_id: number | null
   neighborhood: string | null
   status: ProposalStatus
@@ -86,6 +88,7 @@ export interface ProposalSummary {
   title: string
   category: string
   scope: ProposalScope
+  territory_code: string | null
   status: ProposalStatus
   endorsement_count: number
   total_votes: number
@@ -158,6 +161,7 @@ export interface ProposalRow {
   executive_summary: string | null
   category: string
   scope: string
+  territory_code: string | null
   locality_id: number | null
   neighborhood: string | null
   status: string
