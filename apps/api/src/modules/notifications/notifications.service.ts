@@ -1,5 +1,6 @@
 import { redis } from '../../lib/redis'
 import { TTL } from '../../lib/cache'
+import { dispatchPushNotification } from './push-devices.service'
 
 export interface Notification {
   id: string
@@ -41,6 +42,15 @@ export async function createNotification(
   await redis.lpush(k, JSON.stringify(notif))
   await redis.ltrim(k, 0, MAX_PER_CITIZEN - 1)
   await redis.expire(k, TTL.NOTIFICATION)
+
+  // Push is a non-authoritative delivery channel. Never make a civic mutation
+  // fail because Expo/APNs/FCM is unavailable; the Redis ledger above remains
+  // the canonical notification record and can be read from any client.
+  void dispatchPushNotification(citizenId, {
+    title,
+    body,
+    href,
+  }).catch(() => undefined)
 
   return notif
 }
