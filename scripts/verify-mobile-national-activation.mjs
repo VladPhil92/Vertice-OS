@@ -4,6 +4,7 @@ const required = [
   'apps/mobile/app/city/[code].tsx',
   'apps/mobile/app/territory/select.tsx',
   'apps/mobile/app/territory/activate.tsx',
+  'apps/mobile/app/(auth)/sign-in.tsx',
   'apps/mobile/app/(tabs)/index.tsx',
   'apps/mobile/app/(tabs)/profile.tsx',
   'apps/mobile/app/_layout.tsx',
@@ -20,12 +21,13 @@ for (const file of required) {
 const city = fs.readFileSync(required[0], 'utf8')
 const selector = fs.readFileSync(required[1], 'utf8')
 const activation = fs.readFileSync(required[2], 'utf8')
-const home = fs.readFileSync(required[3], 'utf8')
-const profile = fs.readFileSync(required[4], 'utf8')
-const layout = fs.readFileSync(required[5], 'utf8')
-const types = fs.readFileSync(required[6], 'utf8')
-const publicRoutes = fs.readFileSync(required[7], 'utf8')
-const activationRoutes = fs.readFileSync(required[8], 'utf8')
+const signIn = fs.readFileSync(required[3], 'utf8')
+const home = fs.readFileSync(required[4], 'utf8')
+const profile = fs.readFileSync(required[5], 'utf8')
+const layout = fs.readFileSync(required[6], 'utf8')
+const types = fs.readFileSync(required[7], 'utf8')
+const publicRoutes = fs.readFileSync(required[8], 'utf8')
+const activationRoutes = fs.readFileSync(required[9], 'utf8')
 
 for (const token of [
   '/territories/public/',
@@ -39,6 +41,14 @@ for (const token of [
 }
 
 for (const token of [
+  'useAuth',
+  "next: 'territory-activate'",
+  "pathname: '/(auth)/sign-in'",
+]) {
+  if (!city.includes(token)) throw new Error(`Public city activation CTA missing auth-preserving boundary: ${token}`)
+}
+
+for (const token of [
   '/territories?q=',
   '/territories/me',
   "method: 'PUT'",
@@ -49,16 +59,32 @@ for (const token of [
 }
 
 for (const token of [
+  'useAuth',
   '/territories/me',
   '/territories/activation/me/interests',
   '/territories/activation/',
   "method: 'POST'",
   "method: 'DELETE'",
   'maxLength={500}',
+  "pathname: '/(auth)/sign-in'",
+  "next: 'territory-activate'",
   'no te añade automáticamente a una cohorte',
   'no modifica autenticación, identity assurance, territory assurance, reputación, ranking, voto, autoridad cívica ni alcance orgánico',
 ]) {
   if (!activation.includes(token)) throw new Error(`Mobile activation journey missing canonical contract token: ${token}`)
+}
+
+const blockingPredicate = /blockingInterestForSelectedRole[\s\S]{0,700}interest\.status === 'pending'[\s\S]{0,160}interest\.status === 'approved'/
+if (!blockingPredicate.test(activation)) {
+  throw new Error('Only pending/approved activation interests may block a new mobile submission; declined must remain resubmittable')
+}
+
+for (const token of [
+  'useLocalSearchParams',
+  "requestedNext === 'territory-activate'",
+  "router.replace(requestedNext === 'territory-activate' ? '/territory/activate' : '/(tabs)')",
+]) {
+  if (!signIn.includes(token)) throw new Error(`Mobile sign-in must preserve the activation destination safely: ${token}`)
 }
 
 for (const route of ['city/[code]', 'territory/select', 'territory/activate']) {
@@ -85,7 +111,7 @@ if (!publicRoutes.includes('getPublicCityOverview')) throw new Error('Phase 7D m
 if (!activationRoutes.includes('requireAuth')) throw new Error('Phase 7D activation mutations must remain authenticated')
 if (!activationRoutes.includes('requireSuperadmin')) throw new Error('Phase 7D must preserve separate superadmin review authority')
 
-const mobileSurfaces = [city, selector, activation, home, profile].join('\n')
+const mobileSurfaces = [city, selector, activation, signIn, home, profile].join('\n')
 for (const forbidden of [
   'citizen_role_grants',
   'reputation_events',
