@@ -134,6 +134,24 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Continúa tu gestión</Text>
+          <View style={styles.launchGrid}>
+            <Pressable onPress={() => router.push('/workflows')} style={styles.launchCard}>
+              <Text style={styles.launchTitle}>Expedientes</Text>
+              <Text style={styles.launchBody}>Sigue reportes, análisis, propuestas y control.</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/identity')} style={styles.launchCard}>
+              <Text style={styles.launchTitle}>Identidad cívica</Text>
+              <Text style={styles.launchBody}>Consulta assurance, proofing y proveedor.</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/crowdfunding')} style={styles.launchCardWide}>
+              <Text style={styles.launchTitle}>Crowdfunding</Text>
+              <Text style={styles.launchBody}>Revisa campañas, readiness y bloqueos financieros sin mover dinero desde el cliente.</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tu gestión</Text>
           <View style={styles.metricsGrid}>
             <MetricCard label="Acciones cívicas" value={dashboard?.mine.civic_actions.total ?? 0} />
@@ -183,6 +201,11 @@ const styles = StyleSheet.create({
   attentionLabel: { color: '#595E55' },
   attentionDetails: { marginTop: 14, gap: 7 },
   detail: { color: '#363A32', lineHeight: 20 },
+  launchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  launchCard: { width: '48%', minHeight: 118, borderRadius: 18, padding: 16, backgroundColor: '#FFFFFF', gap: 7 },
+  launchCardWide: { width: '100%', minHeight: 100, borderRadius: 18, padding: 16, backgroundColor: '#E7E4D8', gap: 7 },
+  launchTitle: { fontSize: 16, fontWeight: '800', color: '#17382A' },
+  launchBody: { color: '#5E6259', lineHeight: 18, fontSize: 12 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   metricCard: { width: '48%', minHeight: 110, borderRadius: 18, padding: 16, backgroundColor: '#FFFFFF', gap: 8 },
   metricValue: { fontSize: 28, fontWeight: '700', color: '#1C3D2E' },
