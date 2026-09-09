@@ -16,6 +16,9 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="report/[id]" />
           <Stack.Screen name="notifications" />
+          <Stack.Screen name="city/[code]" />
+          <Stack.Screen name="territory/select" />
+          <Stack.Screen name="territory/activate" />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>
