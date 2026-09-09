@@ -10,12 +10,6 @@ import {
 
 const describeGolden = process.env.GOLDEN_FINANCE_OPERATIONS === '1' ? describe : describe.skip
 
-function errorCode(error: unknown): string | undefined {
-  return error && typeof error === 'object' && 'code' in error
-    ? String((error as { code?: unknown }).code)
-    : undefined
-}
-
 describeGolden('Golden Financial Operations Command Center', () => {
   const actorId = randomUUID()
   let initialReputation = 0
@@ -53,9 +47,10 @@ describeGolden('Golden Financial Operations Command Center', () => {
     await prisma.$executeRaw(Prisma.sql`
       DELETE FROM finance_runtime_controls WHERE capability = 'pro_checkout'
     `)
-    await expect(assertFinancialCapabilityEnabled('pro_checkout')).rejects.toSatisfy((error: unknown) => (
-      errorCode(error) === 'FINANCE_CONTROL_STATE_MISSING'
-    ))
+    await expect(assertFinancialCapabilityEnabled('pro_checkout')).rejects.toMatchObject({
+      code: 'FINANCE_CONTROL_STATE_MISSING',
+      statusCode: 503,
+    })
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO finance_runtime_controls (capability, emergency_stop)
       VALUES ('pro_checkout', FALSE)
@@ -70,9 +65,10 @@ describeGolden('Golden Financial Operations Command Center', () => {
       reason: 'Golden incident containment test',
     })
 
-    await expect(assertFinancialCapabilityEnabled('crowdfunding_collection')).rejects.toSatisfy((error: unknown) => (
-      errorCode(error) === 'CROWDFUNDING_COLLECTION_EMERGENCY_STOP'
-    ))
+    await expect(assertFinancialCapabilityEnabled('crowdfunding_collection')).rejects.toMatchObject({
+      code: 'CROWDFUNDING_COLLECTION_EMERGENCY_STOP',
+      statusCode: 503,
+    })
     await expect(assertFinancialCapabilityEnabled('pro_checkout')).resolves.toBeUndefined()
     await expect(assertFinancialCapabilityEnabled('crowdfunding_payouts')).resolves.toBeUndefined()
 
