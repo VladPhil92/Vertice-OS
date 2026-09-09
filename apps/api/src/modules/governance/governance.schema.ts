@@ -13,7 +13,6 @@ export const ListProposalsSchema = z.object({
   status: z.enum(PROPOSAL_STATUSES).optional(),
   category: z.enum(PROPOSAL_CATEGORIES).optional(),
   scope: z.enum(PROPOSAL_SCOPES).optional(),
-  territory_code: z.string().trim().min(2).max(32).optional(),
   author_id: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   offset: z.coerce.number().int().min(0).default(0),
