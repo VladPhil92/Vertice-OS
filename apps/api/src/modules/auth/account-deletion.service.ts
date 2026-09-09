@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 
 import { delCache } from '../../lib/cache'
 import { prisma } from '../../lib/prisma'
+import { prepareRecurringBillingForAccountDeletion } from '../billing/account-deletion-billing.service'
 
 const SUPERADMIN_AUTHORITY_LOCK = 'vertice-superadmin-authority'
 const RETENTION_POLICY_VERSION = '2026-09-09.v1'
@@ -30,6 +31,7 @@ type AccountState = {
   live_session: boolean
   canonical_root: boolean
   has_active_privilege_descendants: boolean
+  has_open_payout: boolean
 }
 
 type AvatarAsset = {
@@ -41,12 +43,88 @@ function deletionError(message: string, statusCode: number, code: string): Error
   return Object.assign(new Error(message), { statusCode, code })
 }
 
+function validateDeletionState(account: AccountState | undefined): asserts account is AccountState {
+  if (!account) {
+    throw deletionError('La cuenta no existe.', 404, 'ACCOUNT_NOT_FOUND')
+  }
+  if (!account.is_active) {
+    throw deletionError('La cuenta ya fue eliminada.', 410, 'ACCOUNT_ALREADY_DELETED')
+  }
+  if (!account.live_session) {
+    throw deletionError(
+      'Vuelve a iniciar sesión antes de eliminar tu cuenta.',
+      401,
+      'ACCOUNT_DELETION_REAUTH_REQUIRED',
+    )
+  }
+  if (account.canonical_root) {
+    throw deletionError(
+      'La autoridad raíz de VÉRTICE no puede eliminarse desde el autoservicio de cuenta.',
+      409,
+      'ROOT_ACCOUNT_DELETION_PROTECTED',
+    )
+  }
+  if (account.has_active_privilege_descendants) {
+    throw deletionError(
+      'Transfiere o revoca primero las delegaciones administrativas activas emitidas por esta cuenta.',
+      409,
+      'ACCOUNT_DELETION_AUTHORITY_TRANSFER_REQUIRED',
+    )
+  }
+  if (account.has_open_payout) {
+    throw deletionError(
+      'Existe un desembolso en curso que debe completarse o conciliarse antes de eliminar la identidad beneficiaria.',
+      409,
+      'ACCOUNT_DELETION_PAYOUT_RECONCILIATION_REQUIRED',
+    )
+  }
+}
+
+async function preflightDeletion(citizenId: string, sessionId: string): Promise<void> {
+  const rows = await prisma.$queryRaw<AccountState[]>(Prisma.sql`
+    SELECT
+      c.id::text AS id,
+      c.is_active,
+      EXISTS (
+        SELECT 1 FROM sessions s
+        WHERE s.id = ${sessionId}::uuid
+          AND s.citizen_id = c.id
+          AND s.revoked_at IS NULL
+          AND s.expires_at > NOW()
+      ) AS live_session,
+      EXISTS (
+        SELECT 1 FROM citizen_role_grants g
+        WHERE g.citizen_id = c.id
+          AND g.role = 'superadmin'
+          AND g.source = 'ctg_one_bootstrap'
+          AND g.revoked_at IS NULL
+      ) AS canonical_root,
+      EXISTS (
+        SELECT 1 FROM citizen_role_grants child
+        WHERE child.granted_by_citizen_id = c.id
+          AND child.role IN ('moderator', 'admin', 'superadmin')
+          AND child.revoked_at IS NULL
+      ) AS has_active_privilege_descendants,
+      EXISTS (
+        SELECT 1 FROM crowdfunding_payout_requests p
+        WHERE (p.beneficiary_citizen_id = c.id OR p.requested_by_citizen_id = c.id)
+          AND p.status IN ('requested', 'pending_approval', 'processing', 'reconciliation_required')
+      ) AS has_open_payout
+    FROM citizens c
+    WHERE c.id = ${citizenId}::uuid
+    LIMIT 1
+  `)
+  validateDeletionState(rows[0])
+}
+
 /**
  * Irreversibly erases a citizen's account identity while preserving only the
  * pseudonymised civic/financial/audit anchors required for integrity.
  *
  * Important invariants:
  * - A current, non-revoked server-side session is required.
+ * - External recurring billing mandates are cancelled before identity erasure.
+ * - Open payout lifecycles block erasure until reconciliation is complete.
  * - This is not a reversible account suspension.
  * - Direct identifiers and credentials are removed in the same transaction.
  * - Public social/publishing surfaces are removed or made non-public.
@@ -60,6 +138,11 @@ export async function deleteCitizenAccount(
   sessionId: string,
   source: AccountDeletionSource,
 ): Promise<AccountDeletionReceipt> {
+  // Validate destructive-operation authority before touching an external
+  // recurring mandate. The transaction below repeats every security check.
+  await preflightDeletion(citizenId, sessionId)
+  await prepareRecurringBillingForAccountDeletion(citizenId)
+
   const requestId = crypto.randomUUID()
   const pseudonymousDid = `did:vertice:deleted:${crypto.randomUUID()}`
   const retainedCategories = [...ACCOUNT_DELETION_RETAINED_CATEGORIES]
@@ -74,62 +157,36 @@ export async function deleteCitizenAccount(
         c.id::text AS id,
         c.is_active,
         EXISTS (
-          SELECT 1
-          FROM sessions s
+          SELECT 1 FROM sessions s
           WHERE s.id = ${sessionId}::uuid
             AND s.citizen_id = c.id
             AND s.revoked_at IS NULL
             AND s.expires_at > NOW()
         ) AS live_session,
         EXISTS (
-          SELECT 1
-          FROM citizen_role_grants g
+          SELECT 1 FROM citizen_role_grants g
           WHERE g.citizen_id = c.id
             AND g.role = 'superadmin'
             AND g.source = 'ctg_one_bootstrap'
             AND g.revoked_at IS NULL
         ) AS canonical_root,
         EXISTS (
-          SELECT 1
-          FROM citizen_role_grants child
+          SELECT 1 FROM citizen_role_grants child
           WHERE child.granted_by_citizen_id = c.id
             AND child.role IN ('moderator', 'admin', 'superadmin')
             AND child.revoked_at IS NULL
-        ) AS has_active_privilege_descendants
+        ) AS has_active_privilege_descendants,
+        EXISTS (
+          SELECT 1 FROM crowdfunding_payout_requests p
+          WHERE (p.beneficiary_citizen_id = c.id OR p.requested_by_citizen_id = c.id)
+            AND p.status IN ('requested', 'pending_approval', 'processing', 'reconciliation_required')
+        ) AS has_open_payout
       FROM citizens c
       WHERE c.id = ${citizenId}::uuid
       LIMIT 1
       FOR UPDATE
     `)
-
-    const account = rows[0]
-    if (!account) {
-      throw deletionError('La cuenta no existe.', 404, 'ACCOUNT_NOT_FOUND')
-    }
-    if (!account.is_active) {
-      throw deletionError('La cuenta ya fue eliminada.', 410, 'ACCOUNT_ALREADY_DELETED')
-    }
-    if (!account.live_session) {
-      throw deletionError(
-        'Vuelve a iniciar sesión antes de eliminar tu cuenta.',
-        401,
-        'ACCOUNT_DELETION_REAUTH_REQUIRED',
-      )
-    }
-    if (account.canonical_root) {
-      throw deletionError(
-        'La autoridad raíz de VÉRTICE no puede eliminarse desde el autoservicio de cuenta.',
-        409,
-        'ROOT_ACCOUNT_DELETION_PROTECTED',
-      )
-    }
-    if (account.has_active_privilege_descendants) {
-      throw deletionError(
-        'Transfiere o revoca primero las delegaciones administrativas activas emitidas por esta cuenta.',
-        409,
-        'ACCOUNT_DELETION_AUTHORITY_TRANSFER_REQUIRED',
-      )
-    }
+    validateDeletionState(rows[0])
 
     const avatarAssets = await tx.$queryRaw<AvatarAsset[]>(Prisma.sql`
       SELECT id::text, provider_asset_id
@@ -189,6 +246,9 @@ export async function deleteCitizenAccount(
     await tx.$executeRaw(Prisma.sql`
       DELETE FROM scheduled_civic_publications WHERE citizen_id = ${citizenId}::uuid
     `)
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM legal_documents WHERE citizen_id = ${citizenId}::uuid
+    `)
 
     await tx.$executeRaw(Prisma.sql`
       UPDATE territorial_reports SET citizen_id = NULL
@@ -197,6 +257,55 @@ export async function deleteCitizenAccount(
     await tx.$executeRaw(Prisma.sql`
       UPDATE proposals SET author_id = NULL
       WHERE author_id = ${citizenId}::uuid
+    `)
+
+    -- Stop every creator-owned campaign from accepting new money after the
+    -- creator's identity disappears. Completed/investigation records remain in
+    -- their terminal/audit state. A lifecycle event records automatic suspension.
+    await tx.$executeRaw(Prisma.sql`
+      WITH target AS (
+        SELECT id, revision_no, status AS from_status, compliance_status AS from_compliance_status
+        FROM crowdfunding_campaigns
+        WHERE creator_citizen_id = ${citizenId}::uuid
+          AND status NOT IN ('completed', 'suspended', 'investigation')
+        FOR UPDATE
+      ), changed AS (
+        UPDATE crowdfunding_campaigns c
+        SET status = 'suspended', compliance_status = 'suspended', updated_at = NOW()
+        FROM target t
+        WHERE c.id = t.id
+        RETURNING c.id, c.revision_no, t.from_status, t.from_compliance_status
+      )
+      INSERT INTO crowdfunding_campaign_lifecycle_events (
+        campaign_id, actor_citizen_id, event_type, revision_no,
+        from_status, to_status, from_compliance_status, to_compliance_status,
+        notes
+      )
+      SELECT id, NULL, 'suspended', revision_no,
+             from_status, 'suspended', from_compliance_status, 'suspended',
+             'Automatic suspension after creator account deletion.'
+      FROM changed
+    `)
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM crowdfunding_updates WHERE author_citizen_id = ${citizenId}::uuid
+    `)
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE crowdfunding_contributions SET contributor_citizen_id = NULL
+      WHERE contributor_citizen_id = ${citizenId}::uuid
+    `)
+
+    -- Recurring mandates were cancelled before this transaction. Entitlement
+    -- rows can now be removed, while accounting transactions are retained with
+    -- their direct citizen link severed.
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM subscriptions WHERE citizen_id = ${citizenId}::uuid
+    `)
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM billing_usage_counters WHERE citizen_id = ${citizenId}::uuid
+    `)
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE payment_transactions SET citizen_id = NULL
+      WHERE citizen_id = ${citizenId}::uuid
     `)
 
     await tx.$executeRaw(Prisma.sql`
