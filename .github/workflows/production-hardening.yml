@@ -35,6 +35,11 @@ jobs:
     steps:
       - name: Checkout exact SHA
         uses: actions/checkout@v4
+        with:
+          # pull_request defaults to GitHub's ephemeral merge ref. Phase 5
+          # certification must instead execute against the immutable submitted
+          # head SHA; push/workflow_dispatch fall back to github.sha.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # Keep package-manager bootstrap identical to the canonical CI pipeline.
       # pnpm/action-setup reads the repository packageManager declaration before
