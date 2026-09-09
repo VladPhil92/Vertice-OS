@@ -17,6 +17,7 @@
     "typecheck": "turbo run typecheck",
     "governance:verify": "node scripts/verify-release-governance.mjs",
     "hardening:verify": "node scripts/verify-production-hardening.mjs",
+    "pilot:verify": "node scripts/verify-cartagena-pilot-readiness.mjs",
     "mobile": "pnpm --filter @vertice/mobile start",
     "mobile:android": "pnpm --filter @vertice/mobile android",
     "mobile:ios": "pnpm --filter @vertice/mobile ios",

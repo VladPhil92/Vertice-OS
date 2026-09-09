@@ -1,0 +1,104 @@
+name: Cartagena Pilot Readiness
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/cartagena-pilot-canary.mjs'
+      - 'scripts/verify-cartagena-pilot-readiness.mjs'
+      - 'docs/deployment/cartagena-pilot-runbook.md'
+      - '.github/workflows/cartagena-pilot-readiness.yml'
+      - 'package.json'
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Pilot API base URL (HTTPS)'
+        required: false
+        default: 'https://vertice-os-production.up.railway.app'
+      expected_revision:
+        description: 'Exact deployed Git SHA to certify; defaults to workflow SHA'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cartagena-pilot-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Cartagena Pilot Source Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Verify pilot source contract
+        run: node scripts/verify-cartagena-pilot-readiness.mjs
+
+      - name: Syntax-check production canary
+        run: node --check scripts/cartagena-pilot-canary.mjs
+
+      - name: Emit source boundary
+        run: |
+          echo "Cartagena Pilot source contract: PASS"
+          echo "PR validation is source-only and does not call production."
+          echo "Runtime GO is evaluated only after a main deployment exposes the exact expected SHA."
+
+  production-canary:
+    name: Cartagena Pilot Same-SHA Runtime Canary
+    if: github.event_name != 'pull_request'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact release SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Run non-destructive pilot canary
+        env:
+          PILOT_API_BASE_URL: ${{ github.event.inputs.base_url || 'https://vertice-os-production.up.railway.app' }}
+          PILOT_EXPECTED_REVISION: ${{ github.event.inputs.expected_revision || github.sha }}
+          PILOT_MAX_WAIT_MS: '600000'
+          PILOT_POLL_INTERVAL_MS: '10000'
+          PILOT_ROUNDS: '3'
+          PILOT_MAX_RESPONSE_MS: '4000'
+          PILOT_REQUEST_TIMEOUT_MS: '5000'
+          PILOT_REPORT_PATH: 'pilot-canary-report.json'
+        run: node scripts/cartagena-pilot-canary.mjs
+
+      - name: Upload pilot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cartagena-pilot-canary-${{ github.sha }}
+          path: pilot-canary-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Emit certification boundary
+        if: success()
+        run: |
+          echo "Cartagena Pilot Runtime Canary: GO"
+          echo "Evidence is bound to the exact deployed revision and safe public read surfaces."
+          echo "This is readiness for a controlled Cartagena pilot, not GA or external-provider certification."
