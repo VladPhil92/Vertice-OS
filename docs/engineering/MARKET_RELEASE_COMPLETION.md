@@ -24,6 +24,11 @@ This document separates work that can be completed and evidenced by repository a
 - [x] Native Workflows parity.
 - [x] Native Identity Assurance parity.
 - [x] Native Crowdfunding tracking/readiness parity.
+- [x] Account deletion API with irreversible identifier/credential erasure.
+- [x] In-app mobile account deletion surface.
+- [x] Authenticated web account deletion surface.
+- [x] Public web account-deletion resource for store policy routing.
+- [x] Durable auxiliary purge of avatar provider assets and derived graph identity.
 
 ### A2. Automated verification
 
@@ -41,6 +46,7 @@ This document separates work that can be completed and evidenced by repository a
 - [x] Mobile Core Parity.
 - [x] Mobile Device Release contract.
 - [x] Mobile Domain Parity source/type/export gate.
+- [x] Account Deletion Privacy source/unit/type/export gate.
 - [x] Cartagena same-SHA production canary infrastructure.
 
 These gates can prove source/build/integration/runtime properties when the required infrastructure already exists. They cannot create or attest third-party credentials, legal approvals or physical-device evidence.
@@ -87,7 +93,10 @@ On at least one production-representative Android device and one iOS device:
 - [ ] Community follow/unfollow/feed;
 - [ ] Workflows/case detail;
 - [ ] Identity Assurance/provider handoff;
-- [ ] Crowdfunding readiness/tracking.
+- [ ] Crowdfunding readiness/tracking;
+- [ ] account deletion from the in-app profile surface;
+- [ ] confirm the deleted identity cannot refresh/login and no longer receives push;
+- [ ] confirm avatar/provider cleanup completes when an avatar existed.
 
 ### B4. External provider certification
 
@@ -101,7 +110,8 @@ On at least one production-representative Android device and one iOS device:
 #### Cloudflare Images
 - [ ] production credentials;
 - [ ] upload/confirm canary from physical device;
-- [ ] delivery URL verified.
+- [ ] delivery URL verified;
+- [ ] account-deletion avatar purge canary verified.
 
 #### Mercado Pago
 - [ ] production merchant account/credentials;
@@ -125,6 +135,7 @@ Repository drafts/checklists can be automated, but the organization must approve
 
 - [ ] Terms of Service;
 - [ ] Privacy Policy and Colombian data-processing/Habeas Data obligations;
+- [ ] Account-deletion retention categories and legally required retention periods;
 - [ ] Community Guidelines and moderation policy;
 - [ ] Crowdfunding terms, commissions and refund disclosures;
 - [ ] KYC/KYB and payout disclosures;
@@ -134,9 +145,11 @@ Repository drafts/checklists can be automated, but the organization must approve
 ### B6. Stores
 
 - [ ] App Store Connect listing/privacy labels/screenshots/content declarations;
+- [ ] Confirm the App Store reviewer can locate in-app account deletion;
 - [ ] TestFlight release and review notes;
 - [ ] Apple production submission/review;
 - [ ] Google Play Data Safety/content rating/store listing;
+- [ ] Register the public `/account-deletion` resource in Play Console where requested;
 - [ ] closed/open testing as required;
 - [ ] Google Play production submission/review.
 
@@ -153,6 +166,7 @@ Golden E2E                          PASS
 Golden Financial Integrity          PASS
 Golden Governance                   PASS
 Production Hardening                PASS
+Account Deletion Privacy             PASS
 Web/API production SHA              MATCH
 /health/live                        PASS
 /health/ready                       PASS
@@ -160,8 +174,10 @@ Web/API production SHA              MATCH
 Same-SHA runtime canary              PASS
 Android signed physical smoke        PASS
 IOS signed physical smoke            PASS
+Account deletion physical smoke      PASS
 Veriff external canary               PASS
 Cloudflare Images canary             PASS
+Cloudflare deletion purge canary     PASS
 Mercado Pago bounded canary          PASS
 Wompi/BRE-B bounded payout canary    PASS
 Backup/restore drill                 PASS
