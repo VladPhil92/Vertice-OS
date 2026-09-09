@@ -7,6 +7,7 @@ import {
 } from '../../lib/idempotency'
 import { ENTITLEMENTS } from '../billing/billing.catalog'
 import { requireEntitlement } from '../billing/billing.middleware'
+import { assertFinancialCapabilityEnabled } from '../billing/finance-control-plane.service'
 import { createCrowdfundingContributionCheckout } from '../billing/payment.service'
 import {
   ALLOWED_FUNDING_MODELS,
@@ -181,6 +182,10 @@ export async function crowdfundingRoutes(app: FastifyInstance): Promise<void> {
           details: body.success ? undefined : body.error.flatten(),
         })
       }
+
+      // Phase IV runtime stop is independent of campaign readiness. It blocks
+      // only NEW collection while leaving reconciliation/refunds/webhooks alive.
+      await assertFinancialCapabilityEnabled('crowdfunding_collection')
 
       // Re-evaluate the beneficiary + payout path on every checkout. This is a
       // live circuit breaker: an already-active campaign cannot keep taking
