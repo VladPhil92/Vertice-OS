@@ -1,6 +1,8 @@
+const mockRootQueryRaw = jest.fn()
 const mockTxQueryRaw = jest.fn()
 const mockTxExecuteRaw = jest.fn()
 const mockDelCache = jest.fn().mockResolvedValue(undefined)
+const mockPrepareRecurringBilling = jest.fn().mockResolvedValue(undefined)
 
 const mockTx = {
   $queryRaw: mockTxQueryRaw,
@@ -9,12 +11,17 @@ const mockTx = {
 
 jest.mock('../../../lib/prisma', () => ({
   prisma: {
+    $queryRaw: mockRootQueryRaw,
     $transaction: jest.fn(),
   },
 }))
 
 jest.mock('../../../lib/cache', () => ({
   delCache: mockDelCache,
+}))
+
+jest.mock('../../billing/account-deletion-billing.service', () => ({
+  prepareRecurringBillingForAccountDeletion: mockPrepareRecurringBilling,
 }))
 
 import { prisma } from '../../../lib/prisma'
@@ -31,9 +38,22 @@ function allSqlText(mock: jest.Mock): string {
     .join('\n')
 }
 
+function healthyAccount(overrides: Partial<Record<string, boolean>> = {}) {
+  return {
+    id: 'citizen-id',
+    is_active: true,
+    live_session: true,
+    canonical_root: false,
+    has_active_privilege_descendants: false,
+    has_open_payout: false,
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   jest.resetAllMocks()
   mockDelCache.mockResolvedValue(undefined)
+  mockPrepareRecurringBilling.mockResolvedValue(undefined)
   mockTxExecuteRaw.mockResolvedValue(1)
   ;(prisma.$transaction as jest.Mock).mockImplementation(
     async (callback: (tx: typeof mockTx) => unknown) => callback(mockTx),
@@ -41,22 +61,18 @@ beforeEach(() => {
 })
 
 describe('Store privacy account deletion', () => {
-  it('erases direct identity, revokes auth and queues external avatar purge atomically', async () => {
+  it('erases direct identity, cancels billing links and queues external avatar purge atomically', async () => {
     const completedAt = new Date('2026-09-09T18:45:00.000Z')
+    mockRootQueryRaw.mockResolvedValueOnce([healthyAccount()])
     mockTxQueryRaw
       .mockResolvedValueOnce([]) // authority advisory lock
-      .mockResolvedValueOnce([{
-        id: 'citizen-id',
-        is_active: true,
-        live_session: true,
-        canonical_root: false,
-        has_active_privilege_descendants: false,
-      }])
+      .mockResolvedValueOnce([healthyAccount()])
       .mockResolvedValueOnce([{ id: 'asset-row', provider_asset_id: 'cf-avatar-123' }])
       .mockResolvedValueOnce([{ completed_at: completedAt }])
 
     const receipt = await deleteCitizenAccount('citizen-id', 'session-id', 'mobile')
 
+    expect(mockPrepareRecurringBilling).toHaveBeenCalledWith('citizen-id')
     expect(receipt.status).toBe('completed')
     expect(receipt.completed_at).toBe(completedAt.toISOString())
     expect(receipt.auxiliary_cleanup_queued).toBe(true)
@@ -65,6 +81,7 @@ describe('Store privacy account deletion', () => {
       'financial_records_required_for_accounting_or_disputes',
     ]))
 
+    expect(sqlText(mockRootQueryRaw, 0)).toContain('crowdfunding_payout_requests')
     expect(sqlText(mockTxQueryRaw, 0)).toContain('pg_advisory_xact_lock')
     expect(sqlText(mockTxQueryRaw, 1)).toContain('s.id =')
     expect(sqlText(mockTxQueryRaw, 1)).toContain('s.revoked_at IS NULL')
@@ -78,8 +95,15 @@ describe('Store privacy account deletion', () => {
     expect(writes).toContain('DELETE FROM civic_identity_proofs')
     expect(writes).toContain('DELETE FROM civic_profile_follows')
     expect(writes).toContain('DELETE FROM scheduled_civic_publications')
+    expect(writes).toContain('DELETE FROM legal_documents')
     expect(writes).toContain('UPDATE territorial_reports SET citizen_id = NULL')
     expect(writes).toContain('UPDATE proposals SET author_id = NULL')
+    expect(writes).toContain("status = 'suspended', compliance_status = 'suspended'")
+    expect(writes).toContain('DELETE FROM crowdfunding_updates')
+    expect(writes).toContain('UPDATE crowdfunding_contributions SET contributor_citizen_id = NULL')
+    expect(writes).toContain('DELETE FROM subscriptions')
+    expect(writes).toContain('DELETE FROM billing_usage_counters')
+    expect(writes).toContain('UPDATE payment_transactions SET citizen_id = NULL')
     expect(writes).toContain('email = NULL')
     expect(writes).toContain('cedula_hash = NULL')
     expect(writes).toContain('password_hash = NULL')
@@ -90,52 +114,30 @@ describe('Store privacy account deletion', () => {
     expect(mockDelCache).toHaveBeenCalledWith('profile', 'citizen-id')
   })
 
-  it('requires the authenticated access token to map to a live server-side session', async () => {
-    mockTxQueryRaw
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{
-        id: 'citizen-id',
-        is_active: true,
-        live_session: false,
-        canonical_root: false,
-        has_active_privilege_descendants: false,
-      }])
+  it('requires the authenticated access token to map to a live server-side session before billing cancellation', async () => {
+    mockRootQueryRaw.mockResolvedValueOnce([healthyAccount({ live_session: false })])
 
     await expect(
       deleteCitizenAccount('citizen-id', 'stale-session', 'web'),
     ).rejects.toMatchObject({ statusCode: 401, code: 'ACCOUNT_DELETION_REAUTH_REQUIRED' })
 
-    expect(mockTxExecuteRaw).not.toHaveBeenCalled()
+    expect(mockPrepareRecurringBilling).not.toHaveBeenCalled()
+    expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('protects the canonical root account from self-service deletion', async () => {
-    mockTxQueryRaw
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{
-        id: 'root-id',
-        is_active: true,
-        live_session: true,
-        canonical_root: true,
-        has_active_privilege_descendants: false,
-      }])
+  it('protects the canonical root account before touching external billing', async () => {
+    mockRootQueryRaw.mockResolvedValueOnce([healthyAccount({ canonical_root: true })])
 
     await expect(
       deleteCitizenAccount('root-id', 'session-id', 'web'),
     ).rejects.toMatchObject({ statusCode: 409, code: 'ROOT_ACCOUNT_DELETION_PROTECTED' })
 
-    expect(mockTxExecuteRaw).not.toHaveBeenCalled()
+    expect(mockPrepareRecurringBilling).not.toHaveBeenCalled()
+    expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 
   it('does not orphan active delegated authority', async () => {
-    mockTxQueryRaw
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{
-        id: 'delegating-admin',
-        is_active: true,
-        live_session: true,
-        canonical_root: false,
-        has_active_privilege_descendants: true,
-      }])
+    mockRootQueryRaw.mockResolvedValueOnce([healthyAccount({ has_active_privilege_descendants: true })])
 
     await expect(
       deleteCitizenAccount('delegating-admin', 'session-id', 'web'),
@@ -144,6 +146,33 @@ describe('Store privacy account deletion', () => {
       code: 'ACCOUNT_DELETION_AUTHORITY_TRANSFER_REQUIRED',
     })
 
+    expect(mockPrepareRecurringBilling).not.toHaveBeenCalled()
+  })
+
+  it('blocks deletion while a payout still needs the beneficiary/requester identity', async () => {
+    mockRootQueryRaw.mockResolvedValueOnce([healthyAccount({ has_open_payout: true })])
+
+    await expect(
+      deleteCitizenAccount('citizen-id', 'session-id', 'web'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'ACCOUNT_DELETION_PAYOUT_RECONCILIATION_REQUIRED',
+    })
+
+    expect(mockPrepareRecurringBilling).not.toHaveBeenCalled()
+  })
+
+  it('revalidates destructive authority after external recurring cancellation', async () => {
+    mockRootQueryRaw.mockResolvedValueOnce([healthyAccount()])
+    mockTxQueryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([healthyAccount({ live_session: false })])
+
+    await expect(
+      deleteCitizenAccount('citizen-id', 'session-id', 'web'),
+    ).rejects.toMatchObject({ statusCode: 401, code: 'ACCOUNT_DELETION_REAUTH_REQUIRED' })
+
+    expect(mockPrepareRecurringBilling).toHaveBeenCalledWith('citizen-id')
     expect(mockTxExecuteRaw).not.toHaveBeenCalled()
   })
 })
