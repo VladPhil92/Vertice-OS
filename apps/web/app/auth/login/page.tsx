@@ -4,10 +4,14 @@ import { useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { requireApiBaseUrl } from '@/lib/api'
 
+const TERRITORY_ONBOARDING_INTENT = 'territory-onboarding'
+
 export default function LoginPage() {
+  const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -38,9 +42,12 @@ export default function LoginPage() {
       localStorage.setItem('citizen_id', data.citizen_id)
       document.cookie = `vertice_auth=1; path=/; max-age=${7 * 24 * 3600}; SameSite=Strict`
 
-      // Never redirect from a user-controlled query parameter after login.
-      // Authenticated navigation resumes from the dashboard.
-      window.location.assign('/dashboard')
+      // Never redirect to a user-provided URL. Phase 7E accepts only a fixed,
+      // non-URL onboarding intent and maps it server/product-side to a known route.
+      const destination = searchParams.get('intent') === TERRITORY_ONBOARDING_INTENT
+        ? '/dashboard/territory'
+        : '/dashboard'
+      window.location.assign(destination)
     } catch (err) {
       setError(
         err instanceof Error && err.message === 'API_NOT_CONFIGURED'
@@ -77,6 +84,11 @@ export default function LoginPage() {
               <p className="mt-2 text-xs font-semibold leading-5 text-[#607087]">
                 Accede a tu identidad, participación y seguimiento dentro de VÉRTICE.
               </p>
+              {searchParams.get('intent') === TERRITORY_ONBOARDING_INTENT ? (
+                <p className="mt-3 rounded-xl bg-[#F3F7FC] px-4 py-3 text-xs font-semibold leading-5 text-[#35557F]">
+                  Después de ingresar continuarás al selector territorial nacional para vincular tu municipio o distrito.
+                </p>
+              ) : null}
             </div>
 
             {error && (

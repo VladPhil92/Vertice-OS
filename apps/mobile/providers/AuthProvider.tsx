@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiFetch, loginMobile, logoutMobile } from '../lib/api'
+import { registerAndLoginMobile } from '../lib/registration'
 import { clearSessionTokens, getRefreshToken } from '../lib/session'
 import { deactivatePushRegistration } from '../lib/push-notifications'
 import type { CitizenProfile } from '../types/api'
@@ -8,6 +9,7 @@ interface AuthContextValue {
   user: CitizenProfile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string, cedula: string) => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -49,10 +51,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(profile)
   }, [])
 
+  const signUp = useCallback(async (email: string, password: string, cedula: string) => {
+    await registerAndLoginMobile({ email, password, cedula })
+    const profile = await apiFetch<CitizenProfile>('/auth/me')
+    setUser(profile)
+  }, [])
+
   const signOut = useCallback(async () => {
-    // Deactivate the current citizen/token association while auth is still
-    // valid. Failure never prevents logout, and the local opt-in preference is
-    // preserved so a future sign-in can re-register without another prompt.
     try {
       await deactivatePushRegistration({ preservePreference: true })
     } catch {
@@ -66,9 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     signIn,
+    signUp,
     signOut,
     refreshProfile,
-  }), [user, loading, signIn, signOut, refreshProfile])
+  }), [user, loading, signIn, signUp, signOut, refreshProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

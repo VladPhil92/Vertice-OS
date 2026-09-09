@@ -44,6 +44,19 @@ test.describe('Login page', () => {
     await expect(page).toHaveURL(/\/dashboard$/)
   })
 
+  test('allows only the fixed territorial onboarding intent after login', async ({ page }) => {
+    await page.route(`${API}/auth/token`, (route) => route.fulfill({
+      status: 200,
+      json: { access_token: 'test-jwt-token', citizen_id: '550e8400-e29b-41d4-a716-446655440000', expires_in: 3600 },
+    }))
+    await page.goto('/auth/login?intent=territory-onboarding')
+    await expect(page.getByText(/continuarás al selector territorial nacional/i)).toBeVisible()
+    await page.getByLabel('Correo electrónico', { exact: true }).fill('ciudadano@ejemplo.com')
+    await page.getByLabel('Contraseña', { exact: true }).fill('password123')
+    await page.getByRole('button', { name: /^ingresar$/i }).click()
+    await expect(page).toHaveURL(/\/dashboard\/territory$/)
+  })
+
   test('shows password toggle', async ({ page }) => {
     await page.goto('/auth/login')
     const password = page.getByLabel('Contraseña', { exact: true })
@@ -78,7 +91,7 @@ test.describe('Register page', () => {
     expect(await cedula.evaluate((element) => (element as HTMLInputElement).checkValidity())).toBe(false)
   })
 
-  test('shows completion after successful registration', async ({ page }) => {
+  test('shows national territory continuation after successful registration', async ({ page }) => {
     await page.route(`${API}/auth/register`, (route) => route.fulfill({
       status: 201,
       json: { citizen_id: '550e8400-e29b-41d4-a716-446655440000', did: 'did:vertice:550e8400-e29b-41d4-a716-446655440000' },
@@ -89,7 +102,10 @@ test.describe('Register page', () => {
     await page.getByLabel(/cédula de ciudadanía/i).fill('1234567890')
     await page.getByRole('button', { name: /crear cuenta/i }).click()
     await expect(page.getByRole('heading', { name: /cuenta creada/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /ingresar ahora/i })).toHaveAttribute('href', '/auth/login')
+    await expect(page.getByRole('link', { name: /ingresar y elegir territorio/i })).toHaveAttribute(
+      'href',
+      '/auth/login?intent=territory-onboarding',
+    )
   })
 })
 
