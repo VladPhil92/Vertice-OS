@@ -5,6 +5,10 @@ import { prisma } from '../lib/prisma'
 import { redis } from '../lib/redis'
 import { closeNeo4j } from '../lib/neo4j'
 
+// Registration/login here hit the real citizen_role_grants bootstrap, which
+// the standard "Tests" job's minimal init.sql baseline does not carry — only
+// the Golden API Journeys job provisions that migration slice. Skip outside it.
+const describeGolden = process.env.GOLDEN_API_JOURNEYS === '1' ? describe : describe.skip
 const app = buildApp()
 
 function uniqueCitizen(seed: number) {
@@ -59,7 +63,7 @@ async function registerAndLogin(seed: number) {
   return { citizenId, authorization: `Bearer ${accessToken}` }
 }
 
-describe('Mobile push device lifecycle', () => {
+describeGolden('Mobile push device lifecycle', () => {
   beforeAll(async () => {
     await ensurePushDeviceFixtureTable()
     await app.ready()
