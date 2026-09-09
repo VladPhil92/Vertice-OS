@@ -77,7 +77,7 @@ export default function TerritorySelectScreen() {
           <Text style={styles.eyebrow}>TERRITORIO PRINCIPAL</Text>
           <Text style={styles.title}>Vincula tu municipio o distrito</Text>
           <Text style={styles.heroBody}>
-            Esta selección organiza tu experiencia local en Vértice. Es una declaración del usuario y no prueba residencia, identidad territorial ni elegibilidad de gobernanza.
+            Esta selección autodeclarada organiza tu experiencia local en Vértice y no prueba residencia, identidad territorial ni elegibilidad de gobernanza.
           </Text>
         </View>
 
@@ -136,7 +136,7 @@ export default function TerritorySelectScreen() {
         <View style={styles.boundaryCard}>
           <Text style={styles.boundaryText}>
             <Text style={styles.boundaryStrong}>Frontera de identidad territorial. </Text>
-            Cambiar esta selección sólo cambia contexto de producto. No crea `territory_assurance`, rol, reputación, padrón electoral, voto ni autoridad cívica.
+            Cambiar esta selección autodeclarada sólo cambia contexto de producto. No crea `territory_assurance`, rol, reputación, padrón electoral, voto ni autoridad cívica.
           </Text>
         </View>
       </ScrollView>
