@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import MapView, { Marker } from 'react-native-maps'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch, apiMutation } from '../../lib/api'
@@ -13,17 +14,11 @@ import {
 import type { ApiList, NearbyTerritorialReport, ReportCategory, ReportMediaState, TerritorialReportSummary } from '../../types/api'
 
 const categories: ReportCategory[] = [
-  'infraestructura',
-  'servicios_publicos',
-  'seguridad',
-  'medio_ambiente',
-  'transporte',
-  'salud',
-  'educacion',
-  'cultura',
-  'otro',
+  'infraestructura', 'servicios_publicos', 'seguridad', 'medio_ambiente',
+  'transporte', 'salud', 'educacion', 'cultura', 'otro',
 ]
 
+const CARTAGENA = { latitude: 10.391, longitude: -75.4794, latitudeDelta: 0.12, longitudeDelta: 0.12 }
 const initialForm = {
   title: '',
   description: '',
@@ -55,10 +50,7 @@ export default function ReportsScreen() {
 
   const loadNearby = useCallback(async (coordinates: DeviceCoordinates) => {
     const query = new URLSearchParams({
-      lat: String(coordinates.lat),
-      lng: String(coordinates.lng),
-      radius_km: '3',
-      limit: '20',
+      lat: String(coordinates.lat), lng: String(coordinates.lng), radius_km: '3', limit: '20',
     })
     const response = await apiFetch<ApiList<NearbyTerritorialReport>>(`/territorial/reports/nearby?${query.toString()}`, { public: true })
     setNearbyReports(response.data)
@@ -87,11 +79,7 @@ export default function ReportsScreen() {
     try {
       const coordinates = await getCurrentReportCoordinates()
       setCurrentCoordinates(coordinates)
-      setForm((prev) => ({
-        ...prev,
-        lat: coordinates.lat.toFixed(6),
-        lng: coordinates.lng.toFixed(6),
-      }))
+      setForm((prev) => ({ ...prev, lat: coordinates.lat.toFixed(6), lng: coordinates.lng.toFixed(6) }))
       await loadNearby(coordinates)
     } catch (cause) {
       Alert.alert('Ubicación no disponible', cause instanceof Error ? cause.message : 'No fue posible obtener tu ubicación.')
@@ -121,18 +109,9 @@ export default function ReportsScreen() {
   }
 
   async function createReport() {
-    const latText = form.lat.trim()
-    const lngText = form.lng.trim()
-    const lat = Number(latText)
-    const lng = Number(lngText)
-    const coordinatesValid = Boolean(latText && lngText)
-      && Number.isFinite(lat)
-      && Number.isFinite(lng)
-      && lat >= -90
-      && lat <= 90
-      && lng >= -180
-      && lng <= 180
-
+    const lat = Number(form.lat.trim())
+    const lng = Number(form.lng.trim())
+    const coordinatesValid = Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
     if (form.title.trim().length < 10 || form.description.trim().length < 20 || !coordinatesValid) {
       Alert.alert('Información incompleta', 'Completa título, descripción y una ubicación válida.')
       return
@@ -146,19 +125,15 @@ export default function ReportsScreen() {
         setConfirmedEvidence(evidenceForSubmission)
       }
 
-      const mediaAssetIds = evidenceForSubmission ? [evidenceForSubmission.media_asset_id] : []
       const created = await apiMutation<TerritorialReportSummary>('/territorial/reports', 'mobile-territorial-report', {
         method: 'POST',
         body: JSON.stringify({
-          title: form.title.trim(),
-          description: form.description.trim(),
-          category: form.category,
-          lat,
-          lng,
+          title: form.title.trim(), description: form.description.trim(), category: form.category,
+          lat, lng,
           neighborhood: form.neighborhood.trim() || undefined,
           address_reference: form.address_reference.trim() || undefined,
           media_urls: [],
-          media_asset_ids: mediaAssetIds,
+          media_asset_ids: evidenceForSubmission ? [evidenceForSubmission.media_asset_id] : [],
         }),
       })
 
@@ -178,6 +153,11 @@ export default function ReportsScreen() {
     router.push({ pathname: '/report/[id]', params: { id: reportId } })
   }
 
+  const mapReports = currentCoordinates ? nearbyReports : reports
+  const mapRegion = currentCoordinates
+    ? { latitude: currentCoordinates.lat, longitude: currentCoordinates.lng, latitudeDelta: 0.055, longitudeDelta: 0.055 }
+    : CARTAGENA
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
@@ -188,8 +168,8 @@ export default function ReportsScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>TERRITORIO</Text>
-            <Text style={styles.title}>Reportes ciudadanos</Text>
-            <Text style={styles.subtitle}>GPS, proximidad y evidencia fotográfica conectados al registro territorial canónico.</Text>
+            <Text style={styles.title}>Mapa ciudadano</Text>
+            <Text style={styles.subtitle}>Incidencias públicas, proximidad y evidencia sobre una superficie territorial nativa.</Text>
           </View>
           <Pressable style={styles.primaryButton} onPress={() => setShowCreate((value) => !value)}>
             <Text style={styles.primaryButtonText}>{showCreate ? 'Cerrar' : 'Reportar'}</Text>
@@ -198,33 +178,45 @@ export default function ReportsScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <View style={styles.locationCard}>
-          <View style={styles.locationCopy}>
-            <Text style={styles.cardTitle}>Tu entorno</Text>
-            <Text style={styles.hint}>
-              {currentCoordinates
-                ? `Ubicación activa${currentCoordinates.accuracy ? ` · precisión ±${Math.round(currentCoordinates.accuracy)} m` : ''}`
-                : 'Activa tu ubicación para ver incidencias públicas a 3 km.'}
-            </Text>
+        <View style={styles.mapCard}>
+          <MapView
+            key={currentCoordinates ? `${currentCoordinates.lat}:${currentCoordinates.lng}` : 'cartagena'}
+            style={styles.map}
+            initialRegion={mapRegion}
+            showsUserLocation={Boolean(currentCoordinates)}
+            showsMyLocationButton={false}
+            toolbarEnabled={false}
+          >
+            {mapReports.map((report) => (
+              <Marker
+                key={report.id}
+                coordinate={{ latitude: report.lat, longitude: report.lng }}
+                title={report.title}
+                description={report.neighborhood ?? report.category.replace(/_/g, ' ')}
+                onCalloutPress={() => openReport(report.id)}
+              />
+            ))}
+          </MapView>
+          <View style={styles.mapFooter}>
+            <View style={styles.locationCopy}>
+              <Text style={styles.cardTitle}>{currentCoordinates ? 'Tu entorno · 3 km' : 'Cartagena de Indias'}</Text>
+              <Text style={styles.hint}>{currentCoordinates ? `${nearbyReports.length} incidencias cercanas${currentCoordinates.accuracy ? ` · GPS ±${Math.round(currentCoordinates.accuracy)} m` : ''}` : `${reports.length} reportes recientes en el mapa`}</Text>
+            </View>
+            <Pressable disabled={locating} style={styles.locationButton} onPress={() => void useCurrentLocation()}>
+              <Text style={styles.locationButtonText}>{locating ? 'Ubicando…' : currentCoordinates ? 'Actualizar' : 'Usar GPS'}</Text>
+            </Pressable>
           </View>
-          <Pressable disabled={locating} style={styles.locationButton} onPress={() => void useCurrentLocation()}>
-            <Text style={styles.locationButtonText}>{locating ? 'Ubicando…' : currentCoordinates ? 'Actualizar GPS' : 'Usar GPS'}</Text>
-          </Pressable>
         </View>
 
         {currentCoordinates ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Cerca de ti · 3 km</Text>
+            <Text style={styles.sectionTitle}>Cerca de ti</Text>
             <View style={styles.list}>
               {nearbyReports.map((report) => (
-                <Pressable key={report.id} style={styles.nearbyCard} onPress={() => openReport(report.id)}>
-                  <View style={styles.cardTop}>
-                    <Text style={styles.category}>{report.category.replace(/_/g, ' ')}</Text>
-                    <Text style={styles.distance}>{distanceLabel(report.distance_meters)}</Text>
-                  </View>
+                <Pressable key={report.id} style={styles.card} onPress={() => openReport(report.id)}>
+                  <View style={styles.cardTop}><Text style={styles.category}>{report.category.replace(/_/g, ' ')}</Text><Text style={styles.distance}>{distanceLabel(report.distance_meters)}</Text></View>
                   <Text style={styles.cardTitle}>{report.title}</Text>
                   <Text style={styles.body} numberOfLines={2}>{report.description}</Text>
-                  <Text style={styles.muted}>{report.neighborhood ?? 'Sin barrio'} · {report.status.replace(/_/g, ' ')}</Text>
                 </Pressable>
               ))}
               {nearbyReports.length === 0 ? <Text style={styles.empty}>No hay reportes públicos dentro de 3 km.</Text> : null}
@@ -246,45 +238,24 @@ export default function ReportsScreen() {
               ))}
             </ScrollView>
             <TextInput style={styles.input} placeholder="Barrio" value={form.neighborhood} onChangeText={(neighborhood) => setForm((prev) => ({ ...prev, neighborhood }))} />
-
-            <Pressable disabled={locating} style={styles.deviceAction} onPress={() => void useCurrentLocation()}>
-              <Text style={styles.deviceActionText}>{locating ? 'Obteniendo GPS…' : 'Usar mi ubicación actual'}</Text>
-            </Pressable>
-
+            <Pressable disabled={locating} style={styles.deviceAction} onPress={() => void useCurrentLocation()}><Text style={styles.deviceActionText}>{locating ? 'Obteniendo GPS…' : 'Usar mi ubicación actual'}</Text></Pressable>
             <View style={styles.coordinates}>
-              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Latitud" value={form.lat} onChangeText={(lat) => setForm((prev) => ({ ...prev, lat }))} />
-              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Longitud" value={form.lng} onChangeText={(lng) => setForm((prev) => ({ ...prev, lng }))} />
+              <TextInput style={[styles.input, styles.coordinateInput]} placeholder="Latitud" value={form.lat} onChangeText={(lat) => setForm((prev) => ({ ...prev, lat }))} />
+              <TextInput style={[styles.input, styles.coordinateInput]} placeholder="Longitud" value={form.lng} onChangeText={(lng) => setForm((prev) => ({ ...prev, lng }))} />
             </View>
             <TextInput style={styles.input} placeholder="Referencia de dirección" value={form.address_reference} onChangeText={(address_reference) => setForm((prev) => ({ ...prev, address_reference }))} />
-
             <Text style={styles.label}>Evidencia fotográfica opcional</Text>
             <View style={styles.evidenceActions}>
-              <Pressable disabled={selectingEvidence} style={styles.deviceAction} onPress={() => void chooseEvidence('camera')}>
-                <Text style={styles.deviceActionText}>Tomar foto</Text>
-              </Pressable>
-              <Pressable disabled={selectingEvidence} style={styles.deviceAction} onPress={() => void chooseEvidence('library')}>
-                <Text style={styles.deviceActionText}>Elegir foto</Text>
-              </Pressable>
+              <Pressable disabled={selectingEvidence} style={styles.deviceAction} onPress={() => void chooseEvidence('camera')}><Text style={styles.deviceActionText}>Tomar foto</Text></Pressable>
+              <Pressable disabled={selectingEvidence} style={styles.deviceAction} onPress={() => void chooseEvidence('library')}><Text style={styles.deviceActionText}>Elegir foto</Text></Pressable>
             </View>
-
             {selectedEvidence ? (
               <View style={styles.previewCard}>
                 <Image source={{ uri: selectedEvidence.uri }} style={styles.previewImage} />
-                <View style={styles.previewCopy}>
-                  <Text style={styles.previewTitle}>{confirmedEvidence ? 'Evidencia confirmada' : 'Evidencia lista'}</Text>
-                  <Text style={styles.hint}>{selectedEvidence.width} × {selectedEvidence.height}</Text>
-                  {confirmedEvidence ? <Text style={styles.confirmedEvidence}>Asset seguro listo para reintento</Text> : null}
-                  <Pressable onPress={clearEvidence}>
-                    <Text style={styles.removeEvidence}>Quitar</Text>
-                  </Pressable>
-                </View>
+                <View style={styles.previewCopy}><Text style={styles.cardTitle}>{confirmedEvidence ? 'Evidencia confirmada' : 'Evidencia lista'}</Text><Text style={styles.hint}>{selectedEvidence.width} × {selectedEvidence.height}</Text><Pressable onPress={clearEvidence}><Text style={styles.removeEvidence}>Quitar</Text></Pressable></View>
               </View>
             ) : null}
-
-            <Text style={styles.hint}>La foto se carga directamente al proveedor seguro y el API confirma propiedad/metadata. Si la creación del reporte queda incierta, el mismo asset confirmado se reutiliza para conservar el payload idempotente.</Text>
-            <Pressable disabled={saving} style={styles.submitButton} onPress={() => void createReport()}>
-              <Text style={styles.submitButtonText}>{saving ? 'Procesando reporte…' : 'Crear reporte'}</Text>
-            </Pressable>
+            <Pressable disabled={saving} style={styles.submitButton} onPress={() => void createReport()}><Text style={styles.submitButtonText}>{saving ? 'Procesando reporte…' : 'Crear reporte'}</Text></Pressable>
           </View>
         ) : null}
 
@@ -293,16 +264,12 @@ export default function ReportsScreen() {
           <View style={styles.list}>
             {reports.map((report) => (
               <Pressable key={report.id} style={styles.card} onPress={() => openReport(report.id)}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.category}>{report.category.replace(/_/g, ' ')}</Text>
-                  <Text style={styles.status}>{report.status.replace(/_/g, ' ')}</Text>
-                </View>
+                <View style={styles.cardTop}><Text style={styles.category}>{report.category.replace(/_/g, ' ')}</Text><Text style={styles.status}>{report.status.replace(/_/g, ' ')}</Text></View>
                 <Text style={styles.cardTitle}>{report.title}</Text>
                 {report.description ? <Text style={styles.body} numberOfLines={3}>{report.description}</Text> : null}
                 <Text style={styles.muted}>{report.neighborhood ?? 'Cartagena'} · {report.lat.toFixed(4)}, {report.lng.toFixed(4)}</Text>
               </Pressable>
             ))}
-            {!error && reports.length === 0 ? <Text style={styles.empty}>No hay reportes públicos para mostrar.</Text> : null}
           </View>
         </View>
       </ScrollView>
@@ -311,54 +278,10 @@ export default function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 18, paddingBottom: 36, gap: 18 },
-  headerRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  headerCopy: { flex: 1, gap: 5 },
-  eyebrow: { fontSize: 11, letterSpacing: 1.6, fontWeight: '700', color: '#697068' },
-  title: { fontSize: 28, fontWeight: '700', color: '#11130F' },
-  subtitle: { color: '#6D7168', lineHeight: 20 },
-  primaryButton: { backgroundColor: '#17382A', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 14 },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '700' },
-  locationCard: { backgroundColor: '#17382A', borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  locationCopy: { flex: 1, gap: 4 },
-  locationButton: { backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
-  locationButtonText: { color: '#17382A', fontWeight: '700', fontSize: 12 },
-  section: { gap: 10 },
-  sectionTitle: { fontSize: 19, fontWeight: '700', color: '#171A15' },
-  formCard: { backgroundColor: '#E7E4D8', borderRadius: 20, padding: 16, gap: 10 },
-  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7D3C7', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#171A15' },
-  multiline: { minHeight: 88, textAlignVertical: 'top' },
-  label: { color: '#565D54', fontWeight: '700', fontSize: 12 },
-  chips: { gap: 8, paddingVertical: 2 },
-  chip: { borderWidth: 1, borderColor: '#AEB7AF', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999 },
-  chipActive: { backgroundColor: '#1C3D2E', borderColor: '#1C3D2E' },
-  chipText: { color: '#4D554D', fontSize: 12, textTransform: 'capitalize' },
-  chipTextActive: { color: '#FFFFFF' },
-  coordinates: { flexDirection: 'row', gap: 8 },
-  coordinateInput: { flex: 1 },
-  deviceAction: { flex: 1, borderWidth: 1, borderColor: '#AEB7AF', backgroundColor: '#FFFFFF', borderRadius: 12, padding: 11, alignItems: 'center' },
-  deviceActionText: { color: '#1C3D2E', fontWeight: '700', fontSize: 12 },
-  evidenceActions: { flexDirection: 'row', gap: 8 },
-  previewCard: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 10, flexDirection: 'row', gap: 12, alignItems: 'center' },
-  previewImage: { width: 74, height: 74, borderRadius: 10, backgroundColor: '#DDD' },
-  previewCopy: { flex: 1, gap: 4 },
-  previewTitle: { fontWeight: '700', color: '#1A1D18' },
-  confirmedEvidence: { color: '#1C3D2E', fontSize: 11, fontWeight: '700' },
-  removeEvidence: { color: '#8A302A', fontWeight: '700', fontSize: 12 },
-  hint: { color: '#6D7168', fontSize: 12, lineHeight: 17 },
-  submitButton: { backgroundColor: '#1C3D2E', borderRadius: 12, padding: 13, alignItems: 'center' },
-  submitButtonText: { color: '#FFFFFF', fontWeight: '700' },
-  list: { gap: 12 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, gap: 9 },
-  nearbyCard: { backgroundColor: '#EEF3EF', borderRadius: 18, padding: 16, gap: 8, borderWidth: 1, borderColor: '#D5E0D7' },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  category: { textTransform: 'uppercase', fontSize: 10, letterSpacing: 1.1, color: '#667067', fontWeight: '700' },
-  status: { textTransform: 'uppercase', fontSize: 10, color: '#1C3D2E', fontWeight: '800' },
-  distance: { fontSize: 11, color: '#1C3D2E', fontWeight: '800' },
-  cardTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' },
-  body: { color: '#343931', lineHeight: 20 },
-  muted: { color: '#70746C', fontSize: 12 },
-  error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
-  empty: { textAlign: 'center', color: '#777B74', paddingVertical: 22 },
+  safeArea: { flex: 1, backgroundColor: '#F6F4EE' }, content: { padding: 18, paddingBottom: 36, gap: 18 },
+  headerRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' }, headerCopy: { flex: 1, gap: 5 }, eyebrow: { fontSize: 11, letterSpacing: 1.6, fontWeight: '700', color: '#697068' }, title: { fontSize: 28, fontWeight: '700', color: '#11130F' }, subtitle: { color: '#6D7168', lineHeight: 20 },
+  primaryButton: { backgroundColor: '#17382A', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 14 }, primaryButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  mapCard: { backgroundColor: '#FFFFFF', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#E1DED4' }, map: { height: 290, width: '100%' }, mapFooter: { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, locationCopy: { flex: 1, gap: 3 }, locationButton: { backgroundColor: '#17382A', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }, locationButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
+  section: { gap: 10 }, sectionTitle: { fontSize: 19, fontWeight: '700', color: '#171A15' }, list: { gap: 10 }, card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, gap: 8 }, cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 }, category: { textTransform: 'uppercase', fontSize: 10, letterSpacing: 1.1, color: '#667067', fontWeight: '700' }, distance: { color: '#17382A', fontWeight: '800', fontSize: 12 }, status: { textTransform: 'uppercase', fontSize: 10, color: '#1C3D2E', fontWeight: '800' }, cardTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' }, body: { color: '#343931', lineHeight: 20 }, muted: { color: '#70746C', fontSize: 12 }, hint: { color: '#6D7168', fontSize: 12, lineHeight: 17 }, empty: { textAlign: 'center', color: '#777B74', paddingVertical: 22 },
+  formCard: { backgroundColor: '#E7E4D8', borderRadius: 20, padding: 16, gap: 10 }, input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7D3C7', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#171A15' }, multiline: { minHeight: 88, textAlignVertical: 'top' }, label: { color: '#565D54', fontWeight: '700', fontSize: 12 }, chips: { gap: 8, paddingVertical: 2 }, chip: { borderWidth: 1, borderColor: '#AEB7AF', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999 }, chipActive: { backgroundColor: '#1C3D2E', borderColor: '#1C3D2E' }, chipText: { color: '#4D554D', fontSize: 12, textTransform: 'capitalize' }, chipTextActive: { color: '#FFFFFF' }, coordinates: { flexDirection: 'row', gap: 8 }, coordinateInput: { flex: 1 }, deviceAction: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#BCC4BC', padding: 11, alignItems: 'center' }, deviceActionText: { color: '#17382A', fontWeight: '700', fontSize: 12 }, evidenceActions: { flexDirection: 'row', gap: 8 }, previewCard: { flexDirection: 'row', gap: 12, backgroundColor: '#FFFFFF', padding: 10, borderRadius: 14 }, previewImage: { width: 82, height: 82, borderRadius: 10 }, previewCopy: { flex: 1, justifyContent: 'center', gap: 4 }, removeEvidence: { color: '#8A302A', fontWeight: '700', fontSize: 12 }, submitButton: { backgroundColor: '#1C3D2E', borderRadius: 12, padding: 13, alignItems: 'center' }, submitButtonText: { color: '#FFFFFF', fontWeight: '700' }, error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
 })
