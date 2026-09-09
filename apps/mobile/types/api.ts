@@ -305,4 +305,81 @@ export interface CivicLeaderEntry {
   average_action_score: number
   verification_rate: number
   rank: number
+export type TerritoryActivationStatus =
+  | 'available'
+  | 'emerging'
+  | 'community_active'
+  | 'pilot_ready'
+  | 'verified_network'
+
+export type TerritoryLaunchState = 'observing' | 'recruiting' | 'launch_ready' | 'launched' | 'paused'
+export type TerritoryInterestRole = 'ambassador' | 'organizer' | 'observer'
+export type TerritoryInterestStatus = 'pending' | 'approved' | 'declined' | 'withdrawn'
+
+export interface MyTerritory {
+  territory_code: string | null
+  neighborhood: string | null
+  locality_id: number | null
+  territory_name: string | null
+  territory_level: string | null
+  activation_status: TerritoryActivationStatus | null
+  department_code: string | null
+  department_name: string | null
+}
+
+export interface TerritoryActivationInterest {
+  id: string
+  citizen_id?: string
+  territory_code: string
+  interest_role: TerritoryInterestRole
+  status: TerritoryInterestStatus
+  message: string | null
+  reviewed_by?: string | null
+  review_reason?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PublicCityFeedItem {
+  id: string
+  title: string
+  category: string
+  status: string
+  neighborhood?: string | null
+  scope?: string
+  created_at: string
+}
+
+export interface PublicCityOverview {
+  territory: {
+    code: string
+    external_code: string | null
+    name: string
+    activation_status: TerritoryActivationStatus
+  }
+  activation: {
+    momentum_score: number
+    activation_status: TerritoryActivationStatus
+    registered_citizens: number
+    active_citizens_30d: number
+    civic_actions_30d: number
+    verified_actions_90d: number
+    reports_30d: number
+    proposals_30d: number
+  }
+  launch: {
+    operational_state: TerritoryLaunchState
+    active_cohort_members: number
+    pending_interest_count: number
+    accepting_interest: boolean
+  }
+  feed: {
+    actions: PublicCityFeedItem[]
+    reports: PublicCityFeedItem[]
+    proposals: PublicCityFeedItem[]
+    empty_state: string | null
+  }
+  authority_boundary: 'public_discovery_only'
+  interest_boundary: 'voluntary_interest_grants_no_authority'
+  excluded_signals: string[]
 }

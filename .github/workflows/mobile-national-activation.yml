@@ -1,0 +1,73 @@
+name: Mobile National Activation Parity
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/mobile/app/city/**'
+      - 'apps/mobile/app/territory/**'
+      - 'apps/mobile/app/(auth)/sign-in.tsx'
+      - 'apps/mobile/app/(tabs)/index.tsx'
+      - 'apps/mobile/app/(tabs)/profile.tsx'
+      - 'apps/mobile/app/_layout.tsx'
+      - 'apps/mobile/types/api.ts'
+      - 'apps/api/src/modules/territories/**'
+      - 'scripts/verify-mobile-national-activation.mjs'
+      - 'scripts/verify-national-citizen-activation.mjs'
+      - 'docs/engineering/MOBILE_NATIONAL_ACTIVATION_PHASE7D.md'
+      - '.github/workflows/mobile-national-activation.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-national-activation-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-national-activation-contract:
+    name: Mobile National Activation Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Phase 7D source contract
+        run: node scripts/verify-mobile-national-activation.mjs
+
+      - name: Re-verify canonical Phase 7C backend contract
+        run: node scripts/verify-national-citizen-activation.mjs
+
+      - name: Typecheck mobile client
+        run: pnpm --filter @vertice/mobile typecheck
+
+      - name: Export Android bundle
+        run: pnpm --filter @vertice/mobile exec expo export --platform android --output-dir dist/phase7d-android
+
+      - name: Export iOS bundle
+        run: pnpm --filter @vertice/mobile exec expo export --platform ios --output-dir dist/phase7d-ios
+
+      - name: Emit certification boundary
+        run: |
+          echo 'Mobile National Activation Phase 7D contract: PASS'
+          echo 'This proves source/type/export coherence for the exact SHA.'
+          echo 'It does not prove signed physical-device smoke, verified residence, cohort staffing, store distribution, or national GA.'
