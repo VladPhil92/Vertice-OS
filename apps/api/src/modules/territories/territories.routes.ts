@@ -2,11 +2,11 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requireAuth, requireSuperadmin } from '../../middleware/auth'
 import { getTerritoryFeed } from './territories.feed'
+import { getNationalActivationRanking } from './territories.ranking'
 import {
   ACTIVATION_STATUSES,
   TERRITORY_LEVELS,
   getActivationMetrics,
-  getActivationRanking,
   getMyTerritory,
   getTerritory,
   listTerritories,
@@ -47,7 +47,7 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
   app.get('/activation/ranking', async (request, reply) => {
     const parsed = RankingQuery.safeParse(request.query)
     if (!parsed.success) return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
-    const data = await getActivationRanking(parsed.data.limit)
+    const data = await getNationalActivationRanking(parsed.data.limit)
     return reply.send({
       data,
       count: data.length,
