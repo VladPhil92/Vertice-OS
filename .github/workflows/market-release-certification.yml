@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: 'Exact 40-character release SHA being certified'
+        description: 'Exact 40-character release SHA whose external evidence is being validated'
         required: true
         type: string
       manifest_path:
@@ -56,9 +56,9 @@ jobs:
           echo 'Market release evidence contract: PASS'
           echo 'This is schema/source validation only. It does NOT certify VÉRTICE for market release.'
 
-  strict-certification:
+  strict-evidence-validation:
     if: github.event_name == 'workflow_dispatch'
-    name: Strict Market Release Certification
+    name: Strict External Evidence Validation
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -92,4 +92,5 @@ jobs:
           RELEASE_SHA: ${{ inputs.release_sha }}
         run: |
           echo "External/operator evidence bundle is complete for $RELEASE_SHA."
+          echo 'This result is not by itself a market-release certification.'
           echo 'Existing exact-SHA CI/security/runtime gates remain mandatory and must also be green before release promotion.'
