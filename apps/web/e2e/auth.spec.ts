@@ -1,43 +1,75 @@
-import { expect, test } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+const API = '**/api'
 
 test.describe('Login page', () => {
-  test('renders the login contract', async ({ page }) => {
+  test('renders accessible form', async ({ page }) => {
     await page.goto('/auth/login')
+    await expect(page.getByRole('heading', { name: /ingresa a tu cuenta/i })).toBeVisible()
     await expect(page.getByLabel('Correo electrónico', { exact: true })).toBeVisible()
     await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: /ingresar/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^ingresar$/i })).toBeVisible()
   })
 
-  test('submits credentials and reaches dashboard', async ({ page }) => {
+  test('shows error on invalid credentials', async ({ page }) => {
+    await page.route(`${API}/auth/token`, (route) => route.fulfill({ status: 401, json: { error: 'Credenciales inválidas' } }))
+    await page.goto('/auth/login')
+    await page.getByLabel('Correo electrónico', { exact: true }).fill('test@ejemplo.com')
+    await page.getByLabel('Contraseña', { exact: true }).fill('wrongpass')
+    await page.getByRole('button', { name: /^ingresar$/i }).click()
+    await expect(page.getByText('Credenciales inválidas')).toBeVisible()
+  })
+
+  test('redirects to dashboard after successful login', async ({ page }) => {
     await page.route(`${API}/auth/token`, (route) => route.fulfill({
       status: 200,
-      json: {
-        access_token: 'test-access-token',
-        token_type: 'Bearer',
-        expires_in: 900,
-        citizen_id: '550e8400-e29b-41d4-a716-446655440000',
-      },
-    }))
-    await page.route(`${API}/auth/me`, (route) => route.fulfill({
-      status: 200,
-      json: {
-        id: '550e8400-e29b-41d4-a716-446655440000',
-        did: 'did:vertice:550e8400-e29b-41d4-a716-446655440000',
-        email: 'juan@ejemplo.com',
-        neighborhood: null,
-        locality_id: null,
-        reputation_score: '0',
-        verification_level: 0,
-        created_at: '2026-09-09T00:00:00.000Z',
-        last_active_at: null,
-      },
+      json: { access_token: 'test-jwt-token', citizen_id: '550e8400-e29b-41d4-a716-446655440000', expires_in: 3600 },
     }))
     await page.goto('/auth/login')
-    await page.getByLabel('Correo electrónico', { exact: true }).fill('juan@ejemplo.com')
-    await page.getByLabel('Contraseña', { exact: true }).fill('Password123')
-    await page.getByRole('button', { name: /ingresar/i }).click()
+    await page.getByLabel('Correo electrónico', { exact: true }).fill('ciudadano@ejemplo.com')
+    await page.getByLabel('Contraseña', { exact: true }).fill('password123')
+    await page.getByRole('button', { name: /^ingresar$/i }).click()
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
+
+  test('ignores a client supplied next target after login', async ({ page }) => {
+    await page.route(`${API}/auth/token`, (route) => route.fulfill({
+      status: 200,
+      json: { access_token: 'test-jwt-token', citizen_id: '550e8400-e29b-41d4-a716-446655440000', expires_in: 3600 },
+    }))
+    await page.goto('/auth/login?next=/dashboard/reports')
+    await page.getByLabel('Correo electrónico', { exact: true }).fill('ciudadano@ejemplo.com')
+    await page.getByLabel('Contraseña', { exact: true }).fill('password123')
+    await page.getByRole('button', { name: /^ingresar$/i }).click()
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
+
+  test('allows only the fixed territorial onboarding intent after login', async ({ page }) => {
+    await page.route(`${API}/auth/token`, (route) => route.fulfill({
+      status: 200,
+      json: { access_token: 'test-jwt-token', citizen_id: '550e8400-e29b-41d4-a716-446655440000', expires_in: 3600 },
+    }))
+    await page.goto('/auth/login?intent=territory-onboarding')
+    await expect(page.getByText(/continuarás al selector territorial nacional/i)).toBeVisible()
+    await page.getByLabel('Correo electrónico', { exact: true }).fill('ciudadano@ejemplo.com')
+    await page.getByLabel('Contraseña', { exact: true }).fill('password123')
+    await page.getByRole('button', { name: /^ingresar$/i }).click()
+    await expect(page).toHaveURL(/\/dashboard\/territory$/)
+  })
+
+  test('shows password toggle', async ({ page }) => {
+    await page.goto('/auth/login')
+    const password = page.getByLabel('Contraseña', { exact: true })
+    await expect(password).toHaveAttribute('type', 'password')
+    await page.getByRole('button', { name: /mostrar contraseña/i }).click()
+    await expect(password).toHaveAttribute('type', 'text')
+    await page.getByRole('button', { name: /ocultar contraseña/i }).click()
+    await expect(password).toHaveAttribute('type', 'password')
+  })
+
+  test('link to register page is visible', async ({ page }) => {
+    await page.goto('/auth/login')
+    await expect(page.getByRole('link', { name: /regístrate aquí/i })).toBeVisible()
   })
 })
 
@@ -72,7 +104,7 @@ test.describe('Register page', () => {
     await expect(page.getByRole('heading', { name: /cuenta creada/i })).toBeVisible()
     await expect(page.getByRole('link', { name: /ingresar y elegir territorio/i })).toHaveAttribute(
       'href',
-      '/auth/login?next=/dashboard/territory',
+      '/auth/login?intent=territory-onboarding',
     )
   })
 })
@@ -88,9 +120,23 @@ test.describe('Route protection', () => {
     await context.addCookies([{ name: 'vertice_auth', value: '1', domain: 'localhost', path: '/' }])
     await page.route(`${API}/identity/status`, (route) => route.fulfill({
       status: 200,
-      json: { authenticated: true, citizen_id: '550e8400-e29b-41d4-a716-446655440000' },
+      json: {
+        citizen_id: '550e8400-e29b-41d4-a716-446655440000',
+        did: 'did:vertice:cartagena:abc123',
+        level: 1,
+        level_name: 'Ciudadano',
+        can_vote: false,
+        can_propose: false,
+        verified_at: null,
+      },
     }))
     await page.goto('/dashboard')
-    await expect(page).not.toHaveURL(/\/auth\/login/)
+    await expect(page).toHaveURL('/dashboard')
+  })
+
+  test('middleware preserves requested path in the unauthenticated login URL', async ({ page }) => {
+    await page.context().clearCookies()
+    await page.goto('/dashboard/reports')
+    await expect(page).toHaveURL(/\/auth\/login\?next=.*reports/)
   })
 })
