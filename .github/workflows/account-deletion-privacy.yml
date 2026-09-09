@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
     paths:
       - 'apps/api/src/modules/auth/**'
+      - 'apps/api/src/modules/billing/account-deletion-billing.service.ts'
+      - 'apps/api/src/modules/billing/__tests__/account-deletion-billing.service.test.ts'
       - 'apps/api/src/lib/jobs.ts'
       - 'apps/api/src/modules/media/media-provider.ts'
       - 'apps/api/prisma/migrations/**'
@@ -57,7 +59,11 @@ jobs:
         run: node scripts/verify-account-deletion-privacy.mjs
 
       - name: Run account deletion unit tests
-        run: pnpm --filter @vertice/api test -- account-deletion.service.test.ts --runInBand
+        run: >-
+          pnpm --filter @vertice/api test --
+          account-deletion.service.test.ts
+          account-deletion-billing.service.test.ts
+          --runInBand
 
       - name: Typecheck API
         run: pnpm --filter @vertice/api typecheck
