@@ -6,11 +6,13 @@ import { useAuth } from '../../providers/AuthProvider'
 
 export default function SignInScreen() {
   const { signIn } = useAuth()
-  const params = useLocalSearchParams<{ next?: string | string[] }>()
+  const params = useLocalSearchParams<{ next?: string | string[]; created?: string | string[] }>()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const createdAccount = (Array.isArray(params.created) ? params.created[0] : params.created) === '1'
 
   async function handleSubmit() {
     if (!email.trim() || !password) {
@@ -23,7 +25,15 @@ export default function SignInScreen() {
     try {
       await signIn(email.trim().toLowerCase(), password)
       const requestedNext = Array.isArray(params.next) ? params.next[0] : params.next
-      router.replace(requestedNext === 'territory-activate' ? '/territory/activate' : '/(tabs)')
+      if (requestedNext === 'territory-activate') {
+        router.replace('/territory/activate')
+        return
+      }
+      if (requestedNext === 'territory-select') {
+        router.replace('/territory/select')
+        return
+      }
+      router.replace('/(tabs)')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible iniciar sesión.')
     } finally {
@@ -46,6 +56,15 @@ export default function SignInScreen() {
         </View>
 
         <View style={styles.form}>
+          {createdAccount ? (
+            <View style={styles.noticeCard}>
+              <Text style={styles.noticeTitle}>Tu cuenta ya fue creada</Text>
+              <Text style={styles.noticeText}>
+                La sesión automática no pudo completarse. Ingresa con las credenciales que acabas de registrar y continuarás al selector territorial nacional.
+              </Text>
+            </View>
+          ) : null}
+
           <Text style={styles.label}>Correo electrónico</Text>
           <TextInput
             autoCapitalize="none"
@@ -96,6 +115,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 36, lineHeight: 42, fontWeight: '700', color: '#11130F' },
   subtitle: { fontSize: 16, lineHeight: 24, color: '#5B5E55' },
   form: { gap: 10 },
+  noticeCard: { borderRadius: 14, backgroundColor: '#E7EFE9', padding: 14, gap: 4 },
+  noticeTitle: { color: '#234A32', fontWeight: '800' },
+  noticeText: { color: '#3E5547', lineHeight: 19, fontSize: 13 },
   label: { marginTop: 8, fontSize: 14, fontWeight: '600', color: '#24271F' },
   input: { minHeight: 52, borderWidth: 1, borderColor: '#D3D0C6', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 16, fontSize: 16, color: '#11130F' },
   error: { marginTop: 6, color: '#9B2C2C', lineHeight: 20 },
