@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { isPostRegistrationLoginRequiredError } from '../../lib/registration'
 import { useAuth } from '../../providers/AuthProvider'
 
 function validatePassword(password: string): string | null {
@@ -48,6 +49,13 @@ export default function RegisterScreen() {
       await signUp(normalizedEmail, password, normalizedCedula)
       router.replace('/territory/select')
     } catch (cause) {
+      if (isPostRegistrationLoginRequiredError(cause)) {
+        router.replace({
+          pathname: '/(auth)/sign-in',
+          params: { next: 'territory-select', created: '1' },
+        })
+        return
+      }
       setError(cause instanceof Error ? cause.message : 'No fue posible crear tu cuenta.')
     } finally {
       setSubmitting(false)
