@@ -83,7 +83,7 @@ export default function DashboardScreen() {
               <View style={styles.territoryActions}>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push(`/city/${encodeURIComponent(territory.territory_code!)}`)}
+                  onPress={() => router.push({ pathname: '/city/[code]', params: { code: territory.territory_code! } })}
                   style={styles.territoryPrimary}
                 >
                   <Text style={styles.territoryPrimaryText}>Ver nodo público</Text>
