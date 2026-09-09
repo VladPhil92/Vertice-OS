@@ -27,6 +27,7 @@ export interface AccountDeletionReceipt {
 type AccountState = {
   id: string
   is_active: boolean
+  live_session: boolean
   canonical_root: boolean
   has_active_privilege_descendants: boolean
 }
@@ -45,6 +46,7 @@ function deletionError(message: string, statusCode: number, code: string): Error
  * pseudonymised civic/financial/audit anchors required for integrity.
  *
  * Important invariants:
+ * - A current, non-revoked server-side session is required.
  * - This is not a reversible account suspension.
  * - Direct identifiers and credentials are removed in the same transaction.
  * - Public social/publishing surfaces are removed or made non-public.
@@ -55,6 +57,7 @@ function deletionError(message: string, statusCode: number, code: string): Error
  */
 export async function deleteCitizenAccount(
   citizenId: string,
+  sessionId: string,
   source: AccountDeletionSource,
 ): Promise<AccountDeletionReceipt> {
   const requestId = crypto.randomUUID()
@@ -70,6 +73,14 @@ export async function deleteCitizenAccount(
       SELECT
         c.id::text AS id,
         c.is_active,
+        EXISTS (
+          SELECT 1
+          FROM sessions s
+          WHERE s.id = ${sessionId}::uuid
+            AND s.citizen_id = c.id
+            AND s.revoked_at IS NULL
+            AND s.expires_at > NOW()
+        ) AS live_session,
         EXISTS (
           SELECT 1
           FROM citizen_role_grants g
@@ -98,6 +109,13 @@ export async function deleteCitizenAccount(
     if (!account.is_active) {
       throw deletionError('La cuenta ya fue eliminada.', 410, 'ACCOUNT_ALREADY_DELETED')
     }
+    if (!account.live_session) {
+      throw deletionError(
+        'Vuelve a iniciar sesión antes de eliminar tu cuenta.',
+        401,
+        'ACCOUNT_DELETION_REAUTH_REQUIRED',
+      )
+    }
     if (account.canonical_root) {
       throw deletionError(
         'La autoridad raíz de VÉRTICE no puede eliminarse desde el autoservicio de cuenta.',
@@ -122,7 +140,6 @@ export async function deleteCitizenAccount(
       FOR UPDATE
     `)
 
-    -- Authentication and device identity cease immediately.
     await tx.$executeRaw(Prisma.sql`
       UPDATE sessions
       SET revoked_at = COALESCE(revoked_at, NOW()), active_role = 'citizen'
@@ -140,8 +157,6 @@ export async function deleteCitizenAccount(
       DELETE FROM external_identities WHERE citizen_id = ${citizenId}::uuid
     `)
 
-    -- Identity-proofing receipts contain provider references/evidence hashes and
-    -- are not needed once governance eligibility for this account disappears.
     await tx.$executeRaw(Prisma.sql`
       DELETE FROM civic_identity_proof_events WHERE citizen_id = ${citizenId}::uuid
     `)
@@ -149,7 +164,6 @@ export async function deleteCitizenAccount(
       DELETE FROM civic_identity_proofs WHERE citizen_id = ${citizenId}::uuid
     `)
 
-    -- Social/discovery state is not an auditable civic record and is erased.
     await tx.$executeRaw(Prisma.sql`
       DELETE FROM civic_profile_follows
       WHERE follower_id = ${citizenId}::uuid OR followed_id = ${citizenId}::uuid
@@ -158,8 +172,6 @@ export async function deleteCitizenAccount(
       DELETE FROM territory_activation_interests WHERE citizen_id = ${citizenId}::uuid
     `)
 
-    -- Scheduled/publication content is user-authored social content rather than
-    -- an immutable governance record. Remove its validations/jobs first.
     await tx.$executeRaw(Prisma.sql`
       DELETE FROM civic_activity_validations v
       USING scheduled_civic_publications p
@@ -178,8 +190,6 @@ export async function deleteCitizenAccount(
       DELETE FROM scheduled_civic_publications WHERE citizen_id = ${citizenId}::uuid
     `)
 
-    -- Reports/proposals are public civic records, but their direct author link is
-    -- nullable and can be severed without falsifying the underlying record.
     await tx.$executeRaw(Prisma.sql`
       UPDATE territorial_reports SET citizen_id = NULL
       WHERE citizen_id = ${citizenId}::uuid
@@ -189,8 +199,6 @@ export async function deleteCitizenAccount(
       WHERE author_id = ${citizenId}::uuid
     `)
 
-    -- Avatar provider assets are queued for external purge and their local
-    -- delivery/reference data is erased immediately.
     await tx.$executeRaw(Prisma.sql`
       UPDATE media_assets
       SET
@@ -203,9 +211,6 @@ export async function deleteCitizenAccount(
         AND status <> 'deleted'
     `)
 
-    -- The row remains only as a pseudonymous referential anchor. All direct
-    -- identifiers, authentication material, public profile data and territory
-    -- binding are erased. created_at remains for audit chronology.
     await tx.$executeRaw(Prisma.sql`
       UPDATE citizens
       SET
