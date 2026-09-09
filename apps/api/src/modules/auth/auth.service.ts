@@ -275,7 +275,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
   // Consuming it must never write credentials back into a deleted identity.
   const account = await prisma.citizen.findUnique({
     where: { id: citizenId },
-    select: { isActive: true },
+    select: { id: true, isActive: true },
   })
   if (!account?.isActive) {
     throw Object.assign(new Error('Token inválido o expirado'), {
