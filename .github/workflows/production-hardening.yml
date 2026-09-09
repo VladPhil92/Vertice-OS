@@ -36,18 +36,17 @@ jobs:
       - name: Checkout exact SHA
         uses: actions/checkout@v4
 
+      # Keep package-manager bootstrap identical to the canonical CI pipeline.
+      # pnpm/action-setup reads the repository packageManager declaration before
+      # setup-node initializes the pnpm cache.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22.13.0'
-
-      # setup-node cannot initialize its pnpm cache until pnpm exists on PATH.
-      # Enable Corepack first; locked installs remain the source of determinism.
-      - name: Enable pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.34.5 --activate
-          pnpm --version
+          cache: 'pnpm'
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
