@@ -66,6 +66,55 @@ async function lockSuperadminAuthority(tx: Prisma.TransactionClient): Promise<vo
   `)
 }
 
+/**
+ * P2 TOCTOU boundary.
+ *
+ * requireSuperadmin protects the HTTP boundary, but authority can be revoked
+ * between middleware completion and acquisition of the transaction-scoped
+ * Superadmin advisory lock. Revalidate the actor *inside the same transaction*
+ * immediately after the lock and before reading or mutating the target.
+ *
+ * The database's has_trusted_superadmin_lineage() function is the canonical
+ * provenance contract introduced by privilege_provenance_hardening. It proves
+ * an active, acyclic lineage back to the pinned CTG One root.
+ */
+async function requireLiveSuperadminAuthority(
+  tx: Prisma.TransactionClient,
+  actorId: string,
+  actorSessionId: string | undefined,
+): Promise<void> {
+  if (!actorSessionId) {
+    throw Object.assign(new Error('Vuelve a iniciar sesión y activa explícitamente Superadmin'), {
+      statusCode: 401,
+      code: 'ROLE_SWITCH_REAUTH_REQUIRED',
+    })
+  }
+
+  const [row] = await tx.$queryRaw<Array<{ authorized: boolean }>>(Prisma.sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM sessions s
+      INNER JOIN citizen_role_grants g
+        ON g.citizen_id = s.citizen_id
+       AND g.role = 'superadmin'
+       AND g.revoked_at IS NULL
+      WHERE s.id = ${actorSessionId}::uuid
+        AND s.citizen_id = ${actorId}::uuid
+        AND s.revoked_at IS NULL
+        AND s.expires_at > NOW()
+        AND s.active_role = 'superadmin'
+        AND has_trusted_superadmin_lineage(${actorId}::uuid)
+    ) AS authorized
+  `)
+
+  if (!row?.authorized) {
+    throw Object.assign(new Error('La autoridad Superadmin cambió antes de completar la operación'), {
+      statusCode: 403,
+      code: 'SUPERADMIN_AUTHORITY_STALE',
+    })
+  }
+}
+
 async function requireCitizen(tx: Prisma.TransactionClient, citizenId: string): Promise<void> {
   const citizen = await tx.citizen.findUnique({
     where: { id: citizenId },
@@ -129,6 +178,7 @@ async function writeRoleAudit(
 
 export async function grantCitizenRole(
   actorId: string,
+  actorSessionId: string | undefined,
   targetCitizenId: string,
   roleRaw: unknown,
   reasonRaw: unknown,
@@ -144,6 +194,7 @@ export async function grantCitizenRole(
 
   return prisma.$transaction(async (tx) => {
     await lockSuperadminAuthority(tx)
+    await requireLiveSuperadminAuthority(tx, actorId, actorSessionId)
     await requireCitizen(tx, targetCitizenId)
 
     let activeRows = await getActiveGrantRows(tx, targetCitizenId)
@@ -180,9 +231,6 @@ export async function grantCitizenRole(
       data: { role: highestRole(nextRoles) },
     })
 
-    // This audit insert is part of the SAME database transaction as the grant.
-    // A role change therefore cannot commit without its actor, timestamp (DB
-    // default), reason and target being durably recorded.
     await writeRoleAudit(tx, {
       actorId,
       action: 'role.grant',
@@ -201,6 +249,7 @@ export async function grantCitizenRole(
 
 export async function revokeCitizenRole(
   actorId: string,
+  actorSessionId: string | undefined,
   targetCitizenId: string,
   roleRaw: unknown,
   reasonRaw: unknown,
@@ -216,6 +265,7 @@ export async function revokeCitizenRole(
 
   return prisma.$transaction(async (tx) => {
     await lockSuperadminAuthority(tx)
+    await requireLiveSuperadminAuthority(tx, actorId, actorSessionId)
     await requireCitizen(tx, targetCitizenId)
 
     let activeRows = await getActiveGrantRows(tx, targetCitizenId)
@@ -227,9 +277,6 @@ export async function revokeCitizenRole(
       })
     }
 
-    // The canonical bootstrap is the trust anchor for all delegated authority.
-    // Removing it would invalidate the provenance chain even if another
-    // superadmin row still existed, so ordinary delegation cannot revoke it.
     if (role === 'superadmin' && grant.source === 'ctg_one_bootstrap') {
       throw Object.assign(new Error('El Superadmin raíz no puede revocarse desde el plano ordinario'), {
         statusCode: 409,
@@ -260,8 +307,6 @@ export async function revokeCitizenRole(
         AND revoked_at IS NULL
     `)
 
-    // Revocation is effective immediately for any session that explicitly had
-    // this role activated. Other valid active roles are not silently changed.
     await tx.$executeRaw(Prisma.sql`
       UPDATE sessions
       SET active_role = 'citizen'

@@ -1,263 +1,203 @@
 # VÉRTICE OS — Current State
 
-> Snapshot técnico-funcional: **7 de septiembre de 2026**  
-> Baseline de modernización: Node.js 22.13+, pnpm 10, Next.js 15.5.24 y cliente nativo Expo SDK 57.
+> Snapshot técnico-funcional: **9 de septiembre de 2026**  
+> Baseline: Node.js 22.13+, pnpm 10, Next.js 15.5.24, Fastify 5 y cliente nativo Expo SDK 57 / React Native 0.86.3.
 
-Este documento clasifica el estado por evidencia:
+Estados de evidencia:
 
-- **✅ Implementado:** existe como contrato ejecutable en el repositorio.
-- **🟡 Integrado / pendiente de certificación:** existe código, pero la capacidad completa depende de credenciales, infraestructura, stores o evidencia externa.
-- **🧭 Planeado:** dirección de producto todavía no completa.
-- **⛔ No activo:** arquitectura histórica o componente retirado que no debe describirse como runtime actual.
-
----
+- **✅ IMPLEMENTED:** contrato ejecutable presente.
+- **✅ INTEGRATED:** fusionado con CI exact-SHA verde.
+- **🟦 DEPLOYED/READY:** runtime desplegado y verificado por evidencia aplicable.
+- **🟡 External certification pending:** depende de proveedor, credenciales, dispositivo, store o aprobación externa.
 
 ## 1. Plataforma activa
 
-### 1.1 Web y dashboard
+### Web / Dashboard
 
-`apps/web` es la experiencia web/PWA sobre Next.js 15.5.24 y React 18. El dashboard autenticado funciona como centro de mando ciudadano e integra:
+`apps/web` es la experiencia web/PWA y el centro de mando ciudadano. Integra identidad/perfil, Red Cívica, acciones/evidencia, territorio, gobernanza, legal/control, reputación, IA, workflows, notificaciones, operaciones Pro y crowdfunding.
 
-- identidad/perfil cívico;
-- red social de gestión comunitaria;
-- acciones cívicas y evidencias;
-- reportes territoriales;
-- propuestas, gobernanza y votaciones consultivas;
-- control público / legal;
-- reputación;
-- IA cívica;
-- workflows/expedientes;
-- notificaciones y tiempo real;
-- rol activo y superficies de autoridad.
+La web mantiene el contrato same-origin hacia `/api`; manifest/service worker/offline fallback/web push están implementados y rutas sensibles no se cachean como contenido estático.
 
-`GET /dashboard/me` es el agregado principal para la actividad y atención del ciudadano. La web productiva conserva el contrato same-origin hacia `/api` para evitar enviar credenciales directamente a un origen Railway desde el navegador.
+**Estado:** ✅ IMPLEMENTED / INTEGRATED.
 
-La PWA dispone de manifest, service worker, offline fallback y web push. Peticiones `/api/*`, `/auth/*` y artefactos versionados de Next.js no se cachean en el service worker.
+### API / datos
 
-### 1.2 App móvil nativa
+API REST sobre Fastify 5 con módulos activos de auth, dashboard, identity, territories/territorial, governance, community, civic-actions, reputation, legal, AI, workflows, notifications, events, billing y crowdfunding.
 
-`apps/mobile` existe desde esta actualización como workspace nativo independiente:
+Persistencia:
 
-- Expo SDK 57;
-- React Native 0.86.3;
-- React 19.2.3;
-- Expo Router;
-- SecureStore;
-- EAS build profiles.
+- PostgreSQL + PostGIS: autoridad relacional/territorial;
+- Redis: cache/rate limiting/pub-sub/operación;
+- Neo4j: grafo degradable, no dependencia crítica del serving core.
 
-Superficies nativas implementadas a la fecha de este snapshot:
+**Estado:** ✅ IMPLEMENTED / INTEGRATED; runtime sujeto a release evidence por SHA.
 
-- login nativo, bootstrap de sesión y refresh automático del access token;
-- command center ciudadano desde `/dashboard/me`, reputación y atención pendiente;
-- acciones cívicas: creación, listado propio y adjunto de evidencia (`/civic-actions`);
-- reportes territoriales con mapa embebido (`react-native-maps`) y envío de evidencia georreferenciada;
-- gobernanza: listado y detalle de propuestas;
-- notificaciones push (Expo) con registro/baja de dispositivo, bandeja de notificaciones y enrutamiento a pantalla;
-- **Comunidad/feed (Phase 2D-1):** feed público y "siguiendo", ranking cívico, perfil público con seguir/dejar de seguir — ver `docs/engineering/MOBILE_CORE_PARITY_PHASE2D.md`;
-- perfil, pull-to-refresh y logout con revocación server-side.
+### App móvil nativa
 
-Clasificación: **🟡 primera fase funcional, en expansión de paridad**. Siguiendo el orden de construcción definido en Phase 2C, todavía faltan las superficies nativas de: workflows/expedientes cívicos, Identity Assurance (preservando la frontera de certificación del proveedor) y seguimiento de campañas/readiness de crowdfunding. La regla arquitectónica es reutilizar contratos de API existentes, no duplicar reglas cívicas dentro del cliente.
+`apps/mobile` usa Expo SDK 57, React Native 0.86.3, React 19.2.3, Expo Router y SecureStore.
 
-### 1.3 Autenticación y autoridad
+Paridad de dominio implementada:
 
-La autenticación mantiene dos transportes con una sola fuente de verdad de sesión:
+- registro/login nacional, sesión y refresh;
+- command center y perfil;
+- selección territorial, nodo público y activación voluntaria;
+- acciones cívicas/evidencia;
+- reportes, GPS foreground, mapa, cámara/galería y media confirmada;
+- gobernanza, aval, voto y tally canónico;
+- push-device lifecycle, inbox y deep links;
+- Community/Feed, leaderboard, perfiles y follow/unfollow;
+- Workflows/expedientes y detalle de caso;
+- Civic Identity Assurance, proofing y handoff HTTPS a Veriff;
+- crowdfunding campaign/readiness tracking.
 
-**Web**
-- `POST /auth/token`;
-- refresh token en cookie httpOnly;
-- access token de vida corta;
-- refresh vía `/auth/refresh`.
+El móvil consume contratos existentes y no calcula reputación, autoridad, settlement, payout ni elegibilidad financiera.
 
-**Native**
-- `POST /auth/mobile/token`;
-- `POST /auth/mobile/refresh`;
-- `POST /auth/mobile/logout`;
-- refresh token persistido únicamente en Keychain/Keystore mediante SecureStore.
+**Estado:** ✅ code parity implemented; 🟡 signed-device/store/provider certification pending.
 
-Ambos transportes reutilizan `loginCitizen`, `refreshAccessToken`, `revokeSession` y las sesiones persistentes de la API. No existe un segundo sistema de identidad móvil.
+## 2. Plataforma territorial nacional
 
-El modelo de autoridad activo usa grants persistentes `citizen`, `moderator`, `admin`, `superadmin`, `active_role` por sesión y JWT ligado a `sid`. Los privilegios se revalidan contra autoridad viva y una sesión privilegiada no debe surgir desde `citizens.role` legacy.
+Phases 7A–7E sustituyen el antiguo perímetro Cartagena-only por una arquitectura nacional:
 
-### 1.4 Federación CTG One
+- Colombia → departamento → municipio/distrito → localidad/comuna → barrio/vereda;
+- identificadores externos DANE/DIVIPOLA;
+- `territory_code` durable;
+- selector nacional web/mobile;
+- nodos públicos `/cities` y city node;
+- activation engine y cohorts operativos;
+- interest ledger voluntario;
+- onboarding `create account → authenticate → select municipality/district → local experience`.
 
-`Continuar con CTG One` usa intercambio federado con PKCE. VÉRTICE crea su propia sesión y no vincula cuentas únicamente por coincidencia de email.
+Cartagena (`13001`) permanece como primer nodo `pilot_ready`, no como límite arquitectónico nacional.
 
-CTG One federation autentica, pero **no constituye por sí sola civic identity assurance**.
+Invariante: territorio seleccionado/autodeclarado ≠ residencia cívica asegurada.
 
-### 1.5 Civic identity assurance
+## 3. Identidad y autoridad
 
-La frontera de identidad fuerte permanece fail-closed y separa:
+Web y mobile comparten la misma fuente canónica de sesión. La autoridad se deriva de grants vivos y sesión activa, no de un rol legacy estático.
 
-- autenticación;
-- contacto verificado;
-- prueba de identidad cívica;
-- certificación operativa del provider;
-- evidencia durable de canary externo.
+Civic Identity Assurance exige de forma independiente:
 
-El provider Veriff dispone de adapter, sesión, webhook nativo firmado, replay protection, lifecycle, certificación durable y controles administrativos en código. Clasificación productiva: **🟡 integrado / pendiente de credenciales y certificación externa real**.
+1. contacto verificado;
+2. ingress de provider operativo;
+3. prueba activa;
+4. certificación externa vigente del provider nativo.
 
-Un provider no puede habilitar elegibilidad de gobernanza únicamente por aparecer en configuración. Se requiere la cadena de promoción/certificación prevista por el sistema.
+Veriff dispone de adapter, creación de sesión, webhook HMAC, replay protection, normalización, lifecycle y certificación durable.
 
-### 1.6 Gestión comunitaria y reputación
+**Estado productivo Veriff:** 🟡 integrado; credenciales/canary externo real pendientes.
 
-La plataforma soporta perfil público, acciones cívicas, evidencia, resultados y reputación. El producto prioriza gestión social-comunitaria y trazabilidad sobre mecánicas de engagement manipulativas.
+CTG One federation autentica y aprovisiona identidad de ecosistema, pero no concede Civic Identity Assurance por sí sola.
 
-Reputación e identidad se mantienen separadas: una reputación alta no convierte una identidad en verificada.
+## 4. Gestión comunitaria, reputación y gobernanza
 
-### 1.7 Gobernanza
+Community soporta feed público/siguiendo, perfiles, social graph, leaderboard y señales de corroboración/disputa.
 
-La gobernanza usa padrón congelado por propuesta y ledger canónico de participación. Coordina:
+Reputación prioriza evidencia/resultados. Seguidores, likes, impresiones, pagos, donaciones, suscripciones y capacidad económica no suman autoridad cívica.
 
-- voto directo;
-- delegación;
-- nullifiers opacos;
-- prevención de doble influencia;
-- precedencia determinística;
-- override directo;
-- tally reconstruible desde registros durables.
+Gobernanza usa padrón congelado y ledger reconstructible de participación. Voto directo/delegación/override/nullifiers se resuelven server-side.
 
-Las votaciones de la plataforma son cívicas/consultivas salvo reconocimiento jurídico o institucional externo específico.
+Las votaciones son cívicas/consultivas salvo reconocimiento institucional/jurídico externo específico.
 
-### 1.8 API y datos
+## 5. Crowdfunding y monetización
 
-API activa: **REST / Fastify 5**.
+El stack implementado incluye:
 
-Módulos activos incluyen:
+- Free/Pro y metering;
+- lifecycle de campañas;
+- categorías y políticas flexible/all-or-nothing/milestone;
+- comisión canónica 1% / 2.5% / 3.5% según categoría/modelo;
+- payment ledger e idempotencia;
+- refunds/reconciliation;
+- payout readiness;
+- binding de destino BRE-B;
+- Wompi payout adapter/control plane;
+- Financial Operations Command Center;
+- emergency stops separados para checkout, collection y payouts;
+- Golden Financial Integrity.
 
-- `auth`
-- `dashboard`
-- `identity`
-- `territorial`
-- `governance`
-- `community`
-- `civic-actions`
-- `reputation`
-- `legal`
-- `ai`
-- `workflows`
-- `notifications`
-- `events`
+**Estado:** ✅ integridad interna implementada/certificable por CI; 🟡 Mercado Pago/Wompi/BRE-B reales requieren credenciales, bounded canary, settlement/refund/payout y reconciliación externa antes de operación abierta.
 
-Datos:
+## 6. IA y blockchain
 
-- PostgreSQL + PostGIS: estado canónico relacional/territorial;
-- Redis: cache, rate limiting, pub/sub y soporte operacional;
-- Neo4j: grafo de reputación, degradable en readiness.
+`apps/ai`: FastAPI/LangGraph/RAG con degradación controlada cuando proveedores opcionales no están disponibles.
 
-### 1.9 IA
+`contracts/`: Solidity/Hardhat/Polygon (`CivicSBT`, `VotingRegistry`). Blockchain es opcional para el core y no debe almacenar PII ni sentido individual del voto.
 
-`apps/ai` implementa agentes cívicos sobre FastAPI/LangGraph y una capa RAG con proveedores externos. La ausencia de proveedores opcionales no debe simular calidad semántica equivalente, pero puede degradarse de forma controlada según el contrato de cada feature.
+## 7. Release engineering
 
-### 1.10 Blockchain
+El repositorio separa:
 
-`contracts/` contiene Solidity/Hardhat para Polygon, incluidos `CivicSBT` y `VotingRegistry`.
+`IMPLEMENTED → INTEGRATED → DEPLOYED → READY → CERTIFIED`
 
-Clasificación: **🟡 código implementado; despliegue on-chain dependiente del entorno**.
+Gates especializados incluyen:
 
-PII y sentido individual del voto no deben almacenarse on-chain.
+- CI general;
+- Semgrep Community SAST;
+- Golden E2E Journeys;
+- Golden Main Governance Contract;
+- Golden Financial Integrity;
+- Financial Operations Command Center;
+- Frontend Runtime Contract;
+- Railway Runtime Contract;
+- Production Hardening;
+- Identity Provider Certification;
+- National Platform Readiness;
+- National Citizen Activation;
+- National Account Onboarding;
+- Mobile Core Parity;
+- Mobile Device Release;
+- Mobile Domain Parity;
+- Cartagena Pilot Same-SHA Runtime Canary.
 
----
+El `main` auditado antes de esta fase (`efb0c181c3bd5613390b5bfd829ff8f25bd28054`) ya tenía same-SHA Cartagena runtime canary exitoso y checks de build/tests exitosos.
 
-## 2. Actualización tecnológica de septiembre de 2026
+## 8. Deuda restante
 
-Remediaciones ya incorporadas en la rama de actualización:
+### Puede continuar automáticamente en repositorio
 
-- corrección del parser regression que bloqueaba unit tests;
-- Next.js `15.5.23 → 15.5.24` por seguridad;
-- Node baseline `>=22.13`;
-- pnpm 10 como única autoridad de lockfile del monorepo;
-- eliminación de `contracts/package-lock.json`;
-- app nativa Expo/React Native;
-- contrato de autenticación móvil dedicado;
-- SecureStore para credenciales nativas;
-- hardening de Next.js (`poweredByHeader: false`, strict mode, formatos AVIF/WebP);
-- `secrets.yaml` retirado del tracking/Kustomize y sustituido por `secrets.example.yaml`;
-- documentación de auditoría en `TECHNOLOGY_REFRESH_2026-09-07.md`.
+- refinamientos UX/performance/accessibility;
+- ampliar E2E y source contracts;
+- bundle budgets;
+- retirar legacy comprobado;
+- refactor de componentes grandes;
+- runbooks, checklists y documentación;
+- static security/quality gates.
 
-No se ejecuta una migración inmediata a Next.js 16 dentro de esta misma fase. El parche 15.5.24 reduce el riesgo de seguridad manteniendo el blast radius controlado; una migración de major debe tener su propia matriz de regresión y métricas Web Vitals.
+Estos trabajos son mejoras incrementales; ya no representan ausencia de paridad de dominio base.
 
----
+### Requiere intervención de operador/terceros
 
-## 3. Infraestructura y producción
-
-### Web
-
-- Next.js 15.5.24
-- Vercel como destino operativo documentado
-- producción browser API same-origin
-
-### API
-
-- Fastify 5
-- Railway como destino operativo documentado
-- Docker + migraciones Prisma + health/readiness
-
-### AI
-
-- FastAPI
-- Railway como destino operativo documentado
-
-### Mobile
-
-- Expo SDK 57 / EAS build profiles
-- la generación y publicación de binarios exige credenciales de Apple/Google y configuración externa del proyecto EAS
-
-### Kubernetes
-
-La base de Kustomize ya **no** crea un Secret desde un archivo trackeado. `vertice-secrets` debe provisionarse antes del apply mediante un secret manager, External Secrets, Vault o un proceso operacional equivalente.
-
----
-
-## 4. Deuda y riesgos pendientes
-
-### Ingeniería que puede continuar dentro del repositorio
-
-- descomponer componentes/rutas web demasiado grandes;
-- retirar árboles `legacy` una vez comprobadas referencias;
-- introducir presupuestos de bundle/asset size;
-- completar superficies móviles nativas de community, reports/map, workflows, governance, notifications e identity;
-- ampliar tests nativos y E2E;
-- evaluar Next.js 16 como migración separada;
-- consolidar documentación histórica que todavía describa arquitecturas no activas.
-
-### Acciones manuales / externas
-
-- activar protección de `main` y required checks;
+- proteger `main` con ruleset/required checks;
 - provisionar secretos productivos;
-- validar readiness después del deploy en Vercel/Railway;
-- crear/configurar proyecto EAS;
-- gestionar Apple Developer / Google Play Console, signing y store metadata;
-- ejecutar canaries reales de proveedores de identidad;
-- certificar cualquier despliegue blockchain productivo.
+- EAS project, Apple Developer, Google Play Console y signing;
+- Google Maps production key restringida;
+- APNs/FCM/EAS push credentials;
+- smoke de dispositivos físicos Android/iOS;
+- Cloudflare Images production canary;
+- Veriff production credentials/canary;
+- Mercado Pago bounded real-money canary, settlement y refund;
+- Wompi/BRE-B production access, payout canary y conciliación;
+- aprobación legal/compliance/privacidad;
+- App Store / Google Play submission y revisión.
 
----
+La separación completa se mantiene en `docs/engineering/MARKET_RELEASE_COMPLETION.md`.
 
-## 5. Componentes que no son contrato operativo actual
+## 9. Componentes que NO son contrato operativo requerido
 
-No documentar como runtime actual salvo que vuelvan a implementarse explícitamente:
+No documentar como dependencia actual salvo reintroducción explícita:
 
 - Apollo Federation/GraphQL gateway;
 - Governance Engine separado en Go;
 - MongoDB obligatorio;
 - Kafka obligatorio;
 - The Graph obligatorio;
-- integración certificada por defecto con Registraduría;
+- Registraduría certificada por defecto;
 - DAO de gobierno de plataforma;
 - ZKP productivo para cada voto;
-- wallet de Verifiable Credentials como requisito universal.
+- wallet VC como requisito universal.
 
----
+## 10. Regla final
 
-## 6. Regla de release
+`Código presente` no equivale a `CERTIFIED FOR MARKET RELEASE`.
 
-`Código presente` ≠ `release certificado`.
-
-Un release debe distinguir al menos:
-
-1. checks CI del commit;
-2. artefacto/build generado;
-3. deployment iniciado;
-4. readiness confirmado;
-5. canaries externos cuando la feature depende de terceros.
-
-La documentación nunca debe declarar una capacidad productiva únicamente porque exista código o IaC.
+La plataforma solo alcanza certificación comercial completa cuando el SHA de release supera los gates internos aplicables y existe evidencia externa real para dispositivos, identidad, media, pagos/payouts, cumplimiento legal y stores.
