@@ -17,6 +17,7 @@ on:
       - 'apps/web/e2e/dashboard-operational-convergence-phase6b.spec.ts'
       - 'apps/web/e2e/dashboard-operational-capacity-phase7.spec.ts'
       - 'apps/web/e2e/pro-usage-community-resilience-phase7.spec.ts'
+      - 'apps/web/e2e/financial-operations-command-center-phase4.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
       - 'apps/web/e2e/process-resilience.spec.ts'
@@ -47,6 +48,7 @@ on:
       - 'apps/web/e2e/dashboard-operational-convergence-phase6b.spec.ts'
       - 'apps/web/e2e/dashboard-operational-capacity-phase7.spec.ts'
       - 'apps/web/e2e/pro-usage-community-resilience-phase7.spec.ts'
+      - 'apps/web/e2e/financial-operations-command-center-phase4.spec.ts'
       - 'apps/web/e2e/report-media.spec.ts'
       - 'apps/web/e2e/avatar-persistence.spec.ts'
       - 'apps/web/e2e/process-resilience.spec.ts'
@@ -136,6 +138,7 @@ jobs:
             e2e/dashboard-operational-convergence-phase6b.spec.ts \
             e2e/dashboard-operational-capacity-phase7.spec.ts \
             e2e/pro-usage-community-resilience-phase7.spec.ts \
+            e2e/financial-operations-command-center-phase4.spec.ts \
             e2e/report-media.spec.ts \
             e2e/avatar-persistence.spec.ts \
             e2e/process-resilience.spec.ts \

@@ -50,6 +50,7 @@ jest.mock('../../../lib/idempotency', () => ({
 
 import type { IdempotentMutationOptions, IdempotentMutationResult } from '../../../lib/idempotency'
 import { buildApp } from '../../../app'
+import { prisma } from '../../../lib/prisma'
 
 const app = buildApp()
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440001'
@@ -62,7 +63,14 @@ beforeAll(async () => {
   token = app.jwt.sign({ sub: CITIZEN_ID, did: DID, lvl: 1 })
 })
 afterAll(() => app.close())
-beforeEach(() => jest.resetAllMocks())
+beforeEach(() => {
+  jest.resetAllMocks()
+  // Default finance runtime control state: capability enabled. Routes that
+  // call assertFinancialCapabilityEnabled() (e.g. POST /billing/checkout)
+  // hit this via prisma.$queryRaw, which resetAllMocks() strips back to a
+  // bare jest.fn() with no return value each test.
+  ;(prisma.$queryRaw as jest.Mock).mockResolvedValue([{ emergency_stop: false, reason: null }])
+})
 
 describe('GET /billing/plans', () => {
   it('returns the public catalog without authentication', async () => {

@@ -69,7 +69,8 @@ jobs:
             apps/api/prisma/migrations/20260908121500_crowdfunding_payouts_phase4/migration.sql \
             apps/api/prisma/migrations/20260908140500_crowdfunding_payout_destination_binding/migration.sql \
             apps/api/prisma/migrations/20260908143000_crowdfunding_category_policy_alignment/migration.sql \
-            apps/api/prisma/migrations/20260908145000_crowdfunding_fee_funding_policy_phase5/migration.sql
+            apps/api/prisma/migrations/20260908145000_crowdfunding_fee_funding_policy_phase5/migration.sql \
+            apps/api/prisma/migrations/20260909005500_finance_runtime_controls_phase4/migration.sql
           do
             echo "Applying Golden Finance schema slice: $migration"
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
