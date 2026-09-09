@@ -305,6 +305,8 @@ export interface CivicLeaderEntry {
   average_action_score: number
   verification_rate: number
   rank: number
+}
+
 export type TerritoryActivationStatus =
   | 'available'
   | 'emerging'
