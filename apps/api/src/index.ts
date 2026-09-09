@@ -5,14 +5,20 @@ process.stderr.write(
   `[boot] ENTRY POINT REACHED pid=${process.pid} node=${process.version} at=${new Date().toISOString()}\n`,
 )
 
+// Fatal process-level errors are not safe to continue serving after. Keeping a
+// process alive after an uncaught exception can leave partially mutated state,
+// duplicate workers, or broken provider clients behind a green container.
 process.on('unhandledRejection', (reason) => {
-  console.error('[unhandledRejection]', reason)
+  console.error('[fatal:unhandledRejection]', reason)
+  process.exit(1)
 })
 process.on('uncaughtException', (err) => {
-  console.error('[uncaughtException]', err)
+  console.error('[fatal:uncaughtException]', err)
+  process.exit(1)
 })
 
 const MAIN_TIMEOUT_MS = 30_000
+const SHUTDOWN_TIMEOUT_MS = 15_000
 
 function withDeadline<T>(label: string, work: Promise<T>, timeoutMs: number): Promise<T> {
   const start = Date.now()
@@ -118,18 +124,52 @@ async function main() {
   const stopJobWorker = startJobWorker()
   app.log.info('[jobs] worker started')
 
+  let shuttingDown = false
   const shutdown = async (signal: string) => {
-    app.log.info(`[shutdown] ${signal} received`)
-    stopJobWorker()
-    await app.close()
-    await prisma.$disconnect()
-    if (redis.status !== 'end') await redis.quit()
-    await closeNeo4j()
-    process.exit(0)
+    if (shuttingDown) {
+      app.log.warn({ signal }, '[shutdown] duplicate signal ignored')
+      return
+    }
+    shuttingDown = true
+
+    app.log.info({ signal, timeoutMs: SHUTDOWN_TIMEOUT_MS }, '[shutdown] draining runtime')
+    const forceExitTimer = setTimeout(() => {
+      app.log.error({ signal }, '[shutdown] deadline exceeded; forcing non-zero exit')
+      process.exit(1)
+    }, SHUTDOWN_TIMEOUT_MS)
+    forceExitTimer.unref()
+
+    let exitCode = 0
+    try {
+      stopJobWorker()
+      await app.close()
+
+      const cleanupResults = await Promise.allSettled([
+        prisma.$disconnect(),
+        redis.status === 'end' ? Promise.resolve() : redis.quit(),
+        closeNeo4j(),
+      ])
+
+      cleanupResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          exitCode = 1
+          const dependency = ['postgres', 'redis', 'neo4j'][index]
+          const message = result.reason instanceof Error ? result.reason.message : String(result.reason)
+          app.log.error({ dependency, message }, '[shutdown] dependency cleanup failed')
+        }
+      })
+    } catch (err) {
+      exitCode = 1
+      const message = err instanceof Error ? err.message : String(err)
+      app.log.error({ message }, '[shutdown] drain failed')
+    } finally {
+      clearTimeout(forceExitTimer)
+      process.exit(exitCode)
+    }
   }
 
-  process.on('SIGINT', () => shutdown('SIGINT'))
-  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.once('SIGINT', () => void shutdown('SIGINT'))
+  process.once('SIGTERM', () => void shutdown('SIGTERM'))
 
   console.error('[boot] main() finished setup; process is now serving requests')
 }
