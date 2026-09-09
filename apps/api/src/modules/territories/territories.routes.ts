@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requireAuth, requireSuperadmin } from '../../middleware/auth'
+import { getTerritoryFeed } from './territories.feed'
 import {
   ACTIVATION_STATUSES,
   TERRITORY_LEVELS,
@@ -33,6 +34,7 @@ const ActivationBody = z.object({
   reason: z.string().trim().min(8).max(500),
 })
 const RankingQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(25) })
+const FeedQuery = z.object({ limit: z.coerce.number().int().min(1).max(30).default(12) })
 
 export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async (request, reply) => {
@@ -95,6 +97,13 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
       status: body.data.status,
       reason: body.data.reason,
     }))
+  })
+
+  app.get('/:code/feed', async (request, reply) => {
+    const params = TerritoryParams.safeParse(request.params)
+    const query = FeedQuery.safeParse(request.query)
+    if (!params.success || !query.success) return reply.status(400).send({ error: 'Feed territorial inválido' })
+    return reply.send(await getTerritoryFeed(params.data.code, query.data.limit))
   })
 
   app.get('/:code/activation', async (request, reply) => {
