@@ -1,0 +1,117 @@
+name: Financial Operations Command Center
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/billing/**'
+      - 'apps/api/src/modules/crowdfunding/**'
+      - 'apps/api/src/__tests__/golden-financial-operations.integration.test.ts'
+      - 'apps/api/prisma/migrations/**'
+      - 'apps/web/app/dashboard/admin/finance/**'
+      - 'apps/web/app/dashboard/admin/layout.tsx'
+      - '.github/workflows/financial-operations-command-center.yml'
+      - '.github/workflows/golden-financial-integrity.yml'
+      - 'docs/monetization/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/src/modules/billing/**'
+      - 'apps/api/src/modules/crowdfunding/**'
+      - 'apps/api/src/__tests__/golden-financial-operations.integration.test.ts'
+      - 'apps/api/prisma/migrations/**'
+      - 'apps/web/app/dashboard/admin/finance/**'
+      - 'apps/web/app/dashboard/admin/layout.tsx'
+      - '.github/workflows/financial-operations-command-center.yml'
+      - '.github/workflows/golden-financial-integrity.yml'
+      - 'docs/monetization/**'
+
+concurrency:
+  group: financial-operations-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  command-center:
+    name: Financial Operations Command Center
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: vertice_finops_test
+          POSTGRES_USER: vertice
+          POSTGRES_PASSWORD: vertice_finops_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck API and web command center
+        run: |
+          pnpm --filter @vertice/api typecheck
+          pnpm --filter @vertice/web typecheck
+
+      - name: Initialize exact financial operations schema
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_finops_test@localhost:5432/vertice_finops_test
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infrastructure/db/init.sql
+
+          for migration in \
+            apps/api/prisma/migrations/20260907234500_monetization_foundation/migration.sql \
+            apps/api/prisma/migrations/20260908023500_payment_execution_phase2/migration.sql \
+            apps/api/prisma/migrations/20260908113000_finance_operations_phase3/migration.sql \
+            apps/api/prisma/migrations/20260908121500_crowdfunding_payouts_phase4/migration.sql \
+            apps/api/prisma/migrations/20260908140500_crowdfunding_payout_destination_binding/migration.sql \
+            apps/api/prisma/migrations/20260908143000_crowdfunding_category_policy_alignment/migration.sql \
+            apps/api/prisma/migrations/20260908145000_crowdfunding_fee_funding_policy_phase5/migration.sql \
+            apps/api/prisma/migrations/20260909005500_finance_runtime_controls_phase4/migration.sql
+          do
+            echo "Applying Financial Operations schema slice: $migration"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Run Golden financial operations journeys
+        env:
+          GOLDEN_FINANCE_OPERATIONS: '1'
+          NODE_ENV: test
+          DATABASE_URL: postgresql://vertice:vertice_finops_test@localhost:5432/vertice_finops_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: golden-finops-jwt-secret-with-at-least-32-characters
+          CORS_ORIGIN: http://localhost:3000
+          CROWDFUNDING_PAYMENTS_ENABLED: 'false'
+          CROWDFUNDING_PAYOUTS_ENABLED: 'false'
+        run: pnpm --filter @vertice/api test -- golden-financial-operations.integration.test.ts --runInBand
+
+      - name: Verify recovery remains outside emergency stops
+        run: |
+          set -euo pipefail
+          grep -q "assertFinancialCapabilityEnabled('pro_checkout')" apps/api/src/modules/billing/billing.routes.ts
+          grep -q "assertFinancialCapabilityEnabled('crowdfunding_collection')" apps/api/src/modules/crowdfunding/crowdfunding.routes.ts
+          grep -q "assertFinancialCapabilityEnabled('crowdfunding_payouts')" apps/api/src/modules/billing/finance-operations.routes.ts
+          grep -q "'/reconcile'" apps/api/src/modules/billing/finance-operations.routes.ts
+          grep -q "'/refunds/:transactionId'" apps/api/src/modules/billing/finance-operations.routes.ts
+          grep -q "'/webhooks/mercadopago'" apps/api/src/modules/billing/billing.routes.ts
+          grep -q "finance-operations-command-center" apps/web/app/dashboard/admin/finance/page.tsx
+
+      - name: Record certification boundary
+        run: |
+          echo 'Financial Operations Command Center: PASS'
+          echo 'This gate certifies durable emergency controls, operational SLO aggregation and civic-neutrality against PostgreSQL.'
+          echo 'It does NOT certify productive Mercado Pago/Wompi credentials, real settlement/refunds, BRE-B payouts or banking reconciliation.'
