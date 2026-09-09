@@ -127,13 +127,13 @@ export default function TerritoryActivationScreen() {
         <View style={styles.hero}>
           <Text style={styles.eyebrow}>ACTIVACIÓN CIUDADANA · PHASE 7D</Text>
           <Text style={styles.title}>Ayuda a activar {territory?.territory_name ?? 'tu comunidad'}</Text>
-          <Text style={styles.body}>
+          <Text style={styles.heroBody}>
             Puedes ofrecer apoyo local de manera voluntaria. La revisión de esta manifestación es operativa: no verifica residencia, no aumenta reputación y no concede autoridad de gobernanza.
           </Text>
           {territory?.territory_code ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push(`/city/${encodeURIComponent(territory.territory_code)}`)}
+              onPress={() => router.push({ pathname: '/city/[code]', params: { code: territory.territory_code! } })}
               style={styles.outlineButton}
             >
               <Text style={styles.outlineButtonText}>Ver nodo público de {territory.territory_name ?? 'mi ciudad'}</Text>
@@ -158,6 +158,9 @@ export default function TerritoryActivationScreen() {
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Primero vincula tu territorio</Text>
             <Text style={styles.body}>Tu cuenta debe tener un municipio o distrito asociado antes de manifestar interés de activación.</Text>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/territory/select')} style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Seleccionar mi municipio o distrito</Text>
+            </Pressable>
             <Text style={styles.boundaryText}>La vinculación territorial continúa siendo autodeclarada y no equivale a residencia cívica verificada.</Text>
           </View>
         ) : null}
@@ -293,8 +296,8 @@ const styles = StyleSheet.create({
   counter: { alignSelf: 'flex-end', color: '#858980', fontSize: 12 },
   infoCard: { borderRadius: 14, padding: 13, backgroundColor: '#EEECE4' },
   infoText: { color: '#62675F', lineHeight: 19 },
-  primaryButton: { minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#17382A' },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '800' },
+  primaryButton: { minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#17382A', paddingHorizontal: 14 },
+  primaryButtonText: { color: '#FFFFFF', fontWeight: '800', textAlign: 'center' },
   helper: { color: '#72766E', lineHeight: 18, fontSize: 12 },
   empty: { borderRadius: 14, padding: 14, backgroundColor: '#F1EFE8', color: '#666B62', lineHeight: 20 },
   interestList: { gap: 10 },
