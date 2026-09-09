@@ -88,7 +88,9 @@ export interface ProposalSummary {
   title: string
   category: string
   scope: ProposalScope
-  territory_code: string | null
+  // Optional while legacy list queries are progressively upgraded; detail
+  // responses always carry the immutable territory snapshot.
+  territory_code?: string | null
   status: ProposalStatus
   endorsement_count: number
   total_votes: number
