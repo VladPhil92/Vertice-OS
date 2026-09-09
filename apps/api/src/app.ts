@@ -11,6 +11,7 @@ import { redis } from './lib/redis'
 import { prisma } from './lib/prisma'
 import { getNeo4jDriver } from './lib/neo4j'
 import { getFeatureCapabilities } from './lib/feature-secrets'
+import { assessRuntimeReadiness, type RuntimeDependencyChecks } from './lib/runtime-readiness'
 import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
 import { mobileAuthRoutes } from './modules/auth/mobile-auth.routes'
@@ -119,21 +120,21 @@ export function buildApp() {
     })
   })
 
-  app.get('/health', async () => ({
-    status: 'ok',
+  const livenessPayload = () => ({
+    status: 'ok' as const,
     version: pkg.version,
     revision: deployedRevision(),
     timestamp: new Date().toISOString(),
-  }))
+  })
 
-  app.get('/health/ready', async (_request, reply) => {
+  const probeRuntime = async () => {
     const [redisProbe, databaseProbe, neo4jProbe] = await Promise.allSettled([
       withTimeout('redis', redis.ping()),
       withTimeout('database', prisma.$queryRaw`SELECT 1`),
       withTimeout('neo4j', getNeo4jDriver().verifyConnectivity()),
     ])
 
-    const checks: Record<string, 'ok' | 'fail'> = {
+    const checks: RuntimeDependencyChecks = {
       redis: redisProbe.status === 'fulfilled' ? 'ok' : 'fail',
       database: databaseProbe.status === 'fulfilled' ? 'ok' : 'fail',
       neo4j: neo4jProbe.status === 'fulfilled' ? 'ok' : 'fail',
@@ -151,18 +152,51 @@ export function buildApp() {
     }
 
     const capabilities = getFeatureCapabilities()
-    const healthy = checks.redis === 'ok' && checks.database === 'ok'
-    const featureDegraded = Object.values(capabilities).some((state) => state === 'misconfigured')
-    const dependencyDegraded = checks.neo4j !== 'ok'
+    const revision = deployedRevision()
+    const assessment = assessRuntimeReadiness({
+      checks,
+      capabilities,
+      revision,
+      production: config.NODE_ENV === 'production',
+    })
 
-    return reply.status(healthy ? 200 : 503).send({
-      status: healthy
-        ? (dependencyDegraded || featureDegraded ? 'degraded' : 'ok')
-        : 'unavailable',
+    return { checks, capabilities, revision, assessment }
+  }
+
+  // Backward-compatible liveness endpoint. It intentionally performs no
+  // network dependency probes; schedulers can use /health/live explicitly.
+  app.get('/health', async () => livenessPayload())
+  app.get('/health/live', async () => livenessPayload())
+
+  // Serving readiness: only core dependencies (Postgres + Redis) block traffic.
+  // Optional/degraded capabilities stay observable without taking civic basics down.
+  app.get('/health/ready', async (_request, reply) => {
+    const { checks, capabilities, revision, assessment } = await probeRuntime()
+
+    return reply.status(assessment.servingReady ? 200 : 503).send({
+      status: assessment.status,
       checks,
       capabilities,
       version: pkg.version,
-      revision: deployedRevision(),
+      revision,
+      timestamp: new Date().toISOString(),
+    })
+  })
+
+  // Release readiness is intentionally stricter than serving readiness. A
+  // partially configured feature or an untraceable production revision blocks
+  // promotion even when the base API can safely continue serving free civic use.
+  app.get('/health/release', async (_request, reply) => {
+    const { checks, capabilities, revision, assessment } = await probeRuntime()
+
+    return reply.status(assessment.releaseReady ? 200 : 503).send({
+      status: assessment.releaseReady ? 'ready' : 'blocked',
+      serving_status: assessment.status,
+      blockers: assessment.blockers,
+      checks,
+      capabilities,
+      version: pkg.version,
+      revision,
       timestamp: new Date().toISOString(),
     })
   })
