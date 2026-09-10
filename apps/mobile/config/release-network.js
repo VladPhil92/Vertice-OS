@@ -23,11 +23,27 @@ function isPrivateIpv4(host) {
   )
 }
 
+function mappedIpv4FromIpv6(host) {
+  const dotted = host.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i)
+  if (dotted) return dotted[1]
+
+  // WHATWG URL canonicalizes addresses such as ::ffff:192.168.1.1 to
+  // ::ffff:c0a8:101. Convert the two trailing 16-bit groups back to IPv4.
+  const hex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
+  if (!hex) return null
+
+  const high = Number.parseInt(hex[1], 16)
+  const low = Number.parseInt(hex[2], 16)
+  if (!Number.isFinite(high) || !Number.isFinite(low)) return null
+
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.')
+}
+
 function isPrivateIpv6(host) {
   if (host === '::' || host === '::1') return true
 
-  const ipv4Mapped = host.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i)
-  if (ipv4Mapped) return isPrivateIpv4(ipv4Mapped[1])
+  const mappedIpv4 = mappedIpv4FromIpv6(host)
+  if (mappedIpv4) return isPrivateIpv4(mappedIpv4)
 
   const firstGroup = Number.parseInt(host.split(':')[0] || '0', 16)
   if (!Number.isFinite(firstGroup)) return false
