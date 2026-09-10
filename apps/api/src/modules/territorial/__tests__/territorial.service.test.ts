@@ -2,6 +2,7 @@ const mockQueryRaw = jest.fn()
 const mockGetCache = jest.fn()
 const mockSetCache = jest.fn()
 const mockDelCache = jest.fn()
+const mockVerifyTerritoryPoint = jest.fn()
 
 jest.mock('../../../lib/prisma', () => ({
   prisma: { $queryRaw: mockQueryRaw },
@@ -12,6 +13,14 @@ jest.mock('../../../lib/cache', () => ({
   setCache: mockSetCache,
   delCache: mockDelCache,
   TTL: { PROFILE: 300, SESSION: 60, REPORT: 120, STATS: 600 },
+}))
+
+// This suite verifies territorial.service's legacy row/query behavior with a
+// deterministic Prisma mock. Real PostGIS polygon enforcement is exercised by
+// golden-territorial.integration.test.ts, so keep that new dependency isolated
+// here instead of consuming the ordered $queryRaw fixtures below.
+jest.mock('../../territories/territory-boundaries.service', () => ({
+  verifyTerritoryPoint: mockVerifyTerritoryPoint,
 }))
 
 import {
@@ -49,6 +58,11 @@ beforeEach(() => {
   jest.resetAllMocks()
   mockSetCache.mockResolvedValue(undefined)
   mockDelCache.mockResolvedValue(undefined)
+  mockVerifyTerritoryPoint.mockResolvedValue({
+    status: 'catalog_unavailable',
+    source_version: null,
+    distance_meters: null,
+  })
 })
 
 // ── createReport ──────────────────────────────────────────────────────────────
