@@ -110,16 +110,19 @@ export default function ReportsScreen() {
           setTargetSource('gps')
           await setActiveTerritory(suggestion.territory.code, 'gps').catch(() => null)
         } else if (suggestion.status === 'outside_colombia') {
+          setTargetTerritory(null)
           setTargetSource('manual')
           Alert.alert(
             'Estás fuera de Colombia',
             'Tu territorio de origen no cambia. Para aportar en Vértice selecciona manualmente el municipio colombiano al que pertenece la contribución y usa las coordenadas del hecho, no tu ubicación actual.',
           )
         } else {
+          setTargetTerritory(null)
           setTargetSource('manual')
           Alert.alert('Municipio no identificado', 'El GPS obtuvo coordenadas, pero debes confirmar manualmente el municipio colombiano del reporte.')
         }
       } catch {
+        setTargetTerritory(null)
         setTargetSource('manual')
       }
     } catch (cause) {
