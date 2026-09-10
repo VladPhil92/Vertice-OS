@@ -53,7 +53,7 @@ const ActivationBody = z.object({
 })
 const RankingQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(25) })
 const FeedQuery = z.object({ limit: z.coerce.number().int().min(1).max(30).default(12) })
-const ResolvePointQuery = z.object({
+const ResolvePointBody = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
   tolerance_m: z.coerce.number().int().min(0).max(1000).default(DEFAULT_BORDER_TOLERANCE_METERS),
@@ -84,12 +84,12 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
     })
   })
 
-  // Server-authoritative geographic resolver. It uses the locally synchronized
-  // DANE polygon catalog and never persists device coordinates as movement history.
-  app.get('/resolve', {
+  // Server-authoritative geographic resolver. Exact coordinates travel in the
+  // JSON body so URL/error telemetry cannot become a passive GPS history.
+  app.post('/resolve', {
     config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
   }, async (request, reply) => {
-    const parsed = ResolvePointQuery.safeParse(request.query)
+    const parsed = ResolvePointBody.safeParse(request.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'Coordenadas territoriales inválidas',
