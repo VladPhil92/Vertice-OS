@@ -18,6 +18,9 @@ export const REPORT_STATUSES = [
   'duplicate',
 ] as const
 
+export const REPORT_TERRITORY_SOURCES = ['manual', 'gps'] as const
+export type ReportTerritorySource = (typeof REPORT_TERRITORY_SOURCES)[number]
+export type StoredReportTerritorySource = ReportTerritorySource | 'legacy_home_fallback'
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number]
 export type ReportStatus = (typeof REPORT_STATUSES)[number]
 
@@ -35,6 +38,8 @@ export interface TerritorialReport {
   address_reference: string | null
   urgency_score: number | null
   status: ReportStatus
+  territory_code: string | null
+  territory_source: StoredReportTerritorySource | null
   media_urls: string[]
   created_at: Date
   updated_at: Date
@@ -51,6 +56,8 @@ export interface ReportSummary {
   neighborhood: string | null
   status: ReportStatus
   urgency_score: number | null
+  territory_code: string | null
+  territory_source: StoredReportTerritorySource | null
   media_urls: string[]
   created_at: Date
 }
@@ -88,6 +95,8 @@ export interface ReportRow {
   address_reference: string | null
   urgency_score: number | null
   status: string
+  territory_code?: string | null
+  territory_source?: string | null
   media_urls: string[]
   created_at: Date
   updated_at: Date
