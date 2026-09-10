@@ -96,9 +96,27 @@ requireToken(dynamicConfig, 'EAS_PROJECT_ID', 'dynamic EAS project config', fail
 requireToken(dynamicConfig, 'parsePublicHttpsUrl', 'release network validation', failures)
 requireToken(releaseNetwork, 'isPrivateIpv4', 'release IPv4 policy', failures)
 requireToken(releaseNetwork, 'isPrivateIpv6', 'release IPv6 policy', failures)
+requireToken(releaseNetwork, 'mappedIpv4FromIpv6', 'IPv4-mapped IPv6 policy', failures)
 requireToken(releaseNetwork, 'must use a public, non-local hostname', 'release public-host policy', failures)
 
-for (const blockedHost of ['localhost', 'api.localhost', '127.0.0.1', '10.0.2.2', '10.0.0.1', '100.64.0.1', '169.254.1.1', '172.16.0.1', '172.31.255.254', '192.168.1.5', '::1', 'fc00::1', 'fd12::1', 'fe80::1']) {
+for (const blockedHost of [
+  'localhost',
+  'api.localhost',
+  '127.0.0.1',
+  '10.0.2.2',
+  '10.0.0.1',
+  '100.64.0.1',
+  '169.254.1.1',
+  '172.16.0.1',
+  '172.31.255.254',
+  '192.168.1.5',
+  '::1',
+  'fc00::1',
+  'fd12::1',
+  'fe80::1',
+  '::ffff:192.168.1.1',
+  '::ffff:c0a8:101',
+]) {
   if (!isLocalOrPrivateHostname(blockedHost)) failures.push(`release network policy must reject ${blockedHost}`)
 }
 for (const allowedHost of ['api.vertice.example', '203.0.113.10', '2001:db8::1']) {
