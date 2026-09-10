@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "release_sha": "0000000000000000000000000000000000000000",
+  "app": {
+    "name": "Vértice OS",
+    "expo_slug": "vertice-os",
+    "scheme": "vertice",
+    "ios_bundle_id": "com.ctgone.verticeos",
+    "android_package": "com.ctgone.verticeos"
+  },
+  "public_urls": {
+    "privacy_policy": "https://replace.example/privacy",
+    "account_deletion": "https://vertice.ctgone.com/account-deletion",
+    "support": "https://replace.example/support"
+  },
+  "legal_identity": {
+    "developer_name": "PENDING_LEGAL_APPROVAL",
+    "privacy_contact": "PENDING_LEGAL_APPROVAL"
+  },
+  "permissions": [
+    {
+      "id": "location_foreground",
+      "purpose": "Attach a citizen report to the place selected or observed by the user.",
+      "status": "implemented"
+    },
+    {
+      "id": "camera",
+      "purpose": "Capture evidence only when the user chooses to add evidence to a report.",
+      "status": "implemented"
+    },
+    {
+      "id": "photo_library",
+      "purpose": "Select existing evidence only when the user chooses to add it to a report.",
+      "status": "implemented"
+    },
+    {
+      "id": "notifications",
+      "purpose": "Optional civic updates after an explicit user opt-in.",
+      "status": "implemented"
+    },
+    {
+      "id": "microphone",
+      "purpose": "Not requested by the current mobile configuration.",
+      "status": "not_collected"
+    }
+  ],
+  "data_inventory": [
+    {
+      "id": "account_contact",
+      "store_category": "contact_info",
+      "examples": ["email", "profile name when supplied"],
+      "purposes": ["account", "authentication", "support"],
+      "linked_to_identity": true,
+      "tracking": false,
+      "review_status": "review_required"
+    },
+    {
+      "id": "account_identifiers",
+      "store_category": "identifiers",
+      "examples": ["internal user id", "session/device identifiers", "Expo push token"],
+      "purposes": ["authentication", "security", "notifications"],
+      "linked_to_identity": true,
+      "tracking": false,
+      "review_status": "review_required"
+    },
+    {
+      "id": "precise_location",
+      "store_category": "location",
+      "examples": ["foreground device coordinates when the user requests location for a report"],
+      "purposes": ["app_functionality"],
+      "linked_to_identity": true,
+      "tracking": false,
+      "review_status": "review_required"
+    },
+    {
+      "id": "user_content",
+      "store_category": "user_content",
+      "examples": ["reports", "posts", "photos/evidence", "workflow/case content"],
+      "purposes": ["app_functionality", "community_features"],
+      "linked_to_identity": true,
+      "tracking": false,
+      "review_status": "review_required"
+    },
+    {
+      "id": "identity_assurance",
+      "store_category": "sensitive_info",
+      "examples": ["identity proofing state", "provider references", "document-derived verification data"],
+      "purposes": ["identity_verification", "fraud_prevention", "civic_integrity"],
+      "linked_to_identity": true,
+      "tracking": false,
+      "review_status": "review_required"
+    },
+    {
+      "id": "transaction_history",
+      "store_category": "purchases_financial",
+      "examples": ["subscription/crowdfunding transaction state when applicable"],
+      "purposes": ["payments", "accounting", "fraud_prevention"],
+      "linked_to_identity": true,
+      "tracking": false,
+      "review_status": "review_required"
+    }
+  ],
+  "store_reviews": {
+    "apple_app_privacy": {
+      "status": "pending",
+      "observed_at": null,
+      "evidence_ref": null,
+      "operator": null
+    },
+    "google_data_safety": {
+      "status": "pending",
+      "observed_at": null,
+      "evidence_ref": null,
+      "operator": null
+    },
+    "privacy_policy_legal_approval": {
+      "status": "pending",
+      "observed_at": null,
+      "evidence_ref": null,
+      "operator": null
+    },
+    "reviewer_access_plan": {
+      "status": "pending",
+      "observed_at": null,
+      "evidence_ref": null,
+      "operator": null
+    },
+    "store_metadata_copy": {
+      "status": "pending",
+      "observed_at": null,
+      "evidence_ref": null,
+      "operator": null
+    }
+  },
+  "notes": "Example/template only. Pending fields and placeholder URLs are intentional and must not be treated as store approval evidence."
+}
