@@ -17,6 +17,7 @@ export default function RootLayout() {
           <Stack.Screen name="report/[id]" />
           <Stack.Screen name="community/[citizenId]" />
           <Stack.Screen name="community/leaderboard" />
+          <Stack.Screen name="community/report" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="city/[code]" />
           <Stack.Screen name="territory/select" />

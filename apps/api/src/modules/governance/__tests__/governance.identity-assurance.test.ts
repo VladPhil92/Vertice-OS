@@ -17,6 +17,12 @@ jest.mock('../../../lib/prisma', () => ({
 }))
 
 const mockCastVote = jest.fn()
+const mockAssertCommunityTargetVisible = jest.fn().mockResolvedValue(undefined)
+
+jest.mock('../../community/community.visibility.service', () => ({
+  assertCommunityTargetVisible: mockAssertCommunityTargetVisible,
+  filterVisibleCommunityTargets: jest.fn(async (_targetType: string, items: unknown[]) => items),
+}))
 
 jest.mock('../governance.service', () => ({
   createProposal: jest.fn(),
@@ -72,6 +78,7 @@ afterAll(() => app.close())
 
 beforeEach(() => {
   jest.resetAllMocks()
+  mockAssertCommunityTargetVisible.mockResolvedValue(undefined)
 })
 
 describe('P0 civic identity assurance — canonical frozen voting boundary', () => {

@@ -18,6 +18,23 @@ function uniqueCitizen() {
   }
 }
 
+async function acceptCurrentCommunityPolicy(authorization: string) {
+  const state = await app.inject({
+    method: 'GET',
+    url: '/community/safety/policy',
+    headers: { authorization },
+  })
+  expect(state.statusCode).toBe(200)
+  const currentVersion = (state.json() as { current_version: string }).current_version
+  const accepted = await app.inject({
+    method: 'POST',
+    url: '/community/safety/policy/accept',
+    headers: { authorization },
+    payload: { policy_version: currentVersion },
+  })
+  expect(accepted.statusCode).toBe(200)
+}
+
 describeGolden('GJ-03 territorial golden journey', () => {
   beforeAll(async () => { await app.ready() })
   afterAll(async () => {
@@ -37,6 +54,7 @@ describeGolden('GJ-03 territorial golden journey', () => {
     expect(login.statusCode).toBe(200)
     const accessToken = (login.json() as { access_token: string }).access_token
     const authorization = `Bearer ${accessToken}`
+    await acceptCurrentCommunityPolicy(authorization)
 
     const idempotencyKey = `golden-report-${randomUUID()}`
     const payload = {

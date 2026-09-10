@@ -5,6 +5,12 @@ import {
   normalizeRequestedIdempotencyKey,
   type IdempotentMutationResult,
 } from '../../lib/idempotency'
+import { assertCommunityContentAllowed } from '../community/community.content-filter'
+import { ensureCommunityPolicyAccepted } from '../community/community.safety.service'
+import {
+  assertCommunityTargetVisible,
+  filterVisibleCommunityTargets,
+} from '../community/community.visibility.service'
 import {
   AttachReportMediaSchema,
   ConfirmReportMediaSchema,
@@ -40,7 +46,8 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const reports = await listReports(parsed.data)
+    const raw = await listReports(parsed.data)
+    const reports = await filterVisibleCommunityTargets('report', raw)
     return reply.send({ data: reports, count: reports.length })
   })
 
@@ -49,7 +56,8 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const reports = await getNearbyReports(parsed.data)
+    const raw = await getNearbyReports(parsed.data)
+    const reports = await filterVisibleCommunityTargets('report', raw)
     return reply.send({ data: reports, count: reports.length })
   })
 
@@ -57,6 +65,7 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/reports/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
+    await assertCommunityTargetVisible('report', id)
     return reply.send(await getReportById(id))
   })
 
@@ -86,6 +95,13 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
+    await ensureCommunityPolicyAccepted(request.citizen.sub)
+    assertCommunityContentAllowed([
+      { field: 'title', value: parsed.data.title },
+      { field: 'description', value: parsed.data.description },
+      { field: 'subcategory', value: parsed.data.subcategory },
+      { field: 'address_reference', value: parsed.data.address_reference },
+    ])
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: 'territorial:report:create',
@@ -109,6 +125,7 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
         details: body.success ? undefined : body.error.flatten().fieldErrors,
       })
     }
+    await ensureCommunityPolicyAccepted(request.citizen.sub)
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: `territorial:report:evidence:${params.data.id}`,
@@ -132,6 +149,8 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await updateReportStatus(id, parsed.data))
   })
 
+  // Moderators intentionally bypass the public visibility overlay so actioned
+  // records remain inspectable in the moderation/operations control plane.
   app.get('/admin/reports', { preHandler: requireModerator }, async (request, reply) => {
     const { status, category, locality_id } = request.query as {
       status?: string; category?: string; locality_id?: string
