@@ -53,9 +53,11 @@ Paridad de dominio implementada:
 
 El móvil consume contratos existentes y no calcula reputación, autoridad, settlement, payout ni elegibilidad financiera.
 
-La configuración de release mantiene identidad canónica `com.ctgone.verticeos`, perfiles EAS separados y una frontera fail-closed: preview/production requieren API HTTPS no local, UUID real de proyecto EAS y credencial Android Maps inyectada durante build. CI utiliza únicamente placeholders para demostrar wiring/configuración; no representa signing real.
+La configuración de release mantiene identidad canónica `com.ctgone.verticeos`, perfiles EAS separados y una frontera fail-closed: preview/production requieren API HTTPS pública, UUID real de proyecto EAS y credencial Android Maps inyectada durante build. La validación bloquea hosts loopback, privados, link-local/ULA y variantes IPv4-mapped. CI utiliza únicamente placeholders para demostrar wiring/configuración; no representa signing real.
 
-**Estado:** ✅ code/domain parity + production configuration implemented; 🟡 EAS ownership/signing, provider credentials, physical-device and store certification pending.
+El required check `Security Scan` incorpora además una frontera de credenciales de firma móvil: rechaza keystores, claves `.p8`, bundles `.p12`, provisioning profiles, Firebase/service-account files y material de private key accidentalmente versionado. `.gitignore` excluye también `.apk`, `.aab` e `.ipa` generados.
+
+**Estado:** ✅ code/domain parity + production configuration + repository signing hygiene implemented; 🟡 EAS ownership/signing, provider credentials, physical-device and store certification pending.
 
 ## 2. Plataforma territorial nacional
 
@@ -150,6 +152,7 @@ Gates especializados incluyen:
 - Mobile Core Parity;
 - Mobile Device Release Contract;
 - Mobile production fail-closed configuration;
+- Mobile signing/provider credential boundary;
 - Mobile Domain Parity;
 - Account Deletion Privacy;
 - Cartagena Pilot Same-SHA Runtime Canary;
