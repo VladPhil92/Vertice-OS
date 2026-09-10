@@ -46,6 +46,7 @@ This document separates work that can be completed and evidenced by repository a
 - [x] Mobile Core Parity.
 - [x] Mobile Device Release contract.
 - [x] Mobile Domain Parity source/type/export gate.
+- [x] Mobile production configuration fail-closed gate.
 - [x] Account Deletion Privacy source/unit/type/export gate.
 - [x] Cartagena same-SHA production canary infrastructure.
 - [x] Market Release Certification evidence schema and fail-closed verifier.
@@ -54,28 +55,43 @@ These gates can prove source/build/integration/runtime properties when the requi
 
 ## B. Operator/external completion — mandatory human boundary
 
-### B1. GitHub governance
+### B1. GitHub governance — COMPLETE
 
-- [ ] Enable `main` branch protection/ruleset.
-- [ ] Require pull request before merge.
-- [ ] Require conversation resolution.
-- [ ] Require stable CI/security/release checks.
-- [ ] Block force pushes and branch deletion.
-- [ ] Keep administrative bypass minimal.
+- [x] `Golden Main Protection` repository ruleset active.
+- [x] Require pull request before merge.
+- [x] Require conversation resolution.
+- [x] Require seven stable CI/security/governance GitHub Actions checks.
+- [x] Require branch to be up to date before merge.
+- [x] Block force pushes and branch deletion.
+- [x] Bypass actors = none.
+- [x] Operational PR test confirmed both blocked and permitted merge states.
 
-Current audit evidence on 9 September 2026 reports `main.protected = false`; this is an administrative configuration, not a repository-file change.
+GitHub reports `main.protected = true`. Operational evidence is recorded in `docs/engineering/MAIN_PROTECTION_VERIFICATION.md` and PR #148; governance issue #128 is closed.
 
 ### B2. Mobile ownership and signing
 
-- [ ] Create/link the real EAS project and set `EAS_PROJECT_ID`.
+Repository-side Phase 8A:
+
+- [x] Canonical Expo slug/scheme and Android/iOS application identifiers are contract-checked.
+- [x] EAS preview/production profiles are explicit and environment-bound.
+- [x] EAS builds require committed source state.
+- [x] Production uses remote build versions, auto-increment and Android app-bundle/store distribution.
+- [x] Preview/production config fails closed without HTTPS API URL, EAS project UUID and Android Maps key.
+- [x] CI resolves/introspects/exports a production-like configuration using non-secret placeholders.
+
+External/account-owner boundary:
+
+- [ ] Create/link the real EAS project and set its real `EAS_PROJECT_ID` in EAS environments.
+- [ ] Configure real preview/production `EXPO_PUBLIC_API_URL` values in EAS.
 - [ ] Own/configure Apple Developer account.
 - [ ] Own/configure Google Play Console account.
-- [ ] Provision Android signing identity.
-- [ ] Provision iOS certificates/profiles.
-- [ ] Restrict Google Maps Android key to package/signing certificate.
+- [ ] Provision Android signing identity / Play App Signing.
+- [ ] Provision iOS distribution certificates/profiles.
+- [ ] Provision the Android Google Maps key and restrict it to package `com.ctgone.verticeos` + real signing SHA-1.
 - [ ] Configure APNs/FCM/EAS push credentials.
+- [ ] Generate signed preview/production-representative Android and iOS builds.
 
-Secrets and signing identities must never be committed to Git.
+Secrets and signing identities must never be committed to Git. See `docs/engineering/MOBILE_PRODUCTION_RELEASE.md`.
 
 ### B3. Physical-device certification
 
@@ -169,24 +185,24 @@ Golden E2E                          PASS
 Golden Financial Integrity          PASS
 Golden Governance                   PASS
 Production Hardening                PASS
-Account Deletion Privacy             PASS
+Account Deletion Privacy            PASS
 Web/API production SHA              MATCH
 /health/live                        PASS
 /health/ready                       PASS
 /health/release                     PASS
-Same-SHA runtime canary              PASS
-Android signed physical smoke        PASS
-IOS signed physical smoke            PASS
-Account deletion physical smoke      PASS
-Veriff external canary               PASS
-Cloudflare Images canary             PASS
-Cloudflare deletion purge canary     PASS
-Mercado Pago bounded canary          PASS
-Wompi/BRE-B bounded payout canary    PASS
-Backup/restore drill                 PASS
-Legal approval                       APPROVED
-App Store release                    APPROVED
-Google Play release                  APPROVED
+Same-SHA runtime canary             PASS
+Android signed physical smoke       PASS
+IOS signed physical smoke           PASS
+Account deletion physical smoke     PASS
+Veriff external canary              PASS
+Cloudflare Images canary            PASS
+Cloudflare deletion purge canary    PASS
+Mercado Pago bounded canary         PASS
+Wompi/BRE-B bounded payout canary   PASS
+Backup/restore drill                PASS
+Legal approval                      APPROVED
+App Store release                   APPROVED
+Google Play release                 APPROVED
 ```
 
 The strict Market Release Certification evidence gate must pass for that exact release SHA. It remains a companion to, not a replacement for, the existing automated CI/security/runtime gates.
