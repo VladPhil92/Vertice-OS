@@ -14,6 +14,10 @@ The release chain is:
 
 ## Certification states
 
+### `BLOCKED`
+
+The candidate SHA is invalid, the repository contract is not ready, or another base technical precondition failed. No stronger readiness state may be inferred from external assertions while this state is active.
+
 ### `REPOSITORY_CONTRACT_READY`
 
 The code path, data invariants, source contracts and automated tests are present and passing for the exact candidate SHA. This is an engineering statement only.
@@ -95,6 +99,7 @@ The Phase 7G.4 certification gate validates the exact submitted SHA and must inc
 - dedicated certification policy tests;
 - the real PostGIS/Redis/Neo4j territorial-assurance Golden journey;
 - the real governance Golden journey;
+- the Phase 7G.4 adversarial Golden journey;
 - current Phase 7G.3 web/mobile server-authority contracts.
 
 A passing automated gate therefore establishes repository readiness, not external production certification.
@@ -116,6 +121,8 @@ A production evidence bundle should be generated and retained by the authorized 
 Repository examples/templates must remain clearly non-certified and contain false/placeholder assertions where external proof is absent.
 
 ## Release decision
+
+Engineering must declare **BLOCKED** when the candidate SHA or repository contract is invalid.
 
 Engineering may declare **REPOSITORY_CONTRACT_READY** after an exact-SHA green gate.
 
