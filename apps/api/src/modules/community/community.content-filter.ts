@@ -21,10 +21,15 @@ const pornPromotionPatterns = [
   /\b(?:vendo|vender|compra|comprar|buy|selling)\s+(?:contenido\s+)?(?:porno(?:graf[ií]a)?|nudes?|packs?\s+sexuales?)\b/i,
 ]
 
+function stripUnsafeControlCharacters(value: string): string {
+  return [...value].filter((character) => {
+    const code = character.charCodeAt(0)
+    return code === 0x09 || code === 0x0a || code === 0x0d || (code >= 0x20 && code !== 0x7f)
+  }).join('')
+}
+
 function normalizedText(value: string): string {
-  return value
-    .normalize('NFKC')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+  return stripUnsafeControlCharacters(value.normalize('NFKC'))
     .replace(/\s+/g, ' ')
     .trim()
 }
