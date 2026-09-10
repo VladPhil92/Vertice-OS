@@ -10,6 +10,19 @@ export const CIVIC_PROFILE_TYPES = [
 
 export const COMMUNITY_ACTIVITY_TYPES = ['report', 'proposal', 'publication'] as const
 export const COMMUNITY_VALIDATION_STANCES = ['corroborate', 'dispute'] as const
+export const COMMUNITY_SAFETY_TARGET_TYPES = ['profile', 'report', 'proposal', 'publication'] as const
+export const COMMUNITY_SAFETY_REASONS = [
+  'harassment',
+  'hate',
+  'sexual_content',
+  'violence',
+  'spam',
+  'impersonation',
+  'privacy',
+  'other',
+] as const
+export const COMMUNITY_SAFETY_REPORT_STATUSES = ['pending', 'reviewing', 'actioned', 'dismissed'] as const
+export const CURRENT_COMMUNITY_POLICY_VERSION = '2026-09-09.1' as const
 
 export const CommunityFeedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(40),
@@ -76,10 +89,41 @@ export const CivicActivityValidationSchema = z.object({
   }
 })
 
+export const CommunityPolicyAcceptanceSchema = z.object({
+  policy_version: z.literal(CURRENT_COMMUNITY_POLICY_VERSION),
+})
+
+export const CommunitySafetyReportSchema = z.object({
+  target_type: z.enum(COMMUNITY_SAFETY_TARGET_TYPES),
+  target_id: z.string().uuid(),
+  reason: z.enum(COMMUNITY_SAFETY_REASONS),
+  details: z.string().trim().min(5).max(1000).nullable().optional(),
+})
+
+export const CommunityModerationQueueQuerySchema = z.object({
+  status: z.enum(COMMUNITY_SAFETY_REPORT_STATUSES).default('pending'),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+})
+
+export const CommunitySafetyReportParamsSchema = z.object({
+  reportId: z.string().uuid(),
+})
+
+export const CommunityModerationResolutionSchema = z.object({
+  action: z.enum(['dismiss', 'hide_target']),
+  note: z.string().trim().min(10).max(1000),
+})
+
 export type CommunityFeedQuery = z.infer<typeof CommunityFeedQuerySchema>
 export type CommunityLeaderboardQuery = z.infer<typeof CommunityLeaderboardQuerySchema>
 export type UpdateCivicProfileInput = z.infer<typeof UpdateCivicProfileSchema>
 export type CivicActivityValidationInput = z.infer<typeof CivicActivityValidationSchema>
+export type CommunitySafetyReportInput = z.infer<typeof CommunitySafetyReportSchema>
+export type CommunityModerationQueueQuery = z.infer<typeof CommunityModerationQueueQuerySchema>
+export type CommunityModerationResolutionInput = z.infer<typeof CommunityModerationResolutionSchema>
 export type CivicProfileType = typeof CIVIC_PROFILE_TYPES[number]
 export type CommunityActivityType = typeof COMMUNITY_ACTIVITY_TYPES[number]
 export type CommunityValidationStance = typeof COMMUNITY_VALIDATION_STANCES[number]
+export type CommunitySafetyTargetType = typeof COMMUNITY_SAFETY_TARGET_TYPES[number]
+export type CommunitySafetyReason = typeof COMMUNITY_SAFETY_REASONS[number]
+export type CommunitySafetyReportStatus = typeof COMMUNITY_SAFETY_REPORT_STATUSES[number]
