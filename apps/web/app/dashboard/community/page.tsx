@@ -170,10 +170,10 @@ export default function CommunityPage() {
       const isTypedFilter = filter === 'report' || filter === 'proposal'
       const endpoint = filter === 'following'
         ? '/community/following/feed?limit=40'
-        : `/community/feed?limit=40${isTypedFilter ? `&type=${filter}` : ''}`
+        : `/community/feed/me?limit=40${isTypedFilter ? `&type=${filter}` : ''}`
 
       const [feedResponse, leaderboardResponse] = await Promise.all([
-        apiFetch<FeedResponse>(endpoint, filter === 'following' ? {} : { public: true }),
+        apiFetch<FeedResponse>(endpoint),
         apiFetch<LeaderboardResponse>('/community/leaderboard?limit=10', { public: true }),
       ])
 
