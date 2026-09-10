@@ -45,6 +45,7 @@ const BASE_PROPOSAL = {
   executive_summary: null,
   category: 'infraestructura',
   scope: 'city',
+  territory_code: 'CO-MP-13001',
   locality_id: null,
   neighborhood: null,
   status: 'debate',
@@ -83,8 +84,8 @@ beforeEach(() => {
   )
 })
 
-describe('P0 governance identity assurance policy', () => {
-  it('freezes the voter roll from active proof ledger rows only', async () => {
+describe('P0 + Phase 7G.2 governance assurance policy', () => {
+  it('freezes the voter roll only from active identity and territorial proof ledgers', async () => {
     const votingProposal = {
       ...BASE_PROPOSAL,
       status: 'voting',
@@ -112,7 +113,14 @@ describe('P0 governance identity assurance policy', () => {
     expect(rosterSql).toContain('cip.verified_at <= NOW()')
     expect(rosterSql).toContain('cip.revoked_at IS NULL')
     expect(rosterSql).toContain('cip.expires_at IS NULL OR cip.expires_at > NOW()')
+    expect(rosterSql).toContain('territory_assurance_requests')
+    expect(rosterSql).toContain("territory_assurance.status = 'verified'")
+    expect(rosterSql).toContain('territory_assurance.expires_at > NOW()')
+    expect(rosterSql).toContain('territory_assurance_request_id')
+    expect(rosterSql).toContain('identity_proof_id')
     expect(rosterSql).not.toContain('external_identities')
+    const rosterValues = (mockQueryRaw.mock.calls[1]?.[0] as { values?: unknown[] }).values ?? []
+    expect(rosterValues).toContain('CO-MP-13001')
   })
 
   it('rejects a direct voter who is not in the frozen roll', async () => {

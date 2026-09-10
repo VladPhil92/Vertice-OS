@@ -31,6 +31,7 @@ import {
   getMyDelegations,
   getGovernanceStats,
 } from './governance.service'
+import { getGovernanceEligibilityPreflight } from './governance.eligibility'
 import { adminAdvanceProposalSafely } from './governance.admin-transition'
 import { adminArchiveProposalSafely } from './governance.admin-security'
 import { advanceProposalStageSafely } from './governance.lifecycle'
@@ -65,6 +66,18 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string }
     await assertCommunityTargetVisible('proposal', id)
     return reply.send(await getVoteTally(id))
+  })
+
+  // Phase 7G.2: before voting opens this evaluates current identity + residence
+  // assurance. Once voting_starts_at exists it switches authority exclusively to
+  // the immutable proposal_voter_roll snapshot.
+  app.get('/proposals/:id/eligibility', {
+    preHandler: requireVerified,
+    config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    await assertCommunityTargetVisible('proposal', id)
+    return reply.send(await getGovernanceEligibilityPreflight(id, request.citizen.sub))
   })
 
   app.post('/proposals', {

@@ -17,6 +17,8 @@ export const TERRITORY_ASSURANCE_REQUEST_STATUSES = [
 ] as const
 
 export const TERRITORY_ASSURANCE_DECISIONS = ['approve', 'reject', 'revoke'] as const
+export const TERRITORY_ASSURANCE_VALIDITY_DAYS = 365
+export const TERRITORY_ASSURANCE_RENEWAL_WINDOW_DAYS = 30
 
 export type TerritoryAssuranceEvidenceType = typeof TERRITORY_ASSURANCE_EVIDENCE_TYPES[number]
 export type TerritoryAssuranceRequestStatus = typeof TERRITORY_ASSURANCE_REQUEST_STATUSES[number]
@@ -31,6 +33,8 @@ interface TerritoryAssuranceRequestRow {
   requested_level: number
   evidence_type: TerritoryAssuranceEvidenceType
   submitted_at: Date
+  verified_at: Date | null
+  expires_at: Date | null
   reviewed_at: Date | null
   reviewed_by: string | null
   decision_reason: string | null
@@ -46,6 +50,9 @@ interface CitizenAssuranceRow {
   territory_assurance_source: string
   territory_verified_at: Date | null
   territory_assurance_request_id: string | null
+  current_request_status: TerritoryAssuranceRequestStatus | null
+  current_request_verified_at: Date | null
+  current_request_expires_at: Date | null
 }
 
 function makeError(message: string, statusCode: number, code: string): Error {
@@ -66,6 +73,8 @@ function requestProjection(alias = 'r'): Prisma.Sql {
     ${alias}.requested_level,
     ${alias}.evidence_type,
     ${alias}.submitted_at,
+    ${alias}.verified_at,
+    ${alias}.expires_at,
     ${alias}.reviewed_at,
     ${alias}.reviewed_by::text,
     ${alias}.decision_reason,
@@ -83,9 +92,14 @@ export async function getMyTerritoryAssurance(citizenId: string) {
       c.territory_assurance_level,
       c.territory_assurance_source,
       c.territory_verified_at,
-      c.territory_assurance_request_id::text
+      c.territory_assurance_request_id::text,
+      current_request.status AS current_request_status,
+      current_request.verified_at AS current_request_verified_at,
+      current_request.expires_at AS current_request_expires_at
     FROM citizens c
     LEFT JOIN territories t ON t.code = c.territory_code
+    LEFT JOIN territory_assurance_requests current_request
+      ON current_request.id = c.territory_assurance_request_id
     WHERE c.id = ${citizenId}::uuid
   `)
   const citizen = rows[0]
@@ -101,12 +115,30 @@ export async function getMyTerritoryAssurance(citizenId: string) {
     LIMIT 1
   `)
 
+  const now = Date.now()
+  const expiry = citizen.current_request_expires_at?.getTime() ?? 0
+  const effective = citizen.territory_assurance_level >= 1
+    && citizen.current_request_status === 'verified'
+    && citizen.current_request_verified_at !== null
+    && expiry > now
+  const renewalWindowMs = TERRITORY_ASSURANCE_RENEWAL_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  const renewalRequired = effective && expiry <= now + renewalWindowMs
+  const expired = citizen.territory_assurance_level >= 1
+    && citizen.current_request_status === 'verified'
+    && expiry > 0
+    && expiry <= now
+
   return {
     ...citizen,
+    effective_territory_assurance_level: effective ? citizen.territory_assurance_level : 0,
+    territory_assurance_effective: effective,
+    renewal_required: renewalRequired,
     pending_request: pending[0] ?? null,
-    governance_effect: citizen.territory_assurance_level >= 1
+    governance_effect: effective
       ? 'territorial_prerequisite_satisfied'
-      : 'none_without_verified_residence',
+      : expired
+        ? 'none_expired_residence'
+        : 'none_without_verified_residence',
   }
 }
 
@@ -122,8 +154,13 @@ export async function submitTerritoryAssuranceRequest(params: {
       citizen_id: string
       territory_code: string | null
       territory_level: string | null
+      territory_assurance_request_id: string | null
     }>>(Prisma.sql`
-      SELECT c.id::text AS citizen_id, c.territory_code, t.level AS territory_level
+      SELECT
+        c.id::text AS citizen_id,
+        c.territory_code,
+        t.level AS territory_level,
+        c.territory_assurance_request_id::text
       FROM citizens c
       LEFT JOIN territories t ON t.code = c.territory_code
       WHERE c.id = ${params.citizenId}::uuid
@@ -144,6 +181,24 @@ export async function submitTerritoryAssuranceRequest(params: {
         409,
         'TERRITORY_ASSURANCE_HOME_LEVEL_UNSUPPORTED',
       )
+    }
+
+    // Do not manufacture duplicate reviews while the current verification has
+    // more than the 30-day renewal window left. Inside that window, a renewal
+    // request may coexist with the still-valid current verification.
+    if (citizen.territory_assurance_request_id) {
+      const current = await tx.$queryRaw<TerritoryAssuranceRequestRow[]>(Prisma.sql`
+        SELECT ${requestProjection()}
+        FROM territory_assurance_requests r
+        JOIN territories t ON t.code = r.territory_code
+        WHERE r.id = ${citizen.territory_assurance_request_id}::uuid
+          AND r.citizen_id = ${params.citizenId}::uuid
+          AND r.territory_code = ${citizen.territory_code}
+          AND r.status = 'verified'
+          AND r.expires_at > NOW() + INTERVAL '30 days'
+        LIMIT 1
+      `)
+      if (current[0]) return { request: current[0], reused: true, renewal: false }
     }
 
     const inserted = await tx.$queryRaw<TerritoryAssuranceRequestRow[]>(Prisma.sql`
@@ -168,6 +223,8 @@ export async function submitTerritoryAssuranceRequest(params: {
         requested_level,
         evidence_type,
         submitted_at,
+        verified_at,
+        expires_at,
         reviewed_at,
         reviewed_by::text,
         decision_reason,
@@ -184,10 +241,15 @@ export async function submitTerritoryAssuranceRequest(params: {
           ${params.citizenId}::uuid,
           ${citizen.territory_code},
           ${params.citizenId}::uuid,
-          'submitted', NULL, 'submitted', 'citizen_submission'
+          'submitted', NULL, 'submitted',
+          ${citizen.territory_assurance_request_id ? 'citizen_renewal_submission' : 'citizen_submission'}
         )
       `)
-      return { request: inserted[0], reused: false }
+      return {
+        request: inserted[0],
+        reused: false,
+        renewal: citizen.territory_assurance_request_id !== null,
+      }
     }
 
     const existing = await tx.$queryRaw<TerritoryAssuranceRequestRow[]>(Prisma.sql`
@@ -196,7 +258,7 @@ export async function submitTerritoryAssuranceRequest(params: {
       JOIN territories t ON t.code = r.territory_code
       WHERE r.citizen_id = ${params.citizenId}::uuid
         AND r.territory_code = ${citizen.territory_code}
-        AND r.status IN ('submitted', 'verified')
+        AND r.status = 'submitted'
       ORDER BY r.submitted_at DESC
       LIMIT 1
     `)
@@ -207,7 +269,7 @@ export async function submitTerritoryAssuranceRequest(params: {
         'TERRITORY_ASSURANCE_REQUEST_CONFLICT',
       )
     }
-    return { request: existing[0], reused: true }
+    return { request: existing[0], reused: true, renewal: citizen.territory_assurance_request_id !== null }
   })
 }
 
@@ -242,10 +304,12 @@ export async function decideTerritoryAssuranceRequest(params: {
   return prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<Array<TerritoryAssuranceRequestRow & {
       current_territory_code: string | null
+      current_assurance_request_id: string | null
     }>>(Prisma.sql`
       SELECT
         ${requestProjection()},
-        c.territory_code AS current_territory_code
+        c.territory_code AS current_territory_code,
+        c.territory_assurance_request_id::text AS current_assurance_request_id
       FROM territory_assurance_requests r
       JOIN territories t ON t.code = r.territory_code
       LEFT JOIN citizens c ON c.id = r.citizen_id
@@ -280,6 +344,8 @@ export async function decideTerritoryAssuranceRequest(params: {
       const verified = await tx.$queryRaw<TerritoryAssuranceRequestRow[]>(Prisma.sql`
         UPDATE territory_assurance_requests r
         SET status = 'verified',
+            verified_at = NOW(),
+            expires_at = NOW() + INTERVAL '365 days',
             reviewed_at = NOW(),
             reviewed_by = ${params.actorId}::uuid,
             decision_reason = ${params.reason},
@@ -290,13 +356,46 @@ export async function decideTerritoryAssuranceRequest(params: {
         RETURNING ${requestProjection('r')}
       `)
       const row = verified[0]
-      if (!row) throw makeError('Solicitud territorial no encontrada', 404, 'TERRITORY_ASSURANCE_REQUEST_NOT_FOUND')
+      if (!row || !row.verified_at || !row.expires_at) {
+        throw makeError('Solicitud territorial no encontrada', 404, 'TERRITORY_ASSURANCE_REQUEST_NOT_FOUND')
+      }
+
+      // A renewal supersedes only the previously-current verified provenance.
+      // Historical rows remain auditable; no bulk rewrite can erase decisions.
+      if (request.current_assurance_request_id && request.current_assurance_request_id !== row.id) {
+        const superseded = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          UPDATE territory_assurance_requests
+          SET status = 'superseded', updated_at = NOW()
+          WHERE id = ${request.current_assurance_request_id}::uuid
+            AND citizen_id = ${request.citizen_id}::uuid
+            AND status = 'verified'
+          RETURNING id::text
+        `)
+        if (superseded[0]) {
+          await tx.$executeRaw(Prisma.sql`
+            INSERT INTO territory_assurance_events (
+              request_id, citizen_id, territory_code, actor_id,
+              event_type, status_from, status_to, reason
+            ) VALUES (
+              ${request.current_assurance_request_id}::uuid,
+              ${request.citizen_id}::uuid,
+              ${row.territory_code},
+              ${params.actorId}::uuid,
+              'superseded', 'verified', 'superseded', 'residence_assurance_renewed'
+            )
+          `)
+        }
+      }
 
       const citizenUpdated = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         UPDATE citizens
         SET territory_assurance_level = ${row.requested_level},
             territory_assurance_source = ${`assurance:${row.evidence_type}`},
-            territory_verified_at = NOW(),
+            territory_verified_at = (
+              SELECT verified_at
+              FROM territory_assurance_requests
+              WHERE id = ${row.id}::uuid
+            ),
             territory_assurance_request_id = ${row.id}::uuid
         WHERE id = ${request.citizen_id}::uuid
           AND territory_code = ${row.territory_code}
