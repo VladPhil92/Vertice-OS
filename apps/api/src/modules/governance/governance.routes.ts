@@ -8,6 +8,10 @@ import {
 import { assertCommunityContentAllowed } from '../community/community.content-filter'
 import { ensureCommunityPolicyAccepted } from '../community/community.safety.service'
 import {
+  assertCommunityTargetVisible,
+  filterVisibleCommunityTargets,
+} from '../community/community.visibility.service'
+import {
   CreateProposalSchema,
   ListProposalsSchema,
   AdminListProposalsSchema,
@@ -44,7 +48,8 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const proposals = await listProposals(parsed.data)
+    const raw = await listProposals(parsed.data)
+    const proposals = await filterVisibleCommunityTargets('proposal', raw)
     return reply.send({ data: proposals, count: proposals.length })
   })
 
@@ -52,11 +57,13 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/proposals/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
+    await assertCommunityTargetVisible('proposal', id)
     return reply.send(await getProposalById(id))
   })
 
   app.get('/proposals/:id/tally', async (request, reply) => {
     const { id } = request.params as { id: string }
+    await assertCommunityTargetVisible('proposal', id)
     return reply.send(await getVoteTally(id))
   })
 
@@ -90,6 +97,7 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     config: { rateLimit: { max: 50, timeWindow: '1 hour' } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
+    await assertCommunityTargetVisible('proposal', id)
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: `governance:proposal:endorse:${id}`,
@@ -109,6 +117,7 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
+    await assertCommunityTargetVisible('proposal', id)
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: `governance:proposal:vote:${id}`,
@@ -129,6 +138,7 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
+    await assertCommunityTargetVisible('proposal', id)
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: `governance:proposal:advance:${id}`,
@@ -172,6 +182,8 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ success: true })
   })
 
+  // Moderators intentionally bypass the public visibility overlay so actioned
+  // proposals remain inspectable in the moderation/operations control plane.
   app.get('/admin/proposals', {
     preHandler: requireModerator,
     config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
