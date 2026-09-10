@@ -7,6 +7,12 @@ import { territoryLaunchOperationsRoutes } from './territories.operations.routes
 import { territoryPublicRoutes } from './territories.public.routes'
 import { territoryCitizenActivationRoutes } from './territories.activation.routes'
 import {
+  DEFAULT_BORDER_TOLERANCE_METERS,
+  getBoundaryCatalogStatus,
+  resolveTerritoryByPoint,
+  syncDaneMunicipalBoundaries,
+} from './territory-boundaries.service'
+import {
   TERRITORY_CONTEXT_SOURCES,
   getCitizenTerritoryContext,
   setActiveTerritoryContext,
@@ -47,6 +53,11 @@ const ActivationBody = z.object({
 })
 const RankingQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(25) })
 const FeedQuery = z.object({ limit: z.coerce.number().int().min(1).max(30).default(12) })
+const ResolvePointQuery = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+  tolerance_m: z.coerce.number().int().min(0).max(1000).default(DEFAULT_BORDER_TOLERANCE_METERS),
+})
 
 export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
   // Register specific Phase 7B/7C subtrees before the generic /:code routes.
@@ -71,6 +82,25 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
       scoring_boundary: 'civic_activity_only',
       note: 'El momentum territorial no concede identidad, reputación, autoridad ni peso de voto.',
     })
+  })
+
+  // Server-authoritative geographic resolver. It uses the locally synchronized
+  // DANE polygon catalog and never persists device coordinates as movement history.
+  app.get('/resolve', {
+    config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const parsed = ResolvePointQuery.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Coordenadas territoriales inválidas',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+    return reply.send(await resolveTerritoryByPoint(
+      parsed.data.lat,
+      parsed.data.lng,
+      parsed.data.tolerance_m,
+    ))
   })
 
   // Home territory is a durable civic affiliation. Movement must never rewrite it.
@@ -119,6 +149,15 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
     preHandler: requireSuperadmin,
     config: { rateLimit: { max: 4, timeWindow: '1 hour' } },
   }, async (_request, reply) => reply.send(await syncDivipolaCatalog({ force: true })))
+
+  app.get('/admin/boundaries/status', {
+    preHandler: requireSuperadmin,
+  }, async (_request, reply) => reply.send(await getBoundaryCatalogStatus()))
+
+  app.post('/admin/sync-boundaries', {
+    preHandler: requireSuperadmin,
+    config: { rateLimit: { max: 2, timeWindow: '1 hour' } },
+  }, async (_request, reply) => reply.send(await syncDaneMunicipalBoundaries({ force: true })))
 
   app.patch('/admin/:code/activation', {
     preHandler: requireSuperadmin,
