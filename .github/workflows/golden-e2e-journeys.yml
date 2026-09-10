@@ -136,7 +136,8 @@ jobs:
             apps/api/prisma/migrations/20260909033000_national_territory_platform_phase7a/migration.sql \
             apps/api/prisma/migrations/20260910033000_community_ugc_trust_safety/migration.sql \
             apps/api/prisma/migrations/20260910122000_national_territory_mobility_context/migration.sql \
-            apps/api/prisma/migrations/20260910131500_territory_boundary_integrity/migration.sql
+            apps/api/prisma/migrations/20260910131500_territory_boundary_integrity/migration.sql \
+            apps/api/prisma/migrations/20260910173000_territory_residence_assurance_phase7g1/migration.sql
           do
             echo "Applying Golden schema slice: $migration"
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
@@ -158,4 +159,4 @@ jobs:
           DID_COMMITMENT_PEPPER: golden-did-commitment-pepper-32-chars-minimum
           CIVIC_IDENTITY_ASSURANCE_PROVIDERS: trusted_kyc
           CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: '{"trusted_kyc":{"golden-key":"golden-trusted-kyc-adapter-secret-32-characters-minimum"}}'
-        run: pnpm --filter @vertice/api test -- golden-journeys.integration.test.ts golden-territorial.integration.test.ts golden-governance.integration.test.ts golden-mobile-push.integration.test.ts --runInBand
+        run: pnpm --filter @vertice/api test -- golden-journeys.integration.test.ts golden-territorial.integration.test.ts golden-territory-assurance.integration.test.ts golden-governance.integration.test.ts golden-mobile-push.integration.test.ts --runInBand
