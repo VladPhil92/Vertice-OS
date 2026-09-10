@@ -51,6 +51,31 @@ describe('Phase 7G.4 territorial assurance certification', () => {
     expect(result.blockers).toContain('external_evidence_missing')
   })
 
+  test('invalid candidate SHA is explicitly BLOCKED', () => {
+    const result = evaluateTerritorialAssuranceCertification({
+      candidateSha: 'main',
+      repositoryContractReady: true,
+    })
+
+    expect(result.repository_contract_ready).toBe(false)
+    expect(result.production_election_certified).toBe(false)
+    expect(result.boundary).toBe('BLOCKED')
+    expect(result.blockers).toContain('candidate_sha_invalid')
+  })
+
+  test('failed repository contract remains BLOCKED even with complete external assertions', () => {
+    const result = evaluateTerritorialAssuranceCertification({
+      candidateSha: SHA,
+      repositoryContractReady: false,
+      externalEvidence: completeEvidence(),
+    })
+
+    expect(result.repository_contract_ready).toBe(false)
+    expect(result.production_election_certified).toBe(false)
+    expect(result.boundary).toBe('BLOCKED')
+    expect(result.blockers).toContain('repository_contract_not_ready')
+  })
+
   test('fails closed when external evidence belongs to a different SHA', () => {
     const evidence = completeEvidence({
       candidate_sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
