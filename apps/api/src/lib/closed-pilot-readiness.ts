@@ -1,9 +1,11 @@
+import type { ClosedPilotAccessState } from './closed-pilot-access'
 import type { FeatureCapabilities } from './feature-secrets'
 import type { RuntimeDependencyChecks } from './runtime-readiness'
 
 export interface ClosedPilotReadinessInput {
   checks: RuntimeDependencyChecks
   capabilities: FeatureCapabilities
+  access: ClosedPilotAccessState
   revision: string
   production: boolean
 }
@@ -49,8 +51,8 @@ export const CLOSED_PILOT_SAFEGUARDS: ClosedPilotSafeguards = {
  *
  * The core API may keep serving safely when Neo4j is degraded, but the first
  * real-user pilot exercises Community/social graph behavior and therefore
- * requires Neo4j to be healthy. Likewise, real-money capabilities must remain
- * disabled until their separate external/provider certification is complete.
+ * requires Neo4j to be healthy. Real-money capabilities remain disabled and
+ * the invitation boundary must be executable, not merely documented.
  *
  * This evaluator never grants market-release certification. It only establishes
  * whether an exact runtime is safe enough for a bounded, invite-only pilot.
@@ -58,6 +60,7 @@ export const CLOSED_PILOT_SAFEGUARDS: ClosedPilotSafeguards = {
 export function assessClosedPilotReadiness({
   checks,
   capabilities,
+  access,
   revision,
   production,
 }: ClosedPilotReadinessInput): ClosedPilotReadinessAssessment {
@@ -65,6 +68,10 @@ export function assessClosedPilotReadiness({
 
   for (const dependency of PILOT_DEPENDENCIES) {
     if (checks[dependency] !== 'ok') blockers.push(`dependency:${dependency}`)
+  }
+
+  if (!access.enabled || !access.configured || access.mode !== 'closed_invite_only') {
+    blockers.push('pilot:access_control_not_ready')
   }
 
   for (const [capability, state] of Object.entries(capabilities)) {
