@@ -58,7 +58,8 @@ requireText('certificationGolden', 'TERRITORY_ASSURANCE_EXPIRED')
 requireText('certificationGolden', 'TERRITORY_SCOPE_MISMATCH')
 requireText('certificationGolden', 'TERRITORY_ASSURANCE_REQUIRED')
 requireText('certificationGolden', 'ELIGIBLE_FROZEN_ELECTORATE')
-requireText('certificationGolden', 'reputation_score = 99999')
+requireText('certificationGolden', 'reputation_score = 100')
+requireText('certificationGolden', '/community/safety/policy/accept')
 requireText('certificationGolden', "expires_at = NOW() - INTERVAL '1 minute'")
 requireText('certificationGolden', "expires_at = NOW() + INTERVAL '20 days'")
 
@@ -69,6 +70,7 @@ requireText('mobileAssurance', '/territories/assurance/me')
 requireText('mobileGovernance', '/eligibility')
 
 requireText('certification', "TERRITORIAL_ASSURANCE_CERTIFICATION_VERSION = '7G.4'")
+requireText('certification', "'BLOCKED'")
 requireText('certification', 'external_evidence_sha_mismatch')
 requireText('certification', 'provider_production_canary_missing')
 requireText('certification', 'reviewer_separation_not_verified')
@@ -90,6 +92,7 @@ for (const scenario of [
   'identity_assurance_cannot_grant_residence',
 ]) requireText('certification', scenario)
 
+requireText('docs', 'BLOCKED')
 requireText('docs', 'REPOSITORY_CONTRACT_READY')
 requireText('docs', 'EXTERNAL_EVIDENCE_REQUIRED')
 requireText('docs', 'PRODUCTION_ELECTION_CERTIFIED')
