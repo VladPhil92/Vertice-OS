@@ -5,6 +5,8 @@ import {
   normalizeRequestedIdempotencyKey,
   type IdempotentMutationResult,
 } from '../../lib/idempotency'
+import { assertCommunityContentAllowed } from '../community/community.content-filter'
+import { ensureCommunityPolicyAccepted } from '../community/community.safety.service'
 import {
   AttachReportMediaSchema,
   ConfirmReportMediaSchema,
@@ -86,6 +88,13 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
+    await ensureCommunityPolicyAccepted(request.citizen.sub)
+    assertCommunityContentAllowed([
+      { field: 'title', value: parsed.data.title },
+      { field: 'description', value: parsed.data.description },
+      { field: 'subcategory', value: parsed.data.subcategory },
+      { field: 'address_reference', value: parsed.data.address_reference },
+    ])
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: 'territorial:report:create',
@@ -109,6 +118,7 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
         details: body.success ? undefined : body.error.flatten().fieldErrors,
       })
     }
+    await ensureCommunityPolicyAccepted(request.citizen.sub)
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: `territorial:report:evidence:${params.data.id}`,
