@@ -137,7 +137,8 @@ jobs:
             apps/api/prisma/migrations/20260910033000_community_ugc_trust_safety/migration.sql \
             apps/api/prisma/migrations/20260910122000_national_territory_mobility_context/migration.sql \
             apps/api/prisma/migrations/20260910131500_territory_boundary_integrity/migration.sql \
-            apps/api/prisma/migrations/20260910173000_territory_residence_assurance_phase7g1/migration.sql
+            apps/api/prisma/migrations/20260910173000_territory_residence_assurance_phase7g1/migration.sql \
+            apps/api/prisma/migrations/20260910184500_territorial_governance_eligibility_phase7g2/migration.sql
           do
             echo "Applying Golden schema slice: $migration"
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
