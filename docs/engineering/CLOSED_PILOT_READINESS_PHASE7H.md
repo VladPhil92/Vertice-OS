@@ -62,7 +62,9 @@ A capability in `ready` or `misconfigured` state blocks this first pilot. This i
 
 ## Exact-SHA rule
 
-Production must expose an immutable revision. A production runtime with `revision=unknown` is `BLOCKED`. Runtime evidence is valid only for the exact source SHA being evaluated.
+Production must expose the immutable revision as a **full 40-character hexadecimal Git commit SHA**. Branch names (`main`), shortened hashes, blank values, arbitrary deployment labels, non-hexadecimal strings and the sentinel `unknown` are all `BLOCKED` with `runtime:revision_invalid`.
+
+A syntactically valid SHA identifies the runtime precisely; the operator release evidence must additionally demonstrate that the Web/API deployment belongs to the candidate release lineage being approved. Runtime evidence from another SHA must never be reused as evidence for the current candidate.
 
 ## Pilot scope
 
@@ -90,6 +92,7 @@ Phase 7H reaches `READY_FOR_CLOSED_PILOT` only when:
 - `/health/live` and `/health/ready` pass;
 - `/health/pilot` returns HTTP 200 with no blockers;
 - invite-only access is enabled and configured for the bounded cohort;
+- `/health/pilot` exposes a valid full Git commit SHA for the API runtime;
 - Vercel/API runtime evidence points to the intended release lineage;
 - the Closed Pilot Runbook has been executed without a STOP condition.
 
