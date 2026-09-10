@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { config } from '../../config'
-import { getPlan, type BillingCycle } from './billing.catalog'
+import { getPlan } from './billing.catalog'
 import type { BillingProvider, CheckoutSession, CheckoutSessionRequest } from './billing.provider'
 
 const API_BASE = 'https://api.mercadopago.com'

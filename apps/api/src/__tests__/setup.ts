@@ -1,7 +1,13 @@
 // Env vars requeridas por config.ts — deben estar antes de cualquier import del módulo.
 // Los valores locales son defaults. CI/staging puede inyectar infraestructura real
 // sin que este setup la sobrescriba silenciosamente.
-process.env.NODE_ENV ??= 'test'
+//
+// NODE_ENV se fuerza (no `??=`): app.ts decide con `config.NODE_ENV !== 'test'` si
+// registra el rate-limit real contra Redis. Si el proceso hereda un NODE_ENV distinto
+// del shell/runner (p. ej. `development`), ese guard deja de activarse y toda la suite
+// falla en cascada con errores de infraestructura no relacionados (Redis) en lugar de
+// señalar regresiones reales.
+process.env.NODE_ENV = 'test'
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test_vertice'
 process.env.REDIS_URL ??= 'redis://localhost:6379'
 process.env.JWT_SECRET ??= 'test-secret-with-at-least-32-characters-ok'

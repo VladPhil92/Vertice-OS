@@ -41,7 +41,6 @@ jest.mock('../identity-assurance.service', () => ({
 import { Wallet } from 'ethers'
 import {
   resolveDID,
-  getOwnDIDDocument,
   getVerificationStatus,
   confirmCedula,
   requestEmailVerification,
