@@ -21,7 +21,11 @@ async function registerCitizen(prefix: string) {
   const registered = await app.inject({ method: 'POST', url: '/auth/register', payload: input })
   expect(registered.statusCode).toBe(201)
   const id = (registered.json() as { citizen_id: string }).citizen_id
-  const signedIn = await app.inject({ method: 'POST', url: '/auth/token', payload: input })
+  const signedIn = await app.inject({
+    method: 'POST',
+    url: '/auth/token',
+    payload: { email: input.email, password: input.password },
+  })
   expect(signedIn.statusCode).toBe(200)
   return {
     id,
