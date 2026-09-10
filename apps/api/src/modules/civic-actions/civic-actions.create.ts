@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
+import { assertColombianMunicipalTerritory } from '../territories/territory-context.service'
 import type { CreateCivicActionInput } from './civic-actions.schema'
 import { getCivicAction } from './civic-actions.service'
 
@@ -12,6 +13,16 @@ export async function createCivicActionAtomically(
   citizenId: string,
   input: CreateCivicActionInput,
 ) {
+  if (input.territory_source && !input.territory_code) {
+    throw Object.assign(new Error('El origen territorial requiere un territorio objetivo explícito.'), {
+      statusCode: 400,
+      code: 'CIVIC_ACTION_TERRITORY_REQUIRED_FOR_SOURCE',
+    })
+  }
+  if (input.territory_code) {
+    await assertColombianMunicipalTerritory(input.territory_code)
+  }
+
   const actionId = await prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       INSERT INTO civic_actions (
@@ -22,6 +33,8 @@ export async function createCivicActionAtomically(
         category,
         neighborhood,
         locality_id,
+        territory_code,
+        territory_source,
         beneficiaries_estimate,
         target_date
       ) VALUES (
@@ -32,6 +45,8 @@ export async function createCivicActionAtomically(
         ${input.category},
         ${input.neighborhood ?? null},
         ${input.locality_id ?? null},
+        ${input.territory_code ?? null},
+        ${input.territory_code ? (input.territory_source ?? 'manual') : null},
         ${input.beneficiaries_estimate ?? null},
         ${input.target_date ?? null}::date
       )

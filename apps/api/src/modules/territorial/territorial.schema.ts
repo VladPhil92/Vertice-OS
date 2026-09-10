@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { REPORT_CATEGORIES, REPORT_STATUSES } from './territorial.types'
+import { REPORT_CATEGORIES, REPORT_STATUSES, REPORT_TERRITORY_SOURCES } from './territorial.types'
 
 const MediaAssetIdSchema = z.string().uuid()
 
@@ -14,9 +14,21 @@ export const CreateReportSchema = z.object({
   locality_id: z.number().int().positive().optional(),
   address_reference: z.string().max(300).optional(),
   urgency_score: z.number().min(0).max(1).optional(),
+  // New national clients send an immutable target municipality/district. This
+  // remains optional only for backward compatibility with pre-mobility clients.
+  territory_code: z.string().trim().min(2).max(32).optional(),
+  territory_source: z.enum(REPORT_TERRITORY_SOURCES).optional(),
   // Legacy/read compatibility only. New evidence is attached through media_asset_ids.
   media_urls: z.array(z.string().url()).max(5).default([]),
   media_asset_ids: z.array(MediaAssetIdSchema).max(5).default([]),
+}).superRefine((value, ctx) => {
+  if (value.territory_source && !value.territory_code) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['territory_code'],
+      message: 'El origen territorial requiere un territorio objetivo explícito.',
+    })
+  }
 })
 
 export const ConfirmReportMediaSchema = z.object({
@@ -35,6 +47,7 @@ export const ListReportsSchema = z.object({
   category: z.enum(REPORT_CATEGORIES).optional(),
   status: z.enum(REPORT_STATUSES).optional(),
   locality_id: z.coerce.number().int().positive().optional(),
+  territory_code: z.string().trim().min(2).max(32).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
 })

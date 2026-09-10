@@ -5,6 +5,7 @@ import { logger } from '../../lib/logger'
 import { recordReputationEvent } from '../reputation/reputation.service'
 import { publish } from '../../lib/pubsub'
 import { createNotification } from '../notifications/notifications.service'
+import { assertColombianMunicipalTerritory, isWithinColombiaEnvelope } from '../territories/territory-context.service'
 import {
   attachLockedReportMedia,
   lockConfirmedReportMediaAssets,
@@ -16,6 +17,7 @@ import type {
   TerritorialStats,
   ReportRow,
   ReportCategory,
+  StoredReportTerritorySource,
 } from './territorial.types'
 import type { CreateReportInput, ListReportsInput, NearbyInput, UpdateStatusInput } from './territorial.schema'
 
@@ -48,6 +50,8 @@ function rowToReport(row: ReportRow): TerritorialReport {
     address_reference: row.address_reference,
     urgency_score: row.urgency_score !== null ? Number(row.urgency_score) : null,
     status: row.status as TerritorialReport['status'],
+    territory_code: row.territory_code ?? null,
+    territory_source: (row.territory_source as StoredReportTerritorySource | null | undefined) ?? null,
     media_urls: row.media_urls ?? [],
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -65,6 +69,8 @@ function rowToSummary(row: ReportRow): ReportSummary {
     neighborhood: row.neighborhood,
     status: row.status as ReportSummary['status'],
     urgency_score: row.urgency_score !== null ? Number(row.urgency_score) : null,
+    territory_code: row.territory_code ?? null,
+    territory_source: (row.territory_source as StoredReportTerritorySource | null | undefined) ?? null,
     media_urls: row.media_urls ?? [],
     created_at: row.created_at,
   }
@@ -81,7 +87,7 @@ async function insertReportRow(
     INSERT INTO territorial_reports (
       citizen_id, category, subcategory, title, description,
       location, neighborhood, locality_id, address_reference,
-      urgency_score, media_urls
+      urgency_score, territory_code, territory_source, media_urls
     ) VALUES (
       ${citizenId}::uuid,
       ${input.category},
@@ -93,6 +99,8 @@ async function insertReportRow(
       ${input.locality_id ?? null}::int,
       ${input.address_reference ?? null},
       ${urgency}::numeric,
+      ${input.territory_code ?? null},
+      ${input.territory_code ? (input.territory_source ?? 'manual') : null},
       ${mediaUrls}
     )
     RETURNING
@@ -109,6 +117,8 @@ async function insertReportRow(
       address_reference,
       urgency_score::float8,
       status,
+      territory_code,
+      territory_source,
       media_urls,
       created_at,
       updated_at,
@@ -128,6 +138,22 @@ export async function createReport(
       statusCode: 400,
       code: 'DIRECT_REPORT_MEDIA_URLS_DISABLED',
     })
+  }
+
+  if (input.territory_source && !input.territory_code) {
+    throw Object.assign(new Error('El origen territorial requiere un territorio objetivo explícito.'), {
+      statusCode: 400,
+      code: 'REPORT_TERRITORY_REQUIRED_FOR_SOURCE',
+    })
+  }
+  if (input.territory_code) {
+    await assertColombianMunicipalTerritory(input.territory_code)
+    if (!isWithinColombiaEnvelope(input.lat, input.lng)) {
+      throw Object.assign(new Error('La ubicación del reporte debe corresponder al territorio colombiano.'), {
+        statusCode: 400,
+        code: 'REPORT_COORDINATES_OUTSIDE_COLOMBIA',
+      })
+    }
   }
 
   const urgency = input.urgency_score ?? DEFAULT_URGENCY[input.category]
@@ -156,7 +182,8 @@ export async function createReport(
     .catch((err: unknown) => logger.error('[territorial] reputation event failed', err))
   publish('territorial', 'report:created', {
     id: report.id, category: report.category, status: report.status,
-    neighborhood: report.neighborhood, urgency_score: report.urgency_score,
+    neighborhood: report.neighborhood, territory_code: report.territory_code,
+    urgency_score: report.urgency_score,
   }).catch(() => null)
   return report
 }
@@ -166,6 +193,7 @@ export async function listReports(input: ListReportsInput): Promise<ReportSummar
   if (input.category) conditions.push(Prisma.sql`category = ${input.category}`)
   if (input.status) conditions.push(Prisma.sql`status = ${input.status}`)
   if (input.locality_id) conditions.push(Prisma.sql`locality_id = ${input.locality_id}`)
+  if (input.territory_code) conditions.push(Prisma.sql`territory_code = ${input.territory_code}`)
 
   const whereClause = conditions.length > 0
     ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
@@ -181,6 +209,8 @@ export async function listReports(input: ListReportsInput): Promise<ReportSummar
       neighborhood,
       status,
       urgency_score::float8,
+      territory_code,
+      territory_source,
       media_urls,
       created_at
     FROM territorial_reports
@@ -211,6 +241,8 @@ export async function getReportById(id: string): Promise<TerritorialReport> {
       address_reference,
       urgency_score::float8,
       status,
+      territory_code,
+      territory_source,
       media_urls,
       created_at,
       updated_at,
@@ -242,6 +274,8 @@ export async function getNearbyReports(input: NearbyInput): Promise<NearbyReport
       neighborhood,
       status,
       urgency_score::float8,
+      territory_code,
+      territory_source,
       media_urls,
       created_at,
       ST_Distance(
@@ -293,6 +327,8 @@ export async function updateReportStatus(
       address_reference,
       urgency_score::float8,
       status,
+      territory_code,
+      territory_source,
       media_urls,
       created_at,
       updated_at,

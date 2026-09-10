@@ -7,6 +7,11 @@ import { territoryLaunchOperationsRoutes } from './territories.operations.routes
 import { territoryPublicRoutes } from './territories.public.routes'
 import { territoryCitizenActivationRoutes } from './territories.activation.routes'
 import {
+  TERRITORY_CONTEXT_SOURCES,
+  getCitizenTerritoryContext,
+  setActiveTerritoryContext,
+} from './territory-context.service'
+import {
   ACTIVATION_STATUSES,
   TERRITORY_LEVELS,
   getActivationMetrics,
@@ -31,6 +36,10 @@ const TerritoryParams = z.object({ code: z.string().trim().min(2).max(32) })
 const SelectTerritoryBody = z.object({
   territory_code: z.string().trim().min(2).max(32),
   neighborhood: z.string().trim().max(120).nullable().optional(),
+})
+const ActiveTerritoryBody = z.object({
+  active_territory_code: z.string().trim().min(2).max(32),
+  source: z.enum(TERRITORY_CONTEXT_SOURCES).default('manual'),
 })
 const ActivationBody = z.object({
   status: z.enum(ACTIVATION_STATUSES),
@@ -64,8 +73,12 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
     })
   })
 
+  // Home territory is a durable civic affiliation. Movement must never rewrite it.
   app.get('/me', { preHandler: requireAuth }, async (request, reply) => {
-    return reply.send(await getMyTerritory(request.citizen.sub))
+    return reply.send({
+      ...(await getMyTerritory(request.citizen.sub)),
+      context_role: 'home',
+    })
   })
 
   app.put('/me', {
@@ -77,9 +90,29 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
     const result = await setMyTerritory(request.citizen.sub, parsed.data.territory_code, parsed.data.neighborhood)
     return reply.send({
       ...result,
+      context_role: 'home',
       territory_assurance: 'self_asserted',
       governance_effect: 'none_without_territory_assurance',
+      travel_effect: 'none',
     })
+  })
+
+  // Active context is transient product context, never residency or governance proof.
+  app.get('/context', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getCitizenTerritoryContext(request.citizen.sub))
+  })
+
+  app.put('/context', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 60, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = ActiveTerritoryBody.safeParse(request.body)
+    if (!parsed.success) return reply.status(400).send({ error: 'Contexto territorial inválido', details: parsed.error.flatten().fieldErrors })
+    return reply.send(await setActiveTerritoryContext(
+      request.citizen.sub,
+      parsed.data.active_territory_code,
+      parsed.data.source,
+    ))
   })
 
   app.post('/admin/sync-divipola', {

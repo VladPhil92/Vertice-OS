@@ -3,6 +3,7 @@ import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, 
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { TerritorialMap } from '../../components/TerritorialMap'
+import { TerritoryTargetPicker } from '../../components/TerritoryTargetPicker'
 import { apiFetch, apiMutation } from '../../lib/api'
 import {
   getCurrentReportCoordinates,
@@ -11,6 +12,11 @@ import {
   type DeviceCoordinates,
   type SelectedReportEvidence,
 } from '../../lib/report-device'
+import {
+  setActiveTerritory,
+  suggestTerritoryFromCoordinates,
+  type TerritoryOption,
+} from '../../lib/territory-context'
 import type { ApiList, NearbyTerritorialReport, ReportCategory, ReportMediaState, TerritorialReportSummary } from '../../types/api'
 
 const categories: ReportCategory[] = [
@@ -44,6 +50,8 @@ export default function ReportsScreen() {
   const [reports, setReports] = useState<TerritorialReportSummary[]>([])
   const [nearbyReports, setNearbyReports] = useState<NearbyTerritorialReport[]>([])
   const [currentCoordinates, setCurrentCoordinates] = useState<DeviceCoordinates | null>(null)
+  const [targetTerritory, setTargetTerritory] = useState<TerritoryOption | null>(null)
+  const [targetSource, setTargetSource] = useState<'manual' | 'gps'>('manual')
   const [form, setForm] = useState(initialForm)
   const [selectedEvidence, setSelectedEvidence] = useState<SelectedReportEvidence | null>(null)
   const [confirmedEvidence, setConfirmedEvidence] = useState<ReportMediaState | null>(null)
@@ -94,8 +102,34 @@ export default function ReportsScreen() {
         lng: coordinates.lng.toFixed(6),
       }))
       await loadNearby(coordinates)
+
+      try {
+        const suggestion = await suggestTerritoryFromCoordinates(coordinates.lat, coordinates.lng)
+        if (suggestion.status === 'matched') {
+          setTargetTerritory(suggestion.territory)
+          setTargetSource('gps')
+          await setActiveTerritory(suggestion.territory.code, 'gps').catch(() => null)
+        } else if (suggestion.status === 'outside_colombia') {
+          setTargetTerritory(null)
+          setTargetSource('manual')
+          Alert.alert(
+            'Estás fuera de Colombia',
+            'Tu territorio de origen no cambia. Para aportar en Vértice selecciona manualmente el municipio colombiano al que pertenece la contribución y usa las coordenadas del hecho, no tu ubicación actual.',
+          )
+        } else {
+          setTargetTerritory(null)
+          setTargetSource('manual')
+          Alert.alert('Municipio no identificado', 'El GPS obtuvo coordenadas, pero debes confirmar manualmente el municipio colombiano del reporte.')
+        }
+      } catch {
+        setTargetTerritory(null)
+        setTargetSource('manual')
+      }
     } catch (cause) {
-      Alert.alert('Ubicación no disponible', cause instanceof Error ? cause.message : 'No fue posible obtener tu ubicación.')
+      Alert.alert(
+        'Ubicación no disponible',
+        `${cause instanceof Error ? cause.message : 'No fue posible obtener tu ubicación.'}\n\nPuedes continuar seleccionando el municipio y escribiendo las coordenadas manualmente.`,
+      )
     } finally {
       setLocating(false)
     }
@@ -138,6 +172,10 @@ export default function ReportsScreen() {
       Alert.alert('Información incompleta', 'Completa título, descripción y una ubicación válida.')
       return
     }
+    if (!targetTerritory) {
+      Alert.alert('Territorio requerido', 'Selecciona el municipio o distrito colombiano donde ocurre el reporte.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -158,6 +196,8 @@ export default function ReportsScreen() {
           lng,
           neighborhood: form.neighborhood.trim() || undefined,
           address_reference: form.address_reference.trim() || undefined,
+          territory_code: targetTerritory.code,
+          territory_source: targetSource,
           media_urls: [],
           media_asset_ids: mediaAssetIds,
         }),
@@ -188,9 +228,9 @@ export default function ReportsScreen() {
       >
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>TERRITORIO</Text>
+            <Text style={styles.eyebrow}>TERRITORIO · COLOMBIA</Text>
             <Text style={styles.title}>Reportes ciudadanos</Text>
-            <Text style={styles.subtitle}>Mapa nativo, GPS, proximidad y evidencia fotográfica conectados al registro territorial canónico.</Text>
+            <Text style={styles.subtitle}>Tu ciudad de registro es tu origen cívico, no una frontera. Reporta en cualquier territorio colombiano con GPS o selección manual.</Text>
           </View>
           <Pressable style={styles.primaryButton} onPress={() => setShowCreate((value) => !value)}>
             <Text style={styles.primaryButtonText}>{showCreate ? 'Cerrar' : 'Reportar'}</Text>
@@ -201,11 +241,11 @@ export default function ReportsScreen() {
 
         <View style={styles.locationCard}>
           <View style={styles.locationCopy}>
-            <Text style={styles.cardTitle}>Tu entorno</Text>
-            <Text style={styles.hint}>
+            <Text style={[styles.cardTitle, styles.locationTitle]}>Tu entorno actual</Text>
+            <Text style={styles.locationHint}>
               {currentCoordinates
-                ? `Ubicación activa${currentCoordinates.accuracy ? ` · precisión ±${Math.round(currentCoordinates.accuracy)} m` : ''}`
-                : 'Activa tu ubicación para ver incidencias públicas a 3 km.'}
+                ? `Ubicación activa${currentCoordinates.accuracy ? ` · precisión ±${Math.round(currentCoordinates.accuracy)} m` : ''}${targetTerritory ? ` · ${targetTerritory.name}` : ''}`
+                : 'Activa tu ubicación para ver incidencias públicas a 3 km. El GPS no cambia tu ciudad de origen.'}
             </Text>
           </View>
           <Pressable disabled={locating} style={styles.locationButton} onPress={() => void useCurrentLocation()}>
@@ -227,7 +267,7 @@ export default function ReportsScreen() {
                   </View>
                   <Text style={styles.cardTitle}>{report.title}</Text>
                   <Text style={styles.body} numberOfLines={2}>{report.description}</Text>
-                  <Text style={styles.muted}>{report.neighborhood ?? 'Sin barrio'} · {report.status.replace(/_/g, ' ')}</Text>
+                  <Text style={styles.muted}>{report.neighborhood ?? 'Sector no especificado'} · {report.status.replace(/_/g, ' ')}</Text>
                 </Pressable>
               ))}
               {nearbyReports.length === 0 ? <Text style={styles.empty}>No hay reportes públicos dentro de 3 km.</Text> : null}
@@ -238,6 +278,14 @@ export default function ReportsScreen() {
         {showCreate ? (
           <View style={styles.formCard}>
             <Text style={styles.cardTitle}>Nuevo reporte territorial</Text>
+            <TerritoryTargetPicker
+              value={targetTerritory}
+              onChange={(territory, source) => {
+                setTargetTerritory(territory)
+                setTargetSource(source)
+              }}
+              label="Municipio o distrito del reporte"
+            />
             <TextInput style={styles.input} placeholder="Título" value={form.title} onChangeText={(title) => setForm((prev) => ({ ...prev, title }))} />
             <TextInput style={[styles.input, styles.multiline]} multiline placeholder="Describe la situación" value={form.description} onChangeText={(description) => setForm((prev) => ({ ...prev, description }))} />
             <Text style={styles.label}>Categoría</Text>
@@ -248,17 +296,18 @@ export default function ReportsScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-            <TextInput style={styles.input} placeholder="Barrio" value={form.neighborhood} onChangeText={(neighborhood) => setForm((prev) => ({ ...prev, neighborhood }))} />
+            <TextInput style={styles.input} placeholder="Barrio o sector (opcional)" value={form.neighborhood} onChangeText={(neighborhood) => setForm((prev) => ({ ...prev, neighborhood }))} />
 
             <Pressable disabled={locating} style={styles.deviceAction} onPress={() => void useCurrentLocation()}>
               <Text style={styles.deviceActionText}>{locating ? 'Obteniendo GPS…' : 'Usar mi ubicación actual'}</Text>
             </Pressable>
 
             <View style={styles.coordinates}>
-              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Latitud" value={form.lat} onChangeText={(lat) => setForm((prev) => ({ ...prev, lat }))} />
-              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Longitud" value={form.lng} onChangeText={(lng) => setForm((prev) => ({ ...prev, lng }))} />
+              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Latitud" value={form.lat} onChangeText={(lat) => { setTargetSource('manual'); setForm((prev) => ({ ...prev, lat })) }} />
+              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Longitud" value={form.lng} onChangeText={(lng) => { setTargetSource('manual'); setForm((prev) => ({ ...prev, lng })) }} />
             </View>
             <TextInput style={styles.input} placeholder="Referencia de dirección" value={form.address_reference} onChangeText={(address_reference) => setForm((prev) => ({ ...prev, address_reference }))} />
+            <Text style={styles.hint}>Si niegas el permiso de ubicación, Vértice sigue funcionando: selecciona el municipio y escribe la ubicación del hecho manualmente.</Text>
 
             <Text style={styles.label}>Evidencia fotográfica opcional</Text>
             <View style={styles.evidenceActions}>
@@ -292,7 +341,7 @@ export default function ReportsScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Reportes recientes</Text>
+          <Text style={styles.sectionTitle}>Reportes recientes · Colombia</Text>
           <View style={styles.list}>
             {reports.map((report) => (
               <Pressable key={report.id} style={styles.card} onPress={() => openReport(report.id)}>
@@ -302,7 +351,7 @@ export default function ReportsScreen() {
                 </View>
                 <Text style={styles.cardTitle}>{report.title}</Text>
                 {report.description ? <Text style={styles.body} numberOfLines={3}>{report.description}</Text> : null}
-                <Text style={styles.muted}>{report.neighborhood ?? 'Cartagena'} · {report.lat.toFixed(4)}, {report.lng.toFixed(4)}</Text>
+                <Text style={styles.muted}>{report.neighborhood ?? 'Territorio colombiano'} · {report.lat.toFixed(4)}, {report.lng.toFixed(4)}</Text>
               </Pressable>
             ))}
             {!error && reports.length === 0 ? <Text style={styles.empty}>No hay reportes públicos para mostrar.</Text> : null}
@@ -325,6 +374,8 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#FFFFFF', fontWeight: '700' },
   locationCard: { backgroundColor: '#17382A', borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   locationCopy: { flex: 1, gap: 4 },
+  locationTitle: { color: '#FFFFFF' },
+  locationHint: { color: '#DDE8E0', fontSize: 12, lineHeight: 17 },
   locationButton: { backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
   locationButtonText: { color: '#17382A', fontWeight: '700', fontSize: 12 },
   section: { gap: 10 },
