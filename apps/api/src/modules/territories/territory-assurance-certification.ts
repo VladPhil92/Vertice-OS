@@ -46,7 +46,7 @@ export interface TerritorialAssuranceCertificationResult {
   repository_contract_ready: boolean
   production_election_certified: boolean
   blockers: string[]
-  boundary: 'REPOSITORY_CONTRACT_READY' | 'EXTERNAL_EVIDENCE_REQUIRED' | 'PRODUCTION_ELECTION_CERTIFIED'
+  boundary: 'BLOCKED' | 'REPOSITORY_CONTRACT_READY' | 'EXTERNAL_EVIDENCE_REQUIRED' | 'PRODUCTION_ELECTION_CERTIFIED'
 }
 
 function nonEmpty(value: string): boolean {
@@ -65,25 +65,22 @@ export function evaluateTerritorialAssuranceCertification(params: {
   const blockers: string[] = []
   const candidateSha = params.candidateSha.trim()
 
-  if (!/^[0-9a-f]{40}$/i.test(candidateSha)) {
-    blockers.push('candidate_sha_invalid')
-  }
+  if (!/^[0-9a-f]{40}$/i.test(candidateSha)) blockers.push('candidate_sha_invalid')
+  if (!params.repositoryContractReady) blockers.push('repository_contract_not_ready')
 
-  if (!params.repositoryContractReady) {
-    blockers.push('repository_contract_not_ready')
-  }
+  const repositoryReady = params.repositoryContractReady
+    && !blockers.includes('candidate_sha_invalid')
+    && !blockers.includes('repository_contract_not_ready')
 
   const evidence = params.externalEvidence
   if (!evidence) {
     return {
       certification_version: TERRITORIAL_ASSURANCE_CERTIFICATION_VERSION,
       candidate_sha: candidateSha,
-      repository_contract_ready: params.repositoryContractReady && blockers.length === 0,
+      repository_contract_ready: repositoryReady,
       production_election_certified: false,
       blockers: [...blockers, 'external_evidence_missing'],
-      boundary: params.repositoryContractReady && blockers.length === 0
-        ? 'EXTERNAL_EVIDENCE_REQUIRED'
-        : 'REPOSITORY_CONTRACT_READY',
+      boundary: repositoryReady ? 'EXTERNAL_EVIDENCE_REQUIRED' : 'BLOCKED',
     }
   }
 
@@ -112,10 +109,6 @@ export function evaluateTerritorialAssuranceCertification(params: {
     }
   }
 
-  const repositoryReady = params.repositoryContractReady
-    && !blockers.includes('candidate_sha_invalid')
-    && !blockers.includes('repository_contract_not_ready')
-
   const productionCertified = repositoryReady && blockers.length === 0
 
   return {
@@ -128,6 +121,6 @@ export function evaluateTerritorialAssuranceCertification(params: {
       ? 'PRODUCTION_ELECTION_CERTIFIED'
       : repositoryReady
         ? 'EXTERNAL_EVIDENCE_REQUIRED'
-        : 'REPOSITORY_CONTRACT_READY',
+        : 'BLOCKED',
   }
 }
