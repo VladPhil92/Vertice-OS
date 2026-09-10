@@ -81,9 +81,21 @@ requireText('feed', 'FROM territorial_reports')
 requireText('feed', 'FROM proposals')
 requireText('provider', "?? 'Selecciona tu municipio'")
 forbidText('provider', "?? 'Cartagena de Indias'", 'Dashboard must not invent Cartagena for unbound national users')
-requireText('page', 'VÉRTICE está disponible para Colombia')
-requireText('page', "apiFetch('/territories/me'")
-requireText('page', 'no equivale a verificación de residencia')
+
+// Phase 7G.3 evolves the citizen-facing territory copy but preserves the Phase 7A
+// national invariants: Colombia-wide availability, canonical server territory
+// binding, and explicit separation between a selected municipality and verified
+// residence. Keep these as semantic product contracts rather than pinning obsolete
+// copy from the pre-assurance screen.
+requireText('page', 'VÉRTICE Colombia · Phase 7G.3', 'page missing national Colombia surface')
+requireText('page', "apiFetch<MyTerritory>('/territories/me')", 'page missing canonical current-territory read')
+requireText(
+  'page',
+  'Tu municipio principal, tu ubicación actual y tu residencia verificada son estados distintos.',
+  'page must distinguish selected territory from verified residence',
+)
+requireText('page', '/territories/assurance/me', 'page missing residence-assurance state')
+requireText('page', '/territories/assurance/requests', 'page missing residence-assurance remediation')
 
 for (const marker of ['NP-01', 'NP-02', 'NP-03', 'NP-04', 'NP-05', 'NP-06', 'NATIONAL_PLATFORM_INTEGRATION=PASS']) {
   requireText('integration', marker)

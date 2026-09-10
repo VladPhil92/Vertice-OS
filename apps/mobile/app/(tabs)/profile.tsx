@@ -87,7 +87,7 @@ export default function ProfileScreen() {
         <View style={styles.territoryCard}>
           <Text style={styles.territoryTitle}>Participación territorial</Text>
           <Text style={styles.territoryBody}>
-            Consulta el nodo público de tu ciudad y, si quieres, manifiesta interés voluntario para apoyar su activación comunitaria. Esto no concede autoridad ni modifica tu reputación.
+            Consulta tu nodo territorial, apoya su activación comunitaria y revisa por separado si tu residencia está verificada para procesos de gobernanza. Ninguna de estas acciones modifica tu reputación ni concede autoridad por sí sola.
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -95,6 +95,13 @@ export default function ProfileScreen() {
             style={({ pressed }) => [styles.territoryButton, pressed && styles.pressed]}
           >
             <Text style={styles.territoryButtonText}>Mi ciudad y activación</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/territory/assurance')}
+            style={({ pressed }) => [styles.assuranceButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.assuranceButtonText}>Residencia y elegibilidad</Text>
           </Pressable>
         </View>
 
@@ -185,6 +192,8 @@ const styles = StyleSheet.create({
   territoryBody: { color: '#D5E0D9', lineHeight: 19 },
   territoryButton: { minHeight: 46, marginTop: 3, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#FFFFFF' },
   territoryButtonText: { color: '#17382A', fontWeight: '800' },
+  assuranceButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#9DB2A5' },
+  assuranceButtonText: { color: '#FFFFFF', fontWeight: '800' },
   notificationCard: { borderRadius: 20, padding: 16, backgroundColor: '#E7E4D8', gap: 12 },
   privacyCard: { borderRadius: 20, padding: 16, backgroundColor: '#F4ECE9', gap: 12 },
   notificationCopy: { gap: 5 },

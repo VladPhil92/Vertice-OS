@@ -22,6 +22,7 @@ export default function RootLayout() {
           <Stack.Screen name="city/[code]" />
           <Stack.Screen name="territory/select" />
           <Stack.Screen name="territory/activate" />
+          <Stack.Screen name="territory/assurance" />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>
