@@ -7,7 +7,10 @@ export interface ClosedPilotAccessState {
 
 const MAX_CLOSED_PILOT_COHORT = 30
 
-type PilotEnvironment = Pick<NodeJS.ProcessEnv, 'CLOSED_PILOT_MODE' | 'CLOSED_PILOT_EMAIL_ALLOWLIST'>
+type PilotEnvironment = {
+  CLOSED_PILOT_MODE?: string
+  CLOSED_PILOT_EMAIL_ALLOWLIST?: string
+}
 
 function normalizedAllowlist(env: PilotEnvironment): string[] {
   return Array.from(new Set(
