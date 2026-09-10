@@ -22,15 +22,23 @@ const HEALTHY_CHECKS = {
   neo4j: 'ok' as const,
 }
 
+const READY_ACCESS = {
+  enabled: true,
+  configured: true,
+  mode: 'closed_invite_only' as const,
+  cohort_size: 10,
+}
+
 function capabilities(overrides: Partial<FeatureCapabilities> = {}): FeatureCapabilities {
   return { ...READY_CAPABILITIES, ...overrides }
 }
 
 describe('Phase 7H closed pilot readiness', () => {
-  it('allows a bounded pilot when runtime dependencies are healthy and money is disabled', () => {
+  it('allows a bounded pilot when runtime, access and monetary safeguards are satisfied', () => {
     const result = assessClosedPilotReadiness({
       checks: HEALTHY_CHECKS,
       capabilities: capabilities(),
+      access: READY_ACCESS,
       revision: 'a'.repeat(40),
       production: true,
     })
@@ -49,11 +57,25 @@ describe('Phase 7H closed pilot readiness', () => {
     })
   })
 
+  it('blocks a pilot until invite-only access is actually enabled and configured', () => {
+    const result = assessClosedPilotReadiness({
+      checks: HEALTHY_CHECKS,
+      capabilities: capabilities(),
+      access: { enabled: false, configured: false, mode: 'disabled', cohort_size: 0 },
+      revision: 'b'.repeat(40),
+      production: true,
+    })
+
+    expect(result.ready).toBe(false)
+    expect(result.blockers).toContain('pilot:access_control_not_ready')
+  })
+
   it('treats Neo4j as mandatory for the Community/social-graph pilot', () => {
     const result = assessClosedPilotReadiness({
       checks: { ...HEALTHY_CHECKS, neo4j: 'fail' },
       capabilities: capabilities(),
-      revision: 'b'.repeat(40),
+      access: READY_ACCESS,
+      revision: 'c'.repeat(40),
       production: true,
     })
 
@@ -70,7 +92,8 @@ describe('Phase 7H closed pilot readiness', () => {
     const result = assessClosedPilotReadiness({
       checks: HEALTHY_CHECKS,
       capabilities: capabilities({ [capability]: 'ready' }),
-      revision: 'c'.repeat(40),
+      access: READY_ACCESS,
+      revision: 'd'.repeat(40),
       production: true,
     })
 
@@ -82,7 +105,8 @@ describe('Phase 7H closed pilot readiness', () => {
     const result = assessClosedPilotReadiness({
       checks: HEALTHY_CHECKS,
       capabilities: capabilities({ civic_identity_assurance: 'misconfigured' }),
-      revision: 'd'.repeat(40),
+      access: READY_ACCESS,
+      revision: 'e'.repeat(40),
       production: true,
     })
 
@@ -94,6 +118,7 @@ describe('Phase 7H closed pilot readiness', () => {
     const result = assessClosedPilotReadiness({
       checks: HEALTHY_CHECKS,
       capabilities: capabilities(),
+      access: READY_ACCESS,
       revision: 'unknown',
       production: true,
     })
