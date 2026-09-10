@@ -1,6 +1,6 @@
 const staticConfig = require('./app.json')
+const { parsePublicHttpsUrl } = require('./config/release-network')
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function normalizedVariant() {
@@ -18,16 +18,7 @@ function validateReleaseConfiguration({ variant, apiUrl, easProjectId, androidMa
     throw new Error(`[mobile-config] ${variant} requires EXPO_PUBLIC_API_URL`)
   }
 
-  let parsedApiUrl
-  try {
-    parsedApiUrl = new URL(apiUrl)
-  } catch {
-    throw new Error(`[mobile-config] ${variant} EXPO_PUBLIC_API_URL must be a valid URL`)
-  }
-
-  if (parsedApiUrl.protocol !== 'https:' || LOCAL_HOSTS.has(parsedApiUrl.hostname)) {
-    throw new Error(`[mobile-config] ${variant} EXPO_PUBLIC_API_URL must use HTTPS and a non-local hostname`)
-  }
+  parsePublicHttpsUrl(apiUrl, `[mobile-config] ${variant} EXPO_PUBLIC_API_URL`)
 
   if (!easProjectId || !UUID_RE.test(easProjectId)) {
     throw new Error(`[mobile-config] ${variant} requires a valid EAS_PROJECT_ID UUID`)
