@@ -31,6 +31,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS territory_assurance_one_submitted_request
   WHERE citizen_id IS NOT NULL AND status = 'submitted';
 
 ALTER TABLE proposal_voter_roll
+  ADD COLUMN IF NOT EXISTS territory_assurance_level SMALLINT,
   ADD COLUMN IF NOT EXISTS territory_assurance_request_id UUID,
   ADD COLUMN IF NOT EXISTS territory_verified_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS territory_assurance_expires_at TIMESTAMPTZ,
@@ -289,6 +290,8 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON COLUMN territory_assurance_requests.expires_at IS
   'Phase 7G.2 authorization validity boundary. Default policy issues 365-day residence assurance.';
+COMMENT ON COLUMN proposal_voter_roll.territory_assurance_level IS
+  'Frozen residence assurance level evaluated at electorate admission time.';
 COMMENT ON COLUMN proposal_voter_roll.territory_assurance_request_id IS
   'Frozen residence-assurance provenance. Current citizen state cannot rewrite this election snapshot.';
 COMMENT ON COLUMN proposal_voter_roll.identity_proof_id IS
