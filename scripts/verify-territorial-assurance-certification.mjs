@@ -13,6 +13,7 @@ const files = {
   mobileAssurance: 'apps/mobile/app/territory/assurance.tsx',
   mobileGovernance: 'apps/mobile/app/(tabs)/governance.tsx',
   docs: 'docs/engineering/TERRITORIAL_ASSURANCE_CERTIFICATION_PHASE7G4.md',
+  runbook: 'docs/operations/TERRITORIAL_ASSURANCE_CERTIFICATION_RUNBOOK.md',
   evidenceTemplate: 'docs/operations/territorial-assurance-certification-evidence.example.json',
 }
 
@@ -99,6 +100,7 @@ for (const scenario of [
 ]) {
   requireText('certification', scenario)
   requireText('evidenceTemplate', `"${scenario}"`)
+  requireText('runbook', `\`${scenario}\``)
 }
 
 requireText('evidenceTemplate', 'REPLACE_WITH_EXACT_40_CHAR_COMMIT_SHA')
@@ -107,6 +109,15 @@ requireText('evidenceTemplate', 'approval_reference')
 requireText('evidenceTemplate', '"passed": false')
 requireText('evidenceTemplate', '"evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE"')
 requireText('evidenceTemplate', '"observed_at": ""')
+
+requireText('runbook', '## Stop conditions')
+requireText('runbook', '## Procedure B — production provider canary')
+requireText('runbook', '## Procedure C — reviewer-separation check')
+requireText('runbook', '## Procedure D — revocation drill')
+requireText('runbook', '## Procedure F — audit export')
+requireText('runbook', '## Incident response')
+requireText('runbook', 'do not rewrite already frozen voter-roll provenance')
+requireText('runbook', 'EXTERNAL_EVIDENCE_REQUIRED')
 
 requireText('docs', 'BLOCKED')
 requireText('docs', 'REPOSITORY_CONTRACT_READY')
