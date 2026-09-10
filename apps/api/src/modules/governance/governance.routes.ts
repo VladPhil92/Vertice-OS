@@ -5,6 +5,8 @@ import {
   normalizeRequestedIdempotencyKey,
   type IdempotentMutationResult,
 } from '../../lib/idempotency'
+import { assertCommunityContentAllowed } from '../community/community.content-filter'
+import { ensureCommunityPolicyAccepted } from '../community/community.safety.service'
 import {
   CreateProposalSchema,
   ListProposalsSchema,
@@ -66,6 +68,12 @@ export async function governanceRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors })
     }
+    await ensureCommunityPolicyAccepted(request.citizen.sub)
+    assertCommunityContentAllowed([
+      { field: 'title', value: parsed.data.title },
+      { field: 'description', value: parsed.data.description },
+      { field: 'executive_summary', value: parsed.data.executive_summary },
+    ])
     const result = await executeIdempotentMutation({
       citizenId: request.citizen.sub,
       scope: 'governance:proposal:create',
