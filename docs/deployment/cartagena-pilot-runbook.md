@@ -90,9 +90,22 @@ Immediate pilot freeze is warranted for authentication bypass, authorization esc
 
 ## Branch protection
 
-`main` branch protection remains an explicit repository-governance debt until GitHub administration enables it. The automated same-SHA gate reduces accidental evidence reuse, but it does **not** replace protected-branch enforcement.
+`main` is protected by the active repository ruleset `Golden Main Protection`.
 
-Until protection is enabled, a controlled pilot requires disciplined release operation: no direct unreviewed pushes to `main`, merge only after the exact candidate SHA has passed the required PR checks, and preserve the PR/review trail. Open production/GA should not treat this manual discipline as equivalent to branch protection.
+The effective policy requires:
+
+- pull request before merge;
+- seven required GitHub Actions checks;
+- branch up to date before merge;
+- all review conversations resolved;
+- squash or rebase merge only;
+- no bypass actors;
+- branch deletion blocked;
+- non-fast-forward/force-push blocked.
+
+The policy was verified operationally with PR #148: GitHub rejected a merge while a review conversation was unresolved and allowed the squash merge only after conversations were resolved and required checks were green. GitHub reports `main.protected = true`.
+
+This protection complements the same-SHA runtime gate; neither mechanism replaces the other.
 
 ## External-provider boundary
 
