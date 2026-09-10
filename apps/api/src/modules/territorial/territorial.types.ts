@@ -19,8 +19,16 @@ export const REPORT_STATUSES = [
 ] as const
 
 export const REPORT_TERRITORY_SOURCES = ['manual', 'gps'] as const
+export const REPORT_TERRITORY_VALIDATIONS = [
+  'polygon_verified',
+  'border_tolerance',
+  'catalog_unavailable',
+  'legacy_unverified',
+] as const
+
 export type ReportTerritorySource = (typeof REPORT_TERRITORY_SOURCES)[number]
 export type StoredReportTerritorySource = ReportTerritorySource | 'legacy_home_fallback'
+export type ReportTerritoryValidation = (typeof REPORT_TERRITORY_VALIDATIONS)[number]
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number]
 export type ReportStatus = (typeof REPORT_STATUSES)[number]
 
@@ -39,7 +47,12 @@ export interface TerritorialReport {
   urgency_score: number | null
   status: ReportStatus
   territory_code: string | null
+  territory_name: string | null
+  department_code: string | null
+  department_name: string | null
   territory_source: StoredReportTerritorySource | null
+  territory_validation: ReportTerritoryValidation | null
+  territory_boundary_version: string | null
   media_urls: string[]
   created_at: Date
   updated_at: Date
@@ -57,7 +70,12 @@ export interface ReportSummary {
   status: ReportStatus
   urgency_score: number | null
   territory_code: string | null
+  territory_name: string | null
+  department_code: string | null
+  department_name: string | null
   territory_source: StoredReportTerritorySource | null
+  territory_validation: ReportTerritoryValidation | null
+  territory_boundary_version: string | null
   media_urls: string[]
   created_at: Date
 }
@@ -75,8 +93,20 @@ export interface CategoryStats {
   avg_urgency: number | null
 }
 
+export interface TerritoryStats {
+  territory_code: string
+  territory_name: string
+  department_code: string | null
+  department_name: string | null
+  total: number
+  open_count: number
+  resolved_count: number
+  avg_urgency: number | null
+}
+
 export interface TerritorialStats {
   by_category: CategoryStats[]
+  by_territory: TerritoryStats[]
   total_reports: number
   open_reports: number
 }
@@ -96,7 +126,12 @@ export interface ReportRow {
   urgency_score: number | null
   status: string
   territory_code?: string | null
+  territory_name?: string | null
+  department_code?: string | null
+  department_name?: string | null
   territory_source?: string | null
+  territory_validation?: string | null
+  territory_boundary_version?: string | null
   media_urls: string[]
   created_at: Date
   updated_at: Date
