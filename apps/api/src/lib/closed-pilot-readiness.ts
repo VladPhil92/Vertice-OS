@@ -38,6 +38,8 @@ const MONETARY_CAPABILITIES: ReadonlyArray<keyof FeatureCapabilities> = [
   'crowdfunding_payouts',
 ]
 
+const FULL_GIT_COMMIT_SHA = /^[0-9a-f]{40}$/i
+
 export const CLOSED_PILOT_SAFEGUARDS: ClosedPilotSafeguards = {
   access: 'closed_invite_only',
   governance: 'consultative_only',
@@ -53,6 +55,10 @@ export const CLOSED_PILOT_SAFEGUARDS: ClosedPilotSafeguards = {
  * real-user pilot exercises Community/social graph behavior and therefore
  * requires Neo4j to be healthy. Real-money capabilities remain disabled and
  * the invitation boundary must be executable, not merely documented.
+ *
+ * Production pilot evidence must also identify the runtime with the full
+ * immutable 40-character Git commit SHA. Branch names, shortened hashes,
+ * blanks and arbitrary labels are not acceptable release evidence.
  *
  * This evaluator never grants market-release certification. It only establishes
  * whether an exact runtime is safe enough for a bounded, invite-only pilot.
@@ -84,7 +90,9 @@ export function assessClosedPilotReadiness({
     }
   }
 
-  if (production && revision === 'unknown') blockers.push('runtime:revision_unknown')
+  if (production && !FULL_GIT_COMMIT_SHA.test(revision)) {
+    blockers.push('runtime:revision_invalid')
+  }
 
   const uniqueBlockers = Array.from(new Set(blockers)).sort()
   const ready = uniqueBlockers.length === 0
