@@ -13,6 +13,7 @@ const files = {
   mobileAssurance: 'apps/mobile/app/territory/assurance.tsx',
   mobileGovernance: 'apps/mobile/app/(tabs)/governance.tsx',
   docs: 'docs/engineering/TERRITORIAL_ASSURANCE_CERTIFICATION_PHASE7G4.md',
+  evidenceTemplate: 'docs/operations/territorial-assurance-certification-evidence.example.json',
 }
 
 const content = Object.fromEntries(await Promise.all(
@@ -72,6 +73,11 @@ requireText('mobileGovernance', '/eligibility')
 requireText('certification', "TERRITORIAL_ASSURANCE_CERTIFICATION_VERSION = '7G.4'")
 requireText('certification', "'BLOCKED'")
 requireText('certification', 'external_evidence_sha_mismatch')
+requireText('certification', 'provider_evidence_reference_missing')
+requireText('certification', 'operator_evidence_reference_missing')
+requireText('certification', 'policy_approval_reference_missing')
+requireText('certification', 'adversarial_evidence_reference_missing')
+requireText('certification', 'adversarial_evidence_timestamp_invalid')
 requireText('certification', 'provider_production_canary_missing')
 requireText('certification', 'reviewer_separation_not_verified')
 requireText('certification', 'revocation_drill_missing')
@@ -90,12 +96,23 @@ for (const scenario of [
   'reputation_cannot_grant_residence',
   'payments_cannot_grant_residence',
   'identity_assurance_cannot_grant_residence',
-]) requireText('certification', scenario)
+]) {
+  requireText('certification', scenario)
+  requireText('evidenceTemplate', `"${scenario}"`)
+}
+
+requireText('evidenceTemplate', 'REPLACE_WITH_EXACT_40_CHAR_COMMIT_SHA')
+requireText('evidenceTemplate', 'evidence_bundle_reference')
+requireText('evidenceTemplate', 'approval_reference')
+requireText('evidenceTemplate', '"passed": false')
+requireText('evidenceTemplate', '"evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE"')
+requireText('evidenceTemplate', '"observed_at": ""')
 
 requireText('docs', 'BLOCKED')
 requireText('docs', 'REPOSITORY_CONTRACT_READY')
 requireText('docs', 'EXTERNAL_EVIDENCE_REQUIRED')
 requireText('docs', 'PRODUCTION_ELECTION_CERTIFIED')
+requireText('docs', 'Boolean assertions are not evidence')
 requireText('docs', 'must not be committed as a fabricated passing artifact')
 
 console.log('TERRITORIAL_ASSURANCE_CERTIFICATION_SOURCE_CONTRACT=PASS')
