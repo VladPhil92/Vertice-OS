@@ -12,6 +12,10 @@ interface VisibleLeaderShape {
   citizen_id: string
 }
 
+interface IdentifiedTarget {
+  id: string
+}
+
 async function hiddenTargetKeys(targetIds: string[]): Promise<Set<string>> {
   if (targetIds.length === 0) return new Set()
   const ids = [...new Set(targetIds)]
@@ -21,6 +25,76 @@ async function hiddenTargetKeys(targetIds: string[]): Promise<Set<string>> {
     WHERE target_id::text IN (${Prisma.join(ids)})
   `)
   return new Set(rows.map((row) => `${row.target_type}:${row.target_id}`))
+}
+
+async function activityOwners(
+  targetType: CommunityActivityType,
+  targetIds: string[],
+): Promise<Map<string, string>> {
+  if (targetIds.length === 0) return new Map()
+  const ids = [...new Set(targetIds)]
+  let rows: Array<{ target_id: string; owner_id: string | null }>
+
+  if (targetType === 'report') {
+    rows = await prisma.$queryRaw(Prisma.sql`
+      SELECT id::text AS target_id, citizen_id::text AS owner_id
+      FROM territorial_reports
+      WHERE id::text IN (${Prisma.join(ids)})
+    `)
+  } else if (targetType === 'proposal') {
+    rows = await prisma.$queryRaw(Prisma.sql`
+      SELECT id::text AS target_id, author_id::text AS owner_id
+      FROM proposals
+      WHERE id::text IN (${Prisma.join(ids)})
+    `)
+  } else {
+    rows = await prisma.$queryRaw(Prisma.sql`
+      SELECT id::text AS target_id, citizen_id::text AS owner_id
+      FROM scheduled_civic_publications
+      WHERE id::text IN (${Prisma.join(ids)})
+    `)
+  }
+
+  return new Map(rows.flatMap((row) => row.owner_id ? [[row.target_id, row.owner_id] as const] : []))
+}
+
+export async function filterVisibleCommunityTargets<T extends IdentifiedTarget>(
+  targetType: CommunityActivityType,
+  items: T[],
+): Promise<T[]> {
+  if (items.length === 0) return items
+  const targetIds = items.map((item) => item.id)
+  const [hiddenTargets, owners] = await Promise.all([
+    hiddenTargetKeys(targetIds),
+    activityOwners(targetType, targetIds),
+  ])
+  const ownerIds = [...new Set(owners.values())]
+  const hiddenOwners = await hiddenTargetKeys(ownerIds)
+
+  return items.filter((item) => {
+    if (hiddenTargets.has(`${targetType}:${item.id}`)) return false
+    const ownerId = owners.get(item.id)
+    return !ownerId || !hiddenOwners.has(`profile:${ownerId}`)
+  })
+}
+
+export async function assertCommunityTargetVisible(
+  targetType: CommunityActivityType,
+  targetId: string,
+): Promise<void> {
+  const [hiddenTargets, owners] = await Promise.all([
+    hiddenTargetKeys([targetId]),
+    activityOwners(targetType, [targetId]),
+  ])
+  const ownerId = owners.get(targetId)
+  const hiddenOwners = ownerId ? await hiddenTargetKeys([ownerId]) : new Set<string>()
+
+  if (hiddenTargets.has(`${targetType}:${targetId}`) || (ownerId && hiddenOwners.has(`profile:${ownerId}`))) {
+    throw Object.assign(new Error('Contenido cívico no disponible'), {
+      statusCode: 404,
+      code: 'CIVIC_ACTIVITY_NOT_FOUND',
+    })
+  }
 }
 
 export async function filterVisibleCommunityActivities<T extends VisibleActivityShape>(activities: T[]): Promise<T[]> {
