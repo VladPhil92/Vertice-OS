@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch, apiMutation } from '../../lib/api'
 import type { FollowState, PublicCivicProfile } from '../../types/api'
+import type { CommunityBlockState } from '../../types/community-safety'
 
 const PROFILE_TYPE_LABEL: Record<string, string> = {
   citizen: 'Ciudadano',
@@ -17,20 +18,28 @@ export default function CivicProfileScreen() {
   const { citizenId } = useLocalSearchParams<{ citizenId: string }>()
   const [profile, setProfile] = useState<PublicCivicProfile | null>(null)
   const [followState, setFollowState] = useState<FollowState | null>(null)
+  const [blockState, setBlockState] = useState<CommunityBlockState | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [followBusy, setFollowBusy] = useState(false)
+  const [blockBusy, setBlockBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!citizenId) return
     setError(null)
     try {
-      const [profileResponse, follow] = await Promise.all([
-        apiFetch<PublicCivicProfile>(`/community/profiles/${citizenId}`),
-        apiFetch<FollowState>(`/community/profiles/${citizenId}/follow-state`).catch(() => null),
-      ])
+      const profileResponse = await apiFetch<PublicCivicProfile>(`/community/profiles/${citizenId}`)
       setProfile(profileResponse)
-      if (follow) setFollowState(follow)
+
+      const block = await apiFetch<CommunityBlockState>(`/community/profiles/${citizenId}/block-state`).catch(() => null)
+      if (block) setBlockState(block)
+
+      if (!block?.blocked) {
+        const follow = await apiFetch<FollowState>(`/community/profiles/${citizenId}/follow-state`).catch(() => null)
+        setFollowState(follow)
+      } else {
+        setFollowState(null)
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar este perfil cívico.')
     }
@@ -44,8 +53,9 @@ export default function CivicProfileScreen() {
   }
 
   async function toggleFollow() {
-    if (!citizenId || !followState) return
+    if (!citizenId || !followState || blockState?.blocked) return
     setFollowBusy(true)
+    setError(null)
     try {
       const next = followState.following
         ? await apiFetch<FollowState>(`/community/profiles/${citizenId}/follow`, { method: 'DELETE' })
@@ -56,6 +66,63 @@ export default function CivicProfileScreen() {
     } finally {
       setFollowBusy(false)
     }
+  }
+
+  function reportProfile() {
+    if (!citizenId) return
+    router.push({
+      pathname: '/community/report',
+      params: {
+        targetType: 'profile',
+        targetId: citizenId,
+        label: profile?.display_name ?? 'Perfil cívico',
+      },
+    })
+  }
+
+  async function unblockUser() {
+    if (!citizenId || blockBusy) return
+    setBlockBusy(true)
+    setError(null)
+    try {
+      const next = await apiFetch<CommunityBlockState>(`/community/profiles/${citizenId}/block`, { method: 'DELETE' })
+      setBlockState(next)
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo desbloquear este perfil.')
+    } finally {
+      setBlockBusy(false)
+    }
+  }
+
+  async function blockUser() {
+    if (!citizenId || blockBusy) return
+    setBlockBusy(true)
+    setError(null)
+    try {
+      const next = await apiMutation<CommunityBlockState>(
+        `/community/profiles/${citizenId}/block`,
+        `mobile-community-block-${citizenId}`,
+        { method: 'POST' },
+      )
+      setBlockState(next)
+      setFollowState(null)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo bloquear este perfil.')
+    } finally {
+      setBlockBusy(false)
+    }
+  }
+
+  function confirmBlock() {
+    Alert.alert(
+      'Bloquear usuario',
+      'Dejarán de seguirse mutuamente y el contenido de este perfil dejará de aparecer en tu experiencia comunitaria. Puedes desbloquearlo después.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Bloquear', style: 'destructive', onPress: () => { void blockUser() } },
+      ],
+    )
   }
 
   return (
@@ -79,7 +146,7 @@ export default function CivicProfileScreen() {
               {profile.organization ? <Text style={styles.muted}>{profile.organization}</Text> : null}
               {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
-              {followState ? (
+              {!blockState?.blocked && followState ? (
                 <Pressable
                   disabled={followBusy}
                   onPress={() => void toggleFollow()}
@@ -89,6 +156,13 @@ export default function CivicProfileScreen() {
                     {followBusy ? 'Procesando…' : followState.following ? 'Dejar de seguir' : 'Seguir'}
                   </Text>
                 </Pressable>
+              ) : null}
+
+              {blockState?.blocked ? (
+                <View style={styles.blockedNote}>
+                  <Text style={styles.blockedTitle}>Usuario bloqueado</Text>
+                  <Text style={styles.blockedText}>Su contenido y las interacciones sociales entre ambos están limitados.</Text>
+                </View>
               ) : null}
 
               <View style={styles.statsRow}>
@@ -113,8 +187,27 @@ export default function CivicProfileScreen() {
 
             <View style={styles.neutralityNote}>
               <Text style={styles.neutralityText}>
-                Seguir a este perfil es una señal social y no otorga reputación, identidad ni autoridad cívica adicional.
+                Seguir, bloquear o denunciar un perfil son controles sociales y de seguridad. No otorgan ni descuentan reputación, identidad o autoridad cívica automáticamente.
               </Text>
+            </View>
+
+            <View style={styles.safetyCard}>
+              <Text style={styles.sectionTitle}>Seguridad</Text>
+              <Text style={styles.safetyText}>Puedes denunciar este perfil para revisión o bloquear la interacción directamente.</Text>
+              <View style={styles.safetyActions}>
+                <Pressable style={styles.reportButton} onPress={reportProfile}>
+                  <Text style={styles.reportButtonText}>Reportar usuario</Text>
+                </Pressable>
+                {blockState?.blocked ? (
+                  <Pressable disabled={blockBusy} style={[styles.unblockButton, blockBusy && styles.disabled]} onPress={() => void unblockUser()}>
+                    <Text style={styles.unblockButtonText}>{blockBusy ? 'Procesando…' : 'Desbloquear usuario'}</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable disabled={blockBusy} style={[styles.blockButton, blockBusy && styles.disabled]} onPress={confirmBlock}>
+                    <Text style={styles.blockButtonText}>{blockBusy ? 'Procesando…' : 'Bloquear usuario'}</Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
 
             <Text style={styles.sectionTitle}>Acciones recientes</Text>
@@ -127,6 +220,19 @@ export default function CivicProfileScreen() {
                   </View>
                   <Text style={styles.actionTitle}>{activity.title}</Text>
                   <Text style={styles.body} numberOfLines={2}>{activity.summary}</Text>
+                  <Pressable
+                    style={styles.inlineReport}
+                    onPress={() => router.push({
+                      pathname: '/community/report',
+                      params: {
+                        targetType: activity.type,
+                        targetId: activity.id,
+                        label: activity.title,
+                      },
+                    })}
+                  >
+                    <Text style={styles.inlineReportText}>Reportar</Text>
+                  </Pressable>
                 </View>
               ))}
               {profile.recent_actions.length === 0 ? (
@@ -155,6 +261,9 @@ const styles = StyleSheet.create({
   followButtonText: { color: '#17382A', fontWeight: '700' },
   followButtonTextActive: { color: '#FFFFFF' },
   disabled: { opacity: 0.55 },
+  blockedNote: { marginTop: 10, borderRadius: 14, padding: 12, backgroundColor: '#F4EFE8', gap: 3 },
+  blockedTitle: { color: '#503F2B', fontWeight: '800', fontSize: 13 },
+  blockedText: { color: '#6E5A43', fontSize: 12, lineHeight: 17 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
   stat: { alignItems: 'center', gap: 3 },
   statValue: { fontSize: 18, fontWeight: '800', color: '#1C3D2E' },
@@ -162,6 +271,15 @@ const styles = StyleSheet.create({
   neutralityNote: { backgroundColor: '#EEF3EF', borderRadius: 14, padding: 12 },
   neutralityText: { color: '#3F5B4B', fontSize: 12, lineHeight: 17 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#171A15' },
+  safetyCard: { backgroundColor: '#FFFFFF', borderRadius: 17, padding: 15, gap: 9 },
+  safetyText: { color: '#656A63', fontSize: 12, lineHeight: 18 },
+  safetyActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  reportButton: { backgroundColor: '#F5ECEA', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 11 },
+  reportButtonText: { color: '#853B35', fontWeight: '800', fontSize: 12 },
+  blockButton: { backgroundColor: '#782E2A', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 11 },
+  blockButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
+  unblockButton: { borderWidth: 1, borderColor: '#53635A', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 11 },
+  unblockButtonText: { color: '#425149', fontWeight: '800', fontSize: 12 },
   list: { gap: 10 },
   actionCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, gap: 6 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -169,6 +287,8 @@ const styles = StyleSheet.create({
   score: { fontSize: 18, color: '#1C3D2E', fontWeight: '800' },
   actionTitle: { fontSize: 15, fontWeight: '700', color: '#171A15' },
   body: { color: '#343931', lineHeight: 18, fontSize: 13 },
+  inlineReport: { alignSelf: 'flex-end', marginTop: 2, paddingHorizontal: 8, paddingVertical: 6 },
+  inlineReportText: { color: '#853B35', fontWeight: '700', fontSize: 11 },
   error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
   empty: { textAlign: 'center', color: '#777B74', paddingVertical: 20 },
 })
