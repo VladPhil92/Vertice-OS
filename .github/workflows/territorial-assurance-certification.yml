@@ -7,6 +7,9 @@ on:
       - 'apps/api/src/modules/territories/territory-assurance*.ts'
       - 'apps/api/src/modules/territories/territories.routes.ts'
       - 'apps/api/src/modules/governance/governance.eligibility.ts'
+      - 'apps/api/src/modules/governance/governance.service.ts'
+      - 'apps/api/src/modules/governance/governance.routes.ts'
+      - 'apps/api/src/modules/governance/governance.lifecycle.ts'
       - 'apps/api/src/modules/governance/__tests__/governance.assurance-policy.test.ts'
       - 'apps/api/src/modules/governance/__tests__/governance.eligibility.test.ts'
       - 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts'
@@ -25,6 +28,9 @@ on:
       - 'apps/api/src/modules/territories/territory-assurance*.ts'
       - 'apps/api/src/modules/territories/territories.routes.ts'
       - 'apps/api/src/modules/governance/governance.eligibility.ts'
+      - 'apps/api/src/modules/governance/governance.service.ts'
+      - 'apps/api/src/modules/governance/governance.routes.ts'
+      - 'apps/api/src/modules/governance/governance.lifecycle.ts'
       - 'apps/api/src/modules/governance/__tests__/governance.assurance-policy.test.ts'
       - 'apps/api/src/modules/governance/__tests__/governance.eligibility.test.ts'
       - 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts'
@@ -190,6 +196,7 @@ jobs:
             apps/api/prisma/migrations/20260907223000_least_privilege_session_activation/migration.sql \
             apps/api/prisma/migrations/20260908111500_operation_idempotency_phase6/migration.sql \
             apps/api/prisma/migrations/20260909033000_national_territory_platform_phase7a/migration.sql \
+            apps/api/prisma/migrations/20260909033800_national_voter_roll_territory_interlock/migration.sql \
             apps/api/prisma/migrations/20260910033000_community_ugc_trust_safety/migration.sql \
             apps/api/prisma/migrations/20260910122000_national_territory_mobility_context/migration.sql \
             apps/api/prisma/migrations/20260910131500_territory_boundary_integrity/migration.sql \
@@ -199,6 +206,13 @@ jobs:
             echo "Applying certification schema slice: $migration"
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
+
+      - name: Assert voter-roll territorial trigger is installed
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_territory_cert@localhost:5432/vertice_territory_cert
+        run: |
+          set -euo pipefail
+          test "$(psql "$DATABASE_URL" -Atc "SELECT count(*) FROM pg_trigger WHERE tgname = 'proposal_voter_roll_territory_interlock' AND NOT tgisinternal")" = "1"
 
       - name: Run adversarial territorial assurance journey
         env:
