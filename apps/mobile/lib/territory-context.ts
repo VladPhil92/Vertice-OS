@@ -140,18 +140,21 @@ async function suggestFromDeviceReverseGeocode(lat: number, lng: number): Promis
  * Prefer the API's locally synchronized DANE polygons because municipality names
  * are not globally unique and reverse-geocoder labels vary by device provider.
  *
- * If the authoritative boundary catalog has not been synchronized yet, or the
- * resolver is temporarily unavailable, the previous department-aware reverse
- * geocoding path remains an availability fallback. Ambiguous polygon borders do
- * not guess: they require explicit citizen confirmation.
+ * Exact coordinates are sent in a POST body rather than the request URL so API
+ * URL telemetry cannot become a passive movement-history trail. If the boundary
+ * resolver is unavailable, the department-aware device reverse-geocoder remains
+ * an availability fallback. Ambiguous polygon borders never guess.
  */
 export async function suggestTerritoryFromCoordinates(
   lat: number,
   lng: number,
 ): Promise<TerritoryGpsSuggestion> {
   try {
-    const params = new URLSearchParams({ lat: String(lat), lng: String(lng) })
-    const resolution = await apiFetch<BoundaryResolution>(`/territories/resolve?${params.toString()}`, { public: true })
+    const resolution = await apiFetch<BoundaryResolution>('/territories/resolve', {
+      method: 'POST',
+      public: true,
+      body: JSON.stringify({ lat, lng }),
+    })
 
     if ((resolution.status === 'matched' || resolution.status === 'near_border') && resolution.territory) {
       return { status: 'matched', territory: resolution.territory }
