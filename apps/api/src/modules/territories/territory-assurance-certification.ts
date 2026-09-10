@@ -15,10 +15,17 @@ export const TERRITORIAL_ASSURANCE_REQUIRED_ADVERSARIAL_SCENARIOS = [
 
 export type TerritorialAssuranceScenario = typeof TERRITORIAL_ASSURANCE_REQUIRED_ADVERSARIAL_SCENARIOS[number]
 
+export interface TerritorialAssuranceScenarioEvidence {
+  passed: boolean
+  evidence_reference: string
+  observed_at: string
+}
+
 export interface TerritorialAssuranceExternalEvidence {
   candidate_sha: string
   provider: {
     provider_name: string
+    evidence_bundle_reference: string
     evidence_reference_only: boolean
     raw_document_storage_disabled: boolean
     decision_authenticity_verified: boolean
@@ -26,18 +33,20 @@ export interface TerritorialAssuranceExternalEvidence {
     production_canary_passed: boolean
   }
   operator: {
+    evidence_bundle_reference: string
     reviewer_separation_verified: boolean
     revocation_drill_passed: boolean
     audit_export_verified: boolean
     incident_runbook_approved: boolean
   }
   election_policy: {
+    approval_reference: string
     legal_privacy_review_approved: boolean
     eligibility_policy_approved: boolean
     policy_owner: string
     approved_at: string
   }
-  adversarial_scenarios: Partial<Record<TerritorialAssuranceScenario, boolean>>
+  adversarial_scenarios: Partial<Record<TerritorialAssuranceScenario, TerritorialAssuranceScenarioEvidence>>
 }
 
 export interface TerritorialAssuranceCertificationResult {
@@ -55,6 +64,11 @@ function nonEmpty(value: string): boolean {
 
 function validIsoTimestamp(value: string): boolean {
   return nonEmpty(value) && Number.isFinite(Date.parse(value))
+}
+
+function validEvidenceReference(value: string): boolean {
+  const normalized = value.trim()
+  return normalized.length >= 8 && !/^(replace|todo|tbd)(?:_|:|\b)/i.test(normalized)
 }
 
 export function evaluateTerritorialAssuranceCertification(params: {
@@ -87,25 +101,36 @@ export function evaluateTerritorialAssuranceCertification(params: {
   if (evidence.candidate_sha !== candidateSha) blockers.push('external_evidence_sha_mismatch')
 
   if (!nonEmpty(evidence.provider.provider_name)) blockers.push('provider_name_missing')
+  if (!validEvidenceReference(evidence.provider.evidence_bundle_reference)) blockers.push('provider_evidence_reference_missing')
   if (!evidence.provider.evidence_reference_only) blockers.push('provider_raw_reference_boundary_not_proven')
   if (!evidence.provider.raw_document_storage_disabled) blockers.push('raw_document_storage_boundary_not_proven')
   if (!evidence.provider.decision_authenticity_verified) blockers.push('provider_decision_authenticity_not_verified')
   if (!evidence.provider.replay_protection_verified) blockers.push('provider_replay_protection_not_verified')
   if (!evidence.provider.production_canary_passed) blockers.push('provider_production_canary_missing')
 
+  if (!validEvidenceReference(evidence.operator.evidence_bundle_reference)) blockers.push('operator_evidence_reference_missing')
   if (!evidence.operator.reviewer_separation_verified) blockers.push('reviewer_separation_not_verified')
   if (!evidence.operator.revocation_drill_passed) blockers.push('revocation_drill_missing')
   if (!evidence.operator.audit_export_verified) blockers.push('audit_export_not_verified')
   if (!evidence.operator.incident_runbook_approved) blockers.push('incident_runbook_not_approved')
 
+  if (!validEvidenceReference(evidence.election_policy.approval_reference)) blockers.push('policy_approval_reference_missing')
   if (!evidence.election_policy.legal_privacy_review_approved) blockers.push('legal_privacy_review_missing')
   if (!evidence.election_policy.eligibility_policy_approved) blockers.push('eligibility_policy_approval_missing')
   if (!nonEmpty(evidence.election_policy.policy_owner)) blockers.push('policy_owner_missing')
   if (!validIsoTimestamp(evidence.election_policy.approved_at)) blockers.push('policy_approval_timestamp_invalid')
 
   for (const scenario of TERRITORIAL_ASSURANCE_REQUIRED_ADVERSARIAL_SCENARIOS) {
-    if (evidence.adversarial_scenarios[scenario] !== true) {
+    const scenarioEvidence = evidence.adversarial_scenarios[scenario]
+    if (!scenarioEvidence || scenarioEvidence.passed !== true) {
       blockers.push(`adversarial_scenario_missing:${scenario}`)
+      continue
+    }
+    if (!validEvidenceReference(scenarioEvidence.evidence_reference)) {
+      blockers.push(`adversarial_evidence_reference_missing:${scenario}`)
+    }
+    if (!validIsoTimestamp(scenarioEvidence.observed_at)) {
+      blockers.push(`adversarial_evidence_timestamp_invalid:${scenario}`)
     }
   }
 
