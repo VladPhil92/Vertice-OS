@@ -162,6 +162,14 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Verificar frontera de credenciales de firma móvil
+        run: node scripts/verify-mobile-signing-boundary.mjs
+
       # Toda vulnerabilidad high/critical sigue bloqueando. Las únicas
       # excepciones temporales son los dos GHSA sin parche de image-size,
       # restringidos al toolchain móvil Expo/Metro y con expiración explícita.
