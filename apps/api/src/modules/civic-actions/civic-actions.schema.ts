@@ -29,6 +29,7 @@ export const CIVIC_EVIDENCE_TYPES = [
   'external_record',
 ] as const
 
+export const CIVIC_ACTION_TERRITORY_SOURCES = ['manual', 'gps'] as const
 export const CIVIC_ACTION_VALIDATION_STANCES = ['corroborate', 'dispute'] as const
 export const CIVIC_ACTION_REVIEW_DECISIONS = [
   'under_verification',
@@ -60,10 +61,23 @@ export const CreateCivicActionSchema = z.object({
   category: z.string().trim().min(2).max(80),
   neighborhood: z.string().trim().min(2).max(120).nullable().optional(),
   locality_id: z.coerce.number().int().positive().nullable().optional(),
+  territory_code: z.string().trim().min(2).max(32).optional(),
+  territory_source: z.enum(CIVIC_ACTION_TERRITORY_SOURCES).optional(),
   beneficiaries_estimate: z.coerce.number().int().min(0).max(10_000_000).nullable().optional(),
   target_date: z.string().date().nullable().optional(),
+}).superRefine((value, ctx) => {
+  if (value.territory_source && !value.territory_code) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['territory_code'],
+      message: 'El origen territorial requiere un territorio objetivo explícito.',
+    })
+  }
 })
 
+// The contribution territory is deliberately absent here. It is an immutable
+// snapshot of where the action belongs; travelling or editing an action cannot
+// silently move its historical geography.
 export const UpdateCivicActionSchema = z.object({
   title: z.string().trim().min(8).max(180).optional(),
   problem: z.string().trim().min(20).max(4000).optional(),
@@ -124,6 +138,7 @@ export const CivicActionReviewSchema = z.object({
 export type CivicActionStatus = typeof CIVIC_ACTION_STATUSES[number]
 export type CivicActionOwnerStatus = typeof OWNER_CIVIC_ACTION_STATUSES[number]
 export type CivicEvidenceType = typeof CIVIC_EVIDENCE_TYPES[number]
+export type CivicActionTerritorySource = typeof CIVIC_ACTION_TERRITORY_SOURCES[number]
 export type CivicActionValidationStance = typeof CIVIC_ACTION_VALIDATION_STANCES[number]
 export type CivicActionReviewDecision = typeof CIVIC_ACTION_REVIEW_DECISIONS[number]
 export type CivicActionListQuery = z.infer<typeof CivicActionListQuerySchema>
