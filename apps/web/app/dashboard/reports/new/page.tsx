@@ -96,7 +96,7 @@ export default function NewReportPage() {
 
   useEffect(() => {
     requestLocation()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   function requestLocation() {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {

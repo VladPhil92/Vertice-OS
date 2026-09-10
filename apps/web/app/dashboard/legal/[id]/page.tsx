@@ -28,13 +28,6 @@ const URGENCY_COLOR: Record<string, string> = {
   critica: 'text-red-400',
 }
 
-const URGENCY_BADGE: Record<string, string> = {
-  baja:    'border-border text-secondary',
-  media:   'border-gold/30 text-gold',
-  alta:    'border-orange-400/30 text-orange-400',
-  critica: 'border-red-400/30 text-red-400',
-}
-
 const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: string }> = {
   draft:     { label: 'Borrador',   icon: FileText,      color: 'text-secondary' },
   ready:     { label: 'Listo',      icon: CheckCircle,   color: 'text-cyan' },
