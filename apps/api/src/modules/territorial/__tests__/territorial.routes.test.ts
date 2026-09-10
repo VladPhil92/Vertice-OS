@@ -16,6 +16,11 @@ const mockGetById = jest.fn()
 const mockNearby = jest.fn()
 const mockUpdateStatus = jest.fn()
 const mockStats = jest.fn()
+const mockEnsureCommunityPolicyAccepted = jest.fn().mockResolvedValue(undefined)
+
+jest.mock('../../community/community.safety.service', () => ({
+  ensureCommunityPolicyAccepted: mockEnsureCommunityPolicyAccepted,
+}))
 
 jest.mock('../territorial.service', () => ({
   createReport: mockCreate,
