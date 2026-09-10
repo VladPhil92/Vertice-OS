@@ -36,7 +36,24 @@ async function registerCitizen(seed: string) {
     payload: { email: input.email, password: input.password },
   })
   expect(signedIn.statusCode).toBe(200)
-  return { id, auth: `Bearer ${(signedIn.json() as { access_token: string }).access_token}` }
+  const auth = `Bearer ${(signedIn.json() as { access_token: string }).access_token}`
+
+  const policyState = await app.inject({
+    method: 'GET',
+    url: '/community/safety/policy',
+    headers: { authorization: auth },
+  })
+  expect(policyState.statusCode).toBe(200)
+  const currentVersion = (policyState.json() as { current_version: string }).current_version
+  const policy = await app.inject({
+    method: 'POST',
+    url: '/community/safety/policy/accept',
+    headers: { authorization: auth },
+    payload: { policy_version: currentVersion },
+  })
+  expect(policy.statusCode).toBe(200)
+
+  return { id, auth }
 }
 
 async function selectTerritory(subject: { auth: string }, territoryCode: string) {
@@ -119,7 +136,7 @@ describeGolden('GJ-08 Phase 7G.4 territorial assurance certification', () => {
     })).rejects.toMatchObject({ code: 'TERRITORY_ASSURANCE_SELF_REVIEW_FORBIDDEN' })
 
     await prisma.$executeRaw(Prisma.sql`
-      UPDATE citizens SET reputation_score = 99999 WHERE id = ${subject.id}::uuid
+      UPDATE citizens SET reputation_score = 100 WHERE id = ${subject.id}::uuid
     `)
 
     const proposal = await createCityProposal(author, 'Certificación: residencia no sustituible')
