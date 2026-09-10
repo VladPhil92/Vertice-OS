@@ -7,6 +7,7 @@ const files = {
   migration: 'apps/api/prisma/migrations/20260910184500_territorial_governance_eligibility_phase7g2/migration.sql',
   assuranceGolden: 'apps/api/src/__tests__/golden-territory-assurance.integration.test.ts',
   governanceGolden: 'apps/api/src/__tests__/golden-governance.integration.test.ts',
+  certificationGolden: 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts',
   webTerritory: 'apps/web/app/dashboard/territory/page.tsx',
   webGovernance: 'apps/web/app/dashboard/governance/page.tsx',
   mobileAssurance: 'apps/mobile/app/territory/assurance.tsx',
@@ -26,8 +27,6 @@ function forbidText(key, needle, message = `${key} must not include ${needle}`) 
   if (content[key].includes(needle)) throw new Error(message)
 }
 
-// Phase 7G.1/7G.2 residence proof lifecycle remains durable, bounded and
-// independent from identity, GPS, popularity or payments.
 requireText('assurance', 'TERRITORY_ASSURANCE_VALIDITY_DAYS = 365')
 requireText('assurance', 'TERRITORY_ASSURANCE_RENEWAL_WINDOW_DAYS = 30')
 requireText('assurance', 'TERRITORY_ASSURANCE_SELF_REVIEW_FORBIDDEN')
@@ -38,8 +37,6 @@ requireText('migration', 'enforce_voter_roll_territory')
 requireText('migration', 'territory_assurance_request_id')
 requireText('migration', 'territory_assurance_expires_at')
 
-// Governance must continue to fail closed on stale/mismatched residence and
-// must never derive electoral authority from reputation or financial state.
 for (const reason of [
   'TERRITORY_ASSURANCE_REQUIRED',
   'TERRITORY_ASSURANCE_EXPIRED',
@@ -51,22 +48,26 @@ for (const forbidden of ['reputation_score', 'subscription_tier', 'wallet_balanc
   forbidText('governance', forbidden, `Governance eligibility must remain independent from ${forbidden}`)
 }
 
-// Existing real-DB journeys are part of the certification evidence, not merely
-// unit mocks.
 requireText('assuranceGolden', 'territorial residence assurance core')
 requireText('assuranceGolden', 'territory_assurance_level: 0')
 requireText('governanceGolden', 'territorial governance eligibility')
 requireText('governanceGolden', 'territory_assurance_request_id')
+requireText('certificationGolden', 'Phase 7G.4 territorial assurance certification')
+requireText('certificationGolden', 'TERRITORY_ASSURANCE_SELF_REVIEW_FORBIDDEN')
+requireText('certificationGolden', 'TERRITORY_ASSURANCE_EXPIRED')
+requireText('certificationGolden', 'TERRITORY_SCOPE_MISMATCH')
+requireText('certificationGolden', 'TERRITORY_ASSURANCE_REQUIRED')
+requireText('certificationGolden', 'ELIGIBLE_FROZEN_ELECTORATE')
+requireText('certificationGolden', 'reputation_score = 99999')
+requireText('certificationGolden', "expires_at = NOW() - INTERVAL '1 minute'")
+requireText('certificationGolden', "expires_at = NOW() + INTERVAL '20 days'")
 
-// Phase 7G.3 clients must consume server authority and fail closed.
 requireText('webTerritory', '/territories/assurance/me')
 requireText('webTerritory', '/territories/assurance/requests')
 requireText('webGovernance', '/eligibility')
 requireText('mobileAssurance', '/territories/assurance/me')
 requireText('mobileGovernance', '/eligibility')
 
-// Phase 7G.4 itself must require exact-SHA external evidence and all adversarial
-// scenarios before the stronger production-election boundary can be emitted.
 requireText('certification', "TERRITORIAL_ASSURANCE_CERTIFICATION_VERSION = '7G.4'")
 requireText('certification', 'external_evidence_sha_mismatch')
 requireText('certification', 'provider_production_canary_missing')
