@@ -31,9 +31,15 @@ describe('Phase 7H closed pilot access control', () => {
       CLOSED_PILOT_EMAIL_ALLOWLIST: 'invited@example.com',
     }
 
-    expect(() => assertClosedPilotEmailAllowed('outsider@example.com', env)).toThrow(
-      expect.objectContaining({ code: 'CLOSED_PILOT_INVITE_REQUIRED', statusCode: 403 }),
-    )
+    try {
+      assertClosedPilotEmailAllowed('outsider@example.com', env)
+      throw new Error('expected closed-pilot access rejection')
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'CLOSED_PILOT_INVITE_REQUIRED',
+        statusCode: 403,
+      })
+    }
   })
 
   it('fails closed when pilot mode is enabled with an empty or oversized cohort', () => {
