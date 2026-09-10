@@ -2,6 +2,7 @@ const mockQueryRaw = jest.fn()
 const mockGetCache = jest.fn()
 const mockSetCache = jest.fn()
 const mockDelCache = jest.fn()
+const mockVerifyTerritoryPoint = jest.fn()
 
 jest.mock('../../../lib/prisma', () => ({
   prisma: { $queryRaw: mockQueryRaw },
@@ -12,6 +13,14 @@ jest.mock('../../../lib/cache', () => ({
   setCache: mockSetCache,
   delCache: mockDelCache,
   TTL: { PROFILE: 300, SESSION: 60, REPORT: 120, STATS: 600 },
+}))
+
+// This suite verifies territorial.service's legacy row/query behavior with a
+// deterministic Prisma mock. Real PostGIS polygon enforcement is exercised by
+// golden-territorial.integration.test.ts, so keep that new dependency isolated
+// here instead of consuming the ordered $queryRaw fixtures below.
+jest.mock('../../territories/territory-boundaries.service', () => ({
+  verifyTerritoryPoint: mockVerifyTerritoryPoint,
 }))
 
 import {
@@ -49,6 +58,11 @@ beforeEach(() => {
   jest.resetAllMocks()
   mockSetCache.mockResolvedValue(undefined)
   mockDelCache.mockResolvedValue(undefined)
+  mockVerifyTerritoryPoint.mockResolvedValue({
+    status: 'catalog_unavailable',
+    source_version: null,
+    distance_meters: null,
+  })
 })
 
 // ── createReport ──────────────────────────────────────────────────────────────
@@ -248,6 +262,18 @@ describe('getTerritorialStats', () => {
       { category: 'infraestructura', total: BigInt(42), open_count: BigInt(30), resolved_count: BigInt(10), avg_urgency: 0.5 },
       { category: 'seguridad', total: BigInt(15), open_count: BigInt(10), resolved_count: BigInt(5), avg_urgency: 0.8 },
     ])
+    mockQueryRaw.mockResolvedValueOnce([
+      {
+        territory_code: 'CO-MP-13001',
+        territory_name: 'Cartagena de Indias',
+        department_code: 'CO-DP-13',
+        department_name: 'Bolívar',
+        total: BigInt(42),
+        open_count: BigInt(30),
+        resolved_count: BigInt(10),
+        avg_urgency: 0.5,
+      },
+    ])
 
     const stats = await getTerritorialStats()
 
@@ -256,5 +282,8 @@ describe('getTerritorialStats', () => {
     expect(stats.by_category[0].category).toBe('infraestructura')
     expect(stats.by_category[0].total).toBe(42)
     expect(typeof stats.by_category[0].total).toBe('number')
+    expect(stats.by_territory[0].territory_code).toBe('CO-MP-13001')
+    expect(stats.by_territory[0].total).toBe(42)
+    expect(typeof stats.by_territory[0].total).toBe('number')
   })
 })

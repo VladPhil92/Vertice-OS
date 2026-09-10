@@ -11,6 +11,15 @@ export async function getTerritoryFeed(territoryCode: string, limit = 12) {
     })
   }
   const bounded = Math.max(1, Math.min(limit, 30))
+  const department = territory.parent_code
+    ? await getTerritory(territory.parent_code).catch(() => null)
+    : null
+  const canonicalGeography = {
+    territory_code: territory.code,
+    territory_name: territory.name,
+    department_code: department?.level === 'department' ? department.code : null,
+    department_name: department?.level === 'department' ? department.name : null,
+  }
 
   const [actions, reports, proposals] = await Promise.all([
     prisma.$queryRaw<Array<{
@@ -43,10 +52,14 @@ export async function getTerritoryFeed(territoryCode: string, limit = 12) {
   ])
 
   return {
-    territory,
-    actions,
-    reports,
-    proposals,
+    territory: {
+      ...territory,
+      department_code: canonicalGeography.department_code,
+      department_name: canonicalGeography.department_name,
+    },
+    actions: actions.map((item) => ({ ...item, ...canonicalGeography })),
+    reports: reports.map((item) => ({ ...item, ...canonicalGeography })),
+    proposals: proposals.map((item) => ({ ...item, ...canonicalGeography })),
     empty_state: actions.length + reports.length + proposals.length === 0
       ? 'Sé una de las primeras personas en activar esta comunidad en VÉRTICE.'
       : null,
