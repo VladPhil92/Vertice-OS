@@ -86,8 +86,9 @@ async function resolveDepartmentCode(region: string | null): Promise<string | nu
     && department.level === 'department'
     && nameMatchesCandidate(department.name, q),
   )
+  const [department] = candidates
 
-  return candidates.length === 1 ? candidates[0].code : null
+  return candidates.length === 1 && department ? department.code : null
 }
 
 export type TerritoryGpsSuggestion =
@@ -131,9 +132,10 @@ export async function suggestTerritoryFromCoordinates(
     const scopedMatches = departmentCode
       ? nameMatches.filter((territory) => territory.parent_code === departmentCode)
       : nameMatches
+    const [match] = scopedMatches
 
-    if (scopedMatches.length === 1) {
-      return { status: 'matched', territory: scopedMatches[0] }
+    if (scopedMatches.length === 1 && match) {
+      return { status: 'matched', territory: match }
     }
 
     if (scopedMatches.length > 1 || (!departmentCode && nameMatches.length > 1)) {
