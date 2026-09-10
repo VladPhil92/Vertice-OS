@@ -42,6 +42,21 @@ describe('Phase 7H closed pilot access control', () => {
     }
   })
 
+  it.each([null, undefined, ''])('rejects a missing legacy email while pilot mode is enabled: %p', (email) => {
+    const env = {
+      CLOSED_PILOT_MODE: 'true',
+      CLOSED_PILOT_EMAIL_ALLOWLIST: 'invited@example.com',
+    }
+
+    expect(() => assertClosedPilotEmailAllowed(email, env)).toThrow(
+      'Esta fase de VÉRTICE está disponible únicamente por invitación',
+    )
+  })
+
+  it('keeps nullable legacy identities compatible while pilot mode is disabled', () => {
+    expect(() => assertClosedPilotEmailAllowed(null, {})).not.toThrow()
+  })
+
   it('fails closed when pilot mode is enabled with an empty or oversized cohort', () => {
     expect(getClosedPilotAccessState({ CLOSED_PILOT_MODE: 'true' }).configured).toBe(false)
 
