@@ -227,7 +227,9 @@ export async function communityRoutes(app: FastifyInstance): Promise<void> {
     const parsed = CivicProfileParamsSchema.safeParse(request.params)
     if (!parsed.success) return reply.status(400).send({ error: 'Perfil inválido' })
     await assertCommunityProfileVisible(parsed.data.citizenId)
-    return reply.send(await getPublicCivicProfile(parsed.data.citizenId))
+    const profile = await getPublicCivicProfile(parsed.data.citizenId)
+    const recentActions = await filterVisibleCommunityActivities(profile.recent_actions)
+    return reply.send({ ...profile, recent_actions: recentActions })
   })
 
   app.get('/profiles/:citizenId/follow-state', { preHandler: requireAuth }, async (request, reply) => {
