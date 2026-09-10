@@ -87,13 +87,25 @@ async function freezeProofBackedVoterRoll(
   }
 
   const subnational = proposal.scope !== 'national'
-  if (subnational && !proposal.territory_code) {
+  const hasLegacyTerritoryMapping = proposal.locality_id !== null
+  if (subnational && !proposal.territory_code && !hasLegacyTerritoryMapping) {
     throw makeError(
       'La propuesta subnacional no tiene un territorio inmutable asociado',
       409,
       'PROPOSAL_TERRITORY_UNAVAILABLE',
     )
   }
+
+  // Pre-Phase-7A Cartagena proposals may carry only a legacy locality_id.
+  // Resolve that durable migration mapping rather than treating GPS/current
+  // account context as proposal geography.
+  const proposalTerritory = proposal.territory_code
+    ? Prisma.sql`${proposal.territory_code}`
+    : Prisma.sql`(
+        SELECT legacy.territory_code
+        FROM legacy_locality_territories legacy
+        WHERE legacy.locality_id = ${proposal.locality_id}
+      )`
 
   const assuranceJoin = subnational
     ? Prisma.sql`
@@ -116,7 +128,7 @@ async function freezeProofBackedVoterRoll(
   switch (proposal.scope) {
     case 'neighborhood':
       scopePredicate = Prisma.sql`
-        c.territory_code = ${proposal.territory_code}
+        c.territory_code = ${proposalTerritory}
         AND c.neighborhood = ${proposal.neighborhood}
         AND (${proposal.locality_id}::int IS NULL OR c.locality_id = ${proposal.locality_id})
       `
@@ -124,13 +136,13 @@ async function freezeProofBackedVoterRoll(
       break
     case 'locality':
       scopePredicate = Prisma.sql`
-        c.territory_code = ${proposal.territory_code}
+        c.territory_code = ${proposalTerritory}
         AND c.locality_id = ${proposal.locality_id}
       `
       reason = 'locality_residence_verified'
       break
     case 'city':
-      scopePredicate = Prisma.sql`c.territory_code = ${proposal.territory_code}`
+      scopePredicate = Prisma.sql`c.territory_code = ${proposalTerritory}`
       reason = 'city_residence_verified'
       break
     case 'regional':
@@ -139,7 +151,7 @@ async function freezeProofBackedVoterRoll(
           SELECT 1
           FROM territories proposal_territory
           JOIN territories citizen_territory ON citizen_territory.code = c.territory_code
-          WHERE proposal_territory.code = ${proposal.territory_code}
+          WHERE proposal_territory.code = ${proposalTerritory}
             AND proposal_territory.parent_code IS NOT NULL
             AND citizen_territory.parent_code = proposal_territory.parent_code
         )
