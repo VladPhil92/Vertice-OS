@@ -2,6 +2,7 @@
   "candidate_sha": "REPLACE_WITH_EXACT_40_CHAR_COMMIT_SHA",
   "provider": {
     "provider_name": "REPLACE_WITH_AUTHORIZED_PROVIDER",
+    "evidence_bundle_reference": "REPLACE_WITH_IMMUTABLE_PROVIDER_EVIDENCE_REFERENCE",
     "evidence_reference_only": false,
     "raw_document_storage_disabled": false,
     "decision_authenticity_verified": false,
@@ -9,27 +10,69 @@
     "production_canary_passed": false
   },
   "operator": {
+    "evidence_bundle_reference": "REPLACE_WITH_IMMUTABLE_OPERATOR_EVIDENCE_REFERENCE",
     "reviewer_separation_verified": false,
     "revocation_drill_passed": false,
     "audit_export_verified": false,
     "incident_runbook_approved": false
   },
   "election_policy": {
+    "approval_reference": "REPLACE_WITH_IMMUTABLE_POLICY_APPROVAL_REFERENCE",
     "legal_privacy_review_approved": false,
     "eligibility_policy_approved": false,
     "policy_owner": "",
     "approved_at": ""
   },
   "adversarial_scenarios": {
-    "self_review_rejected": false,
-    "expired_assurance_rejected": false,
-    "territory_change_invalidates_assurance": false,
-    "scope_mismatch_rejected": false,
-    "renewal_does_not_rewrite_frozen_roll": false,
-    "revocation_blocks_future_admission": false,
-    "gps_cannot_grant_residence": false,
-    "reputation_cannot_grant_residence": false,
-    "payments_cannot_grant_residence": false,
-    "identity_assurance_cannot_grant_residence": false
+    "self_review_rejected": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "expired_assurance_rejected": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "territory_change_invalidates_assurance": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "scope_mismatch_rejected": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "renewal_does_not_rewrite_frozen_roll": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "revocation_blocks_future_admission": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "gps_cannot_grant_residence": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "reputation_cannot_grant_residence": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "payments_cannot_grant_residence": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    },
+    "identity_assurance_cannot_grant_residence": {
+      "passed": false,
+      "evidence_reference": "REPLACE_WITH_EVIDENCE_REFERENCE",
+      "observed_at": ""
+    }
   }
 }
