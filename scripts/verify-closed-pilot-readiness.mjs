@@ -7,8 +7,10 @@ const files = {
   access: 'apps/api/src/lib/closed-pilot-access.ts',
   accessTest: 'apps/api/src/lib/__tests__/closed-pilot-access.test.ts',
   app: 'apps/api/src/app.ts',
+  authRoutes: 'apps/api/src/modules/auth/auth.routes.ts',
   authService: 'apps/api/src/modules/auth/auth.service.ts',
   federationService: 'apps/api/src/modules/auth/federation.service.ts',
+  communityRoutes: 'apps/api/src/modules/community/community.routes.ts',
   capabilities: 'apps/api/src/lib/feature-secrets.ts',
   engineering: 'docs/engineering/CLOSED_PILOT_READINESS_PHASE7H.md',
   runbook: 'docs/operations/CLOSED_PILOT_RUNBOOK.md',
@@ -57,6 +59,12 @@ requireText('policyTest', 'pilot:access_control_not_ready')
 requireText('authService', 'assertClosedPilotEmailAllowed(input.email)')
 requireText('authService', 'assertClosedPilotEmailAllowed(session.citizen.email)')
 requireText('federationService', 'assertClosedPilotEmailAllowed(identity.email)')
+requireText('authRoutes', "app.delete('/account'")
+requireText('authRoutes', 'deleteCitizenAccount')
+requireText('communityRoutes', "app.post('/safety/reports'")
+requireText('communityRoutes', "app.get('/moderation/reports'")
+requireText('communityRoutes', 'requireModerator')
+
 requireText('app', "app.get('/health/pilot'")
 requireText('app', 'getClosedPilotAccessState()')
 requireText('app', 'access_control: access')
