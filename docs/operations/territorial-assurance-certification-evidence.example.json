@@ -1,0 +1,35 @@
+{
+  "candidate_sha": "REPLACE_WITH_EXACT_40_CHAR_COMMIT_SHA",
+  "provider": {
+    "provider_name": "REPLACE_WITH_AUTHORIZED_PROVIDER",
+    "evidence_reference_only": false,
+    "raw_document_storage_disabled": false,
+    "decision_authenticity_verified": false,
+    "replay_protection_verified": false,
+    "production_canary_passed": false
+  },
+  "operator": {
+    "reviewer_separation_verified": false,
+    "revocation_drill_passed": false,
+    "audit_export_verified": false,
+    "incident_runbook_approved": false
+  },
+  "election_policy": {
+    "legal_privacy_review_approved": false,
+    "eligibility_policy_approved": false,
+    "policy_owner": "",
+    "approved_at": ""
+  },
+  "adversarial_scenarios": {
+    "self_review_rejected": false,
+    "expired_assurance_rejected": false,
+    "territory_change_invalidates_assurance": false,
+    "scope_mismatch_rejected": false,
+    "renewal_does_not_rewrite_frozen_roll": false,
+    "revocation_blocks_future_admission": false,
+    "gps_cannot_grant_residence": false,
+    "reputation_cannot_grant_residence": false,
+    "payments_cannot_grant_residence": false,
+    "identity_assurance_cannot_grant_residence": false
+  }
+}
