@@ -10,6 +10,7 @@ on:
       - 'apps/api/src/modules/governance/governance.service.ts'
       - 'apps/api/src/__tests__/golden-territory-assurance.integration.test.ts'
       - 'apps/api/src/__tests__/golden-governance.integration.test.ts'
+      - 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts'
       - 'apps/api/prisma/migrations/**/migration.sql'
       - 'apps/web/app/dashboard/territory/page.tsx'
       - 'apps/web/app/dashboard/governance/page.tsx'
@@ -28,6 +29,7 @@ on:
       - 'apps/api/src/modules/governance/governance.service.ts'
       - 'apps/api/src/__tests__/golden-territory-assurance.integration.test.ts'
       - 'apps/api/src/__tests__/golden-governance.integration.test.ts'
+      - 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts'
       - 'apps/api/prisma/migrations/**/migration.sql'
       - 'apps/web/app/dashboard/territory/page.tsx'
       - 'apps/web/app/dashboard/governance/page.tsx'
@@ -179,6 +181,7 @@ jobs:
           pnpm --filter @vertice/api test --
           golden-territory-assurance.integration.test.ts
           golden-governance.integration.test.ts
+          golden-territorial-assurance-certification.integration.test.ts
           --runInBand
 
       - name: Emit certification boundary
