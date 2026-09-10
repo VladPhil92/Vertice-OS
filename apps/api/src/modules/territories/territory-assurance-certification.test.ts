@@ -11,7 +11,10 @@ function completeEvidence(): TerritorialAssuranceCertificationEvidence {
   return Object.fromEntries(
     TERRITORIAL_ASSURANCE_EXTERNAL_CONTROLS.map((control) => [
       control,
-      `vault:territory-cert/${control}/evidence-20260910`,
+      {
+        reference: `vault:territory-cert/${control}/evidence-20260910`,
+        result: 'pass' as const,
+      },
     ]),
   ) as TerritorialAssuranceCertificationEvidence
 }
@@ -49,7 +52,10 @@ describe('Phase 7G.4 territorial assurance certification policy', () => {
 
   it('rejects HTTP evidence links instead of treating signed/public URLs as certification evidence', () => {
     const evidence = completeEvidence()
-    evidence.provider_production_canary = 'https://provider.example/canary?id=secret'
+    evidence.provider_production_canary = {
+      reference: 'https://provider.example/canary?id=secret',
+      result: 'pass',
+    }
 
     const result = evaluateTerritorialAssuranceCertification({
       candidateSha: SHA,
@@ -62,7 +68,26 @@ describe('Phase 7G.4 territorial assurance certification policy', () => {
     expect(result.blocking_reasons).toContain('external_evidence_reference_invalid')
   })
 
-  it('accepts opaque evidence references without automatically certifying production', () => {
+  it('keeps readiness blocked when a referenced mandatory control failed', () => {
+    const evidence = completeEvidence()
+    evidence.frozen_electorate_drill = {
+      reference: 'vault:territory-cert/frozen_electorate_drill/evidence-20260910',
+      result: 'fail',
+    }
+
+    const result = evaluateTerritorialAssuranceCertification({
+      candidateSha: SHA,
+      expectedSha: SHA,
+      evidence,
+    })
+
+    expect(result.failed_controls).toEqual(['frozen_electorate_drill'])
+    expect(result.satisfied_controls).not.toContain('frozen_electorate_drill')
+    expect(result.production_readiness).toBe('blocked_external_evidence')
+    expect(result.blocking_reasons).toContain('external_control_failed')
+  })
+
+  it('accepts opaque passing evidence references without automatically certifying production', () => {
     const result = evaluateTerritorialAssuranceCertification({
       candidateSha: SHA,
       expectedSha: SHA,
@@ -74,6 +99,7 @@ describe('Phase 7G.4 territorial assurance certification policy', () => {
       repository_contract: 'eligible_for_ci_certification',
       production_readiness: 'ready_for_operator_release_review',
       automatic_production_certification: false,
+      failed_controls: [],
       missing_controls: [],
       invalid_controls: [],
       blocking_reasons: [],
