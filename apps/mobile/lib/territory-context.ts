@@ -11,6 +11,13 @@ export interface TerritoryOption {
   activation_status?: string
 }
 
+interface DepartmentOption {
+  code: string
+  name: string
+  level: 'department'
+  country_code: string
+}
+
 export interface MobileTerritoryContext {
   home: {
     territory_code: string | null
@@ -60,6 +67,29 @@ function normalize(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
+function nameMatchesCandidate(name: string, candidate: string): boolean {
+  const normalizedName = normalize(name)
+  const normalizedCandidate = normalize(candidate)
+  return normalizedName === normalizedCandidate
+    || normalizedName.startsWith(normalizedCandidate)
+    || normalizedCandidate.startsWith(normalizedName)
+}
+
+async function resolveDepartmentCode(region: string | null): Promise<string | null> {
+  const q = region?.trim()
+  if (!q || q.length < 2) return null
+
+  const params = new URLSearchParams({ q, level: 'department', limit: '20' })
+  const response = await apiFetch<{ data: DepartmentOption[] }>(`/territories?${params.toString()}`, { public: true })
+  const candidates = response.data.filter((department) =>
+    department.country_code === 'CO'
+    && department.level === 'department'
+    && nameMatchesCandidate(department.name, q),
+  )
+
+  return candidates.length === 1 ? candidates[0].code : null
+}
+
 export type TerritoryGpsSuggestion =
   | { status: 'matched'; territory: TerritoryOption }
   | { status: 'outside_colombia' }
@@ -68,6 +98,11 @@ export type TerritoryGpsSuggestion =
 /**
  * Reverse geocoding is used only to suggest a canonical DANE/DIVIPOLA target.
  * Raw coordinates are not stored in the citizen territory context.
+ *
+ * Municipality names are not globally unique in Colombia. A GPS suggestion is
+ * accepted only when the municipality/district can be resolved unambiguously,
+ * preferably within the reverse-geocoded department. Ambiguous matches stay
+ * unresolved and require explicit citizen confirmation.
  */
 export async function suggestTerritoryFromCoordinates(
   lat: number,
@@ -81,17 +116,29 @@ export async function suggestTerritoryFromCoordinates(
     return { status: 'outside_colombia' }
   }
 
-  const candidates = [place.city, place.subregion, place.region]
+  const departmentCode = await resolveDepartmentCode(place.region)
+  const municipalityCandidates = [place.city, place.subregion]
     .filter((value): value is string => Boolean(value && value.trim().length >= 2))
+    .filter((value, index, values) => values.findIndex((item) => normalize(item) === normalize(value)) === index)
 
-  for (const candidate of candidates) {
+  for (const candidate of municipalityCandidates) {
     const territories = await searchNationalTerritories(candidate)
-    const wanted = normalize(candidate)
-    const match = territories.find((territory) => {
-      const name = normalize(territory.name)
-      return name === wanted || name.startsWith(wanted) || wanted.startsWith(name)
-    }) ?? territories[0]
-    if (match) return { status: 'matched', territory: match }
+    const exactMatches = territories.filter((territory) => normalize(territory.name) === normalize(candidate))
+    const nameMatches = exactMatches.length > 0
+      ? exactMatches
+      : territories.filter((territory) => nameMatchesCandidate(territory.name, candidate))
+
+    const scopedMatches = departmentCode
+      ? nameMatches.filter((territory) => territory.parent_code === departmentCode)
+      : nameMatches
+
+    if (scopedMatches.length === 1) {
+      return { status: 'matched', territory: scopedMatches[0] }
+    }
+
+    if (scopedMatches.length > 1 || (!departmentCode && nameMatches.length > 1)) {
+      return { status: 'unresolved' }
+    }
   }
 
   return { status: 'unresolved' }
