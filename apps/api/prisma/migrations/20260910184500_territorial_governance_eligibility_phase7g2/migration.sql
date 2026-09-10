@@ -61,9 +61,11 @@ CREATE INDEX IF NOT EXISTS idx_voter_roll_identity_provenance
   WHERE identity_proof_id IS NOT NULL;
 
 -- A current citizen assurance may only be elevated from an unexpired verified
--- request. Time passing does not rewrite the citizen row; all authorization
--- consumers must evaluate expires_at and the frozen voter roll captures the
--- decision at a specific instant.
+-- request. The verified request is the canonical timestamp authority. PostgreSQL
+-- keeps microsecond precision while JavaScript Date is millisecond precision, so
+-- copying the request timestamp through the application would create a lossy
+-- provenance round-trip. The trigger validates the exact request and writes the
+-- canonical DB timestamp directly into the citizen aggregate.
 CREATE OR REPLACE FUNCTION enforce_current_territory_assurance_binding() RETURNS TRIGGER AS $$
 DECLARE
   request_evidence_type VARCHAR(40);
@@ -76,9 +78,8 @@ BEGIN
   END IF;
 
   IF NEW.territory_code IS NULL
-     OR NEW.territory_verified_at IS NULL
      OR NEW.territory_assurance_request_id IS NULL THEN
-    RAISE EXCEPTION 'verified territorial assurance requires territory, timestamp and request provenance';
+    RAISE EXCEPTION 'verified territorial assurance requires territory and request provenance';
   END IF;
 
   SELECT r.evidence_type, r.requested_level, r.verified_at, r.expires_at
@@ -106,9 +107,7 @@ BEGIN
     RAISE EXCEPTION 'territorial assurance source does not match verified request';
   END IF;
 
-  IF NEW.territory_verified_at IS DISTINCT FROM request_verified_at THEN
-    RAISE EXCEPTION 'territorial assurance timestamp does not match verified request';
-  END IF;
+  NEW.territory_verified_at := request_verified_at;
 
   RETURN NEW;
 END;
@@ -294,3 +293,5 @@ COMMENT ON COLUMN proposal_voter_roll.territory_assurance_request_id IS
   'Frozen residence-assurance provenance. Current citizen state cannot rewrite this election snapshot.';
 COMMENT ON COLUMN proposal_voter_roll.identity_proof_id IS
   'Frozen civic identity proof provenance used at electorate admission time.';
+COMMENT ON FUNCTION enforce_current_territory_assurance_binding() IS
+  'Phase 7G.2 validates the exact verified request and canonicalizes citizens.territory_verified_at from durable database provenance.';
