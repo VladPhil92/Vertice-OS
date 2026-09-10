@@ -13,7 +13,6 @@
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@apollo/client": "^3.11.0",
     "@radix-ui/react-dialog": "^1.1.0",
     "@radix-ui/react-dropdown-menu": "^2.1.0",
     "@radix-ui/react-toast": "^1.2.0",
@@ -23,7 +22,6 @@
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.3.0",
-    "graphql": "^16.9.0",
     "lucide-react": "^0.400.0",
     "mapbox-gl": "^3.5.0",
     "next": "15.5.24",

@@ -527,7 +527,6 @@ export default function IdentityPage() {
   useEffect(() => {
     void fetchIdentityState()
     void fetchDIDDoc()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleVerificationSuccess() {

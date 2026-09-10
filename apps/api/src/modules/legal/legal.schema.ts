@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LEGAL_TYPES, LEGAL_DOCUMENT_STATUSES, URGENCY_LEVELS } from './legal.types'
+import { LEGAL_TYPES, LEGAL_DOCUMENT_STATUSES } from './legal.types'
 
 // ── Crear documento (inicia el proceso del ciudadano) ─────────────────────────
 
