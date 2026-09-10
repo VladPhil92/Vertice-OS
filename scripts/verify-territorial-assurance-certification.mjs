@@ -11,6 +11,8 @@ const files = {
   eligibilityTest: 'apps/api/src/modules/governance/__tests__/governance.eligibility.test.ts',
   golden: 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts',
   migration: 'apps/api/prisma/migrations/20260910184500_territorial_governance_eligibility_phase7g2/migration.sql',
+  voterRollInterlockMigration: 'apps/api/prisma/migrations/20260909033800_national_voter_roll_territory_interlock/migration.sql',
+  certificationWorkflow: '.github/workflows/territorial-assurance-certification.yml',
   webTerritory: 'apps/web/app/dashboard/territory/page.tsx',
   webGovernance: 'apps/web/app/dashboard/governance/page.tsx',
   mobileAssurance: 'apps/mobile/app/territory/assurance.tsx',
@@ -54,10 +56,12 @@ for (const control of [
 requireText('policy', "'blocked_external_evidence'")
 requireText('policy', "'ready_for_operator_release_review'")
 requireText('policy', 'automatic_production_certification: false')
+requireText('policy', "result: 'pass' | 'fail'")
 forbidText('policy', "production_readiness: 'certified'", 'CI policy must never manufacture production certification')
 requireText('policyTest', 'candidate_sha_mismatch')
 requireText('policyTest', 'external_evidence_missing')
 requireText('policyTest', 'external_evidence_reference_invalid')
+requireText('policyTest', 'external_control_failed')
 
 requireText('service', 'TERRITORY_ASSURANCE_VALIDITY_DAYS = 365')
 requireText('service', 'TERRITORY_ASSURANCE_RENEWAL_WINDOW_DAYS = 30')
@@ -88,6 +92,12 @@ requireText('migration', 'enforce_voter_roll_territory')
 requireText('migration', 'protect_frozen_voter_roll')
 requireText('migration', 'territory_assurance_request_id')
 requireText('migration', 'identity_proof_id')
+requireText('voterRollInterlockMigration', 'proposal_voter_roll_territory_interlock')
+requireText('certificationWorkflow', '20260909033800_national_voter_roll_territory_interlock/migration.sql')
+requireText('certificationWorkflow', "apps/api/src/modules/governance/governance.service.ts")
+requireText('certificationWorkflow', "apps/api/src/modules/governance/governance.routes.ts")
+requireText('certificationWorkflow', "apps/api/src/modules/governance/governance.lifecycle.ts")
+requireText('certificationWorkflow', 'Assert voter-roll territorial trigger is installed')
 
 for (const marker of [
   'TERRITORY_SCOPE_MISMATCH',
