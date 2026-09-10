@@ -262,6 +262,18 @@ describe('getTerritorialStats', () => {
       { category: 'infraestructura', total: BigInt(42), open_count: BigInt(30), resolved_count: BigInt(10), avg_urgency: 0.5 },
       { category: 'seguridad', total: BigInt(15), open_count: BigInt(10), resolved_count: BigInt(5), avg_urgency: 0.8 },
     ])
+    mockQueryRaw.mockResolvedValueOnce([
+      {
+        territory_code: 'CO-MP-13001',
+        territory_name: 'Cartagena de Indias',
+        department_code: 'CO-DP-13',
+        department_name: 'Bolívar',
+        total: BigInt(42),
+        open_count: BigInt(30),
+        resolved_count: BigInt(10),
+        avg_urgency: 0.5,
+      },
+    ])
 
     const stats = await getTerritorialStats()
 
@@ -270,5 +282,8 @@ describe('getTerritorialStats', () => {
     expect(stats.by_category[0].category).toBe('infraestructura')
     expect(stats.by_category[0].total).toBe(42)
     expect(typeof stats.by_category[0].total).toBe('number')
+    expect(stats.by_territory[0].territory_code).toBe('CO-MP-13001')
+    expect(stats.by_territory[0].total).toBe(42)
+    expect(typeof stats.by_territory[0].total).toBe('number')
   })
 })
