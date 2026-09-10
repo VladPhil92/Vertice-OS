@@ -8,6 +8,10 @@ import {
 import { assertCommunityContentAllowed } from '../community/community.content-filter'
 import { ensureCommunityPolicyAccepted } from '../community/community.safety.service'
 import {
+  assertCommunityTargetVisible,
+  filterVisibleCommunityTargets,
+} from '../community/community.visibility.service'
+import {
   AttachReportMediaSchema,
   ConfirmReportMediaSchema,
   CreateReportSchema,
@@ -42,7 +46,8 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const reports = await listReports(parsed.data)
+    const raw = await listReports(parsed.data)
+    const reports = await filterVisibleCommunityTargets('report', raw)
     return reply.send({ data: reports, count: reports.length })
   })
 
@@ -51,7 +56,8 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Parámetros inválidos', details: parsed.error.flatten().fieldErrors })
     }
-    const reports = await getNearbyReports(parsed.data)
+    const raw = await getNearbyReports(parsed.data)
+    const reports = await filterVisibleCommunityTargets('report', raw)
     return reply.send({ data: reports, count: reports.length })
   })
 
@@ -59,6 +65,7 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/reports/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
+    await assertCommunityTargetVisible('report', id)
     return reply.send(await getReportById(id))
   })
 
@@ -142,6 +149,8 @@ export async function territorialRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await updateReportStatus(id, parsed.data))
   })
 
+  // Moderators intentionally bypass the public visibility overlay so actioned
+  // records remain inspectable in the moderation/operations control plane.
   app.get('/admin/reports', { preHandler: requireModerator }, async (request, reply) => {
     const { status, category, locality_id } = request.query as {
       status?: string; category?: string; locality_id?: string
