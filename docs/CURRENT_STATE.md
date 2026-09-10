@@ -48,11 +48,14 @@ Paridad de dominio implementada:
 - Community/Feed, leaderboard, perfiles y follow/unfollow;
 - Workflows/expedientes y detalle de caso;
 - Civic Identity Assurance, proofing y handoff HTTPS a Veriff;
-- crowdfunding campaign/readiness tracking.
+- crowdfunding campaign/readiness tracking;
+- eliminación irreversible de cuenta desde la app.
 
 El móvil consume contratos existentes y no calcula reputación, autoridad, settlement, payout ni elegibilidad financiera.
 
-**Estado:** ✅ code parity implemented; 🟡 signed-device/store/provider certification pending.
+La configuración de release mantiene identidad canónica `com.ctgone.verticeos`, perfiles EAS separados y una frontera fail-closed: preview/production requieren API HTTPS no local, UUID real de proyecto EAS y credencial Android Maps inyectada durante build. CI utiliza únicamente placeholders para demostrar wiring/configuración; no representa signing real.
+
+**Estado:** ✅ code/domain parity + production configuration implemented; 🟡 EAS ownership/signing, provider credentials, physical-device and store certification pending.
 
 ## 2. Plataforma territorial nacional
 
@@ -145,11 +148,14 @@ Gates especializados incluyen:
 - National Citizen Activation;
 - National Account Onboarding;
 - Mobile Core Parity;
-- Mobile Device Release;
+- Mobile Device Release Contract;
+- Mobile production fail-closed configuration;
 - Mobile Domain Parity;
-- Cartagena Pilot Same-SHA Runtime Canary.
+- Account Deletion Privacy;
+- Cartagena Pilot Same-SHA Runtime Canary;
+- Market Release Certification Evidence.
 
-El `main` auditado antes de esta fase (`efb0c181c3bd5613390b5bfd829ff8f25bd28054`) ya tenía same-SHA Cartagena runtime canary exitoso y checks de build/tests exitosos.
+`main` está protegida por el ruleset activo `Golden Main Protection`: PR obligatorio, conversaciones resueltas, branch up-to-date, siete required GitHub Actions checks, squash/rebase únicamente, sin bypass, y bloqueo de deletion/force-push. La política fue verificada operacionalmente mediante PR #148 y GitHub reporta `main.protected = true`.
 
 ## 8. Deuda restante
 
@@ -161,18 +167,18 @@ El `main` auditado antes de esta fase (`efb0c181c3bd5613390b5bfd829ff8f25bd28054
 - retirar legacy comprobado;
 - refactor de componentes grandes;
 - runbooks, checklists y documentación;
-- static security/quality gates.
+- static security/quality gates;
+- store metadata/privacy-data mapping que no requiera credenciales externas.
 
 Estos trabajos son mejoras incrementales; ya no representan ausencia de paridad de dominio base.
 
 ### Requiere intervención de operador/terceros
 
-- proteger `main` con ruleset/required checks;
-- provisionar secretos productivos;
-- EAS project, Apple Developer, Google Play Console y signing;
-- Google Maps production key restringida;
+- crear/vincular el proyecto EAS real y provisionar sus variables por ambiente;
+- Apple Developer, Google Play Console y signing;
+- Google Maps production key restringida con package + signing SHA-1 real;
 - APNs/FCM/EAS push credentials;
-- smoke de dispositivos físicos Android/iOS;
+- builds firmados y smoke de dispositivos físicos Android/iOS;
 - Cloudflare Images production canary;
 - Veriff production credentials/canary;
 - Mercado Pago bounded real-money canary, settlement y refund;
@@ -180,7 +186,7 @@ Estos trabajos son mejoras incrementales; ya no representan ausencia de paridad 
 - aprobación legal/compliance/privacidad;
 - App Store / Google Play submission y revisión.
 
-La separación completa se mantiene en `docs/engineering/MARKET_RELEASE_COMPLETION.md`.
+La separación completa se mantiene en `docs/engineering/MARKET_RELEASE_COMPLETION.md`; el runbook móvil está en `docs/engineering/MOBILE_PRODUCTION_RELEASE.md`.
 
 ## 9. Componentes que NO son contrato operativo requerido
 
