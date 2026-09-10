@@ -80,7 +80,7 @@ describeGolden('GJ-07 territorial residence assurance core', () => {
           territory_assurance_source = 'assurance:secure_document',
           territory_verified_at = NOW()
       WHERE id = ${citizen.id}::uuid
-    `)).rejects.toThrow('verified territorial assurance requires territory, timestamp and request provenance')
+    `)).rejects.toThrow('verified territorial assurance requires territory and request provenance')
 
     const verified = await decideTerritoryAssuranceRequest({
       actorId: reviewer.id,
