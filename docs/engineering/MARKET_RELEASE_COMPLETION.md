@@ -47,6 +47,7 @@ This document separates work that can be completed and evidenced by repository a
 - [x] Mobile Device Release contract.
 - [x] Mobile Domain Parity source/type/export gate.
 - [x] Mobile production configuration fail-closed gate.
+- [x] Mobile signing/provider credential repository boundary.
 - [x] Account Deletion Privacy source/unit/type/export gate.
 - [x] Cartagena same-SHA production canary infrastructure.
 - [x] Market Release Certification evidence schema and fail-closed verifier.
@@ -70,14 +71,17 @@ GitHub reports `main.protected = true`. Operational evidence is recorded in `doc
 
 ### B2. Mobile ownership and signing
 
-Repository-side Phase 8A:
+Repository-side Phase 8A/8B:
 
 - [x] Canonical Expo slug/scheme and Android/iOS application identifiers are contract-checked.
 - [x] EAS preview/production profiles are explicit and environment-bound.
 - [x] EAS builds require committed source state.
 - [x] Production uses remote build versions, auto-increment and Android app-bundle/store distribution.
-- [x] Preview/production config fails closed without HTTPS API URL, EAS project UUID and Android Maps key.
+- [x] Preview/production config fails closed without HTTPS public API URL, EAS project UUID and Android Maps key.
+- [x] Release URL validation rejects loopback/private/link-local/ULA and IPv4-mapped private forms.
 - [x] CI resolves/introspects/exports a production-like configuration using non-secret placeholders.
+- [x] Required `Security Scan` rejects tracked mobile signing/private-key/service-account artifacts.
+- [x] `.gitignore` covers mobile signing credentials and generated `.apk/.aab/.ipa` artifacts.
 
 External/account-owner boundary:
 
