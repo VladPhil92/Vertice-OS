@@ -7,6 +7,15 @@ import { territoryLaunchOperationsRoutes } from './territories.operations.routes
 import { territoryPublicRoutes } from './territories.public.routes'
 import { territoryCitizenActivationRoutes } from './territories.activation.routes'
 import {
+  TERRITORY_ASSURANCE_DECISIONS,
+  TERRITORY_ASSURANCE_EVIDENCE_TYPES,
+  TERRITORY_ASSURANCE_REQUEST_STATUSES,
+  decideTerritoryAssuranceRequest,
+  getMyTerritoryAssurance,
+  listTerritoryAssuranceRequests,
+  submitTerritoryAssuranceRequest,
+} from './territory-assurance.service'
+import {
   DEFAULT_BORDER_TOLERANCE_METERS,
   getBoundaryCatalogStatus,
   resolveTerritoryByPoint,
@@ -57,6 +66,21 @@ const ResolvePointBody = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
   tolerance_m: z.coerce.number().int().min(0).max(1000).default(DEFAULT_BORDER_TOLERANCE_METERS),
+})
+const AssuranceSubmissionBody = z.object({
+  evidence_type: z.enum(TERRITORY_ASSURANCE_EVIDENCE_TYPES),
+  // Only an opaque reference is accepted. The service persists its SHA-256
+  // digest, never the raw locator or document contents.
+  evidence_reference: z.string().trim().min(16).max(200).regex(/^[A-Za-z0-9._:/-]+$/),
+})
+const AssuranceRequestParams = z.object({ requestId: z.string().uuid() })
+const AssuranceDecisionBody = z.object({
+  decision: z.enum(TERRITORY_ASSURANCE_DECISIONS),
+  reason: z.string().trim().min(8).max(500),
+})
+const AssuranceAdminQuery = z.object({
+  status: z.enum(TERRITORY_ASSURANCE_REQUEST_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
 })
 
 export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
@@ -125,6 +149,55 @@ export async function territoriesRoutes(app: FastifyInstance): Promise<void> {
       governance_effect: 'none_without_territory_assurance',
       travel_effect: 'none',
     })
+  })
+
+  // Phase 7G.1: residence assurance is a separate, proof-backed contract. GPS,
+  // active context and contribution geography cannot reach these mutations.
+  app.get('/assurance/me', { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await getMyTerritoryAssurance(request.citizen.sub))
+  })
+
+  app.post('/assurance/requests', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 4, timeWindow: '1 day' } },
+  }, async (request, reply) => {
+    const parsed = AssuranceSubmissionBody.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Solicitud de verificación territorial inválida',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+    const result = await submitTerritoryAssuranceRequest({
+      citizenId: request.citizen.sub,
+      evidenceType: parsed.data.evidence_type,
+      evidenceReference: parsed.data.evidence_reference,
+    })
+    return reply.status(result.reused ? 200 : 201).send(result)
+  })
+
+  app.get('/admin/assurance/requests', { preHandler: requireSuperadmin }, async (request, reply) => {
+    const parsed = AssuranceAdminQuery.safeParse(request.query)
+    if (!parsed.success) return reply.status(400).send({ error: 'Filtros de assurance inválidos' })
+    const data = await listTerritoryAssuranceRequests(parsed.data)
+    return reply.send({ data, count: data.length })
+  })
+
+  app.post('/admin/assurance/requests/:requestId/decision', {
+    preHandler: requireSuperadmin,
+    config: { rateLimit: { max: 60, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const params = AssuranceRequestParams.safeParse(request.params)
+    const body = AssuranceDecisionBody.safeParse(request.body)
+    if (!params.success || !body.success) {
+      return reply.status(400).send({ error: 'Decisión de assurance inválida' })
+    }
+    return reply.send(await decideTerritoryAssuranceRequest({
+      actorId: request.citizen.sub,
+      requestId: params.data.requestId,
+      decision: body.data.decision,
+      reason: body.data.reason,
+    }))
   })
 
   // Active context is transient product context, never residency or governance proof.
