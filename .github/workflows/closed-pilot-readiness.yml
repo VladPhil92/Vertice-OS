@@ -1,0 +1,103 @@
+name: Closed Pilot Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/app.ts'
+      - 'apps/api/src/lib/closed-pilot-readiness.ts'
+      - 'apps/api/src/lib/__tests__/closed-pilot-readiness.test.ts'
+      - 'apps/api/src/lib/runtime-readiness.ts'
+      - 'apps/api/src/lib/feature-secrets.ts'
+      - 'apps/api/src/modules/community/**'
+      - 'apps/api/src/modules/auth/**'
+      - 'apps/api/src/modules/governance/**'
+      - 'apps/api/src/modules/billing/**'
+      - 'apps/api/src/modules/crowdfunding/**'
+      - 'scripts/verify-closed-pilot-readiness.mjs'
+      - 'docs/engineering/CLOSED_PILOT_READINESS_PHASE7H.md'
+      - 'docs/operations/CLOSED_PILOT_RUNBOOK.md'
+      - '.github/workflows/closed-pilot-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/app.ts'
+      - 'apps/api/src/lib/closed-pilot-readiness.ts'
+      - 'apps/api/src/lib/__tests__/closed-pilot-readiness.test.ts'
+      - 'apps/api/src/lib/runtime-readiness.ts'
+      - 'apps/api/src/lib/feature-secrets.ts'
+      - 'apps/api/src/modules/community/**'
+      - 'apps/api/src/modules/auth/**'
+      - 'apps/api/src/modules/governance/**'
+      - 'apps/api/src/modules/billing/**'
+      - 'apps/api/src/modules/crowdfunding/**'
+      - 'scripts/verify-closed-pilot-readiness.mjs'
+      - 'docs/engineering/CLOSED_PILOT_READINESS_PHASE7H.md'
+      - 'docs/operations/CLOSED_PILOT_RUNBOOK.md'
+      - '.github/workflows/closed-pilot-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: closed-pilot-readiness-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.13.0'
+
+jobs:
+  code-gate:
+    name: Exact SHA + closed pilot policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact submitted SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "CLOSED_PILOT_CANDIDATE_SHA=$EXPECTED_SHA"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @vertice/types build
+
+      - name: Typecheck API
+        run: pnpm --filter @vertice/api typecheck
+
+      - name: Test closed pilot policy
+        env:
+          NODE_ENV: test
+        run: >-
+          pnpm --filter @vertice/api exec jest --runInBand
+          src/lib/__tests__/closed-pilot-readiness.test.ts
+
+      - name: Verify exact-SHA closed pilot source contract
+        env:
+          VERTICE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/verify-closed-pilot-readiness.mjs
+
+      - name: Emit Phase 7H boundary
+        run: |
+          echo "CLOSED_PILOT_CODE_STATUS=READY_FOR_RUNTIME_VALIDATION"
+          echo "CLOSED_PILOT_RUNTIME_STATUS=REQUIRES_EXACT_SHA_PRODUCTION_EVIDENCE"
+          echo "READY_FOR_CLOSED_PILOT requires /health/pilot HTTP 200 on the deployed candidate."
+          echo "This gate never enables real money or binding governance."
