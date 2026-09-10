@@ -28,6 +28,15 @@ const mockUnfollow = jest.fn()
 const mockValidationState = jest.fn()
 const mockSetValidation = jest.fn()
 const mockRemoveValidation = jest.fn()
+const mockAssertCommunityProfileVisible = jest.fn().mockResolvedValue(undefined)
+
+jest.mock('../community.visibility.service', () => ({
+  assertCommunityInteractionAllowed: jest.fn().mockResolvedValue(undefined),
+  assertCommunityProfileVisible: mockAssertCommunityProfileVisible,
+  filterCommunityActivitiesForViewer: jest.fn(async (_viewerId: string, items: unknown[]) => items),
+  filterVisibleCommunityActivities: jest.fn(async (items: unknown[]) => items),
+  filterVisibleCommunityLeaders: jest.fn(async (items: unknown[]) => items),
+}))
 
 jest.mock('../community.service', () => ({
   listCommunityFeed: mockListFeed,
@@ -144,6 +153,7 @@ describe('community following routes', () => {
 
     expect(res.statusCode).toBe(200)
     expect(mockGetPublicProfile).toHaveBeenCalledWith(TARGET_ID)
+    expect(mockAssertCommunityProfileVisible).toHaveBeenCalledWith(TARGET_ID)
   })
 
   it('rejects malformed public profile identifiers', async () => {
