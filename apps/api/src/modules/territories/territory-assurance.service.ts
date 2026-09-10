@@ -391,7 +391,11 @@ export async function decideTerritoryAssuranceRequest(params: {
         UPDATE citizens
         SET territory_assurance_level = ${row.requested_level},
             territory_assurance_source = ${`assurance:${row.evidence_type}`},
-            territory_verified_at = ${row.verified_at},
+            territory_verified_at = (
+              SELECT verified_at
+              FROM territory_assurance_requests
+              WHERE id = ${row.id}::uuid
+            ),
             territory_assurance_request_id = ${row.id}::uuid
         WHERE id = ${request.citizen_id}::uuid
           AND territory_code = ${row.territory_code}
