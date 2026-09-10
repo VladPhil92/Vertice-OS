@@ -4,6 +4,18 @@
 -- auditable residence assurance. GPS, contribution geography, identity proofing,
 -- reputation and financial activity must never elevate territorial assurance.
 
+-- Keep this migration self-contained for bounded integration environments while
+-- remaining compatible with the Phase 7A assurance-guard migration in production.
+ALTER TABLE citizens
+  ADD COLUMN IF NOT EXISTS territory_assurance_level SMALLINT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS territory_assurance_source VARCHAR(40) NOT NULL DEFAULT 'self_asserted',
+  ADD COLUMN IF NOT EXISTS territory_verified_at TIMESTAMPTZ;
+
+DO $$ BEGIN
+  ALTER TABLE citizens ADD CONSTRAINT citizens_territory_assurance_level_check
+    CHECK (territory_assurance_level BETWEEN 0 AND 2);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 CREATE TABLE IF NOT EXISTS territory_assurance_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   citizen_id UUID REFERENCES citizens(id) ON DELETE SET NULL,
