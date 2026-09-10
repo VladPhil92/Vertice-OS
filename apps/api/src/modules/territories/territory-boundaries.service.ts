@@ -192,7 +192,6 @@ export async function syncDaneMunicipalBoundaries(options: { force?: boolean } =
       return {
         skipped: true,
         reason: 'fresh_boundaries',
-        last_synced_at: recent[0].completed_at,
         ...(await getBoundaryCatalogStatus()),
       }
     }
