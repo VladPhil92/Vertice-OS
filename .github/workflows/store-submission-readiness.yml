@@ -28,8 +28,13 @@ on:
         description: 'Exact 40-character release SHA represented by the completed store manifest'
         required: true
         type: string
+      manifest_ref:
+        description: 'Branch/tag/SHA that contains the completed evidence manifest; may be newer than release_sha'
+        required: true
+        default: 'main'
+        type: string
       manifest_path:
-        description: 'Repository-relative completed store submission manifest'
+        description: 'Repository-relative completed store submission manifest at manifest_ref'
         required: true
         default: 'release/store/store-submission.json'
         type: string
@@ -69,24 +74,62 @@ jobs:
             echo 'release_sha must be an exact 40-character Git SHA'
             exit 1
           fi
-      - name: Checkout exact release SHA
+
+      - name: Checkout exact release source
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.release_sha }}
           fetch-depth: 0
+          path: release-source
+
+      - name: Checkout completed manifest evidence
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.manifest_ref }}
+          fetch-depth: 1
+          path: manifest-source
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22.13.0'
+
+      - name: Validate and stage evidence manifest outside release history
+        env:
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const value = process.env.MANIFEST_PATH ?? ''
+          const normalized = path.normalize(value)
+          if (!value || path.isAbsolute(normalized) || normalized === '..' || normalized.startsWith(`..${path.sep}`)) {
+            console.error('manifest_path must stay inside manifest_ref checkout')
+            process.exit(1)
+          }
+          const source = path.join('manifest-source', normalized)
+          if (!fs.statSync(source, { throwIfNoEntry: false })?.isFile()) {
+            console.error(`completed manifest not found: ${source}`)
+            process.exit(1)
+          }
+          const destination = path.join('release-source', 'release/store/store-submission.runtime.json')
+          fs.mkdirSync(path.dirname(destination), { recursive: true })
+          fs.copyFileSync(source, destination)
+          NODE
+
       - name: Confirm target commit exists
+        working-directory: release-source
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
         run: git cat-file -e "${RELEASE_SHA}^{commit}"
-      - name: Validate completed internal store package
+
+      - name: Validate completed internal store package against exact release source
+        working-directory: release-source
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
-          MANIFEST_PATH: ${{ inputs.manifest_path }}
-        run: node scripts/verify-store-submission.mjs --mode strict --manifest "$MANIFEST_PATH" --release-sha "$RELEASE_SHA"
+        run: node scripts/verify-store-submission.mjs --mode strict --manifest release/store/store-submission.runtime.json --release-sha "$RELEASE_SHA"
+
       - name: Certification boundary
         run: |
           echo 'Internal store submission package: READY'
+          echo 'The evidence manifest may live at a newer manifest_ref, while source/config validation remains bound to release_sha.'
           echo 'Apple/Google review approval, signed-device evidence, external provider certification and the Market Release Certification gate remain separate mandatory evidence.'
