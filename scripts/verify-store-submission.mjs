@@ -45,8 +45,17 @@ const requireToken = (content, token, label) => {
 const SHA_RE = /^[0-9a-f]{40}$/i
 const ZERO_SHA = '0'.repeat(40)
 const PLACEHOLDER_RE = /(?:replace\.example|example\.invalid|localhost|127\.0\.0\.1|PENDING_|CHANGE_ME|REPLACE_ME)/i
+const UNRESOLVED_TEXT_RE = /(?:^|[\s_:/#.-])(?:tbd|todo|pending|unknown|placeholder|unset|none|null|n\/?a)(?:$|[\s_:/#.-])|\?{2,}/i
 const APPROVED = 'approved'
 const allowedReviewStatuses = new Set(['pending', 'blocked', 'approved'])
+
+const meaningfulStrictText = (value, minLength) => (
+  typeof value === 'string'
+  && value.trim().length >= minLength
+  && /[\p{L}\p{N}]/u.test(value)
+  && !PLACEHOLDER_RE.test(value)
+  && !UNRESOLVED_TEXT_RE.test(value)
+)
 
 const canonicalApp = {
   name: 'Vértice OS',
@@ -192,15 +201,11 @@ if (mode === 'strict') {
   }
 
   requireValue(
-    typeof manifest.legal_identity?.developer_name === 'string'
-      && manifest.legal_identity.developer_name.trim().length >= 3
-      && !PLACEHOLDER_RE.test(manifest.legal_identity.developer_name),
+    meaningfulStrictText(manifest.legal_identity?.developer_name, 3),
     'legal_identity.developer_name must be finalized in strict mode',
   )
   requireValue(
-    typeof manifest.legal_identity?.privacy_contact === 'string'
-      && manifest.legal_identity.privacy_contact.trim().length >= 5
-      && !PLACEHOLDER_RE.test(manifest.legal_identity.privacy_contact),
+    meaningfulStrictText(manifest.legal_identity?.privacy_contact, 5),
     'legal_identity.privacy_contact must be finalized in strict mode',
   )
 
@@ -213,8 +218,14 @@ if (mode === 'strict') {
     const review = reviews[id]
     if (!review) continue
     requireValue(review.status === APPROVED, `${id}: status must be approved in strict mode`)
-    requireValue(typeof review.evidence_ref === 'string' && review.evidence_ref.trim().length >= 3, `${id}: evidence_ref is required in strict mode`)
-    requireValue(typeof review.operator === 'string' && review.operator.trim().length >= 2, `${id}: operator is required in strict mode`)
+    requireValue(
+      meaningfulStrictText(review.evidence_ref, 3),
+      `${id}: evidence_ref must be finalized, non-placeholder evidence in strict mode`,
+    )
+    requireValue(
+      meaningfulStrictText(review.operator, 2),
+      `${id}: operator must identify a real reviewer/operator in strict mode`,
+    )
     const observedAt = Date.parse(review.observed_at)
     requireValue(Number.isFinite(observedAt), `${id}: observed_at must be an ISO-compatible timestamp in strict mode`)
     if (Number.isFinite(observedAt)) requireValue(observedAt <= now + 5 * 60 * 1000, `${id}: observed_at cannot be materially in the future`)
