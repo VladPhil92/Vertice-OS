@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { ENTITLEMENTS } from '../billing/billing.catalog'
 import { requireEntitlement } from '../billing/billing.middleware'
+import { assertCommunityContentAllowed } from '../community/community.content-filter'
+import { ensureCommunityPolicyAccepted } from '../community/community.safety.service'
 import { PublicationParamsSchema, ScheduleCivicPublicationSchema } from './publishing.schema'
 import {
   cancelScheduledPublication,
@@ -28,6 +30,11 @@ export async function publishingRoutes(app: FastifyInstance): Promise<void> {
         details: parsed.error.flatten().fieldErrors,
       })
     }
+    await ensureCommunityPolicyAccepted(request.citizen.sub)
+    assertCommunityContentAllowed([
+      { field: 'title', value: parsed.data.title },
+      { field: 'body', value: parsed.data.body },
+    ])
     return reply.status(201).send(await scheduleCivicPublication(request.citizen.sub, parsed.data))
   })
 
