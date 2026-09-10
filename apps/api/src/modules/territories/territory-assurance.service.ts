@@ -257,6 +257,13 @@ export async function decideTerritoryAssuranceRequest(params: {
     if (!request.citizen_id) {
       throw makeError('La cuenta asociada ya no está disponible', 409, 'TERRITORY_ASSURANCE_CITIZEN_UNAVAILABLE')
     }
+    if (request.citizen_id === params.actorId) {
+      throw makeError(
+        'Una persona no puede decidir su propia verificación territorial',
+        403,
+        'TERRITORY_ASSURANCE_SELF_REVIEW_FORBIDDEN',
+      )
+    }
 
     if (params.decision === 'approve') {
       if (request.status !== 'submitted') {
