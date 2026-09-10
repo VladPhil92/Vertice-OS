@@ -86,7 +86,9 @@ jobs:
             'https://[::1]' \
             'https://[fc00::1]' \
             'https://[fd12::1]' \
-            'https://[fe80::1]'
+            'https://[fe80::1]' \
+            'https://[::ffff:192.168.1.1]' \
+            'https://[::ffff:c0a8:101]'
           do
             if APP_VARIANT=production EXPO_PUBLIC_RELEASE_CHANNEL=production EXPO_PUBLIC_API_URL="$url" node -e "require('./apps/mobile/app.config.js')({ config: require('./apps/mobile/app.json').expo })"; then
               echo "Production configuration unexpectedly accepted private/local origin: $url" >&2
