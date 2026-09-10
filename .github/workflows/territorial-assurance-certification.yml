@@ -1,0 +1,226 @@
+name: Territorial Assurance Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/territories/territory-assurance*.ts'
+      - 'apps/api/src/modules/territories/territories.routes.ts'
+      - 'apps/api/src/modules/governance/governance.eligibility.ts'
+      - 'apps/api/src/modules/governance/__tests__/governance.assurance-policy.test.ts'
+      - 'apps/api/src/modules/governance/__tests__/governance.eligibility.test.ts'
+      - 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts'
+      - 'apps/api/prisma/migrations/**/migration.sql'
+      - 'apps/web/app/dashboard/territory/page.tsx'
+      - 'apps/web/app/dashboard/governance/page.tsx'
+      - 'apps/mobile/app/territory/assurance.tsx'
+      - 'apps/mobile/app/(tabs)/governance.tsx'
+      - 'scripts/verify-territorial-assurance-certification.mjs'
+      - 'docs/engineering/TERRITORIAL_ASSURANCE_CERTIFICATION_PHASE7G4.md'
+      - 'docs/operations/TERRITORIAL_ASSURANCE_PRODUCTION_EVIDENCE.md'
+      - '.github/workflows/territorial-assurance-certification.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/territories/territory-assurance*.ts'
+      - 'apps/api/src/modules/territories/territories.routes.ts'
+      - 'apps/api/src/modules/governance/governance.eligibility.ts'
+      - 'apps/api/src/modules/governance/__tests__/governance.assurance-policy.test.ts'
+      - 'apps/api/src/modules/governance/__tests__/governance.eligibility.test.ts'
+      - 'apps/api/src/__tests__/golden-territorial-assurance-certification.integration.test.ts'
+      - 'apps/api/prisma/migrations/**/migration.sql'
+      - 'apps/web/app/dashboard/territory/page.tsx'
+      - 'apps/web/app/dashboard/governance/page.tsx'
+      - 'apps/mobile/app/territory/assurance.tsx'
+      - 'apps/mobile/app/(tabs)/governance.tsx'
+      - 'scripts/verify-territorial-assurance-certification.mjs'
+      - 'docs/engineering/TERRITORIAL_ASSURANCE_CERTIFICATION_PHASE7G4.md'
+      - 'docs/operations/TERRITORIAL_ASSURANCE_PRODUCTION_EVIDENCE.md'
+      - '.github/workflows/territorial-assurance-certification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: territorial-assurance-cert-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.13.0'
+
+jobs:
+  source-policy:
+    name: Exact SHA + territorial assurance policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact submitted SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "EXACT_SHA=$EXPECTED_SHA"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @vertice/types build
+
+      - name: Typecheck API
+        run: pnpm --filter @vertice/api typecheck
+
+      - name: Run territorial assurance certification unit suite
+        env:
+          NODE_ENV: test
+        run: >-
+          pnpm --filter @vertice/api exec jest --runInBand
+          src/modules/territories/territory-assurance.service.test.ts
+          src/modules/territories/territory-assurance.security.test.ts
+          src/modules/territories/territory-assurance-certification.test.ts
+          src/modules/governance/__tests__/governance.assurance-policy.test.ts
+          src/modules/governance/__tests__/governance.eligibility.test.ts
+
+      - name: Verify source certification contract
+        env:
+          VERTICE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/verify-territorial-assurance-certification.mjs
+
+      - name: Emit certification boundary
+        run: |
+          echo "TERRITORIAL_ASSURANCE_CODE_STATUS=CODE_CERTIFIED"
+          echo "TERRITORIAL_ASSURANCE_PRODUCTION_STATUS=BLOCKED_EXTERNAL_EVIDENCE"
+          echo "A green CI gate certifies the exact repository candidate only."
+          echo "Provider/operator/legal evidence and an explicit production release decision remain required."
+
+  adversarial-postgres:
+    name: Adversarial Postgres electorate certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: vertice_territory_cert
+          POSTGRES_USER: vertice
+          POSTGRES_PASSWORD: vertice_territory_cert
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7.4-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+      neo4j:
+        image: neo4j:5.20-community
+        env:
+          NEO4J_AUTH: neo4j/vertice_test
+          NEO4J_PLUGINS: '["apoc"]'
+        options: >-
+          --health-cmd "wget -qO- http://localhost:7474 || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 8
+        ports:
+          - 7687:7687
+          - 7474:7474
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact submitted SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize certification database
+        env:
+          DATABASE_URL: postgresql://vertice:vertice_territory_cert@localhost:5432/vertice_territory_cert
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infrastructure/db/init.sql
+          for migration in \
+            apps/api/prisma/migrations/20260902233000_superadmin_role_authority/migration.sql \
+            apps/api/prisma/migrations/20260903013500_frozen_electorate_transition_hardening/migration.sql \
+            apps/api/prisma/migrations/20260903015000_civic_identity_proofing/migration.sql \
+            apps/api/prisma/migrations/20260903020500_frozen_voter_roll_identity_guard/migration.sql \
+            apps/api/prisma/migrations/20260903032000_civic_proof_provider_isolation/migration.sql \
+            apps/api/prisma/migrations/20260906160000_civic_social_profiles/migration.sql \
+            apps/api/prisma/migrations/20260906191500_civic_actions_core/migration.sql \
+            apps/api/prisma/migrations/20260907223000_least_privilege_session_activation/migration.sql \
+            apps/api/prisma/migrations/20260908111500_operation_idempotency_phase6/migration.sql \
+            apps/api/prisma/migrations/20260909033000_national_territory_platform_phase7a/migration.sql \
+            apps/api/prisma/migrations/20260910033000_community_ugc_trust_safety/migration.sql \
+            apps/api/prisma/migrations/20260910122000_national_territory_mobility_context/migration.sql \
+            apps/api/prisma/migrations/20260910131500_territory_boundary_integrity/migration.sql \
+            apps/api/prisma/migrations/20260910173000_territory_residence_assurance_phase7g1/migration.sql \
+            apps/api/prisma/migrations/20260910184500_territorial_governance_eligibility_phase7g2/migration.sql
+          do
+            echo "Applying certification schema slice: $migration"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Run adversarial territorial assurance journey
+        env:
+          TERRITORIAL_ASSURANCE_CERTIFICATION: '1'
+          NODE_ENV: test
+          DATABASE_URL: postgresql://vertice:vertice_territory_cert@localhost:5432/vertice_territory_cert
+          REDIS_URL: redis://localhost:6379
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: vertice_test
+          JWT_SECRET: territory-cert-jwt-secret-with-at-least-32-characters
+          CORS_ORIGIN: http://localhost:3000
+          VOTE_NULLIFIER_SECRET: territory-cert-nullifier-secret-32-chars-minimum
+          IDENTITY_PEPPER: territory-cert-identity-pepper-32-chars-minimum
+          DID_COMMITMENT_PEPPER: territory-cert-did-commitment-pepper-32-chars-minimum
+          CIVIC_IDENTITY_ASSURANCE_PROVIDERS: trusted_kyc
+          CIVIC_IDENTITY_PROOFING_ADAPTER_KEYS_JSON: '{"trusted_kyc":{"territory-cert-key":"territory-cert-adapter-secret-32-characters-minimum"}}'
+        run: >-
+          pnpm --filter @vertice/api test --
+          golden-territorial-assurance-certification.integration.test.ts --runInBand
+
+      - name: Emit external evidence boundary
+        run: |
+          echo "ADVERSARIAL_ELECTION_BOUNDARY=PASS"
+          echo "PRODUCTION_CERTIFICATION=BLOCKED_EXTERNAL_EVIDENCE"
