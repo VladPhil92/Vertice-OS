@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  FileText, Upload, MapPin, ArrowRight, ArrowLeft,
+  FileText, Upload, MapPin, ArrowRight,
   AlertCircle, CheckCircle, Clock, Shield, Scale,
 } from 'lucide-react'
 import Link from 'next/link'
