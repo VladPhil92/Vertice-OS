@@ -13,6 +13,7 @@ import { getNeo4jDriver } from './lib/neo4j'
 import { getFeatureCapabilities } from './lib/feature-secrets'
 import { assessRuntimeReadiness, type RuntimeDependencyChecks } from './lib/runtime-readiness'
 import { assessClosedPilotReadiness } from './lib/closed-pilot-readiness'
+import { getClosedPilotAccessState } from './lib/closed-pilot-access'
 import { initSentry, captureException } from './lib/sentry'
 import { authRoutes } from './modules/auth/auth.routes'
 import { mobileAuthRoutes } from './modules/auth/mobile-auth.routes'
@@ -205,13 +206,15 @@ export function buildApp() {
 
   // Phase 7H closed-pilot gate. Unlike generic serving readiness, the first
   // real-user cohort exercises Community/social graph behavior, so Neo4j is
-  // mandatory here. Real-money capabilities must remain disabled and the
-  // production runtime must expose an immutable revision.
+  // mandatory here. Real-money capabilities must remain disabled, invitation
+  // access must be enforced, and production must expose an immutable revision.
   app.get('/health/pilot', async (_request, reply) => {
     const { checks, capabilities, revision, assessment } = await probeRuntime()
+    const access = getClosedPilotAccessState()
     const pilot = assessClosedPilotReadiness({
       checks,
       capabilities,
+      access,
       revision,
       production: config.NODE_ENV === 'production',
     })
@@ -220,6 +223,7 @@ export function buildApp() {
       status: pilot.status,
       blockers: pilot.blockers,
       safeguards: pilot.safeguards,
+      access_control: access,
       serving_status: assessment.status,
       release_ready: assessment.releaseReady,
       checks,
