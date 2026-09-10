@@ -18,6 +18,7 @@ on:
       - 'apps/mobile/app/(tabs)/governance.tsx'
       - 'scripts/verify-territorial-assurance-certification.mjs'
       - 'docs/engineering/TERRITORIAL_ASSURANCE_CERTIFICATION_PHASE7G4.md'
+      - 'docs/operations/TERRITORIAL_ASSURANCE_CERTIFICATION_RUNBOOK.md'
       - 'docs/operations/territorial-assurance-certification-evidence.example.json'
       - '.github/workflows/territorial-assurance-certification.yml'
   push:
@@ -37,6 +38,7 @@ on:
       - 'apps/mobile/app/(tabs)/governance.tsx'
       - 'scripts/verify-territorial-assurance-certification.mjs'
       - 'docs/engineering/TERRITORIAL_ASSURANCE_CERTIFICATION_PHASE7G4.md'
+      - 'docs/operations/TERRITORIAL_ASSURANCE_CERTIFICATION_RUNBOOK.md'
       - 'docs/operations/territorial-assurance-certification-evidence.example.json'
       - '.github/workflows/territorial-assurance-certification.yml'
 
