@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import process from 'node:process'
 
 const args = process.argv.slice(2)
@@ -17,18 +18,28 @@ if (!['structure', 'strict'].includes(mode)) {
   process.exit(1)
 }
 
+const normalizedManifestPath = path.normalize(manifestPath)
+if (normalizedManifestPath.startsWith('..') || path.isAbsolute(normalizedManifestPath)) {
+  console.error('Store submission readiness: FAIL')
+  console.error('- manifest path must be repository-relative and may not traverse outside the repository')
+  process.exit(1)
+}
+
 let manifest
 try {
-  manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  manifest = JSON.parse(fs.readFileSync(normalizedManifestPath, 'utf8'))
 } catch (error) {
   console.error('Store submission readiness: FAIL')
-  console.error(`- cannot parse ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`)
+  console.error(`- cannot parse ${normalizedManifestPath}: ${error instanceof Error ? error.message : String(error)}`)
   process.exit(1)
 }
 
 const failures = []
 const requireValue = (condition, message) => {
   if (!condition) failures.push(message)
+}
+const requireToken = (content, token, label) => {
+  requireValue(content.includes(token), `${label}: missing ${token}`)
 }
 
 const SHA_RE = /^[0-9a-f]{40}$/i
@@ -50,6 +61,32 @@ requireValue(manifest.app && typeof manifest.app === 'object', 'app object is re
 for (const [key, expected] of Object.entries(canonicalApp)) {
   requireValue(manifest.app?.[key] === expected, `app.${key} must remain ${expected}`)
 }
+
+// Bind the disclosure package to the actual mobile source/configuration instead
+// of validating a detached paperwork-only manifest.
+const mobileConfig = JSON.parse(fs.readFileSync('apps/mobile/app.json', 'utf8')).expo
+requireValue(mobileConfig.name === canonicalApp.name, 'apps/mobile/app.json name drifted from store identity')
+requireValue(mobileConfig.slug === canonicalApp.expo_slug, 'apps/mobile/app.json slug drifted from store identity')
+requireValue(mobileConfig.scheme === canonicalApp.scheme, 'apps/mobile/app.json scheme drifted from store identity')
+requireValue(mobileConfig.ios?.bundleIdentifier === canonicalApp.ios_bundle_id, 'iOS bundle identifier drifted from store identity')
+requireValue(mobileConfig.android?.package === canonicalApp.android_package, 'Android package drifted from store identity')
+
+const plugins = Array.isArray(mobileConfig.plugins) ? mobileConfig.plugins : []
+const pluginNames = new Set(plugins.map((plugin) => Array.isArray(plugin) ? plugin[0] : plugin))
+for (const pluginName of ['expo-location', 'expo-image-picker', 'expo-notifications']) {
+  requireValue(pluginNames.has(pluginName), `apps/mobile/app.json must declare ${pluginName}`)
+}
+const imagePickerPlugin = plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-image-picker')
+requireValue(imagePickerPlugin?.[1]?.microphonePermission === false, 'mobile image picker must keep microphonePermission=false')
+
+const mobileProfile = fs.readFileSync('apps/mobile/app/(tabs)/profile.tsx', 'utf8')
+const mobileDeletion = fs.readFileSync('apps/mobile/app/account-deletion.tsx', 'utf8')
+const publicDeletion = fs.readFileSync('apps/web/app/account-deletion/page.tsx', 'utf8')
+requireToken(mobileProfile, 'account-deletion', 'mobile profile deletion entry point')
+requireToken(mobileDeletion, 'ELIMINAR', 'mobile deletion confirmation')
+requireToken(mobileDeletion, 'deleteAccount', 'mobile deletion action')
+requireToken(publicDeletion, 'Eliminar tu cuenta de VÉRTICE', 'public account deletion resource')
+requireToken(publicDeletion, '/dashboard/privacy', 'public account deletion authenticated handoff')
 
 const parseHttpsUrl = (value, label) => {
   try {
