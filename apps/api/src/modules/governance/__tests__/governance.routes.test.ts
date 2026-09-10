@@ -21,6 +21,18 @@ const mockCreateDelegation = jest.fn()
 const mockRevokeDelegation = jest.fn()
 const mockMyDelegations = jest.fn()
 const mockStats = jest.fn()
+const mockEnsureCommunityPolicyAccepted = jest.fn().mockResolvedValue(undefined)
+const mockAssertCommunityTargetVisible = jest.fn().mockResolvedValue(undefined)
+const mockFilterVisibleCommunityTargets = jest.fn(async (_targetType: string, items: unknown[]) => items)
+
+jest.mock('../../community/community.safety.service', () => ({
+  ensureCommunityPolicyAccepted: mockEnsureCommunityPolicyAccepted,
+}))
+
+jest.mock('../../community/community.visibility.service', () => ({
+  assertCommunityTargetVisible: mockAssertCommunityTargetVisible,
+  filterVisibleCommunityTargets: mockFilterVisibleCommunityTargets,
+}))
 
 jest.mock('../governance.service', () => ({
   createProposal: mockCreate,
@@ -72,6 +84,9 @@ beforeAll(async () => {
 afterAll(() => app.close())
 beforeEach(() => {
   jest.resetAllMocks()
+  mockEnsureCommunityPolicyAccepted.mockResolvedValue(undefined)
+  mockAssertCommunityTargetVisible.mockResolvedValue(undefined)
+  mockFilterVisibleCommunityTargets.mockImplementation(async (_targetType: string, items: unknown[]) => items)
 })
 
 const MOCK_PROPOSAL = {
