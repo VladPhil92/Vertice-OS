@@ -28,7 +28,15 @@ async function citizen(seed: number) {
   `)
   const signedIn = await app.inject({ method: 'POST', url: '/auth/token', payload: { email: input.email, password: input.password } })
   expect(signedIn.statusCode).toBe(200)
-  return { id, auth: `Bearer ${(signedIn.json() as { access_token: string }).access_token}` }
+  const auth = `Bearer ${(signedIn.json() as { access_token: string }).access_token}`
+  const policy = await app.inject({
+    method: 'POST',
+    url: '/community/safety/policy/accept',
+    headers: { authorization: auth },
+    payload: { policy_version: '2026-09-10' },
+  })
+  expect(policy.statusCode).toBe(200)
+  return { id, auth }
 }
 
 describeGolden('GJ-04 governance golden journey', () => {
