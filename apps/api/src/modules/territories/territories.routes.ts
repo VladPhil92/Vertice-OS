@@ -69,9 +69,13 @@ const ResolvePointBody = z.object({
 })
 const AssuranceSubmissionBody = z.object({
   evidence_type: z.enum(TERRITORY_ASSURANCE_EVIDENCE_TYPES),
-  // Only an opaque reference is accepted. The service persists its SHA-256
-  // digest, never the raw locator or document contents.
-  evidence_reference: z.string().trim().min(16).max(200).regex(/^[A-Za-z0-9._:/-]+$/),
+  // Only an opaque vault/provider reference is accepted. HTTP(S) URLs are
+  // rejected so this contract cannot become a persistence path for signed URLs.
+  evidence_reference: z.string().trim().min(16).max(200)
+    .regex(/^[A-Za-z0-9._:/-]+$/)
+    .refine((value) => !/^https?:\/\//i.test(value), {
+      message: 'Usa una referencia opaca del proveedor, no una URL HTTP(S)',
+    }),
 })
 const AssuranceRequestParams = z.object({ requestId: z.string().uuid() })
 const AssuranceDecisionBody = z.object({
