@@ -50,7 +50,7 @@ for (const forbidden of ['reputation_score', 'subscription_tier', 'wallet_balanc
 
 requireText('assuranceGolden', 'territorial residence assurance core')
 requireText('assuranceGolden', 'territory_assurance_level: 0')
-requireText('governanceGolden', 'territorial governance eligibility')
+requireText('governanceGolden', 'frozen electorate preserves one person, one effective vote and exact assurance provenance')
 requireText('governanceGolden', 'territory_assurance_request_id')
 requireText('certificationGolden', 'Phase 7G.4 territorial assurance certification')
 requireText('certificationGolden', 'TERRITORY_ASSURANCE_SELF_REVIEW_FORBIDDEN')
