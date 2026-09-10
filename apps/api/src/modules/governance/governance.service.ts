@@ -65,13 +65,12 @@ function normalizeProposal(row: ProposalRow): Proposal {
 }
 
 /**
- * P0.4 voter-roll activation interlock.
+ * Phase 7G.2 voter-roll admission contract.
  *
- * The frozen electorate is derived from durable civic proofs only for providers
- * that are both explicitly trusted and operationally configured to receive
- * authenticated updates/revocations. Federation/account linkage cannot create
- * governance eligibility. If no provider satisfies both conditions the vote
- * does not open at all; this avoids freezing an artificial empty electorate.
+ * Identity and (for every subnational scope) residence are evaluated from
+ * current proof ledgers only until debate -> voting. The exact proof IDs and
+ * validity timestamps are then frozen into proposal_voter_roll. From that
+ * instant the roll, not mutable account state, is the voting authority.
  */
 async function freezeProofBackedVoterRoll(
   tx: Prisma.TransactionClient,
@@ -87,10 +86,133 @@ async function freezeProofBackedVoterRoll(
     )
   }
 
-  const assuredIdentity = Prisma.sql`
-    c.verification_level >= 2
-    AND EXISTS (
-      SELECT 1
+  const subnational = proposal.scope !== 'national'
+  const hasLegacyTerritoryMapping = proposal.locality_id !== null
+  if (subnational && !proposal.territory_code && !hasLegacyTerritoryMapping) {
+    throw makeError(
+      'La propuesta subnacional no tiene un territorio inmutable asociado',
+      409,
+      'PROPOSAL_TERRITORY_UNAVAILABLE',
+    )
+  }
+
+  // Pre-Phase-7A Cartagena proposals may carry only a legacy locality_id.
+  // Resolve that durable migration mapping rather than treating GPS/current
+  // account context as proposal geography.
+  const proposalTerritory = proposal.territory_code
+    ? Prisma.sql`${proposal.territory_code}`
+    : Prisma.sql`(
+        SELECT legacy.territory_code
+        FROM legacy_locality_territories legacy
+        WHERE legacy.locality_id = ${proposal.locality_id}
+      )`
+
+  const assuranceJoin = subnational
+    ? Prisma.sql`
+      JOIN territory_assurance_requests territory_assurance
+        ON territory_assurance.id = c.territory_assurance_request_id
+       AND territory_assurance.citizen_id = c.id
+       AND territory_assurance.territory_code = c.territory_code
+       AND territory_assurance.status = 'verified'
+       AND territory_assurance.requested_level >= 1
+       AND territory_assurance.verified_at IS NOT NULL
+       AND territory_assurance.verified_at <= NOW()
+       AND territory_assurance.expires_at IS NOT NULL
+       AND territory_assurance.expires_at > NOW()
+    `
+    : Prisma.empty
+
+  let scopePredicate: Prisma.Sql
+  let reason: string
+
+  switch (proposal.scope) {
+    case 'neighborhood':
+      scopePredicate = Prisma.sql`
+        c.territory_code = ${proposalTerritory}
+        AND c.neighborhood = ${proposal.neighborhood}
+        AND (${proposal.locality_id}::int IS NULL OR c.locality_id = ${proposal.locality_id})
+      `
+      reason = 'neighborhood_residence_verified'
+      break
+    case 'locality':
+      scopePredicate = Prisma.sql`
+        c.territory_code = ${proposalTerritory}
+        AND c.locality_id = ${proposal.locality_id}
+      `
+      reason = 'locality_residence_verified'
+      break
+    case 'city':
+      scopePredicate = Prisma.sql`c.territory_code = ${proposalTerritory}`
+      reason = 'city_residence_verified'
+      break
+    case 'regional':
+      scopePredicate = Prisma.sql`
+        EXISTS (
+          SELECT 1
+          FROM territories proposal_territory
+          JOIN territories citizen_territory ON citizen_territory.code = c.territory_code
+          WHERE proposal_territory.code = ${proposalTerritory}
+            AND proposal_territory.parent_code IS NOT NULL
+            AND citizen_territory.parent_code = proposal_territory.parent_code
+        )
+      `
+      reason = 'regional_residence_verified'
+      break
+    case 'national':
+    default:
+      scopePredicate = Prisma.sql`TRUE`
+      reason = 'national_identity_assured'
+  }
+
+  const territorialProjection = subnational
+    ? Prisma.sql`
+      territory_assurance.territory_code,
+      territory_assurance.requested_level,
+      territory_assurance.id,
+      territory_assurance.verified_at,
+      territory_assurance.expires_at
+    `
+    : Prisma.sql`
+      c.territory_code,
+      c.territory_assurance_level,
+      NULL::uuid,
+      NULL::timestamptz,
+      NULL::timestamptz
+    `
+
+  const inserted = await tx.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
+    INSERT INTO proposal_voter_roll (
+      proposal_id,
+      citizen_id,
+      neighborhood,
+      locality_id,
+      verification_level,
+      eligibility_reason,
+      territory_code,
+      territory_assurance_level,
+      territory_assurance_request_id,
+      territory_verified_at,
+      territory_assurance_expires_at,
+      identity_proof_id,
+      identity_provider,
+      identity_verified_at,
+      identity_expires_at
+    )
+    SELECT
+      ${proposalId}::uuid,
+      c.id,
+      c.neighborhood,
+      c.locality_id,
+      c.verification_level,
+      ${reason},
+      ${territorialProjection},
+      identity_proof.id,
+      identity_proof.provider,
+      identity_proof.verified_at,
+      identity_proof.expires_at
+    FROM citizens c
+    JOIN LATERAL (
+      SELECT cip.id, cip.provider, cip.verified_at, cip.expires_at
       FROM civic_identity_proofs cip
       WHERE cip.citizen_id = c.id
         AND cip.provider IN (${Prisma.join(operationalProviders)})
@@ -100,35 +222,12 @@ async function freezeProofBackedVoterRoll(
         AND cip.verified_at <= NOW()
         AND cip.revoked_at IS NULL
         AND (cip.expires_at IS NULL OR cip.expires_at > NOW())
-    )
-  `
-
-  let whereClause: Prisma.Sql
-  let reason: string
-
-  switch (proposal.scope) {
-    case 'neighborhood':
-      whereClause = Prisma.sql`WHERE ${assuredIdentity} AND c.neighborhood = ${proposal.neighborhood}`
-      reason = 'neighborhood_match'
-      break
-    case 'locality':
-      whereClause = Prisma.sql`WHERE ${assuredIdentity} AND c.locality_id = ${proposal.locality_id}`
-      reason = 'locality_match'
-      break
-    case 'city':
-    case 'regional':
-    case 'national':
-    default:
-      whereClause = Prisma.sql`WHERE ${assuredIdentity}`
-      reason = 'citywide'
-  }
-
-  const inserted = await tx.$queryRaw<Array<{ citizen_id: string }>>(Prisma.sql`
-    INSERT INTO proposal_voter_roll
-      (proposal_id, citizen_id, neighborhood, locality_id, verification_level, eligibility_reason)
-    SELECT ${proposalId}::uuid, c.id, c.neighborhood, c.locality_id, c.verification_level, ${reason}
-    FROM citizens c
-    ${whereClause}
+      ORDER BY cip.assurance_level DESC, cip.verified_at DESC, cip.id
+      LIMIT 1
+    ) identity_proof ON TRUE
+    ${assuranceJoin}
+    WHERE c.verification_level >= 2
+      AND ${scopePredicate}
     ON CONFLICT (proposal_id, citizen_id) DO NOTHING
     RETURNING citizen_id
   `)
@@ -159,8 +258,8 @@ function computeVotingResult(proposal: Proposal): 'approved' | 'rejected' | 'quo
 
 /**
  * Canonical proposal lifecycle. P0.3 changed the debate→voting electorate
- * source; P0.4 additionally requires the proof provider ingress to be
- * operational before the vote can open.
+ * source; P0.4 requires operational identity proofing; Phase 7G.2 adds current
+ * territorial assurance for subnational admission and freezes both proof chains.
  */
 export async function advanceProposalStage(
   proposalId: string,

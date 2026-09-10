@@ -4,6 +4,10 @@ import { buildApp } from '../app'
 import { prisma } from '../lib/prisma'
 import { redis } from '../lib/redis'
 import { closeNeo4j } from '../lib/neo4j'
+import {
+  decideTerritoryAssuranceRequest,
+  submitTerritoryAssuranceRequest,
+} from '../modules/territories/territory-assurance.service'
 
 const describeGolden = process.env.GOLDEN_API_JOURNEYS === '1' ? describe : describe.skip
 const app = buildApp()
@@ -46,6 +50,31 @@ async function citizen(seed: number) {
   return { id, auth }
 }
 
+async function selectCartagena(subject: { id: string; auth: string }) {
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/territories/me',
+    headers: { authorization: subject.auth },
+    payload: { territory_code: 'CO-MP-13001' },
+  })
+  expect(response.statusCode).toBe(200)
+}
+
+async function verifyResidence(subjectId: string, reviewerId: string) {
+  const submitted = await submitTerritoryAssuranceRequest({
+    citizenId: subjectId,
+    evidenceType: 'secure_document',
+    evidenceReference: `vault:golden-governance/${randomUUID()}`,
+  })
+  expect(submitted.request.status).toBe('submitted')
+  return decideTerritoryAssuranceRequest({
+    actorId: reviewerId,
+    requestId: submitted.request.id,
+    decision: 'approve',
+    reason: 'Golden fixture: residence evidence reviewed for governance eligibility.',
+  })
+}
+
 describeGolden('GJ-04 governance golden journey', () => {
   beforeAll(async () => { await app.ready() })
   afterAll(async () => {
@@ -53,9 +82,15 @@ describeGolden('GJ-04 governance golden journey', () => {
     await Promise.allSettled([prisma.$disconnect(), closeNeo4j(), redis.quit()])
   })
 
-  test('frozen electorate preserves one person, one effective vote', async () => {
+  test('frozen electorate preserves one person, one effective vote and exact assurance provenance', async () => {
     const author = await citizen(4)
     const delegator = await citizen(5)
+    const reviewer = await citizen(6)
+
+    await selectCartagena(author)
+    await selectCartagena(delegator)
+    await verifyResidence(author.id, reviewer.id)
+    await verifyResidence(delegator.id, reviewer.id)
 
     const proposalResponse = await app.inject({
       method: 'POST', url: '/governance/proposals',
@@ -68,6 +103,19 @@ describeGolden('GJ-04 governance golden journey', () => {
     })
     expect(proposalResponse.statusCode).toBe(201)
     const proposal = proposalResponse.json() as { id: string }
+
+    const preflight = await app.inject({
+      method: 'GET',
+      url: `/governance/proposals/${proposal.id}/eligibility`,
+      headers: { authorization: author.auth },
+    })
+    expect(preflight.statusCode).toBe(200)
+    expect(preflight.json()).toMatchObject({
+      eligible: true,
+      authority: 'current_assurance',
+      reason_code: 'ELIGIBLE_CURRENT_ASSURANCE',
+      territory_assurance: { satisfied: true, territory_code: 'CO-MP-13001' },
+    })
 
     const delegation = await app.inject({
       method: 'POST', url: '/governance/delegations',
@@ -88,12 +136,43 @@ describeGolden('GJ-04 governance golden journey', () => {
       expect((advanced.json() as { status: string }).status).toBe(status)
     }
 
-    const roll = await prisma.$queryRaw<Array<{ citizen_id: string; effective_delegate_id: string | null }>>(Prisma.sql`
-      SELECT citizen_id::text, effective_delegate_id::text
-      FROM proposal_voter_roll WHERE proposal_id = ${proposal.id}::uuid
+    const roll = await prisma.$queryRaw<Array<{
+      citizen_id: string
+      effective_delegate_id: string | null
+      identity_proof_id: string | null
+      territory_assurance_request_id: string | null
+      territory_verified_at: Date | null
+      territory_assurance_expires_at: Date | null
+    }>>(Prisma.sql`
+      SELECT
+        citizen_id::text,
+        effective_delegate_id::text,
+        identity_proof_id::text,
+        territory_assurance_request_id::text,
+        territory_verified_at,
+        territory_assurance_expires_at
+      FROM proposal_voter_roll
+      WHERE proposal_id = ${proposal.id}::uuid
     `)
     expect(roll).toHaveLength(2)
+    expect(roll.every((row) => row.identity_proof_id !== null)).toBe(true)
+    expect(roll.every((row) => row.territory_assurance_request_id !== null)).toBe(true)
+    expect(roll.every((row) => row.territory_verified_at instanceof Date)).toBe(true)
+    expect(roll.every((row) => row.territory_assurance_expires_at instanceof Date)).toBe(true)
     expect(roll.find((row) => row.citizen_id === delegator.id)?.effective_delegate_id).toBe(author.id)
+
+    const frozenPreflight = await app.inject({
+      method: 'GET',
+      url: `/governance/proposals/${proposal.id}/eligibility`,
+      headers: { authorization: author.auth },
+    })
+    expect(frozenPreflight.statusCode).toBe(200)
+    expect(frozenPreflight.json()).toMatchObject({
+      eligible: true,
+      authority: 'frozen_electorate',
+      reason_code: 'ELIGIBLE_FROZEN_ELECTORATE',
+      frozen_electorate: { available: true, member: true, provenance_available: true },
+    })
 
     const representedVote = await app.inject({
       method: 'POST', url: `/governance/proposals/${proposal.id}/vote`,
