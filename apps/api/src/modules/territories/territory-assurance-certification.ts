@@ -10,9 +10,14 @@ export const TERRITORIAL_ASSURANCE_EXTERNAL_CONTROLS = [
 
 export type TerritorialAssuranceExternalControl = typeof TERRITORIAL_ASSURANCE_EXTERNAL_CONTROLS[number]
 
+export interface TerritorialAssuranceControlEvidence {
+  reference: string
+  result: 'pass' | 'fail'
+}
+
 export type TerritorialAssuranceCertificationEvidence = Partial<Record<
   TerritorialAssuranceExternalControl,
-  string
+  TerritorialAssuranceControlEvidence
 >>
 
 export interface TerritorialAssuranceCertificationInput {
@@ -31,6 +36,7 @@ export interface TerritorialAssuranceCertificationResult {
   production_readiness: TerritorialAssuranceProductionReadiness
   automatic_production_certification: false
   satisfied_controls: TerritorialAssuranceExternalControl[]
+  failed_controls: TerritorialAssuranceExternalControl[]
   missing_controls: TerritorialAssuranceExternalControl[]
   invalid_controls: TerritorialAssuranceExternalControl[]
   blocking_reasons: string[]
@@ -50,7 +56,11 @@ export function isOpaqueTerritorialCertificationReference(value: string): boolea
  * database and election-boundary contracts. It cannot fabricate provider,
  * operator or legal evidence.
  *
- * Even with a complete evidence bundle this function returns
+ * Every mandatory external control must carry both an opaque evidence reference
+ * and an explicit PASS result. A traceable reference to a failed control remains
+ * blocking evidence; traceability alone never implies success.
+ *
+ * Even with a complete passing evidence bundle this function returns
  * `ready_for_operator_release_review`, never `certified`.
  */
 export function evaluateTerritorialAssuranceCertification(
@@ -61,17 +71,22 @@ export function evaluateTerritorialAssuranceCertification(
     && input.candidateSha.toLowerCase() === input.expectedSha.toLowerCase()
 
   const satisfiedControls: TerritorialAssuranceExternalControl[] = []
+  const failedControls: TerritorialAssuranceExternalControl[] = []
   const missingControls: TerritorialAssuranceExternalControl[] = []
   const invalidControls: TerritorialAssuranceExternalControl[] = []
 
   for (const control of TERRITORIAL_ASSURANCE_EXTERNAL_CONTROLS) {
-    const reference = input.evidence[control]
-    if (!reference) {
+    const evidence = input.evidence[control]
+    if (!evidence) {
       missingControls.push(control)
       continue
     }
-    if (!isOpaqueTerritorialCertificationReference(reference)) {
+    if (!isOpaqueTerritorialCertificationReference(evidence.reference)) {
       invalidControls.push(control)
+      continue
+    }
+    if (evidence.result !== 'pass') {
+      failedControls.push(control)
       continue
     }
     satisfiedControls.push(control)
@@ -81,15 +96,20 @@ export function evaluateTerritorialAssuranceCertification(
   if (!exactSha) blockingReasons.push('candidate_sha_mismatch')
   if (missingControls.length > 0) blockingReasons.push('external_evidence_missing')
   if (invalidControls.length > 0) blockingReasons.push('external_evidence_reference_invalid')
+  if (failedControls.length > 0) blockingReasons.push('external_control_failed')
 
   return {
     exact_sha: exactSha,
     repository_contract: exactSha ? 'eligible_for_ci_certification' : 'blocked_sha_mismatch',
-    production_readiness: exactSha && missingControls.length === 0 && invalidControls.length === 0
+    production_readiness: exactSha
+      && missingControls.length === 0
+      && invalidControls.length === 0
+      && failedControls.length === 0
       ? 'ready_for_operator_release_review'
       : 'blocked_external_evidence',
     automatic_production_certification: false,
     satisfied_controls: satisfiedControls,
+    failed_controls: failedControls,
     missing_controls: missingControls,
     invalid_controls: invalidControls,
     blocking_reasons: blockingReasons,
