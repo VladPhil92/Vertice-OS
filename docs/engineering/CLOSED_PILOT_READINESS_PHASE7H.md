@@ -28,6 +28,19 @@ The closed pilot requires all of the following to report healthy:
 
 Generic `/health/ready` may continue serving civic basics with an optional Neo4j degradation. `/health/pilot` is stricter because the pilot explicitly exercises Community, following/feed and graph-backed social behavior.
 
+## Enforced invite boundary
+
+The pilot is not considered closed merely because an operator promises to share the URL selectively. Phase 7H provides an executable authentication boundary controlled by:
+
+- `CLOSED_PILOT_MODE=true`;
+- `CLOSED_PILOT_EMAIL_ALLOWLIST=<comma-separated invited emails>`.
+
+When pilot mode is enabled, registration, password login, refresh-token renewal and CTG One federation all reject identities outside the normalized allowlist with `CLOSED_PILOT_INVITE_REQUIRED`. The allowlist is never emitted by `/health/pilot`; only whether it is configured and its cohort size are observable.
+
+The code caps the configured pilot cohort at 30 identities. An empty or oversized allowlist makes the access control `BLOCKED`. The operational target remains 10–30 invited users.
+
+Existing access tokens may remain valid until their normal short expiry, so pilot activation must occur only after the operator has established the allowlist and allowed any pre-pilot access-token window to expire or revoked relevant sessions.
+
 ## Mandatory safeguards
 
 The pilot contract is fail-closed around high-impact capabilities:
@@ -76,6 +89,7 @@ Phase 7H reaches `READY_FOR_CLOSED_PILOT` only when:
 - that SHA is deployed to the intended production/pilot runtime;
 - `/health/live` and `/health/ready` pass;
 - `/health/pilot` returns HTTP 200 with no blockers;
+- invite-only access is enabled and configured for the bounded cohort;
 - Vercel/API runtime evidence points to the intended release lineage;
 - the Closed Pilot Runbook has been executed without a STOP condition.
 
