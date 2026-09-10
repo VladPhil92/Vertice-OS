@@ -68,6 +68,20 @@ apps/mobile/.expo/
 apps/mobile/.env
 apps/mobile/android/
 apps/mobile/ios/
+*.apk
+*.aab
+*.ipa
+
+# Mobile signing / provider credentials — NUNCA commitear
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+**/google-services.json
+**/GoogleService-Info.plist
+**/*service-account*.json
+apps/mobile/credentials.json
 
 # Misc
 *.tgz
