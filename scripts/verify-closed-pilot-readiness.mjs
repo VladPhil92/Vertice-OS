@@ -4,7 +4,11 @@ import { readFile } from 'node:fs/promises'
 const files = {
   policy: 'apps/api/src/lib/closed-pilot-readiness.ts',
   policyTest: 'apps/api/src/lib/__tests__/closed-pilot-readiness.test.ts',
+  access: 'apps/api/src/lib/closed-pilot-access.ts',
+  accessTest: 'apps/api/src/lib/__tests__/closed-pilot-access.test.ts',
   app: 'apps/api/src/app.ts',
+  authService: 'apps/api/src/modules/auth/auth.service.ts',
+  federationService: 'apps/api/src/modules/auth/federation.service.ts',
   capabilities: 'apps/api/src/lib/feature-secrets.ts',
   engineering: 'docs/engineering/CLOSED_PILOT_READINESS_PHASE7H.md',
   runbook: 'docs/operations/CLOSED_PILOT_RUNBOOK.md',
@@ -42,8 +46,20 @@ for (const safeguard of [
   "moderation: 'required'",
 ]) requireText('policy', safeguard)
 
+requireText('access', 'CLOSED_PILOT_MODE')
+requireText('access', 'CLOSED_PILOT_EMAIL_ALLOWLIST')
+requireText('access', 'MAX_CLOSED_PILOT_COHORT = 30')
+requireText('access', 'CLOSED_PILOT_INVITE_REQUIRED')
+requireText('accessTest', 'rejects non-invited identities')
+requireText('policy', 'pilot:access_control_not_ready')
+requireText('policyTest', 'pilot:access_control_not_ready')
+
+requireText('authService', 'assertClosedPilotEmailAllowed(input.email)')
+requireText('authService', 'assertClosedPilotEmailAllowed(session.citizen.email)')
+requireText('federationService', 'assertClosedPilotEmailAllowed(identity.email)')
 requireText('app', "app.get('/health/pilot'")
-requireText('app', 'assessClosedPilotReadiness')
+requireText('app', 'getClosedPilotAccessState()')
+requireText('app', 'access_control: access')
 requireText('app', 'release_ready: assessment.releaseReady')
 requireText('policyTest', 'dependency:neo4j')
 requireText('policyTest', 'pilot:monetary_capability:')
