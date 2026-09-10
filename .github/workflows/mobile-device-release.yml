@@ -6,6 +6,7 @@ on:
       - 'apps/mobile/**'
       - 'apps/api/src/modules/notifications/**'
       - 'apps/api/prisma/migrations/**mobile_push_devices/**'
+      - 'docs/engineering/MOBILE_PRODUCTION_RELEASE.md'
       - '.github/workflows/mobile-device-release.yml'
       - 'pnpm-lock.yaml'
   push:
@@ -14,12 +15,18 @@ on:
       - 'apps/mobile/**'
       - 'apps/api/src/modules/notifications/**'
       - 'apps/api/prisma/migrations/**mobile_push_devices/**'
+      - 'docs/engineering/MOBILE_PRODUCTION_RELEASE.md'
       - '.github/workflows/mobile-device-release.yml'
       - 'pnpm-lock.yaml'
 
 concurrency:
   group: mobile-device-release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  RELEASE_CONTRACT_API_URL: https://api.release-contract.test
+  RELEASE_CONTRACT_EAS_PROJECT_ID: 11111111-1111-4111-8111-111111111111
+  RELEASE_CONTRACT_MAPS_KEY: ci-release-contract-placeholder
 
 jobs:
   mobile-device-release:
@@ -38,30 +45,71 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify Phase 2C structural contract
+      - name: Verify development/source contract
+        run: node apps/mobile/scripts/verify-device-release.mjs
+
+      - name: Prove preview configuration fails closed without release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if APP_VARIANT=preview EXPO_PUBLIC_RELEASE_CHANNEL=preview node -e "require('./apps/mobile/app.config.js')({ config: require('./apps/mobile/app.json').expo })"; then
+            echo 'Preview configuration unexpectedly accepted missing release inputs.' >&2
+            exit 1
+          fi
+          echo 'Preview fail-closed contract: PASS'
+
+      - name: Prove production configuration fails closed without release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if APP_VARIANT=production EXPO_PUBLIC_RELEASE_CHANNEL=production node -e "require('./apps/mobile/app.config.js')({ config: require('./apps/mobile/app.json').expo })"; then
+            echo 'Production configuration unexpectedly accepted missing release inputs.' >&2
+            exit 1
+          fi
+          echo 'Production fail-closed contract: PASS'
+
+      - name: Verify deterministic production configuration contract
+        env:
+          APP_VARIANT: production
+          EXPO_PUBLIC_RELEASE_CHANNEL: production
+          EXPO_PUBLIC_API_URL: ${{ env.RELEASE_CONTRACT_API_URL }}
+          EAS_PROJECT_ID: ${{ env.RELEASE_CONTRACT_EAS_PROJECT_ID }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ env.RELEASE_CONTRACT_MAPS_KEY }}
         run: node apps/mobile/scripts/verify-device-release.mjs
 
       - name: Typecheck native client
         run: pnpm --filter @vertice/mobile typecheck
 
-      - name: Resolve public Expo configuration
+      - name: Resolve production-like public Expo configuration
         env:
-          EXPO_PUBLIC_API_URL: https://api.example.invalid
+          APP_VARIANT: production
+          EXPO_PUBLIC_RELEASE_CHANNEL: production
+          EXPO_PUBLIC_API_URL: ${{ env.RELEASE_CONTRACT_API_URL }}
+          EAS_PROJECT_ID: ${{ env.RELEASE_CONTRACT_EAS_PROJECT_ID }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ env.RELEASE_CONTRACT_MAPS_KEY }}
         run: pnpm --filter @vertice/mobile exec expo config --type public > /tmp/expo-public.json
 
-      - name: Introspect native config plugins
+      - name: Introspect production-like native config plugins
         env:
-          EXPO_PUBLIC_API_URL: https://api.example.invalid
+          APP_VARIANT: production
+          EXPO_PUBLIC_RELEASE_CHANNEL: production
+          EXPO_PUBLIC_API_URL: ${{ env.RELEASE_CONTRACT_API_URL }}
+          EAS_PROJECT_ID: ${{ env.RELEASE_CONTRACT_EAS_PROJECT_ID }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ env.RELEASE_CONTRACT_MAPS_KEY }}
         run: pnpm --filter @vertice/mobile exec expo config --type introspect > /tmp/expo-introspect.json
 
-      - name: Export Android and iOS bundles
+      - name: Export Android and iOS production-like bundles
         env:
-          EXPO_PUBLIC_API_URL: https://api.example.invalid
+          APP_VARIANT: production
+          EXPO_PUBLIC_RELEASE_CHANNEL: production
+          EXPO_PUBLIC_API_URL: ${{ env.RELEASE_CONTRACT_API_URL }}
+          EAS_PROJECT_ID: ${{ env.RELEASE_CONTRACT_EAS_PROJECT_ID }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ env.RELEASE_CONTRACT_MAPS_KEY }}
         run: pnpm --filter @vertice/mobile build
 
       - name: Assert exported artifacts
         run: |
           test -d apps/mobile/dist/android
           test -d apps/mobile/dist/ios
-          echo 'Mobile Phase 2C compile/export contract: PASS'
-          echo 'This workflow does NOT certify Google Maps credentials, EAS project linkage, APNs/FCM credentials, signed preview installation, or physical-device delivery.'
+          echo 'Mobile production compile/export contract: PASS'
+          echo 'SOURCE/CONFIG READY only — this workflow does NOT certify real EAS linkage, signing identities, Google Maps key restrictions, APNs/FCM credentials, signed installation, push delivery, physical-device smoke, or store approval.'
