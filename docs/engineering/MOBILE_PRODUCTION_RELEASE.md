@@ -4,7 +4,7 @@ Snapshot: 9 September 2026.
 
 ## Purpose
 
-Phase 8A turns the Expo client from an exportable codebase into a fail-closed production build configuration. It does **not** claim ownership of Expo, Apple or Google accounts and it does not certify a signed binary or a physical device.
+Phase 8A turns the Expo client from an exportable codebase into a fail-closed production build configuration. Phase 8B then hardens the repository boundary around mobile signing/provider credentials. Neither phase claims ownership of Expo, Apple or Google accounts and neither certifies a signed binary or a physical device.
 
 ## Canonical application identity
 
@@ -41,7 +41,8 @@ Release requirements:
 
 - valid URL;
 - HTTPS;
-- non-local hostname;
+- public/non-local hostname;
+- loopback, RFC1918, CGNAT, link-local, IPv6 ULA/link-local and IPv4-mapped private forms are rejected;
 - must point to the intended production/preview API environment.
 
 `EXPO_PUBLIC_*` values are public bundle configuration. Never place credentials or secrets in them.
@@ -78,18 +79,38 @@ Non-secret release metadata mirrored into the bundle for diagnostics. EAS profil
 2. verifies EAS production/preview profile semantics;
 3. proves preview configuration rejects missing release inputs;
 4. proves production configuration rejects missing release inputs;
-5. resolves a production-like Expo config with safe CI placeholders;
-6. verifies EAS project ID and Android Maps configuration are injected into the resolved config;
-7. typechecks the native client;
-8. introspects native configuration;
-9. exports Android and iOS production-like bundles;
-10. confirms push/device/media/map source contracts remain intact.
+5. proves local/private API origins are rejected;
+6. resolves a production-like Expo config with safe CI placeholders;
+7. verifies EAS project ID and Android Maps configuration are injected into the resolved config;
+8. typechecks the native client;
+9. introspects native configuration;
+10. exports Android and iOS production-like bundles;
+11. confirms push/device/media/map source contracts remain intact.
 
 A green Phase 8A gate means **SOURCE/CONFIG READY**. It is not a signed-build or store certification.
 
+## Automated Phase 8B repository boundary
+
+The required `Security Scan` runs `scripts/verify-mobile-signing-boundary.mjs` before dependency/security scanning. The check fails when prohibited signing/provider material is tracked or when the required ignore policy drifts.
+
+The repository rejects/ignores at least:
+
+- Android `.jks` / `.keystore` signing stores;
+- Apple/Auth `.p8` private keys;
+- PKCS#12 `.p12` signing bundles;
+- Apple `.mobileprovision` profiles;
+- Firebase `google-services.json` and `GoogleService-Info.plist`;
+- service-account JSON payloads / filenames;
+- generic `apps/mobile/credentials.json`;
+- PEM-style private-key material embedded in tracked text.
+
+Generated `.apk`, `.aab` and `.ipa` binaries are also ignored so local/signed artifacts do not become source-controlled release evidence by accident.
+
+This gate proves **repository credential hygiene only**. It intentionally does not inspect or expose EAS/Apple/Google secret stores and cannot prove that provider credentials exist, are current, or are correctly restricted.
+
 ## Phase 8B — external ownership and signing boundary
 
-The next phase requires account-owner actions that repository automation cannot fabricate:
+After the repository boundary is green, the remaining Phase 8B actions require account-owner/provider access:
 
 - create or link the real Expo/EAS project and obtain its project UUID;
 - configure the EAS `preview` and `production` environments with the real API origin, project ID and Android Maps key;
@@ -150,4 +171,4 @@ Use these states precisely:
 - `PHYSICAL SMOKE PASSED`: the signed build passed the documented device suite;
 - `CERTIFIED`: all applicable automated and external evidence for the exact release SHA is complete.
 
-Never infer `SIGNED BUILD`, `PHYSICAL SMOKE PASSED` or `CERTIFIED` from an Expo export or CI placeholder configuration.
+Never infer `SIGNED BUILD`, `PHYSICAL SMOKE PASSED` or `CERTIFIED` from an Expo export, repository signing-hygiene gate or CI placeholder configuration.
