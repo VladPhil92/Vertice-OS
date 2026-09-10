@@ -17,9 +17,17 @@ const forbiddenPathPatterns = [
   { re: /\.mobileprovision$/i, label: 'Apple provisioning profile' },
 ]
 
+// Build key markers in fragments so this verifier does not match its own source.
+const privateKeyBegin = ['-----BEGIN ', '(?:RSA |EC |OPENSSH )?', 'PRIVATE KEY-----'].join('')
+const encryptedPrivateKeyBegin = ['-----BEGIN ', 'ENCRYPTED ', 'PRIVATE KEY-----'].join('')
+
 const forbiddenContentPatterns = [
-  { re: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/, label: 'private key material' },
-  { re: /-----BEGIN ENCRYPTED PRIVATE KEY-----/, label: 'encrypted private key material' },
+  { re: new RegExp(privateKeyBegin), label: 'private key material' },
+  { re: new RegExp(encryptedPrivateKeyBegin), label: 'encrypted private key material' },
+  {
+    re: /"type"\s*:\s*"service_account"[\s\S]{0,8000}"private_key"\s*:/,
+    label: 'Google service-account private-key payload',
+  },
 ]
 
 const allowedTextExtensions = new Set([
@@ -50,6 +58,7 @@ for (const file of tracked) {
 }
 
 const gitignore = fs.readFileSync('.gitignore', 'utf8')
+const ignoredLines = new Set(gitignore.split(/\r?\n/).map((line) => line.trim()))
 for (const requiredIgnore of [
   '*.jks',
   '*.keystore',
@@ -61,7 +70,7 @@ for (const requiredIgnore of [
   '**/*service-account*.json',
   'apps/mobile/credentials.json',
 ]) {
-  if (!gitignore.split(/\r?\n/).includes(requiredIgnore)) {
+  if (!ignoredLines.has(requiredIgnore)) {
     failures.push(`.gitignore: missing signing-secret pattern ${requiredIgnore}`)
   }
 }
