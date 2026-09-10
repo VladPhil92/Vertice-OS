@@ -9,8 +9,8 @@ const requireToken = (content, token, label, failures) => {
   if (!content.includes(token)) failures.push(`${label}: missing ${token}`)
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
 const require = createRequire(import.meta.url)
+const { parsePublicHttpsUrl, isLocalOrPrivateHostname } = require(path.join(root, 'apps/mobile/config/release-network.js'))
 
 const failures = []
 const packageJson = JSON.parse(read('apps/mobile/package.json'))
@@ -27,6 +27,7 @@ const apiRoutes = read('apps/api/src/modules/notifications/notifications.routes.
 const apiService = read('apps/api/src/modules/notifications/notifications.service.ts')
 const migration = read('apps/api/prisma/migrations/20260908232500_mobile_push_devices/migration.sql')
 const dynamicConfig = read('apps/mobile/app.config.js')
+const releaseNetwork = read('apps/mobile/config/release-network.js')
 
 const expo = appJson.expo ?? {}
 const iosBundleId = expo.ios?.bundleIdentifier
@@ -92,10 +93,19 @@ if (!easJson.submit?.production) failures.push('EAS production submit profile mu
 requireToken(dynamicConfig, 'EXPO_PUBLIC_API_URL', 'dynamic release API validation', failures)
 requireToken(dynamicConfig, 'GOOGLE_MAPS_ANDROID_API_KEY', 'dynamic Google Maps config', failures)
 requireToken(dynamicConfig, 'EAS_PROJECT_ID', 'dynamic EAS project config', failures)
-requireToken(dynamicConfig, 'must use HTTPS and a non-local hostname', 'release fail-closed API rule', failures)
-requireToken(dynamicConfig, 'requires a valid EAS_PROJECT_ID UUID', 'release fail-closed EAS rule', failures)
+requireToken(dynamicConfig, 'parsePublicHttpsUrl', 'release network validation', failures)
+requireToken(releaseNetwork, 'isPrivateIpv4', 'release IPv4 policy', failures)
+requireToken(releaseNetwork, 'isPrivateIpv6', 'release IPv6 policy', failures)
+requireToken(releaseNetwork, 'must use a public, non-local hostname', 'release public-host policy', failures)
 
-const repoConfigText = [dynamicConfig, read('apps/mobile/app.json'), read('apps/mobile/eas.json')].join('\n')
+for (const blockedHost of ['localhost', 'api.localhost', '127.0.0.1', '10.0.2.2', '10.0.0.1', '100.64.0.1', '169.254.1.1', '172.16.0.1', '172.31.255.254', '192.168.1.5', '::1', 'fc00::1', 'fd12::1', 'fe80::1']) {
+  if (!isLocalOrPrivateHostname(blockedHost)) failures.push(`release network policy must reject ${blockedHost}`)
+}
+for (const allowedHost of ['api.vertice.example', '203.0.113.10', '2001:db8::1']) {
+  if (isLocalOrPrivateHostname(allowedHost)) failures.push(`release network policy unexpectedly rejects ${allowedHost}`)
+}
+
+const repoConfigText = [dynamicConfig, releaseNetwork, read('apps/mobile/app.json'), read('apps/mobile/eas.json')].join('\n')
 if (/AIza[0-9A-Za-z_-]{20,}/.test(repoConfigText)) failures.push('Google Maps API key must never be hard-coded in repository config')
 
 let resolvedConfig
@@ -117,12 +127,9 @@ if (releaseLike) {
   const mapsKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() ?? ''
 
   try {
-    const parsed = new URL(apiUrl)
-    if (parsed.protocol !== 'https:' || LOCAL_HOSTS.has(parsed.hostname)) {
-      failures.push(`${variant} API URL must be HTTPS and non-local`)
-    }
-  } catch {
-    failures.push(`${variant} API URL must be a valid HTTPS URL`)
+    parsePublicHttpsUrl(apiUrl, `${variant} API URL`)
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : `${variant} API URL is invalid`)
   }
 
   if (!UUID_RE.test(easProjectId)) failures.push(`${variant} EAS_PROJECT_ID must be a UUID`)
