@@ -114,16 +114,36 @@ describe('Phase 7H closed pilot readiness', () => {
     expect(result.blockers).toContain('capability:civic_identity_assurance')
   })
 
-  it('requires an immutable production revision', () => {
+  it.each([
+    'unknown',
+    '',
+    'main',
+    'abc1234',
+    'g'.repeat(40),
+    'a'.repeat(39),
+    'a'.repeat(41),
+  ])('rejects non-SHA production revision %p', (revision) => {
+    const result = assessClosedPilotReadiness({
+      checks: HEALTHY_CHECKS,
+      capabilities: capabilities(),
+      access: READY_ACCESS,
+      revision,
+      production: true,
+    })
+
+    expect(result.ready).toBe(false)
+    expect(result.blockers).toContain('runtime:revision_invalid')
+  })
+
+  it('does not require a deployment SHA for local/non-production policy tests', () => {
     const result = assessClosedPilotReadiness({
       checks: HEALTHY_CHECKS,
       capabilities: capabilities(),
       access: READY_ACCESS,
       revision: 'unknown',
-      production: true,
+      production: false,
     })
 
-    expect(result.ready).toBe(false)
-    expect(result.blockers).toContain('runtime:revision_unknown')
+    expect(result.ready).toBe(true)
   })
 })
