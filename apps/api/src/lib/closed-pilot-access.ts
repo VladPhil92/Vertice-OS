@@ -39,15 +39,19 @@ export function getClosedPilotAccessState(
  * Enforces the Phase 7H invitation boundary at authentication entry points.
  * The allowlist remains operator configuration and is never emitted by health
  * endpoints; only its coarse configured state and size are observable.
+ *
+ * Legacy/federated database rows may contain a nullable email. That remains
+ * compatible while pilot mode is disabled, but pilot mode fails closed because
+ * a null/blank identity can never match the explicit invitation allowlist.
  */
 export function assertClosedPilotEmailAllowed(
-  email: string,
+  email: string | null | undefined,
   env: PilotEnvironment = process.env,
 ): void {
   const state = getClosedPilotAccessState(env)
   if (!state.enabled) return
 
-  const normalizedEmail = email.trim().toLowerCase()
+  const normalizedEmail = email?.trim().toLowerCase() ?? ''
   if (!state.configured || !normalizedAllowlist(env).includes(normalizedEmail)) {
     throw Object.assign(
       new Error('Esta fase de VÉRTICE está disponible únicamente por invitación'),
