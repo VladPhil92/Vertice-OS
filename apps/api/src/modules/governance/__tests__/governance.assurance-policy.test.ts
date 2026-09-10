@@ -118,8 +118,9 @@ describe('P0 + Phase 7G.2 governance assurance policy', () => {
     expect(rosterSql).toContain('territory_assurance.expires_at > NOW()')
     expect(rosterSql).toContain('territory_assurance_request_id')
     expect(rosterSql).toContain('identity_proof_id')
-    expect(rosterSql).toContain('CO-MP-13001')
     expect(rosterSql).not.toContain('external_identities')
+    const rosterValues = (mockQueryRaw.mock.calls[1]?.[0] as { values?: unknown[] }).values ?? []
+    expect(rosterValues).toContain('CO-MP-13001')
   })
 
   it('rejects a direct voter who is not in the frozen roll', async () => {
