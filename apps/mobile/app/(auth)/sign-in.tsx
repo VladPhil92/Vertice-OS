@@ -219,18 +219,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   hero: { gap: spacing.sm },
-  eyebrow: {
-    color: colors.textTertiary,
-    ...typography.roles.label,
-  },
-  title: {
-    color: colors.textPrimary,
-    ...typography.roles.hero,
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    ...typography.roles.subtitle,
-  },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.hero },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.subtitle },
   card: {
     overflow: 'hidden',
     borderWidth: 1,
@@ -260,28 +251,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.xxs,
   },
-  noticeTitle: {
-    color: colors.textPrimary,
-    fontFamily: typography.bodyExtraBoldFamily,
-    fontWeight: '800',
-  },
-  noticeText: {
-    color: colors.textSecondary,
-    ...typography.roles.caption,
-  },
+  noticeTitle: { color: colors.textPrimary, fontFamily: typography.bodyExtraBoldFamily, fontWeight: '800' },
+  noticeText: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   accessHeader: { marginTop: spacing.xs, gap: spacing.xs },
-  accessEyebrow: {
-    color: colors.citizenDark,
-    ...typography.roles.label,
-  },
-  accessTitle: {
-    color: colors.textPrimary,
-    ...typography.roles.title,
-  },
-  accessText: {
-    color: colors.textSecondary,
-    ...typography.roles.caption,
-  },
+  accessEyebrow: { color: colors.citizenDark, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  accessTitle: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
+  accessText: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   ctgButton: {
     minHeight: interaction.buttonHeight,
     borderWidth: 1,
@@ -308,16 +283,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.7,
   },
-  ctgButtonText: {
-    flex: 1,
-    color: colors.navy,
-    ...typography.roles.button,
-  },
-  ctgHelper: {
-    textAlign: 'center',
-    color: colors.textTertiary,
-    ...typography.roles.caption,
-  },
+  ctgButtonText: { flex: 1, color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  ctgHelper: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.xxs },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: {
@@ -328,10 +295,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
   },
   field: { gap: 6 },
-  label: {
-    color: colors.textSecondary,
-    ...typography.roles.label,
-  },
+  label: { color: colors.textSecondary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   input: {
     minHeight: interaction.inputHeight,
     borderWidth: 1,
@@ -350,10 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.errorBackground,
     padding: spacing.sm,
   },
-  error: {
-    color: colors.errorText,
-    ...typography.roles.caption,
-  },
+  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   primaryButton: {
     minHeight: interaction.buttonHeight,
     borderRadius: radius.md,
@@ -362,15 +323,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.lg,
   },
-  primaryButtonText: {
-    color: colors.white,
-    ...typography.roles.button,
-  },
+  primaryButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   footerActions: { alignItems: 'center', gap: spacing.xxs, paddingTop: spacing.xs },
-  footerPrompt: {
-    color: colors.textTertiary,
-    ...typography.roles.caption,
-  },
+  footerPrompt: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   registerText: {
     color: colors.navy,
     fontFamily: typography.bodyExtraBoldFamily,
