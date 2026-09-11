@@ -7,7 +7,6 @@ type ElevatedGrantRow = {
   role: 'admin' | 'superadmin'
   source: string
   granted_by_citizen_id: string | null
-  grantor_email: string | null
   granted_at: Date
   revoked_at: Date | null
 }
@@ -21,9 +20,20 @@ type CountRow = {
   count: bigint
 }
 
-const ROOT_EMAIL = 'valderramapino@gmail.com'
+// Phase 7J: production privilege certification must never emit the canonical
+// operator identity in source-level diagnostics or runtime logs. We retain only
+// a one-way digest for the invariant check.
+const ROOT_EMAIL_SHA256 = 'c031904e300325e439896cd93119590de562e12d7aa329cd1be141b6d6e3377d'
 const ROOT_SUBJECT_SHA256 = '4446b482e61fff7f0fcfc15f44983c2362e7f64aa32abd6c47b82e57f2d2de08'
 const prisma = new PrismaClient()
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function auditRef(value: string | null): string | null {
+  return value ? sha256(value).slice(0, 16) : null
+}
 
 async function main() {
   const rows = await prisma.$queryRawUnsafe<ElevatedGrantRow[]>(`
@@ -33,12 +43,10 @@ async function main() {
       g.role,
       g.source,
       g.granted_by_citizen_id::text AS granted_by_citizen_id,
-      LOWER(grantor.email) AS grantor_email,
       g.granted_at,
       g.revoked_at
     FROM citizen_role_grants g
     INNER JOIN citizens c ON c.id = g.citizen_id
-    LEFT JOIN citizens grantor ON grantor.id = g.granted_by_citizen_id
     WHERE g.revoked_at IS NULL
       AND g.role IN ('admin', 'superadmin')
     ORDER BY g.role ASC, LOWER(c.email) ASC
@@ -58,7 +66,9 @@ async function main() {
 
   const superadmins = rows.filter((row) => row.role === 'superadmin')
   const admins = rows.filter((row) => row.role === 'admin')
-  const canonicalRoots = superadmins.filter((row) => row.email === ROOT_EMAIL)
+  const canonicalRoots = superadmins.filter(
+    (row) => sha256(row.email.trim().toLowerCase()) === ROOT_EMAIL_SHA256,
+  )
   const legacyElevated = rows.filter((row) =>
     ['legacy_role', 'legacy_backfill'].includes(row.source),
   )
@@ -74,16 +84,20 @@ async function main() {
     `, canonicalRoots[0].citizen_id)
   }
 
+  // Runtime privilege evidence is deliberately privacy-minimized. Raw citizen
+  // UUIDs, emails and grantor identities are used only in-memory to evaluate the
+  // invariant and are never written to deploy logs.
   const safeRows = rows.map((row) => ({
-    ...row,
+    citizen_ref: auditRef(row.citizen_id),
+    role: row.role,
+    source: row.source,
+    grantor_ref: auditRef(row.granted_by_citizen_id),
     granted_at: row.granted_at.toISOString(),
     revoked_at: row.revoked_at?.toISOString() ?? null,
   }))
   const safeRootIdentities = rootIdentities.map((identity) => ({
     provider: identity.provider,
-    provider_subject_sha256: createHash('sha256')
-      .update(identity.provider_subject)
-      .digest('hex'),
+    provider_subject_sha256: sha256(identity.provider_subject),
   }))
 
   const canonicalRootGrant = canonicalRoots.length === 1
