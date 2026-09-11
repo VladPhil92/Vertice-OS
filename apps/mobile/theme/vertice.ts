@@ -3,8 +3,9 @@ import { Platform } from 'react-native'
 /**
  * VÉRTICE visual contract for native clients.
  *
- * These values mirror apps/web/app/globals.css. Screens must consume semantic
- * tokens from this module instead of inventing product colors locally.
+ * These values mirror apps/web/app/globals.css and the canonical auth surfaces.
+ * Screens must consume semantic tokens from this module instead of inventing
+ * product colors locally.
  */
 export const colors = {
   background: '#F7F9FC',
@@ -12,10 +13,12 @@ export const colors = {
   surfaceAlt: '#F0F4F9',
   border: '#E1E7EF',
   borderActive: '#C5D0DF',
+  inputBorder: '#D6DFEA',
 
   navy: '#0A2A66',
   navyLight: '#163F86',
   citizen: '#F5B700',
+  citizenDark: '#D98B00',
   red: '#D72638',
   azure: '#4A90E2',
   emerald: '#2BA745',
@@ -24,7 +27,13 @@ export const colors = {
   textPrimary: '#0A2A66',
   textSecondary: '#4B5870',
   textTertiary: '#7B8799',
+  textMuted: '#9AA6B5',
+  placeholder: '#A5AFBD',
   white: '#FFFFFF',
+
+  errorBackground: '#FCEBED',
+  errorBorder: '#F2BDC3',
+  errorText: '#A11D2A',
 
   mobility: '#4A90E2',
   water: '#178C8C',
@@ -57,13 +66,15 @@ export const radius = {
 } as const
 
 export const typography = {
-  // Web canon: Montserrat for display and Inter for body. The native bundle
-  // keeps a platform-safe fallback until these families are bundled by EAS;
-  // all size/weight/line-height roles are already identical product semantics.
+  // Canon shared with web: Montserrat for display, Inter for body, DM Mono for
+  // machine/readout text. Native currently resolves to platform-safe fallbacks
+  // until the font binaries are bundled by the release pipeline; the semantic
+  // roles and target families remain centralized here so screens never diverge.
   displayFamily: Platform.select({ ios: 'Avenir Next', android: 'sans-serif', default: 'sans-serif' }),
   bodyFamily: Platform.select({ ios: 'System', android: 'sans-serif', default: 'sans-serif' }),
   brandDisplayFamily: 'Montserrat',
   brandBodyFamily: 'Inter',
+  brandMonoFamily: 'DM Mono',
   monoFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
   roles: {
     hero: { fontSize: 34, lineHeight: 40, fontWeight: '800' as const, letterSpacing: -0.8 },
@@ -91,6 +102,7 @@ export const iconography = {
 } as const
 
 export const imagery = {
+  // These files are binary-identical to the canonical web brand assets.
   wordmark: require('../assets/brand/vertice-wordmark.webp'),
   symbol: require('../assets/brand/vertice-symbol.webp'),
   logo: require('../assets/brand/vertice-logo.png'),
