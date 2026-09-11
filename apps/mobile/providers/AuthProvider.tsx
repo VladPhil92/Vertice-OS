@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiFetch, loginMobile, logoutMobile } from '../lib/api'
+import { beginCtgOneMobileSignIn, completeCtgOneMobileSignIn } from '../lib/ctgone'
 import { registerAndLoginMobile } from '../lib/registration'
 import { clearSessionTokens, getRefreshToken } from '../lib/session'
 import { deactivatePushRegistration } from '../lib/push-notifications'
@@ -18,6 +19,8 @@ interface AuthContextValue {
   user: CitizenProfile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  signInWithCtgOne: () => Promise<void>
+  completeCtgOneSignIn: (code: string, state: string) => Promise<void>
   signUp: (email: string, password: string, cedula: string) => Promise<void>
   signOut: () => Promise<void>
   deleteAccount: () => Promise<AccountDeletionReceipt>
@@ -57,6 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     await loginMobile(email, password)
+    const profile = await apiFetch<CitizenProfile>('/auth/me')
+    setUser(profile)
+  }, [])
+
+  const signInWithCtgOne = useCallback(async () => {
+    await beginCtgOneMobileSignIn()
+  }, [])
+
+  const completeCtgOneSignIn = useCallback(async (code: string, state: string) => {
+    await completeCtgOneMobileSignIn(code, state)
     const profile = await apiFetch<CitizenProfile>('/auth/me')
     setUser(profile)
   }, [])
@@ -103,11 +116,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     signIn,
+    signInWithCtgOne,
+    completeCtgOneSignIn,
     signUp,
     signOut,
     deleteAccount,
     refreshProfile,
-  }), [user, loading, signIn, signUp, signOut, deleteAccount, refreshProfile])
+  }), [
+    user,
+    loading,
+    signIn,
+    signInWithCtgOne,
+    completeCtgOneSignIn,
+    signUp,
+    signOut,
+    deleteAccount,
+    refreshProfile,
+  ])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

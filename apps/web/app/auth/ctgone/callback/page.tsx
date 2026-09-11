@@ -6,9 +6,12 @@ import { requireApiBaseUrl } from '@/lib/api'
 
 const VERIFIER_KEY = 'vertice.ctgone.pkce_verifier'
 const STATE_KEY = 'vertice.ctgone.state'
+const MOBILE_STATE_PREFIX = 'mobile.'
+const MOBILE_CALLBACK_URI = 'vertice://auth/ctgone/callback'
 
 export default function CtgOneFederationCallbackPage() {
   const [error, setError] = useState('')
+  const [mobileReturnUrl, setMobileReturnUrl] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -17,11 +20,28 @@ export default function CtgOneFederationCallbackPage() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code') ?? ''
       const returnedState = params.get('state') ?? ''
+
+      // Remove the one-time code from browser history before any exchange or
+      // native handoff. Native state is validated again by the app/API pair.
+      window.history.replaceState({}, '', '/auth/ctgone/callback')
+
+      if (returnedState.startsWith(MOBILE_STATE_PREFIX)) {
+        if (!code) {
+          setError('CTG One no devolvió un código de autorización válido para la aplicación.')
+          return
+        }
+
+        const callback = new URL(MOBILE_CALLBACK_URI)
+        callback.searchParams.set('code', code)
+        callback.searchParams.set('state', returnedState)
+        const callbackUrl = callback.toString()
+        setMobileReturnUrl(callbackUrl)
+        window.location.replace(callbackUrl)
+        return
+      }
+
       const verifier = sessionStorage.getItem(VERIFIER_KEY) ?? ''
       const expectedState = sessionStorage.getItem(STATE_KEY) ?? ''
-
-      // Remove the one-time code from browser history before any network call.
-      window.history.replaceState({}, '', '/auth/ctgone/callback')
       sessionStorage.removeItem(VERIFIER_KEY)
       sessionStorage.removeItem(STATE_KEY)
 
@@ -79,10 +99,22 @@ export default function CtgOneFederationCallbackPage() {
       <div className="w-full max-w-md rounded-3xl border border-[#E1E7EF] bg-white p-8 text-center shadow-[0_20px_60px_rgba(10,42,102,.08)]">
         <div className="mx-auto mb-5 h-3 w-3 animate-pulse rounded-full bg-[#2BA745] shadow-[0_0_0_8px_rgba(43,167,69,.10)]" />
         <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-[#7B8799]">CTG ONE → VÉRTICE</p>
-        <h1 className="mt-3 text-2xl font-extrabold">Validando identidad federada</h1>
+        <h1 className="mt-3 text-2xl font-extrabold">
+          {mobileReturnUrl ? 'Regresando a VÉRTICE' : 'Validando identidad federada'}
+        </h1>
         <p className="mt-3 text-sm leading-6 text-[#607087]">
-          VÉRTICE está canjeando el código de un solo uso y creando una sesión local independiente.
+          {mobileReturnUrl
+            ? 'La identidad fue devuelta a la aplicación. Si el regreso no ocurre automáticamente, usa el botón inferior.'
+            : 'VÉRTICE está canjeando el código de un solo uso y creando una sesión local independiente.'}
         </p>
+        {mobileReturnUrl ? (
+          <a
+            href={mobileReturnUrl}
+            className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#0A2A66] px-5 py-3 text-xs font-extrabold text-white"
+          >
+            Volver a la app VÉRTICE
+          </a>
+        ) : null}
         {error ? (
           <div className="mt-6 rounded-2xl border border-[#D72638]/20 bg-[#FCEBED] p-4 text-sm text-[#B11D2C]">
             <p>{error}</p>

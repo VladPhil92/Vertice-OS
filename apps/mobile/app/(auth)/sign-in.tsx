@@ -1,18 +1,43 @@
 import { useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import { useAuth } from '../../providers/AuthProvider'
 
 export default function SignInScreen() {
-  const { signIn } = useAuth()
+  const { signIn, signInWithCtgOne } = useAuth()
   const params = useLocalSearchParams<{ next?: string | string[]; created?: string | string[] }>()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [federating, setFederating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const createdAccount = (Array.isArray(params.created) ? params.created[0] : params.created) === '1'
+
+  async function handleCtgOne() {
+    setFederating(true)
+    setError(null)
+    try {
+      await signInWithCtgOne()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible abrir el acceso con CTG One.')
+    } finally {
+      setFederating(false)
+    }
+  }
 
   async function handleSubmit() {
     if (!email.trim() || !password) {
@@ -40,87 +65,338 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        style={styles.container}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.hero}>
-          <Text style={styles.eyebrow}>VÉRTICE OS · COLOMBIA</Text>
-          <Text style={styles.title}>Gestión cívica desde tu territorio.</Text>
-          <Text style={styles.subtitle}>
-            Accede a tu reputación, acciones comunitarias, reportes, propuestas y seguimiento ciudadano.
-          </Text>
-        </View>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.content}
+        >
+          <View style={styles.brandShell}>
+            <VerticeBrand variant="wordmark" width={176} />
+          </View>
 
-        <View style={styles.form}>
-          {createdAccount ? (
-            <View style={styles.noticeCard}>
-              <Text style={styles.noticeTitle}>Tu cuenta ya fue creada</Text>
-              <Text style={styles.noticeText}>
-                La sesión automática no pudo completarse. Ingresa con las credenciales que acabas de registrar y continuarás al selector territorial nacional.
+          <View style={styles.hero}>
+            <Text style={styles.eyebrow}>RED CÍVICA · COLOMBIA</Text>
+            <Text style={styles.title}>Gestión cívica desde tu territorio.</Text>
+            <Text style={styles.subtitle}>
+              Accede a tu reputación, acciones comunitarias, reportes, propuestas y seguimiento ciudadano.
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.identityStripe} accessibilityElementsHidden>
+              <View style={[styles.stripeSegment, styles.stripeCitizen]} />
+              <View style={[styles.stripeSegment, styles.stripeNavy]} />
+              <View style={[styles.stripeSegment, styles.stripeRed]} />
+            </View>
+
+            {createdAccount ? (
+              <View style={styles.noticeCard}>
+                <Text style={styles.noticeTitle}>Tu cuenta VÉRTICE ya fue creada</Text>
+                <Text style={styles.noticeText}>
+                  Ingresa con las credenciales registradas o vincula CTG One desde el flujo seguro de identidad.
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.accessHeader}>
+              <Text style={styles.accessEyebrow}>ACCESO CIUDADANO</Text>
+              <Text style={styles.accessTitle}>Ingresa a tu cuenta</Text>
+              <Text style={styles.accessText}>
+                CTG One abre la misma identidad VÉRTICE que ya utilizas en la web; no crea una cuenta móvil separada.
               </Text>
             </View>
-          ) : null}
 
-          <Text style={styles.label}>Correo electrónico</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="tu@correo.com"
-            style={styles.input}
-          />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Continuar con CTG One"
+              disabled={federating || submitting}
+              onPress={() => void handleCtgOne()}
+              style={({ pressed }) => [
+                styles.ctgButton,
+                pressed && styles.pressed,
+                (federating || submitting) && styles.disabled,
+              ]}
+            >
+              <View style={styles.ctgMark} accessibilityElementsHidden>
+                <Text style={styles.ctgMarkText}>CTG</Text>
+              </View>
+              <Text style={styles.ctgButtonText}>{federating ? 'Abriendo CTG One…' : 'Continuar con CTG One'}</Text>
+              <Text style={styles.arrow} accessibilityElementsHidden>›</Text>
+            </Pressable>
 
-          <Text style={styles.label}>Contraseña</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="current-password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            style={styles.input}
-          />
+            <Text style={styles.ctgHelper}>
+              La autenticación ocurre en CTG One y regresa mediante un código de un solo uso. VÉRTICE no recibe tu contraseña de CTG One.
+            </Text>
 
-          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+            <View style={styles.divider} accessibilityElementsHidden>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>O USA TU CUENTA VÉRTICE</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={submitting}
-            onPress={() => void handleSubmit()}
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, submitting && styles.buttonDisabled]}
-          >
-            <Text style={styles.buttonText}>{submitting ? 'Ingresando…' : 'Ingresar'}</Text>
-          </Pressable>
+            <View style={styles.field}>
+              <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
+              <TextInput
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="ciudadano@ejemplo.com"
+                placeholderTextColor="#A5AFBD"
+                style={styles.input}
+              />
+            </View>
 
-          <Pressable accessibilityRole="button" onPress={() => router.push('/(auth)/register')} style={styles.registerButton}>
-            <Text style={styles.registerText}>Crear cuenta ciudadana</Text>
-          </Pressable>
-        </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>CONTRASEÑA</Text>
+              <TextInput
+                autoCapitalize="none"
+                autoComplete="current-password"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor="#A5AFBD"
+                style={styles.input}
+              />
+            </View>
+
+            {error ? (
+              <View style={styles.errorCard}>
+                <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={submitting || federating}
+              onPress={() => void handleSubmit()}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.pressed,
+                (submitting || federating) && styles.disabled,
+              ]}
+            >
+              <Text style={styles.primaryButtonText}>{submitting ? 'Verificando…' : 'Ingresar'}</Text>
+            </Pressable>
+
+            <View style={styles.footerActions}>
+              <Text style={styles.footerPrompt}>¿No tienes cuenta VÉRTICE?</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.push('/(auth)/register')}>
+                <Text style={styles.registerText}>Crear cuenta ciudadana</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <Text style={styles.privacyText}>
+            Identidad y sesión protegidas por el contrato de seguridad de VÉRTICE y la normativa colombiana de protección de datos.
+          </Text>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 36 },
-  hero: { gap: 12 },
-  eyebrow: { fontSize: 13, letterSpacing: 2.1, fontWeight: '700', color: '#5C5A4D' },
-  title: { fontSize: 36, lineHeight: 42, fontWeight: '700', color: '#11130F' },
-  subtitle: { fontSize: 16, lineHeight: 24, color: '#5B5E55' },
-  form: { gap: 10 },
-  noticeCard: { borderRadius: 14, backgroundColor: '#E7EFE9', padding: 14, gap: 4 },
-  noticeTitle: { color: '#234A32', fontWeight: '800' },
-  noticeText: { color: '#3E5547', lineHeight: 19, fontSize: 13 },
-  label: { marginTop: 8, fontSize: 14, fontWeight: '600', color: '#24271F' },
-  input: { minHeight: 52, borderWidth: 1, borderColor: '#D3D0C6', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 16, fontSize: 16, color: '#11130F' },
-  error: { marginTop: 6, color: '#9B2C2C', lineHeight: 20 },
-  button: { marginTop: 14, minHeight: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1C3D2E' },
-  buttonPressed: { opacity: 0.88 },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  registerButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  registerText: { color: '#24573E', fontWeight: '700' },
+  flex: { flex: 1 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl,
+    gap: spacing.xl,
+  },
+  brandShell: {
+    alignSelf: 'center',
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  hero: { gap: spacing.sm },
+  eyebrow: {
+    color: colors.textTertiary,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.label,
+  },
+  title: {
+    color: colors.textPrimary,
+    fontFamily: typography.displayFamily,
+    ...typography.roles.hero,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.subtitle,
+  },
+  card: {
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xxl,
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    gap: spacing.md,
+    ...elevation.card,
+  },
+  identityStripe: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 5,
+    flexDirection: 'row',
+  },
+  stripeSegment: { flex: 1 },
+  stripeCitizen: { backgroundColor: colors.citizen },
+  stripeNavy: { backgroundColor: colors.navy },
+  stripeRed: { backgroundColor: colors.red },
+  noticeCard: {
+    marginTop: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    padding: spacing.md,
+    gap: spacing.xxs,
+  },
+  noticeTitle: {
+    color: colors.textPrimary,
+    fontFamily: typography.bodyFamily,
+    fontWeight: '800',
+  },
+  noticeText: {
+    color: colors.textSecondary,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.caption,
+  },
+  accessHeader: { marginTop: spacing.xs, gap: spacing.xs },
+  accessEyebrow: {
+    color: '#D98B00',
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.label,
+  },
+  accessTitle: {
+    color: colors.textPrimary,
+    fontFamily: typography.displayFamily,
+    ...typography.roles.title,
+  },
+  accessText: {
+    color: colors.textSecondary,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.caption,
+  },
+  ctgButton: {
+    minHeight: interaction.buttonHeight,
+    borderWidth: 1,
+    borderColor: colors.navy,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  ctgMark: {
+    minWidth: 38,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.navy,
+  },
+  ctgMarkText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.7,
+  },
+  ctgButtonText: {
+    flex: 1,
+    color: colors.navy,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.button,
+  },
+  arrow: { color: colors.navy, fontSize: 26, lineHeight: 28, fontWeight: '400' },
+  ctgHelper: {
+    textAlign: 'center',
+    color: colors.textTertiary,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.caption,
+  },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.xxs },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: {
+    color: '#9AA6B5',
+    fontFamily: typography.bodyFamily,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  field: { gap: 6 },
+  label: {
+    color: colors.textSecondary,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.label,
+  },
+  input: {
+    minHeight: interaction.inputHeight,
+    borderWidth: 1,
+    borderColor: '#D6DFEA',
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    fontSize: 16,
+    color: colors.textPrimary,
+    fontFamily: typography.bodyFamily,
+  },
+  errorCard: {
+    borderWidth: 1,
+    borderColor: '#F2BDC3',
+    borderRadius: radius.md,
+    backgroundColor: '#FCEBED',
+    padding: spacing.sm,
+  },
+  error: {
+    color: '#A11D2A',
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.caption,
+  },
+  primaryButton: {
+    minHeight: interaction.buttonHeight,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.navy,
+    paddingHorizontal: spacing.lg,
+  },
+  primaryButtonText: {
+    color: colors.white,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.button,
+  },
+  footerActions: { alignItems: 'center', gap: spacing.xxs, paddingTop: spacing.xs },
+  footerPrompt: {
+    color: colors.textTertiary,
+    fontFamily: typography.bodyFamily,
+    ...typography.roles.caption,
+  },
+  registerText: {
+    color: colors.navy,
+    fontFamily: typography.bodyFamily,
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  privacyText: {
+    textAlign: 'center',
+    color: colors.textTertiary,
+    fontFamily: typography.bodyFamily,
+    fontSize: 11,
+    lineHeight: 17,
+    paddingHorizontal: spacing.sm,
+  },
+  pressed: { opacity: interaction.pressedOpacity },
+  disabled: { opacity: interaction.disabledOpacity },
 })
