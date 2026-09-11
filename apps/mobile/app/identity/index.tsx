@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { apiFetch } from '../../lib/api'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type {
   CivicIdentityAssurance,
   CivicIdentityProofingResponse,
@@ -13,7 +17,13 @@ import type {
 function Requirement({ label, met }: { label: string; met: boolean }) {
   return (
     <View style={styles.requirement}>
-      <Text style={[styles.requirementMark, met && styles.requirementMarkMet]}>{met ? '✓' : '○'}</Text>
+      <View style={[styles.requirementMark, met && styles.requirementMarkMet]}>
+        <VerticeIcon
+          name={met ? 'checkCircle' : 'circle'}
+          color={met ? colors.successText : colors.textTertiary}
+          size={18}
+        />
+      </View>
       <Text style={styles.requirementLabel}>{label}</Text>
     </View>
   )
@@ -72,20 +82,66 @@ export default function IdentityAssuranceScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}><Text style={styles.backText}>Volver</Text></Pressable>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
+            tintColor={colors.navy}
+            colors={[colors.navy]}
+          />
+        )}
+      >
+        <View style={styles.brandRow}>
+          <VerticeBrand variant="wordmark" width={120} />
+          <View style={styles.identityBadge}>
+            <VerticeIcon name="verified" color={colors.navy} size={16} />
+            <Text style={styles.identityBadgeText}>IDENTIDAD</Text>
+          </View>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <VerticeIcon name="back" color={colors.navy} size={18} />
+          <Text style={styles.backText}>Volver</Text>
+        </Pressable>
+
         <View style={styles.header}>
           <Text style={styles.eyebrow}>IDENTITY ASSURANCE</Text>
           <Text style={styles.title}>Identidad cívica</Text>
-          <Text style={styles.intro}>Autenticarse, tener reputación o seleccionar territorio no equivale a identidad cívica asegurada. La elegibilidad se decide exclusivamente en backend.</Text>
+          <Text style={styles.intro}>
+            Autenticarse, tener reputación o seleccionar territorio no equivale a identidad cívica asegurada. La elegibilidad se decide exclusivamente en backend.
+          </Text>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorCard}>
+            <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+          </View>
+        ) : null}
 
         <View style={[styles.statusCard, assurance?.assured && styles.statusCardReady]}>
-          <Text style={styles.statusKicker}>ESTADO</Text>
-          <Text style={styles.statusValue}>{assurance?.assured ? 'Identidad asegurada' : 'Verificación requerida'}</Text>
-          <Text style={styles.statusBody}>Gobernanza: {assurance?.governance_eligible ? 'elegible según estado actual' : 'no elegible todavía'}</Text>
+          <View style={styles.statusIcon}>
+            <VerticeIcon
+              name={assurance?.assured ? 'verified' : 'circle'}
+              color={assurance?.assured ? colors.successText : colors.warningText}
+              size={24}
+            />
+          </View>
+          <View style={styles.statusCopy}>
+            <Text style={[styles.statusKicker, assurance?.assured && styles.statusKickerReady]}>ESTADO</Text>
+            <Text style={[styles.statusValue, assurance?.assured && styles.statusValueReady]}>
+              {assurance?.assured ? 'Identidad asegurada' : 'Verificación requerida'}
+            </Text>
+            <Text style={[styles.statusBody, assurance?.assured && styles.statusBodyReady]}>
+              Gobernanza: {assurance?.governance_eligible ? 'elegible según estado actual' : 'no elegible todavía'}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -98,15 +154,30 @@ export default function IdentityAssuranceScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Proveedor de identidad</Text>
-          <Text style={styles.body}>{veriffAvailable ? 'Veriff está disponible para iniciar una sesión segura.' : 'La creación de sesiones Veriff no está habilitada en este runtime.'}</Text>
+          <Text style={styles.body}>
+            {veriffAvailable
+              ? 'Veriff está disponible para iniciar una sesión segura.'
+              : 'La creación de sesiones Veriff no está habilitada en este runtime.'}
+          </Text>
           <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !veriffAvailable || starting }}
             disabled={!veriffAvailable || starting}
             onPress={() => void startVeriff()}
-            style={[styles.primaryButton, (!veriffAvailable || starting) && styles.disabled]}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              (!veriffAvailable || starting) && styles.disabled,
+              pressed && veriffAvailable && !starting && styles.pressed,
+            ]}
           >
+            <VerticeIcon name="verified" color={colors.white} size={18} />
             <Text style={styles.primaryButtonText}>{starting ? 'Iniciando…' : 'Iniciar verificación con Veriff'}</Text>
           </Pressable>
-          <Text style={styles.boundary}>Abrir una sesión no certifica identidad por sí mismo. El resultado requiere webhook autenticado, proofing activo y certificación externa vigente.</Text>
+          <View style={styles.boundaryCard}>
+            <Text style={styles.boundary}>
+              Abrir una sesión no certifica identidad por sí mismo. El resultado requiere webhook autenticado, proofing activo y certificación externa vigente.
+            </Text>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -128,35 +199,46 @@ export default function IdentityAssuranceScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 18, paddingBottom: 40, gap: 16 },
-  backButton: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#B9BDB5' },
-  backText: { color: '#17382A', fontWeight: '700' },
-  header: { gap: 6 },
-  eyebrow: { fontSize: 11, letterSpacing: 1.5, fontWeight: '700', color: '#697068' },
-  title: { fontSize: 30, fontWeight: '800', color: '#11130F' },
-  intro: { color: '#5E6259', lineHeight: 20 },
-  statusCard: { borderRadius: 20, padding: 18, backgroundColor: '#6C3E2D', gap: 5 },
-  statusCardReady: { backgroundColor: '#17382A' },
-  statusKicker: { color: '#E7DED8', fontWeight: '700', fontSize: 11, letterSpacing: 1.2 },
-  statusValue: { color: '#FFFFFF', fontSize: 23, fontWeight: '800' },
-  statusBody: { color: '#EFE9E5' },
-  card: { borderRadius: 18, padding: 16, backgroundColor: '#FFFFFF', gap: 12 },
-  cardTitle: { fontSize: 17, fontWeight: '800', color: '#171A15' },
-  body: { color: '#5E6259', lineHeight: 19 },
-  requirement: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  requirementMark: { width: 24, height: 24, borderRadius: 12, textAlign: 'center', textAlignVertical: 'center', backgroundColor: '#EEEAE3', color: '#7A5C52', fontWeight: '800' },
-  requirementMarkMet: { backgroundColor: '#DDEAE2', color: '#17382A' },
-  requirementLabel: { flex: 1, color: '#353A33' },
-  primaryButton: { minHeight: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#17382A' },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '800' },
-  boundary: { color: '#777B74', fontSize: 11, lineHeight: 16 },
-  proofRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#ECE9E1' },
-  proofCopy: { flex: 1, gap: 3 },
-  proofProvider: { color: '#171A15', fontWeight: '700', textTransform: 'capitalize' },
-  proofMeta: { color: '#6D7168', fontSize: 12 },
-  proofDate: { color: '#6D7168', fontSize: 12 },
-  error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
-  empty: { color: '#777B74', textAlign: 'center', paddingVertical: 12 },
-  disabled: { opacity: 0.45 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.hero, gap: spacing.md },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  identityBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.infoBackground, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  identityBadgeText: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, fontSize: 9, lineHeight: 13, fontWeight: '800', letterSpacing: 0.8 },
+  backButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start', paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  header: { gap: spacing.xs },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.hero },
+  intro: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  statusCard: { flexDirection: 'row', borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.warningBackground, borderWidth: 1, borderColor: colors.warningBorder, gap: spacing.sm },
+  statusCardReady: { backgroundColor: colors.successBackground, borderColor: colors.successBorder },
+  statusIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  statusCopy: { flex: 1, gap: spacing.xxs },
+  statusKicker: { color: colors.warningText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  statusKickerReady: { color: colors.successText },
+  statusValue: { color: colors.warningText, fontFamily: typography.displayExtraBoldFamily, fontSize: 23, lineHeight: 29, fontWeight: '800' },
+  statusValueReady: { color: colors.successText },
+  statusBody: { color: colors.warningText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  statusBodyReady: { color: colors.successText },
+  card: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.sm, ...elevation.card },
+  cardTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  requirement: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  requirementMark: { width: 32, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
+  requirementMarkMet: { backgroundColor: colors.successBackground },
+  requirementLabel: { flex: 1, color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  primaryButton: { minHeight: interaction.buttonHeight, flexDirection: 'row', gap: spacing.xs, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navy, paddingHorizontal: spacing.md },
+  primaryButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  boundaryCard: { borderRadius: radius.md, backgroundColor: colors.infoBackground, borderWidth: 1, borderColor: colors.infoBorder, padding: spacing.sm },
+  boundary: { color: colors.infoText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  proofRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  proofCopy: { flex: 1, gap: spacing.xxs },
+  proofProvider: { color: colors.textPrimary, fontFamily: typography.bodyBoldFamily, fontWeight: '700', textTransform: 'capitalize' },
+  proofMeta: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  proofDate: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  errorCard: { borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, backgroundColor: colors.errorBackground, padding: spacing.sm },
+  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  empty: { color: colors.textTertiary, textAlign: 'center', paddingVertical: spacing.sm, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  disabled: { opacity: interaction.disabledOpacity },
+  pressed: { opacity: interaction.pressedOpacity },
 })

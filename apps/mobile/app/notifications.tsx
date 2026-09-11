@@ -2,8 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../components/VerticeBrand'
+import { VerticeIcon } from '../components/VerticeIcon'
 import { apiFetch } from '../lib/api'
 import { navigateFromNotificationData } from '../lib/push-notifications'
+import { colors, elevation, interaction, radius, spacing, typography } from '../theme/vertice'
 
 interface MobileNotification {
   id: string
@@ -67,10 +71,31 @@ export default function NotificationsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
+            tintColor={colors.navy}
+            colors={[colors.navy]}
+          />
+        )}
       >
+        <View style={styles.brandRow}>
+          <VerticeBrand variant="wordmark" width={120} />
+          <View style={styles.sectionBadge}>
+            <VerticeIcon name="notifications" color={colors.navy} size={16} />
+            <Text style={styles.sectionBadgeText}>CENTRO CÍVICO</Text>
+          </View>
+        </View>
+
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+          >
+            <VerticeIcon name="back" color={colors.navy} size={18} />
             <Text style={styles.backText}>Volver</Text>
           </Pressable>
           <View style={styles.headerCopy}>
@@ -79,24 +104,37 @@ export default function NotificationsScreen() {
             <Text style={styles.subtitle}>{unread} sin leer</Text>
           </View>
           {unread > 0 ? (
-            <Pressable onPress={() => void markAllRead()} style={styles.readAllButton}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void markAllRead()}
+              style={({ pressed }) => [styles.readAllButton, pressed && styles.pressed]}
+            >
               <Text style={styles.readAllText}>Leer todo</Text>
             </Pressable>
           ) : null}
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorCard}>
+            <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.list}>
           {notifications.map((notification) => (
             <Pressable
+              accessibilityRole="button"
               key={notification.id}
               onPress={() => void openNotification(notification)}
-              style={[styles.card, !notification.read && styles.unreadCard]}
+              style={({ pressed }) => [
+                styles.card,
+                !notification.read && styles.unreadCard,
+                pressed && styles.pressed,
+              ]}
             >
               <View style={styles.cardTop}>
                 <Text style={styles.type}>{notification.type.replace(/_/g, ' ')}</Text>
-                {!notification.read ? <View style={styles.dot} /> : null}
+                {!notification.read ? <View accessibilityLabel="Sin leer" style={styles.dot} /> : null}
               </View>
               <Text style={styles.cardTitle}>{notification.title}</Text>
               <Text style={styles.body}>{notification.body}</Text>
@@ -104,7 +142,10 @@ export default function NotificationsScreen() {
             </Pressable>
           ))}
           {!error && notifications.length === 0 ? (
-            <Text style={styles.empty}>No tienes notificaciones todavía.</Text>
+            <View style={styles.emptyCard}>
+              <VerticeIcon name="notifications" color={colors.textTertiary} size={24} />
+              <Text style={styles.empty}>No tienes notificaciones todavía.</Text>
+            </View>
           ) : null}
         </View>
       </ScrollView>
@@ -113,26 +154,32 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 18, paddingBottom: 36, gap: 18 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  headerCopy: { flex: 1, gap: 4 },
-  backButton: { paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: '#E7E4D8' },
-  backText: { color: '#263228', fontWeight: '700', fontSize: 12 },
-  eyebrow: { fontSize: 11, letterSpacing: 1.5, color: '#697068', fontWeight: '700' },
-  title: { fontSize: 28, fontWeight: '700', color: '#11130F' },
-  subtitle: { color: '#6D7168' },
-  readAllButton: { paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, borderWidth: 1, borderColor: '#AEB7AF' },
-  readAllText: { color: '#17382A', fontWeight: '700', fontSize: 12 },
-  list: { gap: 10 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, gap: 8, borderWidth: 1, borderColor: '#ECE9E1' },
-  unreadCard: { borderColor: '#8FA696', backgroundColor: '#F4F7F3' },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.hero, gap: spacing.lg },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.infoBackground, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  sectionBadgeText: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, fontSize: 9, lineHeight: 13, fontWeight: '800', letterSpacing: 0.8 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  headerCopy: { flex: 1, gap: spacing.xxs },
+  backButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  readAllButton: { minHeight: interaction.minimumTouchTarget, paddingHorizontal: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  readAllText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  list: { gap: spacing.sm },
+  card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xs, borderWidth: 1, borderColor: colors.border, ...elevation.card },
+  unreadCard: { borderColor: colors.infoBorder, backgroundColor: colors.infoBackground },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  type: { textTransform: 'uppercase', fontSize: 10, letterSpacing: 1.1, color: '#667067', fontWeight: '700' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1C3D2E' },
-  cardTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' },
-  body: { color: '#343931', lineHeight: 20 },
-  time: { color: '#7B7E78', fontSize: 11 },
-  error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
-  empty: { textAlign: 'center', color: '#777B74', paddingVertical: 28 },
+  type: { textTransform: 'uppercase', color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, fontSize: 10, lineHeight: 14, letterSpacing: 1.1, fontWeight: '800' },
+  dot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.citizen },
+  cardTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  time: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 11, lineHeight: 16 },
+  errorCard: { borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, backgroundColor: colors.errorBackground, padding: spacing.sm },
+  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  emptyCard: { minHeight: 140, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surface },
+  empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  pressed: { opacity: interaction.pressedOpacity },
 })
