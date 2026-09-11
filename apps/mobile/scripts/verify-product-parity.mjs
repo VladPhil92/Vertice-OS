@@ -24,6 +24,7 @@ function notContains(source, forbidden, label) {
   assert(!source.includes(forbidden), `${label} must not contain legacy token ${JSON.stringify(forbidden)}`)
 }
 
+const canonicalTokens = read('packages/design-tokens/src/index.ts')
 const theme = read('apps/mobile/theme/vertice.ts')
 const signIn = read('apps/mobile/app/(auth)/sign-in.tsx')
 const register = read('apps/mobile/app/(auth)/register.tsx')
@@ -36,17 +37,25 @@ const mobileRoutes = read('apps/api/src/modules/auth/mobile-auth.routes.ts')
 const mobileFederation = read('apps/api/src/modules/auth/mobile-federation.service.ts')
 const webCallback = read('apps/web/app/auth/ctgone/callback/page.tsx')
 const webTheme = read('apps/web/app/globals.css')
+const webTailwind = read('apps/web/tailwind.config.ts')
 
 // ── Canonical visual language ───────────────────────────────────────────────
 for (const token of ['#F7F9FC', '#0A2A66', '#F5B700', '#D72638', '#4A90E2', '#2BA745']) {
-  contains(theme, token, 'native VÉRTICE theme')
+  contains(canonicalTokens.toUpperCase(), token, 'canonical VÉRTICE design tokens')
   contains(webTheme.toUpperCase(), token, 'web VÉRTICE theme')
 }
-contains(theme, "brandDisplayFamily: 'Montserrat'", 'native typography contract')
-contains(theme, "brandBodyFamily: 'Inter'", 'native typography contract')
-contains(theme, "family: 'Lucide'", 'native iconography contract')
-contains(theme, 'strokeWidth: 2', 'native iconography contract')
+contains(canonicalTokens, "display: 'Montserrat'", 'canonical typography contract')
+contains(canonicalTokens, "body: 'Inter'", 'canonical typography contract')
+contains(canonicalTokens, "family: 'Lucide'", 'canonical iconography contract')
+contains(canonicalTokens, 'strokeWidth: 2', 'canonical iconography contract')
+
+contains(theme, "from '../../../packages/design-tokens/src/index'", 'native theme adapter')
+contains(theme, 'canonicalTypography.display', 'native typography adapter')
+contains(theme, 'canonicalTypography.body', 'native typography adapter')
 contains(theme, "wordmark: require('../assets/brand/vertice-wordmark.webp')", 'native imagery contract')
+contains(webTailwind, "from '../../packages/design-tokens/src/index'", 'web theme adapter')
+contains(webTailwind, 'colors.background', 'web canonical color adapter')
+contains(webTailwind, 'moduleColors', 'web module-color adapter')
 
 for (const asset of [
   'apps/mobile/assets/brand/vertice-wordmark.webp',
@@ -92,5 +101,5 @@ contains(webCallback, "MOBILE_STATE_PREFIX = 'mobile.'", 'web federation callbac
 contains(webCallback, "MOBILE_CALLBACK_URI = 'vertice://auth/ctgone/callback'", 'web federation callback')
 
 if (!process.exitCode) {
-  console.log('[product-parity] OK: CTG One identity federation and VÉRTICE visual language are aligned across web/mobile.')
+  console.log('[product-parity] OK: CTG One identity federation and canonical VÉRTICE design tokens are aligned across web/mobile.')
 }
