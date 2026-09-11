@@ -43,6 +43,8 @@ for (const event of [
   'report_submitted',
   'moderation_report_submitted',
   'account_deletion_completed',
+  'feedback_opened',
+  'feedback_submitted',
 ]) requireText('schema', `'${event}'`)
 
 requireText('schema', ').strict()')
@@ -54,6 +56,10 @@ requireText('service', 'RETENTION_DAYS = 30')
 requireText('service', 'bucketExpiryEpoch')
 requireText('service', 'pipeline.expireat')
 requireText('service', 'rollingDays()')
+requireText('service', 'function bucketKey(base: string, revision: string, day: string)')
+requireText('service', 'bucketKey(EVENT_COUNTS, revision, day)')
+requireText('service', 'bucketKey(FEEDBACK_STREAM, revision, day)')
+requireText('service', 'bucketKey(INCIDENT_STREAM, revision, day)')
 requireText('service', 'TELEMETRY_MAXLEN = 10_000')
 requireText('service', 'FEEDBACK_MAXLEN = 2_000')
 requireText('service', 'INCIDENT_MAXLEN = 500')
@@ -84,6 +90,8 @@ requireText('tests', 'requires a dedicated telemetry pepper')
 requireText('tests', 'accepts only immutable full commit SHAs')
 requireText('web', "apiFetch<PilotStatus>('/pilot/status')")
 requireText('web', "apiFetch('/pilot/feedback'")
+requireText('web', "event: 'feedback_opened'")
+requireText('web', "event: 'feedback_submitted'")
 requireText('web', 'No incluyas contraseñas')
 requireText('operatorWeb', "apiFetch<PilotSummary>('/pilot/admin/summary')")
 requireText('operatorWeb', "apiFetch('/pilot/admin/incidents'")
