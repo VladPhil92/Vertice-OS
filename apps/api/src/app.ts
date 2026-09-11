@@ -12,6 +12,12 @@ import { prisma } from './lib/prisma'
 import { getNeo4jDriver } from './lib/neo4j'
 import { getFeatureCapabilities } from './lib/feature-secrets'
 import { assessRuntimeReadiness, type RuntimeDependencyChecks } from './lib/runtime-readiness'
+import {
+  assessOperationalHealth,
+  createDependencyTransitionTracker,
+  type DependencyProbeDetail,
+  type RuntimeDependencyDetails,
+} from './lib/runtime-observability'
 import { assessClosedPilotReadiness } from './lib/closed-pilot-readiness'
 import { getClosedPilotAccessState } from './lib/closed-pilot-access'
 import { initSentry, captureException } from './lib/sentry'
@@ -63,6 +69,21 @@ async function withTimeout<T>(label: string, work: Promise<T>, timeoutMs = DEPEN
     return await Promise.race([work, timeout])
   } finally {
     if (timer) clearTimeout(timer)
+  }
+}
+
+async function measureProbe(label: string, work: Promise<unknown>): Promise<DependencyProbeDetail> {
+  const startedAt = Date.now()
+  try {
+    await withTimeout(label, work)
+    return { state: 'ok', latency_ms: Date.now() - startedAt }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      state: 'fail',
+      latency_ms: Date.now() - startedAt,
+      failure_code: message.includes('timed out') ? 'timeout' : 'unavailable',
+    }
   }
 }
 
@@ -131,29 +152,39 @@ export function buildApp() {
     timestamp: new Date().toISOString(),
   })
 
+  const transitionTracker = createDependencyTransitionTracker(
+    deployedRevision(),
+    (transition) => {
+      if (transition.current_state === 'fail') {
+        app.log.warn(transition, '[health] dependency degraded')
+      } else if (transition.previous_state === 'fail') {
+        app.log.info(transition, '[health] dependency recovered')
+      } else {
+        app.log.info(transition, '[health] dependency state initialized')
+      }
+    },
+  )
+
   const probeRuntime = async () => {
-    const [redisProbe, databaseProbe, neo4jProbe] = await Promise.allSettled([
-      withTimeout('redis', redis.ping()),
-      withTimeout('database', prisma.$queryRaw`SELECT 1`),
-      withTimeout('neo4j', getNeo4jDriver().verifyConnectivity()),
+    const [redisDetail, databaseDetail, neo4jDetail] = await Promise.all([
+      measureProbe('redis', redis.ping()),
+      measureProbe('database', prisma.$queryRaw`SELECT 1`),
+      measureProbe('neo4j', getNeo4jDriver().verifyConnectivity()),
     ])
 
-    const checks: RuntimeDependencyChecks = {
-      redis: redisProbe.status === 'fulfilled' ? 'ok' : 'fail',
-      database: databaseProbe.status === 'fulfilled' ? 'ok' : 'fail',
-      neo4j: neo4jProbe.status === 'fulfilled' ? 'ok' : 'fail',
+    const dependencies: RuntimeDependencyDetails = {
+      redis: redisDetail,
+      database: databaseDetail,
+      neo4j: neo4jDetail,
     }
 
-    for (const [dependency, probe] of [
-      ['redis', redisProbe],
-      ['database', databaseProbe],
-      ['neo4j', neo4jProbe],
-    ] as const) {
-      if (probe.status === 'rejected') {
-        const message = probe.reason instanceof Error ? probe.reason.message : String(probe.reason)
-        app.log.warn({ dependency, message }, '[health] dependency probe failed')
-      }
+    const checks: RuntimeDependencyChecks = {
+      redis: redisDetail.state,
+      database: databaseDetail.state,
+      neo4j: neo4jDetail.state,
     }
+
+    transitionTracker.observe(dependencies)
 
     const capabilities = getFeatureCapabilities()
     const revision = deployedRevision()
@@ -164,7 +195,7 @@ export function buildApp() {
       production: config.NODE_ENV === 'production',
     })
 
-    return { checks, capabilities, revision, assessment }
+    return { checks, dependencies, capabilities, revision, assessment }
   }
 
   // Backward-compatible liveness endpoint. It intentionally performs no
@@ -175,11 +206,38 @@ export function buildApp() {
   // Serving readiness: only core dependencies (Postgres + Redis) block traffic.
   // Optional/degraded capabilities stay observable without taking civic basics down.
   app.get('/health/ready', async (_request, reply) => {
-    const { checks, capabilities, revision, assessment } = await probeRuntime()
+    const { checks, dependencies, capabilities, revision, assessment } = await probeRuntime()
 
     return reply.status(assessment.servingReady ? 200 : 503).send({
       status: assessment.status,
       checks,
+      dependencies,
+      capabilities,
+      version: pkg.version,
+      revision,
+      timestamp: new Date().toISOString(),
+    })
+  })
+
+  // Phase 7K strict operator/canary endpoint. This is deliberately separate
+  // from serving readiness: an optional graph outage may keep core civic flows
+  // online while still preventing an operator from declaring the runtime fully
+  // operational or promoting it as a complete release.
+  app.get('/health/operational', async (_request, reply) => {
+    const { checks, dependencies, capabilities, revision, assessment } = await probeRuntime()
+    const operational = assessOperationalHealth(
+      checks,
+      assessment.servingReady,
+      assessment.blockers,
+    )
+
+    return reply.status(operational.operational ? 200 : 503).send({
+      status: operational.status,
+      blockers: operational.blockers,
+      serving_ready: assessment.servingReady,
+      release_ready: assessment.releaseReady,
+      checks,
+      dependencies,
       capabilities,
       version: pkg.version,
       revision,
@@ -191,13 +249,14 @@ export function buildApp() {
   // partially configured feature or an untraceable production revision blocks
   // promotion even when the base API can safely continue serving free civic use.
   app.get('/health/release', async (_request, reply) => {
-    const { checks, capabilities, revision, assessment } = await probeRuntime()
+    const { checks, dependencies, capabilities, revision, assessment } = await probeRuntime()
 
     return reply.status(assessment.releaseReady ? 200 : 503).send({
       status: assessment.releaseReady ? 'ready' : 'blocked',
       serving_status: assessment.status,
       blockers: assessment.blockers,
       checks,
+      dependencies,
       capabilities,
       version: pkg.version,
       revision,
@@ -210,7 +269,7 @@ export function buildApp() {
   // mandatory here. Real-money capabilities must remain disabled, invitation
   // access must be enforced, and production must expose an immutable revision.
   app.get('/health/pilot', async (_request, reply) => {
-    const { checks, capabilities, revision, assessment } = await probeRuntime()
+    const { checks, dependencies, capabilities, revision, assessment } = await probeRuntime()
     const access = getClosedPilotAccessState()
     const pilot = assessClosedPilotReadiness({
       checks,
@@ -228,6 +287,7 @@ export function buildApp() {
       serving_status: assessment.status,
       release_ready: assessment.releaseReady,
       checks,
+      dependencies,
       capabilities,
       version: pkg.version,
       revision,
