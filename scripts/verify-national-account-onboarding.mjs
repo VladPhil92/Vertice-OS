@@ -52,8 +52,11 @@ for (const token of ['signUp:', 'registerAndLoginMobile', "router.replace('/terr
   if (!surface.includes(token)) throw new Error(`Mobile onboarding missing contract token: ${token}`)
 }
 if (!mobileSignIn.includes("router.push('/(auth)/register')")) throw new Error('Mobile sign-in must expose account creation')
-for (const token of ["requestedNext === 'territory-select'", "router.replace('/territory/select')", 'Tu cuenta ya fue creada']) {
+for (const token of ["requestedNext === 'territory-select'", "router.replace('/territory/select')"]) {
   if (!mobileSignIn.includes(token)) throw new Error(`Mobile sign-in missing post-registration recovery token: ${token}`)
+}
+if (!mobileSignIn.includes('Tu cuenta ya fue creada') && !mobileSignIn.includes('Tu cuenta VÉRTICE ya fue creada')) {
+  throw new Error('Mobile sign-in must preserve a clear post-registration account-created notice')
 }
 if (!selector.includes("'/territories/me'")) throw new Error('Onboarding must continue into canonical territory selection')
 if (!selector.includes('autodeclarada')) throw new Error('Territory selection must remain explicitly self-asserted')

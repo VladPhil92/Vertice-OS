@@ -4,11 +4,15 @@ on:
   pull_request:
     paths:
       - 'apps/mobile/**'
+      - 'apps/api/src/modules/auth/**'
+      - 'apps/web/app/auth/ctgone/**'
       - '.github/workflows/mobile-core-parity.yml'
   push:
     branches: [main, develop]
     paths:
       - 'apps/mobile/**'
+      - 'apps/api/src/modules/auth/**'
+      - 'apps/web/app/auth/ctgone/**'
       - '.github/workflows/mobile-core-parity.yml'
 
 concurrency:
@@ -32,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify VERTICE product language parity
+        run: node apps/mobile/scripts/verify-product-parity.mjs
+
       - name: Verify native device capability contract
         run: node apps/mobile/scripts/verify-device-capabilities.mjs
 
@@ -51,5 +58,5 @@ jobs:
           test -d apps/mobile/dist/android
           test -d apps/mobile/dist/ios
           echo 'Mobile Phase 2B build/config contract: PASS'
-          echo 'This gate validates dependency lock, config plugins, TypeScript and Expo export.'
+          echo 'This gate validates dependency lock, VÉRTICE product-language parity, config plugins, TypeScript and Expo export.'
           echo 'It does not certify physical-device permission prompts, Cloudflare production credentials, push delivery, store signing or app review.'

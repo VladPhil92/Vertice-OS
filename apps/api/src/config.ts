@@ -38,6 +38,7 @@ const schema = z.object({
 
   // CTG One federation. The endpoint remains fail-closed when the shared
   // service secret is absent, so deploying the code never enables SSO by accident.
+  CTG_ONE_FEDERATION_AUTHORIZE_URL: z.string().url().default('https://ctgone.com/api/federation/vertice/authorize'),
   CTG_ONE_FEDERATION_EXCHANGE_URL: z.string().url().default('https://ctgone.com/api/federation/vertice/exchange'),
   CTG_ONE_FEDERATION_SECRET: z.string().min(32).optional(),
 
