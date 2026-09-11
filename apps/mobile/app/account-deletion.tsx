@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../components/VerticeBrand'
+import { VerticeIcon } from '../components/VerticeIcon'
 import { useAuth } from '../providers/AuthProvider'
+import { colors, elevation, interaction, radius, spacing, typography } from '../theme/vertice'
 
 const REQUIRED_CONFIRMATION = 'ELIMINAR'
 
@@ -51,8 +55,19 @@ export default function AccountDeletionScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Volver</Text>
+        <View style={styles.brandRow}>
+          <VerticeBrand variant="wordmark" width={120} />
+          <Text style={styles.brandContext}>PRIVACIDAD</Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <VerticeIcon name="back" color={colors.navy} size={18} />
+          <Text style={styles.backButtonText}>Volver</Text>
         </Pressable>
 
         <View style={styles.header}>
@@ -73,6 +88,7 @@ export default function AccountDeletionScreen() {
         </View>
 
         <View style={styles.retentionCard}>
+          <Text style={styles.retentionKicker}>RETENCIÓN LIMITADA</Text>
           <Text style={styles.cardTitle}>Qué puede conservarse</Text>
           <Text style={styles.body}>
             Registros cívicos, financieros y de auditoría pueden conservarse cuando sean necesarios para integridad histórica, contabilidad, prevención de fraude o resolución de disputas. La relación personal directa se elimina o se seudonimiza y tu perfil deja de ser público.
@@ -80,10 +96,19 @@ export default function AccountDeletionScreen() {
         </View>
 
         <View style={styles.warningCard}>
-          <Text style={styles.warningTitle}>Esta acción no se puede deshacer</Text>
-          <Text style={styles.body}>
+          <View style={styles.warningHeader}>
+            <View style={styles.dangerIcon}>
+              <VerticeIcon name="delete" color={colors.white} size={20} />
+            </View>
+            <View style={styles.warningCopy}>
+              <Text style={styles.warningKicker}>ACCIÓN IRREVERSIBLE</Text>
+              <Text style={styles.warningTitle}>Esta acción no se puede deshacer</Text>
+            </View>
+          </View>
+          <Text style={styles.warningBody}>
             Para evitar eliminaciones accidentales, escribe {REQUIRED_CONFIRMATION} y confirma nuevamente en el diálogo del sistema.
           </Text>
+          <Text style={styles.label}>CONFIRMACIÓN</Text>
           <TextInput
             accessibilityLabel="Confirmación para eliminar la cuenta"
             autoCapitalize="characters"
@@ -91,6 +116,7 @@ export default function AccountDeletionScreen() {
             editable={!busy}
             onChangeText={setConfirmation}
             placeholder={REQUIRED_CONFIRMATION}
+            placeholderTextColor={colors.placeholder}
             style={styles.input}
             value={confirmation}
           />
@@ -105,6 +131,7 @@ export default function AccountDeletionScreen() {
               pressed && canDelete && styles.pressed,
             ]}
           >
+            <VerticeIcon name="delete" color={colors.white} size={18} />
             <Text style={styles.deleteButtonText}>{busy ? 'Eliminando…' : 'Eliminar mi cuenta'}</Text>
           </Pressable>
         </View>
@@ -114,40 +141,52 @@ export default function AccountDeletionScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  container: { padding: 20, paddingBottom: 40, gap: 16 },
-  backButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-  backButtonText: { color: '#17382A', fontWeight: '700' },
-  header: { gap: 8, marginBottom: 2 },
-  eyebrow: { fontSize: 12, letterSpacing: 1.8, fontWeight: '800', color: '#697068' },
-  title: { fontSize: 31, lineHeight: 37, fontWeight: '800', color: '#11130F' },
-  lead: { fontSize: 16, lineHeight: 23, color: '#565D54' },
-  card: { borderRadius: 20, padding: 18, backgroundColor: '#FFFFFF', gap: 8 },
-  retentionCard: { borderRadius: 20, padding: 18, backgroundColor: '#E7E4D8', gap: 8 },
-  warningCard: { borderRadius: 20, padding: 18, backgroundColor: '#F4DFDC', gap: 12 },
-  cardTitle: { fontSize: 17, fontWeight: '800', color: '#171A15' },
-  warningTitle: { fontSize: 18, fontWeight: '800', color: '#812F2F' },
-  item: { color: '#565D54', lineHeight: 20 },
-  body: { color: '#565D54', lineHeight: 21 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  container: { padding: spacing.lg, paddingBottom: spacing.hero, gap: spacing.md },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  brandContext: { color: colors.textTertiary, ...typography.roles.label },
+  backButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start', paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  backButtonText: { color: colors.navy, ...typography.roles.caption },
+  header: { gap: spacing.sm, marginBottom: spacing.xxs },
+  eyebrow: { color: colors.textTertiary, ...typography.roles.label },
+  title: { color: colors.textPrimary, ...typography.roles.hero },
+  lead: { color: colors.textSecondary, ...typography.roles.subtitle },
+  card: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.xs, borderWidth: 1, borderColor: colors.border, ...elevation.card },
+  retentionCard: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.infoBackground, gap: spacing.xs, borderWidth: 1, borderColor: colors.infoBorder },
+  retentionKicker: { color: colors.infoText, ...typography.roles.label },
+  warningCard: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.errorBackground, gap: spacing.sm, borderWidth: 1, borderColor: colors.errorBorder },
+  warningHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dangerIcon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.red },
+  warningCopy: { flex: 1, gap: spacing.xxs },
+  warningKicker: { color: colors.errorText, ...typography.roles.label },
+  cardTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  warningTitle: { color: colors.errorText, fontFamily: typography.displayBoldFamily, fontSize: 18, lineHeight: 23, fontWeight: '700' },
+  item: { color: colors.textSecondary, ...typography.roles.body },
+  body: { color: colors.textSecondary, ...typography.roles.body },
+  warningBody: { color: colors.errorText, ...typography.roles.body },
+  label: { color: colors.errorText, ...typography.roles.label },
   input: {
-    minHeight: 52,
+    minHeight: interaction.inputHeight,
     borderWidth: 1,
-    borderColor: '#BE9C96',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.errorBorder,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
+    fontFamily: typography.bodyBoldFamily,
     fontSize: 16,
     fontWeight: '700',
-    color: '#171A15',
   },
   deleteButton: {
-    minHeight: 54,
+    minHeight: interaction.buttonHeight,
+    flexDirection: 'row',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 15,
-    backgroundColor: '#812F2F',
+    borderRadius: radius.md,
+    backgroundColor: colors.red,
   },
-  deleteButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  disabled: { opacity: 0.45 },
-  pressed: { opacity: 0.82 },
+  deleteButtonText: { color: colors.white, ...typography.roles.button },
+  disabled: { opacity: interaction.disabledOpacity },
+  pressed: { opacity: interaction.pressedOpacity },
 })
