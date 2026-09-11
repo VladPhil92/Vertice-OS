@@ -47,9 +47,9 @@ async function measureProbe(
 }
 
 /**
- * Shared bounded dependency probe used by health endpoints and the Phase 7L
- * activation control plane. Keeping one implementation prevents the pilot
- * activation gate from drifting away from the production health contract.
+ * Bounded dependency probe for the Phase 7L activation control plane. It
+ * deliberately mirrors the 2.5s production health contract so activation can
+ * never ignore a dependency that /health/pilot treats as mandatory.
  */
 export async function probeRuntimeDependencies(
   timeoutMs = DEFAULT_DEPENDENCY_PROBE_TIMEOUT_MS,
