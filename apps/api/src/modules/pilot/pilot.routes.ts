@@ -3,6 +3,7 @@ import { requireAdmin, requireAuth, requireModerator } from '../../middleware/au
 import { getClosedPilotAccessState } from '../../lib/closed-pilot-access'
 import { PilotFeedbackSchema, PilotIncidentSchema, PilotTelemetrySchema } from './pilot.schema'
 import {
+  getPilotObservabilityState,
   getPilotOperationsSummary,
   recordPilotFeedback,
   recordPilotIncident,
@@ -10,14 +11,24 @@ import {
 } from './pilot.service'
 
 function requireConfiguredPilot(reply: FastifyReply): boolean {
-  const state = getClosedPilotAccessState()
-  if (!state.enabled || !state.configured || state.mode !== 'closed_invite_only') {
+  const access = getClosedPilotAccessState()
+  if (!access.enabled || !access.configured || access.mode !== 'closed_invite_only') {
     reply.status(503).send({
       error: 'El piloto cerrado no está activo',
       code: 'CLOSED_PILOT_NOT_ACTIVE',
     })
     return false
   }
+
+  const observability = getPilotObservabilityState()
+  if (!observability.configured) {
+    reply.status(503).send({
+      error: 'La observabilidad del piloto no está configurada',
+      code: 'PILOT_OBSERVABILITY_NOT_CONFIGURED',
+    })
+    return false
+  }
+
   return true
 }
 
@@ -42,11 +53,13 @@ async function requirePilotAdmin(request: FastifyRequest, reply: FastifyReply): 
 export async function pilotRoutes(app: FastifyInstance): Promise<void> {
   app.get('/status', { preHandler: requirePilotParticipant }, async (_request, reply) => {
     const access = getClosedPilotAccessState()
+    const observability = getPilotObservabilityState()
     return reply.send({
       status: 'active',
       mode: access.mode,
       cohort_size: access.cohort_size,
-      telemetry_retention_days: 30,
+      telemetry_retention_days: observability.retention_days,
+      observability_storage: observability.storage,
       money_enabled: false,
       governance_authority: 'consultative_only',
     })
