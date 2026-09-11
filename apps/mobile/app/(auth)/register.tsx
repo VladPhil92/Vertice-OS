@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import { isPostRegistrationLoginRequiredError } from '../../lib/registration'
 import { useAuth } from '../../providers/AuthProvider'
 
@@ -14,13 +17,26 @@ function validatePassword(password: string): string | null {
 }
 
 export default function RegisterScreen() {
-  const { signUp } = useAuth()
+  const { signUp, signInWithCtgOne } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [cedula, setCedula] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [federating, setFederating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  async function handleCtgOne() {
+    setFederating(true)
+    setError(null)
+    try {
+      await signInWithCtgOne()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible abrir el acceso con CTG One.')
+    } finally {
+      setFederating(false)
+    }
+  }
 
   async function handleSubmit() {
     const normalizedEmail = email.trim().toLowerCase()
@@ -66,16 +82,47 @@ export default function RegisterScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.brandShell}>
+            <VerticeBrand variant="wordmark" width={168} />
+          </View>
+
           <View style={styles.hero}>
-            <Text style={styles.eyebrow}>VÉRTICE · COLOMBIA</Text>
-            <Text style={styles.title}>Crea tu cuenta ciudadana</Text>
+            <Text style={styles.eyebrow}>IDENTIDAD CIUDADANA · COLOMBIA</Text>
+            <Text style={styles.title}>Crea tu cuenta VÉRTICE</Text>
             <Text style={styles.subtitle}>
-              Tu cuenta es nacional. Después elegirás tu municipio o distrito para personalizar la experiencia local.
+              La cuenta es nacional y funciona tanto en la web como en la aplicación. Después elegirás tu municipio o distrito.
             </Text>
           </View>
 
+          <View style={styles.ctgCard}>
+            <Text style={styles.ctgTitle}>¿Ya tienes una cuenta CTG One?</Text>
+            <Text style={styles.ctgText}>
+              No crees otra cuenta. Ingresa con CTG One y VÉRTICE abrirá o vinculará tu misma identidad ciudadana.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={federating || submitting}
+              onPress={() => void handleCtgOne()}
+              style={({ pressed }) => [styles.ctgButton, pressed && styles.pressed, (federating || submitting) && styles.disabled]}
+            >
+              <Text style={styles.ctgButtonText}>{federating ? 'Abriendo CTG One…' : 'Continuar con CTG One'}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.divider} accessibilityElementsHidden>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>O CREA UNA CUENTA VÉRTICE</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <View style={styles.card}>
-            <Text style={styles.label}>Correo electrónico</Text>
+            <View style={styles.identityStripe} accessibilityElementsHidden>
+              <View style={[styles.stripeSegment, styles.stripeCitizen]} />
+              <View style={[styles.stripeSegment, styles.stripeNavy]} />
+              <View style={[styles.stripeSegment, styles.stripeRed]} />
+            </View>
+
+            <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
             <TextInput
               autoCapitalize="none"
               autoComplete="email"
@@ -83,10 +130,11 @@ export default function RegisterScreen() {
               value={email}
               onChangeText={setEmail}
               placeholder="ciudadano@ejemplo.com"
+              placeholderTextColor="#A5AFBD"
               style={styles.input}
             />
 
-            <Text style={styles.label}>Contraseña</Text>
+            <Text style={styles.label}>CONTRASEÑA</Text>
             <TextInput
               autoCapitalize="none"
               autoComplete="new-password"
@@ -94,10 +142,11 @@ export default function RegisterScreen() {
               value={password}
               onChangeText={setPassword}
               placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número"
+              placeholderTextColor="#A5AFBD"
               style={styles.input}
             />
 
-            <Text style={styles.label}>Confirmar contraseña</Text>
+            <Text style={styles.label}>CONFIRMAR CONTRASEÑA</Text>
             <TextInput
               autoCapitalize="none"
               autoComplete="new-password"
@@ -105,31 +154,37 @@ export default function RegisterScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Repite tu contraseña"
+              placeholderTextColor="#A5AFBD"
               style={styles.input}
             />
 
-            <Text style={styles.label}>Cédula de ciudadanía</Text>
+            <Text style={styles.label}>CÉDULA DE CIUDADANÍA</Text>
             <TextInput
               autoComplete="off"
               keyboardType="number-pad"
               value={cedula}
               onChangeText={(value) => setCedula(value.replace(/\D/g, '').slice(0, 10))}
               placeholder="Solo dígitos, 6–10 caracteres"
+              placeholderTextColor="#A5AFBD"
               style={styles.input}
             />
             <Text style={styles.helper}>
               El servidor transforma la cédula mediante HMAC-SHA-256 y no la almacena en texto plano. Registrar este dato no equivale a identidad cívica verificada ni a residencia territorial verificada.
             </Text>
 
-            {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+            {error ? (
+              <View style={styles.errorCard}>
+                <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+              </View>
+            ) : null}
 
             <Pressable
               accessibilityRole="button"
-              disabled={submitting}
+              disabled={submitting || federating}
               onPress={() => void handleSubmit()}
-              style={[styles.primaryButton, submitting && styles.disabled]}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, (submitting || federating) && styles.disabled]}
             >
-              <Text style={styles.primaryButtonText}>{submitting ? 'Creando cuenta…' : 'Crear cuenta'}</Text>
+              <Text style={styles.primaryButtonText}>{submitting ? 'Creando cuenta…' : 'Crear cuenta VÉRTICE'}</Text>
             </Pressable>
 
             <Pressable accessibilityRole="button" onPress={() => router.replace('/(auth)/sign-in')} style={styles.secondaryButton}>
@@ -140,7 +195,7 @@ export default function RegisterScreen() {
           <View style={styles.boundaryCard}>
             <Text style={styles.boundaryText}>
               <Text style={styles.boundaryStrong}>Paso siguiente: territorio. </Text>
-              Elegir municipio o distrito será una declaración de contexto de producto; no concede reputación, voto, autoridad ni territory assurance.
+              Elegir municipio o distrito declara contexto de producto; no concede reputación, voto, autoridad ni territory assurance.
             </Text>
           </View>
         </ScrollView>
@@ -151,23 +206,39 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 22, paddingBottom: 44, gap: 18 },
-  hero: { paddingTop: 12, gap: 10 },
-  eyebrow: { fontSize: 12, letterSpacing: 1.8, fontWeight: '800', color: '#5D695F' },
-  title: { fontSize: 34, lineHeight: 40, fontWeight: '800', color: '#11130F' },
-  subtitle: { fontSize: 15, lineHeight: 22, color: '#5B5E55' },
-  card: { borderRadius: 22, padding: 20, backgroundColor: '#FFFFFF', gap: 10 },
-  label: { marginTop: 6, fontSize: 14, fontWeight: '700', color: '#24271F' },
-  input: { minHeight: 52, borderWidth: 1, borderColor: '#D3D0C6', borderRadius: 14, backgroundColor: '#FAF9F5', paddingHorizontal: 15, fontSize: 16, color: '#11130F' },
-  helper: { color: '#70756D', fontSize: 12, lineHeight: 18 },
-  error: { marginTop: 6, color: '#9B2C2C', lineHeight: 20 },
-  primaryButton: { marginTop: 10, minHeight: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#17382A' },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { color: '#24573E', fontWeight: '700' },
-  boundaryCard: { borderRadius: 18, padding: 17, backgroundColor: '#E7EFE9' },
-  boundaryText: { color: '#3E5547', lineHeight: 21 },
-  boundaryStrong: { fontWeight: '800' },
-  disabled: { opacity: 0.55 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.xl, paddingBottom: 44, gap: spacing.lg },
+  brandShell: { alignSelf: 'center', borderRadius: radius.lg, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  hero: { paddingTop: spacing.xs, gap: spacing.sm },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.hero },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  ctgCard: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, backgroundColor: colors.surfaceAlt, padding: spacing.lg, gap: spacing.sm },
+  ctgTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 18, lineHeight: 23, fontWeight: '800' },
+  ctgText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  ctgButton: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.navy, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, paddingHorizontal: spacing.md },
+  ctgButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 10, fontWeight: '800', letterSpacing: 0.65 },
+  card: { overflow: 'hidden', borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.sm, ...elevation.card },
+  identityStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 5, flexDirection: 'row' },
+  stripeSegment: { flex: 1 },
+  stripeCitizen: { backgroundColor: colors.citizen },
+  stripeNavy: { backgroundColor: colors.navy },
+  stripeRed: { backgroundColor: colors.red },
+  label: { marginTop: spacing.xs, color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  input: { minHeight: interaction.inputHeight, borderWidth: 1, borderColor: '#D6DFEA', borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.md, fontSize: 16, color: colors.textPrimary, fontFamily: typography.bodyFamily },
+  helper: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  errorCard: { borderWidth: 1, borderColor: '#F2BDC3', borderRadius: radius.md, backgroundColor: '#FCEBED', padding: spacing.sm },
+  error: { color: '#A11D2A', fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  primaryButton: { marginTop: spacing.xs, minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.navy },
+  primaryButtonText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  secondaryButton: { minHeight: interaction.minimumTouchTarget, alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, fontWeight: '800' },
+  boundaryCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  boundaryText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, lineHeight: 21 },
+  boundaryStrong: { color: colors.textPrimary, fontWeight: '800' },
+  pressed: { opacity: interaction.pressedOpacity },
+  disabled: { opacity: interaction.disabledOpacity },
 })
