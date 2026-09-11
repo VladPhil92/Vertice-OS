@@ -1,7 +1,9 @@
 // ── Entry point sentinel ───────────────────────────────────────────────
 // Keep this before loading application modules so Railway always receives
 // at least one synchronous boot diagnostic even if module evaluation fails.
-process.stderr.write(
+// Phase 7J keeps routine lifecycle diagnostics on stdout; stderr is reserved
+// for actual failures so platform alerting is not polluted by healthy boots.
+process.stdout.write(
   `[boot] ENTRY POINT REACHED pid=${process.pid} node=${process.version} at=${new Date().toISOString()}\n`,
 )
 
@@ -37,20 +39,20 @@ function withDeadline<T>(label: string, work: Promise<T>, timeoutMs: number): Pr
 
 async function loadModules() {
   try {
-    console.error('[boot] loading modules...')
+    console.info('[boot] loading modules...')
 
     const appModule = await import('./app')
-    console.error('[boot] loaded ./app')
+    console.info('[boot] loaded ./app')
 
     const configModule = await import('./config')
-    console.error('[boot] loaded ./config')
+    console.info('[boot] loaded ./config')
 
     const prismaModule = await import('./lib/prisma')
-    console.error('[boot] loaded ./lib/prisma')
+    console.info('[boot] loaded ./lib/prisma')
 
     const redisModule = await import('./lib/redis')
     const redis = redisModule.redis
-    console.error(
+    console.info(
       '[boot] loaded ./lib/redis, initial status=',
       redis.status,
       'lazyConnect=',
@@ -60,15 +62,15 @@ async function loadModules() {
     )
 
     const neo4jModule = await import('./lib/neo4j')
-    console.error('[boot] loaded ./lib/neo4j')
+    console.info('[boot] loaded ./lib/neo4j')
 
     const jobsModule = await import('./lib/jobs')
-    console.error('[boot] loaded ./lib/jobs')
+    console.info('[boot] loaded ./lib/jobs')
 
     const territoriesModule = await import('./modules/territories/territories.service')
-    console.error('[boot] loaded ./modules/territories/territories.service')
+    console.info('[boot] loaded ./modules/territories/territories.service')
 
-    console.error('[boot] all modules loaded ok')
+    console.info('[boot] all modules loaded ok')
 
     return {
       buildApp: appModule.buildApp,
@@ -96,18 +98,18 @@ async function main() {
     refreshDivipolaCatalogBestEffort,
   } = await loadModules()
 
-  console.error('[boot] main() start, PORT=', config.PORT, 'HOST=', config.HOST)
+  console.info('[boot] main() start, PORT=', config.PORT, 'HOST=', config.HOST)
   const app = buildApp()
-  console.error('[boot] buildApp() returned, calling listen()')
+  console.info('[boot] buildApp() returned, calling listen()')
 
   // Bind the HTTP socket before warming external dependencies. Railway can
   // distinguish "process is alive but a required dependency is down" from
   // "the process never listened". Readiness remains fail-closed: Redis and
   // Postgres still have to pass /health/ready before the release is live.
   try {
-    console.error('[boot] app.listen() pre-call, port=', config.PORT, 'host=', config.HOST)
+    console.info('[boot] app.listen() pre-call, port=', config.PORT, 'host=', config.HOST)
     await app.listen({ port: config.PORT, host: config.HOST })
-    console.error('[boot] app.listen() post-call: resolved successfully')
+    console.info('[boot] app.listen() post-call: resolved successfully')
   } catch (err) {
     console.error('[boot] app.listen() post-call: rejected', err)
     throw err
@@ -123,7 +125,7 @@ async function main() {
   )
 
   try {
-    console.error('[boot] redis status before connect:', redis.status)
+    console.info('[boot] redis status before connect:', redis.status)
     if (redis.status === 'wait') await redis.connect()
     await redis.ping()
     app.log.info('[redis] connected')
@@ -191,7 +193,7 @@ async function main() {
   process.once('SIGINT', () => void shutdown('SIGINT'))
   process.once('SIGTERM', () => void shutdown('SIGTERM'))
 
-  console.error('[boot] main() finished setup; process is now serving requests')
+  console.info('[boot] main() finished setup; process is now serving requests')
 }
 
 withDeadline('main()', main(), MAIN_TIMEOUT_MS).catch((err) => {
