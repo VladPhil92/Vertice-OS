@@ -81,11 +81,11 @@ const styles = StyleSheet.create({
   brandShell: { alignSelf: 'center', borderRadius: radius.lg, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   card: { overflow: 'hidden', borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: spacing.xl, gap: spacing.md, ...elevation.card },
   accentBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 5, backgroundColor: colors.citizen },
-  eyebrow: { marginTop: spacing.sm, color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  eyebrow: { marginTop: spacing.sm, color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.title },
   body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
   errorText: { color: colors.red, fontFamily: typography.bodyFamily, ...typography.roles.body },
   primaryButton: { minHeight: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navy, paddingHorizontal: spacing.lg },
-  primaryButtonText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  primaryButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   pressed: { opacity: 0.86 },
 })
