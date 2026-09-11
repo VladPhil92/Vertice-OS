@@ -41,8 +41,8 @@ export function pilotPseudonym(citizenId: string, pepper: string): string {
 export function redactPilotText(raw: string): string {
   return raw
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted-email]')
-    .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, '[redacted-phone]')
     .replace(/\b\d{6,}\b/g, '[redacted-number]')
+    .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, '[redacted-phone]')
     .replace(/\s+/g, ' ')
     .trim()
 }
