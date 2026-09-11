@@ -1,5 +1,4 @@
 import crypto from 'node:crypto'
-import { config } from '../../config'
 import { redis } from '../../lib/redis'
 import type { PilotFeedbackInput, PilotIncidentInput, PilotTelemetryInput } from './pilot.schema'
 
@@ -15,9 +14,18 @@ const TELEMETRY_MAXLEN = 10_000
 const FEEDBACK_MAXLEN = 2_000
 const INCIDENT_MAXLEN = 500
 
+export function getPilotObservabilityState(env: NodeJS.ProcessEnv = process.env) {
+  const pepper = env.PILOT_TELEMETRY_PEPPER?.trim()
+  return {
+    configured: Boolean(pepper && pepper.length >= 32),
+    retention_days: 30,
+    storage: 'redis_ephemeral' as const,
+  }
+}
+
 function requirePilotPepper(): string {
-  const pepper = config.IDENTITY_PEPPER?.trim()
-  if (!pepper) {
+  const pepper = process.env.PILOT_TELEMETRY_PEPPER?.trim()
+  if (!pepper || pepper.length < 32) {
     throw Object.assign(new Error('Pilot observability is not configured'), {
       statusCode: 503,
       code: 'PILOT_OBSERVABILITY_NOT_CONFIGURED',
@@ -136,6 +144,7 @@ function numericRecord(input: Record<string, string>): Record<string, number> {
 }
 
 export async function getPilotOperationsSummary() {
+  requirePilotPepper()
   const [eventCounts, outcomeCounts, uniqueUsers, feedback, incidents] = await Promise.all([
     redis.hgetall(EVENT_COUNTS),
     redis.hgetall(OUTCOME_COUNTS),
