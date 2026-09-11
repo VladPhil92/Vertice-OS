@@ -1,0 +1,93 @@
+name: Runtime Reliability Phase 7K
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/app.ts'
+      - 'apps/api/src/index.ts'
+      - 'apps/api/src/lib/runtime-readiness.ts'
+      - 'apps/api/src/lib/runtime-observability.ts'
+      - 'apps/api/src/lib/__tests__/runtime-observability.test.ts'
+      - 'docs/engineering/PRODUCTION_OBSERVABILITY_RUNTIME_RELIABILITY_PHASE7K.md'
+      - '.github/workflows/runtime-reliability-phase7k.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/app.ts'
+      - 'apps/api/src/index.ts'
+      - 'apps/api/src/lib/runtime-readiness.ts'
+      - 'apps/api/src/lib/runtime-observability.ts'
+      - 'apps/api/src/lib/__tests__/runtime-observability.test.ts'
+      - 'docs/engineering/PRODUCTION_OBSERVABILITY_RUNTIME_RELIABILITY_PHASE7K.md'
+      - '.github/workflows/runtime-reliability-phase7k.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-reliability-phase7k-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.13.0'
+
+jobs:
+  code-gate:
+    name: Exact SHA + runtime reliability contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact submitted SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "RUNTIME_RELIABILITY_CANDIDATE_SHA=$EXPECTED_SHA"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @vertice/types build
+
+      - name: Typecheck API
+        run: pnpm --filter @vertice/api typecheck
+
+      - name: Test runtime observability policy
+        env:
+          NODE_ENV: test
+        run: >-
+          pnpm --filter @vertice/api exec jest --runInBand
+          src/lib/__tests__/runtime-observability.test.ts
+
+      - name: Verify source boundary
+        run: |
+          set -euo pipefail
+          grep -q "'/health/operational'" apps/api/src/app.ts
+          grep -q "createDependencyTransitionTracker" apps/api/src/app.ts
+          grep -q "DEPENDENCY_PROBE_TIMEOUT_MS = 2500" apps/api/src/app.ts
+          grep -q "duplicate signal ignored" apps/api/src/index.ts
+          grep -q "SHUTDOWN_TIMEOUT_MS = 15_000" apps/api/src/index.ts
+          grep -q "CLOSED_PILOT_MODE" docs/engineering/PRODUCTION_OBSERVABILITY_RUNTIME_RELIABILITY_PHASE7K.md
+
+      - name: Emit Phase 7K boundary
+        run: |
+          echo "PHASE7K_CODE_STATUS=READY_FOR_RUNTIME_VALIDATION"
+          echo "Serving readiness remains scheduler-safe; strict operations use /health/operational."
+          echo "This gate does not activate the pilot, payments, payouts, or staged Railway volume changes."
