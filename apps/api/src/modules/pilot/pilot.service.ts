@@ -174,8 +174,10 @@ function decode(entry: StreamEntry): OperationalRecord {
 }
 
 function stripInternalPseudonym(record: OperationalRecord): OperationalRecord {
-  const { pilot_user_id: _pilotUserId, operator_id: _operatorId, ...publicRecord } = record
-  return publicRecord as OperationalRecord
+  const publicRecord: OperationalRecord = { ...record }
+  delete publicRecord.pilot_user_id
+  delete publicRecord.operator_id
+  return publicRecord
 }
 
 function aggregateNumericRecords(records: Array<Record<string, string>>): Record<string, number> {
