@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.citizen },
   cardTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
   body: { color: colors.textSecondary, ...typography.roles.body },
-  time: { color: colors.textTertiary, fontFamily: typography.bodyRegularFamily, fontSize: 11, lineHeight: 16 },
+  time: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 11, lineHeight: 16 },
   errorCard: { borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, backgroundColor: colors.errorBackground, padding: spacing.sm },
   error: { color: colors.errorText, ...typography.roles.caption },
   emptyCard: { minHeight: 140, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surface },
