@@ -63,8 +63,8 @@ function dayStamp(date = new Date()): string {
   return date.toISOString().slice(0, 10)
 }
 
-function bucketKey(base: string, day: string): string {
-  return `${base}:${day}`
+function bucketKey(base: string, revision: string, day: string): string {
+  return `${base}:${revision}:${day}`
 }
 
 function bucketExpiryEpoch(day: string): number {
@@ -88,10 +88,10 @@ export async function recordPilotTelemetry(citizenId: string, input: PilotTeleme
   const at = timestamp()
   const revision = deployedPilotRevision()
   const day = dayStamp()
-  const streamKey = bucketKey(TELEMETRY_STREAM, day)
-  const eventKey = bucketKey(EVENT_COUNTS, day)
-  const outcomeKey = bucketKey(OUTCOME_COUNTS, day)
-  const usersKey = bucketKey(UNIQUE_USERS, day)
+  const streamKey = bucketKey(TELEMETRY_STREAM, revision, day)
+  const eventKey = bucketKey(EVENT_COUNTS, revision, day)
+  const outcomeKey = bucketKey(OUTCOME_COUNTS, revision, day)
+  const usersKey = bucketKey(UNIQUE_USERS, revision, day)
   const expiry = bucketExpiryEpoch(day)
 
   const fields = [
@@ -119,14 +119,15 @@ export async function recordPilotTelemetry(citizenId: string, input: PilotTeleme
 export async function recordPilotFeedback(citizenId: string, input: PilotFeedbackInput): Promise<{ accepted: true }> {
   const pilotUserId = pilotPseudonym(citizenId, requirePilotPepper())
   const message = redactPilotText(input.message)
+  const revision = deployedPilotRevision()
   const day = dayStamp()
-  const streamKey = bucketKey(FEEDBACK_STREAM, day)
+  const streamKey = bucketKey(FEEDBACK_STREAM, revision, day)
   const fields = [
     'pilot_user_id', pilotUserId,
     'category', input.category,
     'surface', input.surface,
     'message', message,
-    'revision', deployedPilotRevision(),
+    'revision', revision,
     'observed_at', timestamp(),
   ]
   if (input.rating !== undefined) fields.push('rating', String(input.rating))
@@ -140,8 +141,9 @@ export async function recordPilotFeedback(citizenId: string, input: PilotFeedbac
 
 export async function recordPilotIncident(operatorId: string, input: PilotIncidentInput): Promise<{ accepted: true }> {
   const operator = pilotPseudonym(operatorId, requirePilotPepper())
+  const revision = deployedPilotRevision()
   const day = dayStamp()
-  const streamKey = bucketKey(INCIDENT_STREAM, day)
+  const streamKey = bucketKey(INCIDENT_STREAM, revision, day)
   const pipeline = redis.multi()
   pipeline.xadd(
     streamKey,
@@ -152,7 +154,7 @@ export async function recordPilotIncident(operatorId: string, input: PilotIncide
     'code', input.code,
     'summary', redactPilotText(input.summary),
     'action', input.action,
-    'revision', deployedPilotRevision(),
+    'revision', revision,
     'observed_at', timestamp(),
   )
   pipeline.expireat(streamKey, bucketExpiryEpoch(day))
@@ -201,12 +203,13 @@ function newestRecords(streams: StreamEntry[][], limit: number): OperationalReco
 
 export async function getPilotOperationsSummary() {
   requirePilotPepper()
+  const revision = deployedPilotRevision()
   const days = rollingDays()
-  const eventKeys = days.map((day) => bucketKey(EVENT_COUNTS, day))
-  const outcomeKeys = days.map((day) => bucketKey(OUTCOME_COUNTS, day))
-  const userKeys = days.map((day) => bucketKey(UNIQUE_USERS, day))
-  const feedbackKeys = days.map((day) => bucketKey(FEEDBACK_STREAM, day))
-  const incidentKeys = days.map((day) => bucketKey(INCIDENT_STREAM, day))
+  const eventKeys = days.map((day) => bucketKey(EVENT_COUNTS, revision, day))
+  const outcomeKeys = days.map((day) => bucketKey(OUTCOME_COUNTS, revision, day))
+  const userKeys = days.map((day) => bucketKey(UNIQUE_USERS, revision, day))
+  const feedbackKeys = days.map((day) => bucketKey(FEEDBACK_STREAM, revision, day))
+  const incidentKeys = days.map((day) => bucketKey(INCIDENT_STREAM, revision, day))
 
   const [eventCounts, outcomeCounts, uniqueUsers, feedbackStreams, incidentStreams] = await Promise.all([
     Promise.all(eventKeys.map((key) => redis.hgetall(key))),
@@ -219,7 +222,7 @@ export async function getPilotOperationsSummary() {
   return {
     status: 'operational',
     retention_days: RETENTION_DAYS,
-    revision: deployedPilotRevision(),
+    revision,
     unique_users_approx: uniqueUsers,
     event_counts: aggregateNumericRecords(eventCounts),
     outcome_counts: aggregateNumericRecords(outcomeCounts),
