@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
 import { useAuth } from '../../providers/AuthProvider'
 import {
   deactivatePushRegistration,
   enablePushNotifications,
   getPushPreferenceState,
 } from '../../lib/push-notifications'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile } = useAuth()
@@ -58,13 +61,20 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>IDENTIDAD CIUDADANA</Text>
-          <Text style={styles.title}>Perfil</Text>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerBrand}>
+            <VerticeBrand variant="symbol" width={42} />
+          </View>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>IDENTIDAD CIUDADANA</Text>
+            <Text style={styles.title}>Perfil</Text>
+            <Text style={styles.subtitle}>Tu identidad, reputación y controles de cuenta en VÉRTICE.</Text>
+          </View>
         </View>
 
         <View style={styles.card}>
+          <View style={styles.identityAccent} />
           <Text style={styles.email}>{user?.email ?? '—'}</Text>
           <Text style={styles.did}>{user?.did ?? 'Sin DID disponible'}</Text>
 
@@ -85,6 +95,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.territoryCard}>
+          <Text style={styles.cardKickerLight}>TERRITORIO</Text>
           <Text style={styles.territoryTitle}>Participación territorial</Text>
           <Text style={styles.territoryBody}>
             Consulta tu nodo territorial, apoya su activación comunitaria y revisa por separado si tu residencia está verificada para procesos de gobernanza. Ninguna de estas acciones modifica tu reputación ni concede autoridad por sí sola.
@@ -107,19 +118,25 @@ export default function ProfileScreen() {
 
         <View style={styles.notificationCard}>
           <View style={styles.notificationCopy}>
+            <Text style={styles.cardKicker}>PREFERENCIAS</Text>
             <Text style={styles.notificationTitle}>Actualizaciones cívicas</Text>
             <Text style={styles.notificationBody}>
               {pushEnabled
                 ? pushRegistered
                   ? 'Este dispositivo está registrado para recibir alertas de reportes, propuestas y resultados.'
                   : 'La preferencia está activa y se reintentará el registro cuando el build tenga configuración EAS válida.'
-                : 'Actívalas cuando quieras. Vértice no solicita permisos de notificación automáticamente.'}
+                : 'Actívalas cuando quieras. VÉRTICE no solicita permisos de notificación automáticamente.'}
             </Text>
           </View>
           <Pressable
             disabled={pushBusy}
             onPress={() => void togglePush()}
-            style={[styles.pushButton, pushEnabled && styles.pushButtonActive, pushBusy && styles.disabled]}
+            style={({ pressed }) => [
+              styles.pushButton,
+              pushEnabled && styles.pushButtonActive,
+              pressed && styles.pressed,
+              pushBusy && styles.disabled,
+            ]}
           >
             <Text style={[styles.pushButtonText, pushEnabled && styles.pushButtonTextActive]}>
               {pushBusy ? 'Procesando…' : pushEnabled ? 'Desactivar' : 'Activar'}
@@ -127,25 +144,28 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/notifications')}
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.secondaryButtonText}>Ver notificaciones</Text>
-        </Pressable>
+        <View style={styles.actionGrid}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/notifications')}
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryButtonText}>Ver notificaciones</Text>
+          </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={() => void refreshProfile()}
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.secondaryButtonText}>Actualizar perfil</Text>
-        </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => void refreshProfile()}
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed, busy && styles.disabled]}
+          >
+            <Text style={styles.secondaryButtonText}>Actualizar perfil</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.privacyCard}>
           <View style={styles.notificationCopy}>
+            <Text style={styles.cardKickerDanger}>PRIVACIDAD</Text>
             <Text style={styles.privacyTitle}>Privacidad y datos</Text>
             <Text style={styles.notificationBody}>
               Puedes eliminar tu cuenta directamente desde VÉRTICE. El proceso borra credenciales e identidad personal y explica qué registros deben conservarse de forma seudonimizada.
@@ -155,7 +175,7 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             disabled={busy}
             onPress={() => router.push('/account-deletion')}
-            style={({ pressed }) => [styles.deleteAccountButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.deleteAccountButton, pressed && styles.pressed, busy && styles.disabled]}
           >
             <Text style={styles.deleteAccountButtonText}>Eliminar mi cuenta</Text>
           </Pressable>
@@ -169,47 +189,55 @@ export default function ProfileScreen() {
         >
           <Text style={styles.dangerButtonText}>{busy ? 'Cerrando…' : 'Cerrar sesión'}</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  container: { flex: 1, padding: 20, gap: 16 },
-  header: { paddingTop: 8, marginBottom: 8, gap: 6 },
-  eyebrow: { fontSize: 12, letterSpacing: 1.8, fontWeight: '700', color: '#697068' },
-  title: { fontSize: 32, fontWeight: '700', color: '#11130F' },
-  card: { borderRadius: 22, padding: 20, backgroundColor: '#FFFFFF', gap: 10 },
-  email: { fontSize: 20, fontWeight: '700', color: '#171A15' },
-  did: { fontSize: 12, lineHeight: 18, color: '#74786F' },
-  divider: { height: 1, backgroundColor: '#ECE9E1', marginVertical: 8 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
-  label: { flex: 1, color: '#6C7068' },
-  value: { flex: 1, textAlign: 'right', fontWeight: '600', color: '#24271F' },
-  territoryCard: { borderRadius: 20, padding: 16, backgroundColor: '#17382A', gap: 9 },
-  territoryTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-  territoryBody: { color: '#D5E0D9', lineHeight: 19 },
-  territoryButton: { minHeight: 46, marginTop: 3, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#FFFFFF' },
-  territoryButtonText: { color: '#17382A', fontWeight: '800' },
-  assuranceButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#9DB2A5' },
-  assuranceButtonText: { color: '#FFFFFF', fontWeight: '800' },
-  notificationCard: { borderRadius: 20, padding: 16, backgroundColor: '#E7E4D8', gap: 12 },
-  privacyCard: { borderRadius: 20, padding: 16, backgroundColor: '#F4ECE9', gap: 12 },
-  notificationCopy: { gap: 5 },
-  notificationTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' },
-  privacyTitle: { fontSize: 17, fontWeight: '800', color: '#812F2F' },
-  notificationBody: { color: '#565D54', lineHeight: 19 },
-  pushButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#AEB7AF', backgroundColor: '#FFFFFF' },
-  pushButtonActive: { backgroundColor: '#17382A', borderColor: '#17382A' },
-  pushButtonText: { color: '#17382A', fontWeight: '700' },
-  pushButtonTextActive: { color: '#FFFFFF' },
-  secondaryButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1, borderColor: '#B9BDB5' },
-  secondaryButtonText: { fontWeight: '700', color: '#263228' },
-  deleteAccountButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#B76A63', backgroundColor: '#FFFFFF' },
-  deleteAccountButtonText: { fontWeight: '800', color: '#812F2F' },
-  dangerButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#F4DFDC' },
-  dangerButtonText: { fontWeight: '700', color: '#812F2F' },
-  pressed: { opacity: 0.82 },
-  disabled: { opacity: 0.55 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  container: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.hero, gap: spacing.md },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  headerBrand: { borderRadius: radius.md, backgroundColor: colors.surface, padding: spacing.xs },
+  header: { flex: 1, gap: spacing.xxs },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.title },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  card: { overflow: 'hidden', borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.sm, ...elevation.card },
+  identityAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.citizen },
+  email: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 20, fontWeight: '800' },
+  did: { color: colors.textTertiary, fontFamily: typography.monoFamily, fontSize: 11, lineHeight: 18 },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
+  label: { flex: 1, color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  value: { flex: 1, textAlign: 'right', color: colors.textPrimary, fontFamily: typography.bodyFamily, fontWeight: '700' },
+  territoryCard: { borderRadius: radius.xl, padding: spacing.md, backgroundColor: colors.navy, gap: spacing.xs, ...elevation.card },
+  cardKickerLight: { color: colors.citizen, fontFamily: typography.bodyFamily, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  territoryTitle: { color: colors.white, fontFamily: typography.displayFamily, fontSize: 17, fontWeight: '800' },
+  territoryBody: { color: colors.borderActive, fontFamily: typography.bodyFamily, lineHeight: 19 },
+  territoryButton: { minHeight: interaction.buttonHeight, marginTop: spacing.xxs, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.surface },
+  territoryButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  assuranceButton: { minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive },
+  assuranceButtonText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  notificationCard: { borderRadius: radius.xl, borderWidth: 1, borderColor: colors.infoBorder, padding: spacing.md, backgroundColor: colors.infoBackground, gap: spacing.sm },
+  privacyCard: { borderRadius: radius.xl, borderWidth: 1, borderColor: colors.errorBorder, padding: spacing.md, backgroundColor: colors.errorBackground, gap: spacing.sm },
+  notificationCopy: { gap: spacing.xxs },
+  cardKicker: { color: colors.infoText, fontFamily: typography.bodyFamily, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  cardKickerDanger: { color: colors.errorText, fontFamily: typography.bodyFamily, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  notificationTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 17, fontWeight: '800' },
+  privacyTitle: { color: colors.errorText, fontFamily: typography.displayFamily, fontSize: 17, fontWeight: '800' },
+  notificationBody: { color: colors.textSecondary, fontFamily: typography.bodyFamily, lineHeight: 19 },
+  pushButton: { minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface },
+  pushButtonActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  pushButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  pushButtonTextActive: { color: colors.white },
+  actionGrid: { flexDirection: 'row', gap: spacing.sm },
+  secondaryButton: { flex: 1, minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.sm },
+  secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.caption, textAlign: 'center' },
+  deleteAccountButton: { minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.errorText, backgroundColor: colors.surface },
+  deleteAccountButtonText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  dangerButton: { minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.errorText },
+  dangerButtonText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  pressed: { opacity: interaction.pressedOpacity },
+  disabled: { opacity: interaction.disabledOpacity },
 })
