@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import { colors, moduleColors } from '../../packages/design-tokens/src/index'
 
 const config: Config = {
   content: [
@@ -10,38 +11,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: '#F7F9FC',
-        surface: '#FFFFFF',
-        'surface-2': '#F0F4F9',
-        border: '#E1E7EF',
-        'border-active': '#C5D0DF',
-        gold: '#F5B700',
+        bg: colors.background,
+        surface: colors.surface,
+        'surface-2': colors.surfaceAlt,
+        border: colors.border,
+        'border-active': colors.borderActive,
+        gold: colors.citizen,
         'gold-dim': 'rgba(245,183,0,0.13)',
-        citizen: '#F5B700',
+        citizen: colors.citizen,
         'citizen-dim': 'rgba(245,183,0,0.12)',
-        azure: '#4A90E2',
+        azure: colors.azure,
         'azure-dim': 'rgba(74,144,226,0.10)',
-        red: '#D72638',
+        red: colors.red,
         'red-dim': 'rgba(215,38,56,0.10)',
-        navy: '#0A2A66',
-        'navy-light': '#163F86',
-        emerald: '#2BA745',
+        navy: colors.navy,
+        'navy-light': colors.navyLight,
+        emerald: colors.emerald,
         'emerald-dim': 'rgba(43,167,69,0.10)',
-        primary: '#0A2A66',
-        secondary: '#4B5870',
-        tertiary: '#7B8799',
-        cyan: '#178C8C',
+        primary: colors.textPrimary,
+        secondary: colors.textSecondary,
+        tertiary: colors.textTertiary,
+        cyan: colors.cyan,
         'cyan-dim': 'rgba(23,140,140,0.10)',
-        module: {
-          mobility: '#4A90E2',
-          water: '#178C8C',
-          security: '#D72638',
-          health: '#2BA745',
-          education: '#F5B700',
-          services: '#6D5CC7',
-          culture: '#E47727',
-          economy: '#0A2A66',
-        },
+        module: moduleColors,
       },
       fontFamily: {
         display: ['var(--font-montserrat)', 'sans-serif'],

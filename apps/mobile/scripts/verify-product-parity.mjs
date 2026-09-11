@@ -24,10 +24,17 @@ function notContains(source, forbidden, label) {
   assert(!source.includes(forbidden), `${label} must not contain legacy token ${JSON.stringify(forbidden)}`)
 }
 
+const canonicalTokens = read('packages/design-tokens/src/index.ts')
 const theme = read('apps/mobile/theme/vertice.ts')
 const signIn = read('apps/mobile/app/(auth)/sign-in.tsx')
 const register = read('apps/mobile/app/(auth)/register.tsx')
 const tabs = read('apps/mobile/app/(tabs)/_layout.tsx')
+const dashboard = read('apps/mobile/app/(tabs)/index.tsx')
+const community = read('apps/mobile/app/(tabs)/community.tsx')
+const actions = read('apps/mobile/app/(tabs)/actions.tsx')
+const reports = read('apps/mobile/app/(tabs)/reports.tsx')
+const governance = read('apps/mobile/app/(tabs)/governance.tsx')
+const profile = read('apps/mobile/app/(tabs)/profile.tsx')
 const rootLayout = read('apps/mobile/app/_layout.tsx')
 const callback = read('apps/mobile/app/auth/ctgone/callback.tsx')
 const mobileCtgOne = read('apps/mobile/lib/ctgone.ts')
@@ -36,17 +43,28 @@ const mobileRoutes = read('apps/api/src/modules/auth/mobile-auth.routes.ts')
 const mobileFederation = read('apps/api/src/modules/auth/mobile-federation.service.ts')
 const webCallback = read('apps/web/app/auth/ctgone/callback/page.tsx')
 const webTheme = read('apps/web/app/globals.css')
+const webTailwind = read('apps/web/tailwind.config.ts')
 
 // ── Canonical visual language ───────────────────────────────────────────────
 for (const token of ['#F7F9FC', '#0A2A66', '#F5B700', '#D72638', '#4A90E2', '#2BA745']) {
-  contains(theme, token, 'native VÉRTICE theme')
+  contains(canonicalTokens.toUpperCase(), token, 'canonical VÉRTICE design tokens')
   contains(webTheme.toUpperCase(), token, 'web VÉRTICE theme')
 }
-contains(theme, "brandDisplayFamily: 'Montserrat'", 'native typography contract')
-contains(theme, "brandBodyFamily: 'Inter'", 'native typography contract')
-contains(theme, "family: 'Lucide'", 'native iconography contract')
-contains(theme, 'strokeWidth: 2', 'native iconography contract')
+contains(canonicalTokens, "display: 'Montserrat'", 'canonical typography contract')
+contains(canonicalTokens, "body: 'Inter'", 'canonical typography contract')
+contains(canonicalTokens, "family: 'Lucide'", 'canonical iconography contract')
+contains(canonicalTokens, 'strokeWidth: 2', 'canonical iconography contract')
+contains(canonicalTokens, "infoBackground: '#EDF4FD'", 'canonical semantic feedback contract')
+contains(canonicalTokens, "successBackground: '#EAF7EE'", 'canonical semantic feedback contract')
+contains(canonicalTokens, "warningBackground: '#FFF7DF'", 'canonical semantic feedback contract')
+
+contains(theme, "from '../../../packages/design-tokens/src/index'", 'native theme adapter')
+contains(theme, 'canonicalTypography.display', 'native typography adapter')
+contains(theme, 'canonicalTypography.body', 'native typography adapter')
 contains(theme, "wordmark: require('../assets/brand/vertice-wordmark.webp')", 'native imagery contract')
+contains(webTailwind, "from '../../packages/design-tokens/src/index'", 'web theme adapter')
+contains(webTailwind, 'colors.background', 'web canonical color adapter')
+contains(webTailwind, 'moduleColors', 'web module-color adapter')
 
 for (const asset of [
   'apps/mobile/assets/brand/vertice-wordmark.webp',
@@ -56,14 +74,35 @@ for (const asset of [
   assert(fs.existsSync(path.join(root, asset)), `canonical brand asset is missing: ${asset}`)
 }
 
-for (const [label, source] of [
+const primarySurfaces = [
   ['mobile sign-in', signIn],
   ['mobile registration', register],
   ['mobile tab shell', tabs],
-]) {
+  ['mobile dashboard', dashboard],
+  ['mobile community', community],
+  ['mobile actions', actions],
+  ['mobile territory reports', reports],
+  ['mobile governance', governance],
+  ['mobile profile', profile],
+]
+
+for (const [label, source] of primarySurfaces) {
   for (const legacy of ['#F6F4EE', '#1C3D2E', '#24573E', '#17382A', '#214634']) {
     notContains(source.toUpperCase(), legacy, label)
   }
+}
+
+for (const [label, source] of [
+  ['mobile dashboard', dashboard],
+  ['mobile community', community],
+  ['mobile actions', actions],
+  ['mobile territory reports', reports],
+  ['mobile governance', governance],
+  ['mobile profile', profile],
+]) {
+  contains(source, "from '../../theme/vertice'", label)
+  contains(source, 'VerticeBrand', label)
+  assert(!/#[0-9A-Fa-f]{6}/.test(source), `${label} must not declare local hex colors; use canonical theme tokens`)
 }
 
 contains(signIn, "from '../../theme/vertice'", 'mobile sign-in')
@@ -92,5 +131,5 @@ contains(webCallback, "MOBILE_STATE_PREFIX = 'mobile.'", 'web federation callbac
 contains(webCallback, "MOBILE_CALLBACK_URI = 'vertice://auth/ctgone/callback'", 'web federation callback')
 
 if (!process.exitCode) {
-  console.log('[product-parity] OK: CTG One identity federation and VÉRTICE visual language are aligned across web/mobile.')
+  console.log('[product-parity] OK: CTG One identity federation and canonical VÉRTICE design language are aligned across web/mobile primary surfaces.')
 }

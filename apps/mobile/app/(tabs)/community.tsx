@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
 import { apiFetch, apiMutation } from '../../lib/api'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CivicActivity, CommunityFeedResponse } from '../../types/api'
 import type { CommunityPolicyState } from '../../types/community-safety'
 
@@ -129,36 +132,55 @@ export default function CommunityScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
+            tintColor={colors.navy}
+            colors={[colors.navy]}
+          />
+        )}
       >
         <View style={styles.headerRow}>
+          <View style={styles.headerBrand}>
+            <VerticeBrand variant="symbol" width={40} />
+          </View>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>RED CÍVICA</Text>
             <Text style={styles.title}>Comunidad</Text>
             <Text style={styles.subtitle}>Actividad verificable de gestores, líderes y organizaciones.</Text>
           </View>
-          <Pressable style={styles.rankButton} onPress={() => router.push('/community/leaderboard')}>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.rankButton, pressed && styles.pressed]}
+            onPress={() => router.push('/community/leaderboard')}
+          >
             <Text style={styles.rankButtonText}>Ranking</Text>
           </Pressable>
         </View>
 
         {policy && !policy.accepted ? (
           <View style={styles.policyCard}>
+            <View style={styles.policyAccent} />
             <Text style={styles.policyTitle}>Normas de Comunidad</Text>
             <Text style={styles.policyText}>
               Antes de publicar contenido debes revisar y aceptar las normas contra acoso, odio, amenazas, contenido sexual indebido, spam, suplantación y exposición de datos personales.
             </Text>
             <View style={styles.policyActions}>
-              <Pressable style={styles.policySecondary} onPress={() => void openGuidelines()}>
+              <Pressable style={({ pressed }) => [styles.policySecondary, pressed && styles.pressed]} onPress={() => void openGuidelines()}>
                 <Text style={styles.policySecondaryText}>Leer normas</Text>
               </Pressable>
-              <Pressable disabled={policyBusy} style={[styles.policyPrimary, policyBusy && styles.disabled]} onPress={() => void acceptPolicy()}>
+              <Pressable
+                disabled={policyBusy}
+                style={({ pressed }) => [styles.policyPrimary, pressed && styles.pressed, policyBusy && styles.disabled]}
+                onPress={() => void acceptPolicy()}
+              >
                 <Text style={styles.policyPrimaryText}>{policyBusy ? 'Guardando…' : 'Acepto las normas'}</Text>
               </Pressable>
             </View>
           </View>
         ) : policy?.accepted ? (
-          <Pressable style={styles.policyAccepted} onPress={() => void openGuidelines()}>
+          <Pressable style={({ pressed }) => [styles.policyAccepted, pressed && styles.pressed]} onPress={() => void openGuidelines()}>
             <Text style={styles.policyAcceptedText}>Normas de Comunidad aceptadas · Ver política</Text>
           </Pressable>
         ) : null}
@@ -179,6 +201,7 @@ export default function CommunityScreen() {
         </View>
 
         <View style={styles.neutralityNote}>
+          <Text style={styles.neutralityLabel}>CRITERIO DE SCORE</Text>
           <Text style={styles.neutralityText}>{scoringNote}</Text>
         </View>
 
@@ -195,7 +218,9 @@ export default function CommunityScreen() {
             <View key={`${activity.type}-${activity.id}`} style={styles.card}>
               <View style={styles.cardTop}>
                 <Text style={styles.type}>{TYPE_LABEL[activity.type] ?? activity.type}</Text>
-                <Text style={styles.score}>{activity.civic_score}</Text>
+                <View style={styles.scorePill}>
+                  <Text style={styles.score}>{activity.civic_score}</Text>
+                </View>
               </View>
               <Text style={styles.cardTitle}>{activity.title}</Text>
               {activity.actor.id ? (
@@ -210,17 +235,17 @@ export default function CommunityScreen() {
               )}
               <Text style={styles.body} numberOfLines={3}>{activity.summary}</Text>
               <View style={styles.metaRow}>
-                <Text style={styles.meta}>Evidencias: {activity.evidence_count}</Text>
+                <Text style={styles.meta}>Evidencias · {activity.evidence_count}</Text>
                 <Text style={styles.meta}>{activity.community_validation.corroborations} corroboraciones</Text>
                 <Text style={styles.meta}>{timeAgo(activity.updated_at)}</Text>
               </View>
               <View style={styles.safetyRow}>
                 {activity.actor.id ? (
-                  <Pressable onPress={() => openActor(activity)} style={styles.textButton}>
+                  <Pressable onPress={() => openActor(activity)} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
                     <Text style={styles.textButtonText}>Ver perfil</Text>
                   </Pressable>
                 ) : null}
-                <Pressable onPress={() => reportActivity(activity)} style={styles.reportButton}>
+                <Pressable onPress={() => reportActivity(activity)} style={({ pressed }) => [styles.reportButton, pressed && styles.pressed]}>
                   <Text style={styles.reportButtonText}>Reportar</Text>
                 </Pressable>
               </View>
@@ -240,51 +265,56 @@ export default function CommunityScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 18, paddingBottom: 36, gap: 16 },
-  headerRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  headerCopy: { flex: 1, gap: 5 },
-  eyebrow: { fontSize: 11, letterSpacing: 1.6, fontWeight: '700', color: '#697068' },
-  title: { fontSize: 28, fontWeight: '700', color: '#11130F' },
-  subtitle: { color: '#6D7168', lineHeight: 20 },
-  rankButton: { borderWidth: 1, borderColor: '#AEB7AF', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
-  rankButtonText: { color: '#17382A', fontWeight: '700', fontSize: 12 },
-  policyCard: { backgroundColor: '#FFF8E8', borderRadius: 18, padding: 15, gap: 10, borderWidth: 1, borderColor: '#E5D9B6' },
-  policyTitle: { color: '#493B17', fontWeight: '800', fontSize: 15 },
-  policyText: { color: '#62552E', lineHeight: 18, fontSize: 12 },
-  policyActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  policySecondary: { borderWidth: 1, borderColor: '#766423', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  policySecondaryText: { color: '#66551A', fontWeight: '700', fontSize: 12 },
-  policyPrimary: { backgroundColor: '#17382A', borderRadius: 12, paddingHorizontal: 13, paddingVertical: 11 },
-  policyPrimaryText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
-  policyAccepted: { backgroundColor: '#EEF3EF', borderRadius: 12, padding: 11 },
-  policyAcceptedText: { color: '#3F5B4B', fontSize: 12, fontWeight: '700' },
-  tabRow: { flexDirection: 'row', gap: 8, backgroundColor: '#E7E4D8', borderRadius: 14, padding: 4 },
-  tabButton: { flex: 1, paddingVertical: 10, borderRadius: 11, alignItems: 'center' },
-  tabButtonActive: { backgroundColor: '#17382A' },
-  tabButtonText: { color: '#4B4F47', fontWeight: '700', fontSize: 12 },
-  tabButtonTextActive: { color: '#FFFFFF' },
-  neutralityNote: { backgroundColor: '#EEF3EF', borderRadius: 14, padding: 12 },
-  neutralityText: { color: '#3F5B4B', fontSize: 12, lineHeight: 17 },
-  degradedNote: { backgroundColor: '#FBF2DC', borderRadius: 14, padding: 12 },
-  degradedText: { color: '#7A5B12', fontSize: 12, lineHeight: 17 },
-  list: { gap: 12 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, gap: 8 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.hero, gap: spacing.md },
+  headerRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  headerBrand: { borderRadius: radius.md, backgroundColor: colors.surface, padding: spacing.xs },
+  headerCopy: { flex: 1, gap: spacing.xxs },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.title },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  rankButton: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.sm, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  rankButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  policyCard: { overflow: 'hidden', backgroundColor: colors.warningBackground, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: colors.warningBorder },
+  policyAccent: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, backgroundColor: colors.citizen },
+  policyTitle: { color: colors.warningText, fontFamily: typography.displayFamily, fontSize: 15, fontWeight: '800' },
+  policyText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 18 },
+  policyActions: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
+  policySecondary: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.warningText, borderRadius: radius.md, paddingHorizontal: spacing.sm, justifyContent: 'center' },
+  policySecondaryText: { color: colors.warningText, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  policyPrimary: { minHeight: interaction.minimumTouchTarget, backgroundColor: colors.navy, borderRadius: radius.md, paddingHorizontal: spacing.md, justifyContent: 'center' },
+  policyPrimaryText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  policyAccepted: { backgroundColor: colors.successBackground, borderWidth: 1, borderColor: colors.successBorder, borderRadius: radius.md, padding: spacing.sm },
+  policyAcceptedText: { color: colors.successText, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  tabRow: { flexDirection: 'row', gap: spacing.xs, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.xxs },
+  tabButton: { flex: 1, minHeight: interaction.minimumTouchTarget, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  tabButtonActive: { backgroundColor: colors.navy },
+  tabButtonText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  tabButtonTextActive: { color: colors.white },
+  neutralityNote: { backgroundColor: colors.infoBackground, borderWidth: 1, borderColor: colors.infoBorder, borderRadius: radius.md, padding: spacing.sm, gap: spacing.xxs },
+  neutralityLabel: { color: colors.infoText, fontFamily: typography.bodyFamily, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  neutralityText: { color: colors.infoText, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 17 },
+  degradedNote: { backgroundColor: colors.warningBackground, borderWidth: 1, borderColor: colors.warningBorder, borderRadius: radius.md, padding: spacing.sm },
+  degradedText: { color: colors.warningText, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 17 },
+  list: { gap: spacing.sm },
+  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xs, ...elevation.card },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  type: { textTransform: 'uppercase', fontSize: 10, letterSpacing: 1.1, color: '#667067', fontWeight: '700' },
-  score: { fontSize: 22, color: '#1C3D2E', fontWeight: '800' },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#171A15' },
-  actorLink: { color: '#1C3D2E', fontWeight: '700' },
-  muted: { color: '#70746C' },
-  body: { color: '#343931', lineHeight: 19 },
-  metaRow: { flexDirection: 'row', gap: 14, flexWrap: 'wrap' },
-  meta: { color: '#596057', fontSize: 12 },
-  safetyRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 },
-  textButton: { paddingHorizontal: 10, paddingVertical: 8 },
-  textButtonText: { color: '#3F5B4B', fontWeight: '700', fontSize: 12 },
-  reportButton: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F5ECEA' },
-  reportButtonText: { color: '#853B35', fontWeight: '800', fontSize: 12 },
-  error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
-  empty: { textAlign: 'center', color: '#777B74', paddingVertical: 28 },
-  disabled: { opacity: 0.55 },
+  type: { textTransform: 'uppercase', color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 10, letterSpacing: 1.1, fontWeight: '800' },
+  scorePill: { minWidth: 44, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs, alignItems: 'center' },
+  score: { color: colors.navy, fontFamily: typography.displayFamily, fontSize: 18, fontWeight: '800' },
+  cardTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 16, fontWeight: '800' },
+  actorLink: { color: colors.navyLight, fontFamily: typography.bodyFamily, fontWeight: '700' },
+  muted: { color: colors.textTertiary, fontFamily: typography.bodyFamily },
+  body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, lineHeight: 19 },
+  metaRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  meta: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 12 },
+  safetyRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.xs, marginTop: spacing.xxs },
+  textButton: { minHeight: interaction.minimumTouchTarget, paddingHorizontal: spacing.sm, justifyContent: 'center' },
+  textButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  reportButton: { minHeight: interaction.minimumTouchTarget, paddingHorizontal: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.errorBackground, justifyContent: 'center' },
+  reportButtonText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  error: { color: colors.errorText, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, padding: spacing.sm, fontFamily: typography.bodyFamily },
+  empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, paddingVertical: spacing.xxl },
+  pressed: { opacity: interaction.pressedOpacity },
+  disabled: { opacity: interaction.disabledOpacity },
 })
