@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { requireAdmin, requireAuth, requireModerator } from '../../middleware/auth'
-import { getClosedPilotAccessState } from '../../lib/closed-pilot-access'
+import { assertClosedPilotEmailAllowed, getClosedPilotAccessState } from '../../lib/closed-pilot-access'
+import { prisma } from '../../lib/prisma'
 import { PilotFeedbackSchema, PilotIncidentSchema, PilotTelemetrySchema } from './pilot.schema'
 import {
   getPilotObservabilityState,
@@ -34,8 +35,21 @@ function requireConfiguredPilot(reply: FastifyReply): boolean {
 
 async function requirePilotParticipant(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await requireAuth(request, reply)
-  if (reply.sent) return
-  requireConfiguredPilot(reply)
+  if (reply.sent || !requireConfiguredPilot(reply)) return
+
+  const citizen = await prisma.citizen.findUnique({
+    where: { id: request.citizen.sub },
+    select: { email: true, isActive: true },
+  })
+  if (!citizen?.isActive) {
+    reply.status(403).send({ error: 'Cuenta inactiva', code: 'PILOT_ACCOUNT_INACTIVE' })
+    return
+  }
+
+  // Revalidate the invitation on every participant entry point. This closes the
+  // short access-token window that could otherwise exist if pilot mode is
+  // activated after an uninvited user already authenticated.
+  assertClosedPilotEmailAllowed(citizen.email)
 }
 
 async function requirePilotOperator(request: FastifyRequest, reply: FastifyReply): Promise<void> {
