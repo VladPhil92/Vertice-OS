@@ -40,6 +40,7 @@ import { financeOperationsRoutes } from './modules/billing/finance-operations.ro
 import { crowdfundingRoutes } from './modules/crowdfunding/crowdfunding.routes'
 import { crowdfundingLifecycleRoutes } from './modules/crowdfunding/crowdfunding.lifecycle.routes'
 import { publishingRoutes } from './modules/publishing/publishing.routes'
+import { pilotRoutes } from './modules/pilot/pilot.routes'
 
 initSentry()
 
@@ -267,6 +268,7 @@ export function buildApp() {
   app.register(crowdfundingRoutes, { prefix: '/crowdfunding' })
   app.register(crowdfundingLifecycleRoutes, { prefix: '/crowdfunding' })
   app.register(publishingRoutes, { prefix: '/publishing' })
+  app.register(pilotRoutes, { prefix: '/pilot' })
   app.register(eventsRoutes)
 
   return app
