@@ -62,9 +62,9 @@ export default function PilotPage() {
         if (cancelled) return
         setStatus(nextStatus)
 
-        const telemetryKey = 'vertice:pilot:session-started'
-        if (!sessionStorage.getItem(telemetryKey)) {
-          sessionStorage.setItem(telemetryKey, '1')
+        const sessionKey = 'vertice:pilot:session-started'
+        if (!sessionStorage.getItem(sessionKey)) {
+          sessionStorage.setItem(sessionKey, '1')
           await apiFetch('/pilot/telemetry', {
             method: 'POST',
             body: JSON.stringify({
@@ -74,7 +74,23 @@ export default function PilotPage() {
               platform: platform(),
             }),
           }).catch(() => {
-            sessionStorage.removeItem(telemetryKey)
+            sessionStorage.removeItem(sessionKey)
+          })
+        }
+
+        const feedbackOpenKey = 'vertice:pilot:feedback-opened'
+        if (!sessionStorage.getItem(feedbackOpenKey)) {
+          sessionStorage.setItem(feedbackOpenKey, '1')
+          await apiFetch('/pilot/telemetry', {
+            method: 'POST',
+            body: JSON.stringify({
+              event: 'feedback_opened',
+              surface: 'feedback',
+              outcome: 'success',
+              platform: platform(),
+            }),
+          }).catch(() => {
+            sessionStorage.removeItem(feedbackOpenKey)
           })
         }
       })
@@ -109,7 +125,7 @@ export default function PilotPage() {
       await apiFetch('/pilot/telemetry', {
         method: 'POST',
         body: JSON.stringify({
-          event: 'feedback_opened',
+          event: 'feedback_submitted',
           surface: 'feedback',
           outcome: 'success',
           platform: platform(),
