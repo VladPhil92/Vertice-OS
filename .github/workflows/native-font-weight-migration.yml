@@ -1,0 +1,66 @@
+name: Native Font Weight Alias Migration
+
+on:
+  push:
+    branches:
+      - feat/native-brand-runtime-certification
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-font-weight-aliases:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/native-brand-runtime-certification
+          fetch-depth: 0
+
+      - name: Route weighted text to bundled font aliases
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('apps/mobile/app')
+          changed = []
+          for path in root.rglob('*.tsx'):
+              text = path.read_text()
+              original = text
+
+              # Semantic roles already define their intended weight.
+              text = text.replace('fontFamily: typography.bodyFamily, ...typography.roles.label', 'fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label')
+              text = text.replace('fontFamily: typography.bodyFamily, ...typography.roles.button', 'fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button')
+              text = text.replace('fontFamily: typography.bodyFamily, ...typography.roles.caption', 'fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption')
+
+              # Explicit weighted body styles must address the matching loaded binary.
+              text = re.sub(r"fontFamily: typography\.bodyFamily,([^\n{}]*?)fontWeight: '800'", r"fontFamily: typography.bodyExtraBoldFamily,\1fontWeight: '800'", text)
+              text = re.sub(r"fontFamily: typography\.bodyFamily,([^\n{}]*?)fontWeight: '700'", r"fontFamily: typography.bodyBoldFamily,\1fontWeight: '700'", text)
+              text = re.sub(r"fontFamily: typography\.bodyFamily,([^\n{}]*?)fontWeight: '600'", r"fontFamily: typography.bodySemiboldFamily,\1fontWeight: '600'", text)
+
+              # Display aliases follow the same rule when a non-default explicit weight is requested.
+              text = re.sub(r"fontFamily: typography\.displayFamily,([^\n{}]*?)fontWeight: '700'", r"fontFamily: typography.displayBoldFamily,\1fontWeight: '700'", text)
+
+              if text != original:
+                  path.write_text(text)
+                  changed.append(str(path))
+
+          print('Updated native font aliases:')
+          for path in changed:
+              print(f' - {path}')
+          PY
+
+      - name: Commit migrated surfaces
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/mobile/app
+          if git diff --cached --quiet; then
+            echo "No font alias migration required."
+            exit 0
+          fi
+          git commit -m "fix(mobile): route weighted text to bundled font aliases"
+          git push origin HEAD:feat/native-brand-runtime-certification
