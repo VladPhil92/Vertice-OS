@@ -4,18 +4,28 @@ export const colors = {
   surfaceAlt: '#F0F4F9',
   border: '#E1E7EF',
   borderActive: '#C5D0DF',
+  inputBorder: '#D6DFEA',
+
   navy: '#0A2A66',
   navyLight: '#163F86',
   citizen: '#F5B700',
+  citizenDark: '#D98B00',
   red: '#D72638',
   azure: '#4A90E2',
   emerald: '#2BA745',
   cyan: '#178C8C',
+
   textPrimary: '#0A2A66',
   textSecondary: '#4B5870',
   textTertiary: '#7B8799',
+  textMuted: '#9AA6B5',
+  placeholder: '#A5AFBD',
   white: '#FFFFFF',
   black: '#111827',
+
+  errorBackground: '#FCEBED',
+  errorBorder: '#F2BDC3',
+  errorText: '#A11D2A',
 } as const
 
 export const moduleColors = {
@@ -44,13 +54,14 @@ export const typography = {
 } as const
 
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
+  xxs: 4,
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 20,
   xl: 24,
   xxl: 32,
-  xxxl: 48,
+  hero: 40,
 } as const
 
 export const radius = {
@@ -58,23 +69,35 @@ export const radius = {
   md: 12,
   lg: 16,
   xl: 22,
+  xxl: 24,
   pill: 999,
 } as const
 
 export const shadows = {
-  soft: {
-    shadowColor: '#0A2A66',
+  card: {
+    shadowColor: colors.navy,
     shadowOpacity: 0.08,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
-    elevation: 4,
+    elevation: 3,
   },
+} as const
+
+export const interaction = {
+  minimumTouchTarget: 44,
+  buttonHeight: 52,
+  inputHeight: 52,
+  pressedOpacity: 0.86,
+  disabledOpacity: 0.52,
 } as const
 
 export const iconography = {
   family: 'Lucide',
+  grid: 24,
   strokeWidth: 2,
-  sizes: { sm: 16, md: 20, lg: 24, xl: 28 },
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  sizes: { compact: 16, standard: 20, navigation: 22, feature: 24 },
   guidance: 'Outlined, rounded, consistent 2px stroke. Avoid filled emoji-style icons for primary navigation.',
 } as const
 
