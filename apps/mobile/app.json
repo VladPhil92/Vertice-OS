@@ -2,6 +2,7 @@
   "expo": {
     "name": "Vértice OS",
     "slug": "vertice-os",
+    "owner": "ctg-one-technology",
     "scheme": "vertice",
     "version": "0.1.0",
     "orientation": "portrait",
