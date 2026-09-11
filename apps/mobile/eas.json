@@ -22,7 +22,9 @@
       },
       "env": {
         "APP_VARIANT": "preview",
-        "EXPO_PUBLIC_RELEASE_CHANNEL": "preview"
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "preview",
+        "EAS_PROJECT_ID": "4ee77781-adec-42f6-be19-64a68848f4c7",
+        "EXPO_PUBLIC_API_URL": "https://vertice-os-production.up.railway.app"
       }
     },
     "preview-simulator": {
@@ -40,7 +42,9 @@
       },
       "env": {
         "APP_VARIANT": "production",
-        "EXPO_PUBLIC_RELEASE_CHANNEL": "production"
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "production",
+        "EAS_PROJECT_ID": "4ee77781-adec-42f6-be19-64a68848f4c7",
+        "EXPO_PUBLIC_API_URL": "https://vertice-os-production.up.railway.app"
       }
     }
   },
