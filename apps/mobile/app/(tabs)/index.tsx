@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
 import { apiFetch } from '../../lib/api'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CitizenDashboard, MyTerritory } from '../../types/api'
 
 function MetricCard({ label, value }: { label: string; value: string | number }) {
@@ -57,8 +60,23 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={colors.navy}
+            colors={[colors.navy]}
+          />
+        )}
       >
+        <View style={styles.brandRow}>
+          <VerticeBrand variant="wordmark" width={126} />
+          <View style={styles.liveBadge}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveBadgeText}>RED CÍVICA</Text>
+          </View>
+        </View>
+
         <View style={styles.header}>
           <Text style={styles.eyebrow}>CENTRO DE MANDO CIUDADANO</Text>
           <Text style={styles.title}>Tu actividad cívica, en un solo lugar.</Text>
@@ -73,6 +91,7 @@ export default function DashboardScreen() {
         ) : null}
 
         <View style={styles.territoryCard}>
+          <View style={styles.cardAccent} />
           <Text style={styles.sectionKicker}>TU TERRITORIO</Text>
           {territory?.territory_code ? (
             <>
@@ -84,14 +103,14 @@ export default function DashboardScreen() {
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push({ pathname: '/city/[code]', params: { code: territory.territory_code! } })}
-                  style={styles.territoryPrimary}
+                  style={({ pressed }) => [styles.territoryPrimary, pressed && styles.pressed]}
                 >
                   <Text style={styles.territoryPrimaryText}>Ver nodo público</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push('/territory/activate')}
-                  style={styles.territorySecondary}
+                  style={({ pressed }) => [styles.territorySecondary, pressed && styles.pressed]}
                 >
                   <Text style={styles.territorySecondaryText}>Quiero ayudar</Text>
                 </Pressable>
@@ -102,7 +121,11 @@ export default function DashboardScreen() {
             <>
               <Text style={styles.territoryName}>Aún no has vinculado una ciudad</Text>
               <Text style={styles.territoryMeta}>La activación comunitaria requiere asociar primero un municipio o distrito a tu cuenta.</Text>
-              <Pressable accessibilityRole="button" onPress={() => router.push('/territory/activate')} style={styles.territoryPrimary}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/territory/activate')}
+                style={({ pressed }) => [styles.territoryPrimary, pressed && styles.pressed]}
+              >
                 <Text style={styles.territoryPrimaryText}>Revisar activación territorial</Text>
               </Pressable>
             </>
@@ -115,7 +138,7 @@ export default function DashboardScreen() {
             <Text style={styles.reputationScore}>{dashboard?.reputation.score ?? '—'}</Text>
             <View style={styles.reputationCopy}>
               <Text style={styles.reputationLevel}>{dashboard?.reputation.level ?? 'Cargando…'}</Text>
-              <Text style={styles.muted}>Nivel de confianza cívica</Text>
+              <Text style={styles.mutedLight}>Nivel de confianza cívica</Text>
             </View>
           </View>
         </View>
@@ -123,12 +146,14 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Requiere tu atención</Text>
           <View style={styles.attentionCard}>
-            <Text style={styles.attentionValue}>{dashboard?.attention.total_items ?? 0}</Text>
-            <Text style={styles.attentionLabel}>elementos pendientes</Text>
+            <View style={styles.attentionHeader}>
+              <Text style={styles.attentionValue}>{dashboard?.attention.total_items ?? 0}</Text>
+              <Text style={styles.attentionLabel}>elementos pendientes</Text>
+            </View>
             <View style={styles.attentionDetails}>
-              <Text style={styles.detail}>Votaciones: {dashboard?.attention.pending_votes.length ?? 0}</Text>
-              <Text style={styles.detail}>Evidencias: {dashboard?.attention.civic_actions_needing_evidence ?? 0}</Text>
-              <Text style={styles.detail}>Reportes en curso: {dashboard?.attention.reports_in_progress ?? 0}</Text>
+              <Text style={styles.detail}>Votaciones · {dashboard?.attention.pending_votes.length ?? 0}</Text>
+              <Text style={styles.detail}>Evidencias · {dashboard?.attention.civic_actions_needing_evidence ?? 0}</Text>
+              <Text style={styles.detail}>Reportes en curso · {dashboard?.attention.reports_in_progress ?? 0}</Text>
             </View>
           </View>
         </View>
@@ -136,15 +161,18 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Continúa tu gestión</Text>
           <View style={styles.launchGrid}>
-            <Pressable onPress={() => router.push('/workflows')} style={styles.launchCard}>
+            <Pressable onPress={() => router.push('/workflows')} style={({ pressed }) => [styles.launchCard, pressed && styles.pressed]}>
+              <Text style={styles.launchKicker}>GESTIÓN</Text>
               <Text style={styles.launchTitle}>Expedientes</Text>
               <Text style={styles.launchBody}>Sigue reportes, análisis, propuestas y control.</Text>
             </Pressable>
-            <Pressable onPress={() => router.push('/identity')} style={styles.launchCard}>
+            <Pressable onPress={() => router.push('/identity')} style={({ pressed }) => [styles.launchCard, pressed && styles.pressed]}>
+              <Text style={styles.launchKicker}>IDENTIDAD</Text>
               <Text style={styles.launchTitle}>Identidad cívica</Text>
               <Text style={styles.launchBody}>Consulta assurance, proofing y proveedor.</Text>
             </Pressable>
-            <Pressable onPress={() => router.push('/crowdfunding')} style={styles.launchCardWide}>
+            <Pressable onPress={() => router.push('/crowdfunding')} style={({ pressed }) => [styles.launchCardWide, pressed && styles.pressed]}>
+              <Text style={styles.launchKicker}>FINANCIACIÓN CÍVICA</Text>
               <Text style={styles.launchTitle}>Crowdfunding</Text>
               <Text style={styles.launchBody}>Revisa campañas, readiness y bloqueos financieros sin mover dinero desde el cliente.</Text>
             </Pressable>
@@ -168,46 +196,54 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 20, paddingBottom: 40, gap: 24 },
-  header: { paddingTop: 8, gap: 8 },
-  eyebrow: { fontSize: 12, letterSpacing: 1.8, fontWeight: '700', color: '#697068' },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '700', color: '#11130F' },
-  subtitle: { fontSize: 15, color: '#6D7168' },
-  errorCard: { borderRadius: 16, padding: 16, backgroundColor: '#FBE9E7', gap: 4 },
-  errorTitle: { fontWeight: '700', color: '#7C2D2D' },
-  errorText: { color: '#7C2D2D', lineHeight: 20 },
-  territoryCard: { borderRadius: 22, padding: 20, backgroundColor: '#FFFFFF', gap: 8 },
-  territoryName: { color: '#171A15', fontSize: 23, lineHeight: 28, fontWeight: '800' },
-  territoryMeta: { color: '#666B62', lineHeight: 20 },
-  territoryActions: { marginTop: 8, flexDirection: 'row', gap: 10 },
-  territoryPrimary: { flex: 1, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#17382A', paddingHorizontal: 10 },
-  territoryPrimaryText: { color: '#FFFFFF', fontWeight: '800', textAlign: 'center' },
-  territorySecondary: { flex: 1, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#AEB7AF', paddingHorizontal: 10 },
-  territorySecondaryText: { color: '#17382A', fontWeight: '800', textAlign: 'center' },
-  territoryBoundary: { marginTop: 4, color: '#7C8178', fontSize: 11, lineHeight: 16 },
-  reputationCard: { borderRadius: 22, padding: 20, backgroundColor: '#17382A', gap: 16 },
-  sectionKicker: { fontSize: 11, letterSpacing: 1.5, fontWeight: '700', color: '#697068' },
-  sectionKickerLight: { fontSize: 11, letterSpacing: 1.5, fontWeight: '700', color: '#C8D9CF' },
-  reputationRow: { flexDirection: 'row', alignItems: 'center', gap: 18 },
-  reputationScore: { fontSize: 44, lineHeight: 50, fontWeight: '700', color: '#FFFFFF' },
-  reputationCopy: { flex: 1, gap: 3 },
-  reputationLevel: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  muted: { color: '#C8D9CF' },
-  section: { gap: 12 },
-  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#151712' },
-  attentionCard: { borderRadius: 20, padding: 18, backgroundColor: '#E7E4D8', gap: 4 },
-  attentionValue: { fontSize: 36, fontWeight: '700', color: '#22251E' },
-  attentionLabel: { color: '#595E55' },
-  attentionDetails: { marginTop: 14, gap: 7 },
-  detail: { color: '#363A32', lineHeight: 20 },
-  launchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  launchCard: { width: '48%', minHeight: 118, borderRadius: 18, padding: 16, backgroundColor: '#FFFFFF', gap: 7 },
-  launchCardWide: { width: '100%', minHeight: 100, borderRadius: 18, padding: 16, backgroundColor: '#E7E4D8', gap: 7 },
-  launchTitle: { fontSize: 16, fontWeight: '800', color: '#17382A' },
-  launchBody: { color: '#5E6259', lineHeight: 18, fontSize: 12 },
-  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  metricCard: { width: '48%', minHeight: 110, borderRadius: 18, padding: 16, backgroundColor: '#FFFFFF', gap: 8 },
-  metricValue: { fontSize: 28, fontWeight: '700', color: '#1C3D2E' },
-  metricLabel: { color: '#5E6259', lineHeight: 18 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.hero, gap: spacing.xl },
+  brandRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  liveDot: { width: 7, height: 7, borderRadius: radius.pill, backgroundColor: colors.emerald },
+  liveBadgeText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  header: { gap: spacing.xs },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.hero },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.subtitle },
+  errorCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, padding: spacing.md, backgroundColor: colors.errorBackground, gap: spacing.xxs },
+  errorTitle: { color: colors.errorText, fontFamily: typography.bodyFamily, fontWeight: '800' },
+  errorText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  territoryCard: { overflow: 'hidden', borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.xs, ...elevation.card },
+  cardAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.citizen },
+  territoryName: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 23, lineHeight: 29, fontWeight: '800' },
+  territoryMeta: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  territoryActions: { marginTop: spacing.xs, flexDirection: 'row', gap: spacing.sm },
+  territoryPrimary: { flex: 1, minHeight: interaction.buttonHeight, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navy, paddingHorizontal: spacing.sm },
+  territoryPrimaryText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.button, textAlign: 'center' },
+  territorySecondary: { flex: 1, minHeight: interaction.buttonHeight, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.sm },
+  territorySecondaryText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.button, textAlign: 'center' },
+  territoryBoundary: { marginTop: spacing.xxs, color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 11, lineHeight: 16 },
+  reputationCard: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.navy, gap: spacing.md, ...elevation.card },
+  sectionKicker: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  sectionKickerLight: { color: colors.citizen, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  reputationRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  reputationScore: { color: colors.white, fontFamily: typography.displayFamily, fontSize: 44, lineHeight: 50, fontWeight: '800' },
+  reputationCopy: { flex: 1, gap: spacing.xxs },
+  reputationLevel: { color: colors.white, fontFamily: typography.displayFamily, fontSize: 18, fontWeight: '800' },
+  mutedLight: { color: colors.borderActive, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  section: { gap: spacing.sm },
+  sectionTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 20, fontWeight: '800' },
+  attentionCard: { borderRadius: radius.xl, borderWidth: 1, borderColor: colors.warningBorder, padding: spacing.lg, backgroundColor: colors.warningBackground, gap: spacing.md },
+  attentionHeader: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+  attentionValue: { color: colors.warningText, fontFamily: typography.displayFamily, fontSize: 36, fontWeight: '800' },
+  attentionLabel: { color: colors.warningText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  attentionDetails: { gap: spacing.xs },
+  detail: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  launchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  launchCard: { width: '48%', minHeight: 128, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, backgroundColor: colors.surface, gap: spacing.xs },
+  launchCardWide: { width: '100%', minHeight: 108, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.infoBorder, padding: spacing.md, backgroundColor: colors.infoBackground, gap: spacing.xs },
+  launchKicker: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  launchTitle: { color: colors.navy, fontFamily: typography.displayFamily, fontSize: 16, fontWeight: '800' },
+  launchBody: { color: colors.textSecondary, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 18 },
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  metricCard: { width: '48%', minHeight: 110, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, backgroundColor: colors.surface, gap: spacing.xs },
+  metricValue: { color: colors.navy, fontFamily: typography.displayFamily, fontSize: 28, fontWeight: '800' },
+  metricLabel: { color: colors.textSecondary, fontFamily: typography.bodyFamily, lineHeight: 18 },
+  pressed: { opacity: interaction.pressedOpacity },
 })
