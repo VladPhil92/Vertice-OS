@@ -1,7 +1,8 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { Redirect, Tabs } from 'expo-router'
+
 import { useAuth } from '../../providers/AuthProvider'
-import { colors, typography } from '../../theme/vertice'
+import { colors, interaction, radius, spacing, typography } from '../../theme/vertice'
 
 export default function TabsLayout() {
   const { user, loading } = useAuth()
@@ -20,20 +21,30 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.navy,
         tabBarInactiveTintColor: colors.textTertiary,
-        tabBarActiveBackgroundColor: colors.surface,
+        tabBarActiveBackgroundColor: colors.infoBackground,
+        tabBarInactiveBackgroundColor: colors.surface,
         tabBarStyle: {
-          minHeight: 68,
-          paddingTop: 8,
-          paddingBottom: 8,
+          minHeight: 70,
+          paddingTop: spacing.xs,
+          paddingBottom: spacing.xs,
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
+        },
+        tabBarItemStyle: {
+          marginHorizontal: spacing.xxs,
+          marginVertical: spacing.xxs,
+          borderRadius: radius.sm,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
+          lineHeight: 14,
           fontFamily: typography.bodyFamily,
-          fontWeight: '700',
+          fontWeight: '800',
+          letterSpacing: 0.15,
         },
       }}
     >
@@ -53,5 +64,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.background,
+    opacity: interaction.disabledOpacity + 0.48,
   },
 })
