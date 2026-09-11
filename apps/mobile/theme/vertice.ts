@@ -23,8 +23,9 @@ export const colors = {
 } as const
 
 export const typography = {
-  // Runtime-certified native aliases. Every weight points to a real bundled
-  // font binary instead of relying on platform font synthesis.
+  // Runtime-certified native aliases. Each exported family points to a real
+  // bundled font binary. Screens select the appropriate alias while roles own
+  // sizing/weight semantics, avoiding duplicate React Native style keys.
   displayFamily: nativeFontFamilies.displayExtraBold,
   displayRegularFamily: nativeFontFamilies.displayRegular,
   displaySemiboldFamily: nativeFontFamilies.displaySemibold,
@@ -41,57 +42,14 @@ export const typography = {
   brandBodyFamily: canonicalTypography.body,
   brandMonoFamily: canonicalTypography.mono,
   roles: {
-    hero: {
-      fontFamily: nativeFontFamilies.displayExtraBold,
-      fontSize: 34,
-      lineHeight: 40,
-      fontWeight: '800' as const,
-      letterSpacing: -0.8,
-    },
-    title: {
-      fontFamily: nativeFontFamilies.displayExtraBold,
-      fontSize: 24,
-      lineHeight: 30,
-      fontWeight: '800' as const,
-      letterSpacing: -0.45,
-    },
-    subtitle: {
-      fontFamily: nativeFontFamilies.bodyRegular,
-      fontSize: 16,
-      lineHeight: 24,
-      fontWeight: '400' as const,
-    },
-    body: {
-      fontFamily: nativeFontFamilies.bodyRegular,
-      fontSize: 15,
-      lineHeight: 22,
-      fontWeight: '400' as const,
-    },
-    label: {
-      fontFamily: nativeFontFamilies.bodyExtraBold,
-      fontSize: 12,
-      lineHeight: 17,
-      fontWeight: '800' as const,
-      letterSpacing: 0.8,
-    },
-    button: {
-      fontFamily: nativeFontFamilies.bodyExtraBold,
-      fontSize: 15,
-      lineHeight: 20,
-      fontWeight: '800' as const,
-    },
-    caption: {
-      fontFamily: nativeFontFamilies.bodySemibold,
-      fontSize: 12,
-      lineHeight: 18,
-      fontWeight: '600' as const,
-    },
-    mono: {
-      fontFamily: nativeFontFamilies.monoRegular,
-      fontSize: 12,
-      lineHeight: 18,
-      fontWeight: '400' as const,
-    },
+    hero: { fontSize: 34, lineHeight: 40, fontWeight: '800' as const, letterSpacing: -0.8 },
+    title: { fontSize: 24, lineHeight: 30, fontWeight: '800' as const, letterSpacing: -0.45 },
+    subtitle: { fontSize: 16, lineHeight: 24, fontWeight: '400' as const },
+    body: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
+    label: { fontSize: 12, lineHeight: 17, fontWeight: '800' as const, letterSpacing: 0.8 },
+    button: { fontSize: 15, lineHeight: 20, fontWeight: '800' as const },
+    caption: { fontSize: 12, lineHeight: 18, fontWeight: '600' as const },
+    mono: { fontSize: 12, lineHeight: 18, fontWeight: '400' as const },
   },
 } as const
 
