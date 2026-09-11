@@ -1,10 +1,15 @@
 import type { ColorValue } from 'react-native'
 import {
+  ArrowLeft,
+  Bell,
   CheckCircle,
   ChevronRight,
+  Circle,
   Home,
   Landmark,
   MapPin,
+  ShieldCheck,
+  Trash2,
   User,
   Users,
 } from 'lucide-react-native'
@@ -19,6 +24,12 @@ const ICONS = {
   governance: Landmark,
   profile: User,
   chevronRight: ChevronRight,
+  back: ArrowLeft,
+  notifications: Bell,
+  verified: ShieldCheck,
+  checkCircle: CheckCircle,
+  circle: Circle,
+  delete: Trash2,
 } as const
 
 export type VerticeIconName = keyof typeof ICONS
