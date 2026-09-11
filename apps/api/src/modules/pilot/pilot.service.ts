@@ -9,7 +9,7 @@ const INCIDENT_STREAM = `${PREFIX}:incidents`
 const EVENT_COUNTS = `${PREFIX}:event_counts`
 const OUTCOME_COUNTS = `${PREFIX}:outcome_counts`
 const UNIQUE_USERS = `${PREFIX}:unique_users`
-const RETENTION_SECONDS = 30 * 24 * 60 * 60
+const RETENTION_DAYS = 30
 const TELEMETRY_MAXLEN = 10_000
 const FEEDBACK_MAXLEN = 2_000
 const INCIDENT_MAXLEN = 500
@@ -18,7 +18,7 @@ export function getPilotObservabilityState(env: NodeJS.ProcessEnv = process.env)
   const pepper = env.PILOT_TELEMETRY_PEPPER?.trim()
   return {
     configured: Boolean(pepper && pepper.length >= 32),
-    retention_days: 30,
+    retention_days: RETENTION_DAYS,
     storage: 'redis_ephemeral' as const,
   }
 }
@@ -59,16 +59,40 @@ function timestamp(): string {
   return new Date().toISOString()
 }
 
-async function retain(...keys: string[]): Promise<void> {
-  const pipeline = redis.multi()
-  for (const key of keys) pipeline.expire(key, RETENTION_SECONDS)
-  await pipeline.exec()
+function dayStamp(date = new Date()): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function bucketKey(base: string, day: string): string {
+  return `${base}:${day}`
+}
+
+function bucketExpiryEpoch(day: string): number {
+  const expires = new Date(`${day}T00:00:00.000Z`)
+  expires.setUTCDate(expires.getUTCDate() + RETENTION_DAYS)
+  return Math.floor(expires.getTime() / 1000)
+}
+
+function rollingDays(count = RETENTION_DAYS): string[] {
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today)
+    date.setUTCDate(date.getUTCDate() - index)
+    return dayStamp(date)
+  })
 }
 
 export async function recordPilotTelemetry(citizenId: string, input: PilotTelemetryInput): Promise<{ accepted: true }> {
   const pilotUserId = pilotPseudonym(citizenId, requirePilotPepper())
   const at = timestamp()
   const revision = deployedPilotRevision()
+  const day = dayStamp()
+  const streamKey = bucketKey(TELEMETRY_STREAM, day)
+  const eventKey = bucketKey(EVENT_COUNTS, day)
+  const outcomeKey = bucketKey(OUTCOME_COUNTS, day)
+  const usersKey = bucketKey(UNIQUE_USERS, day)
+  const expiry = bucketExpiryEpoch(day)
 
   const fields = [
     'pilot_user_id', pilotUserId,
@@ -82,12 +106,12 @@ export async function recordPilotTelemetry(citizenId: string, input: PilotTeleme
   if (input.duration_ms !== undefined) fields.push('duration_ms', String(input.duration_ms))
 
   const pipeline = redis.multi()
-  pipeline.xadd(TELEMETRY_STREAM, 'MAXLEN', '~', TELEMETRY_MAXLEN, '*', ...fields)
-  pipeline.hincrby(EVENT_COUNTS, input.event, 1)
-  pipeline.hincrby(OUTCOME_COUNTS, input.outcome, 1)
-  pipeline.pfadd(UNIQUE_USERS, pilotUserId)
+  pipeline.xadd(streamKey, 'MAXLEN', '~', String(TELEMETRY_MAXLEN), '*', ...fields)
+  pipeline.hincrby(eventKey, input.event, 1)
+  pipeline.hincrby(outcomeKey, input.outcome, 1)
+  pipeline.pfadd(usersKey, pilotUserId)
+  for (const key of [streamKey, eventKey, outcomeKey, usersKey]) pipeline.expireat(key, expiry)
   await pipeline.exec()
-  await retain(TELEMETRY_STREAM, EVENT_COUNTS, OUTCOME_COUNTS, UNIQUE_USERS)
 
   return { accepted: true }
 }
@@ -95,6 +119,8 @@ export async function recordPilotTelemetry(citizenId: string, input: PilotTeleme
 export async function recordPilotFeedback(citizenId: string, input: PilotFeedbackInput): Promise<{ accepted: true }> {
   const pilotUserId = pilotPseudonym(citizenId, requirePilotPepper())
   const message = redactPilotText(input.message)
+  const day = dayStamp()
+  const streamKey = bucketKey(FEEDBACK_STREAM, day)
   const fields = [
     'pilot_user_id', pilotUserId,
     'category', input.category,
@@ -105,16 +131,21 @@ export async function recordPilotFeedback(citizenId: string, input: PilotFeedbac
   ]
   if (input.rating !== undefined) fields.push('rating', String(input.rating))
 
-  await redis.xadd(FEEDBACK_STREAM, 'MAXLEN', '~', FEEDBACK_MAXLEN, '*', ...fields)
-  await retain(FEEDBACK_STREAM)
+  const pipeline = redis.multi()
+  pipeline.xadd(streamKey, 'MAXLEN', '~', String(FEEDBACK_MAXLEN), '*', ...fields)
+  pipeline.expireat(streamKey, bucketExpiryEpoch(day))
+  await pipeline.exec()
   return { accepted: true }
 }
 
 export async function recordPilotIncident(operatorId: string, input: PilotIncidentInput): Promise<{ accepted: true }> {
   const operator = pilotPseudonym(operatorId, requirePilotPepper())
-  await redis.xadd(
-    INCIDENT_STREAM,
-    'MAXLEN', '~', INCIDENT_MAXLEN,
+  const day = dayStamp()
+  const streamKey = bucketKey(INCIDENT_STREAM, day)
+  const pipeline = redis.multi()
+  pipeline.xadd(
+    streamKey,
+    'MAXLEN', '~', String(INCIDENT_MAXLEN),
     '*',
     'operator_id', operator,
     'severity', input.severity,
@@ -124,49 +155,80 @@ export async function recordPilotIncident(operatorId: string, input: PilotIncide
     'revision', deployedPilotRevision(),
     'observed_at', timestamp(),
   )
-  await retain(INCIDENT_STREAM)
+  pipeline.expireat(streamKey, bucketExpiryEpoch(day))
+  await pipeline.exec()
   return { accepted: true }
 }
 
 type StreamEntry = [string, string[]]
 
-function decode(entry: StreamEntry): Record<string, string> & { id: string } {
+type OperationalRecord = Record<string, string> & { id: string }
+
+function decode(entry: StreamEntry): OperationalRecord {
   const [id, fields] = entry
-  const data: Record<string, string> & { id: string } = { id }
+  const data: OperationalRecord = { id }
   for (let index = 0; index < fields.length; index += 2) {
     data[fields[index] ?? 'unknown'] = fields[index + 1] ?? ''
   }
   return data
 }
 
-function numericRecord(input: Record<string, string>): Record<string, number> {
-  return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, Number(value) || 0]))
+function stripInternalPseudonym(record: OperationalRecord): OperationalRecord {
+  const { pilot_user_id: _pilotUserId, operator_id: _operatorId, ...publicRecord } = record
+  return publicRecord as OperationalRecord
+}
+
+function aggregateNumericRecords(records: Array<Record<string, string>>): Record<string, number> {
+  const totals: Record<string, number> = {}
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      totals[key] = (totals[key] ?? 0) + (Number(value) || 0)
+    }
+  }
+  return totals
+}
+
+function newestRecords(streams: StreamEntry[][], limit: number): OperationalRecord[] {
+  return streams
+    .flat()
+    .map(decode)
+    .sort((left, right) => (right.observed_at ?? '').localeCompare(left.observed_at ?? ''))
+    .slice(0, limit)
+    .map(stripInternalPseudonym)
 }
 
 export async function getPilotOperationsSummary() {
   requirePilotPepper()
-  const [eventCounts, outcomeCounts, uniqueUsers, feedback, incidents] = await Promise.all([
-    redis.hgetall(EVENT_COUNTS),
-    redis.hgetall(OUTCOME_COUNTS),
-    redis.pfcount(UNIQUE_USERS),
-    redis.xrevrange(FEEDBACK_STREAM, '+', '-', 'COUNT', 20),
-    redis.xrevrange(INCIDENT_STREAM, '+', '-', 'COUNT', 20),
+  const days = rollingDays()
+  const eventKeys = days.map((day) => bucketKey(EVENT_COUNTS, day))
+  const outcomeKeys = days.map((day) => bucketKey(OUTCOME_COUNTS, day))
+  const userKeys = days.map((day) => bucketKey(UNIQUE_USERS, day))
+  const feedbackKeys = days.map((day) => bucketKey(FEEDBACK_STREAM, day))
+  const incidentKeys = days.map((day) => bucketKey(INCIDENT_STREAM, day))
+
+  const [eventCounts, outcomeCounts, uniqueUsers, feedbackStreams, incidentStreams] = await Promise.all([
+    Promise.all(eventKeys.map((key) => redis.hgetall(key))),
+    Promise.all(outcomeKeys.map((key) => redis.hgetall(key))),
+    redis.pfcount(...userKeys),
+    Promise.all(feedbackKeys.map((key) => redis.xrevrange(key, '+', '-', 'COUNT', 20))),
+    Promise.all(incidentKeys.map((key) => redis.xrevrange(key, '+', '-', 'COUNT', 20))),
   ])
 
   return {
     status: 'operational',
-    retention_days: 30,
+    retention_days: RETENTION_DAYS,
     revision: deployedPilotRevision(),
     unique_users_approx: uniqueUsers,
-    event_counts: numericRecord(eventCounts),
-    outcome_counts: numericRecord(outcomeCounts),
-    recent_feedback: (feedback as StreamEntry[]).map(decode),
-    recent_incidents: (incidents as StreamEntry[]).map(decode),
+    event_counts: aggregateNumericRecords(eventCounts),
+    outcome_counts: aggregateNumericRecords(outcomeCounts),
+    recent_feedback: newestRecords(feedbackStreams as StreamEntry[][], 20),
+    recent_incidents: newestRecords(incidentStreams as StreamEntry[][], 20),
     privacy: {
       raw_citizen_ids_stored: false,
       emails_stored: false,
       gps_stored: false,
       arbitrary_event_payloads_allowed: false,
+      stable_pseudonyms_exposed_to_operators: false,
     },
   }
 }
