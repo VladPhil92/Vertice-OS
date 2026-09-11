@@ -1,0 +1,96 @@
+name: Pilot Operations Observability
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/app.ts'
+      - 'apps/api/src/modules/pilot/**'
+      - 'apps/api/src/lib/closed-pilot-access.ts'
+      - 'apps/web/app/dashboard/pilot/**'
+      - 'scripts/verify-pilot-operations-phase7i.mjs'
+      - 'docs/engineering/PILOT_OPERATIONS_OBSERVABILITY_PHASE7I.md'
+      - 'docs/operations/CLOSED_PILOT_OBSERVABILITY_RUNBOOK.md'
+      - '.github/workflows/pilot-operations-observability.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/app.ts'
+      - 'apps/api/src/modules/pilot/**'
+      - 'apps/api/src/lib/closed-pilot-access.ts'
+      - 'apps/web/app/dashboard/pilot/**'
+      - 'scripts/verify-pilot-operations-phase7i.mjs'
+      - 'docs/engineering/PILOT_OPERATIONS_OBSERVABILITY_PHASE7I.md'
+      - 'docs/operations/CLOSED_PILOT_OBSERVABILITY_RUNBOOK.md'
+      - '.github/workflows/pilot-operations-observability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pilot-operations-observability-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.13.0'
+
+jobs:
+  code-gate:
+    name: Exact SHA + pilot operations privacy contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact submitted SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "PILOT_OPERATIONS_CANDIDATE_SHA=$EXPECTED_SHA"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @vertice/types build
+
+      - name: Typecheck API and web
+        run: |
+          pnpm --filter @vertice/api typecheck
+          pnpm --filter @vertice/web typecheck
+
+      - name: Test Phase 7I privacy contract
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vertice_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret-test-jwt-secret-32chars
+        run: >-
+          pnpm --filter @vertice/api exec jest --runInBand
+          src/modules/pilot/__tests__/pilot.service.test.ts
+
+      - name: Verify Phase 7I exact-SHA source contract
+        env:
+          VERTICE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/verify-pilot-operations-phase7i.mjs
+
+      - name: Emit Phase 7I boundary
+        run: |
+          echo "PILOT_OPERATIONS_CODE_STATUS=READY_FOR_RUNTIME_VALIDATION"
+          echo "PILOT_OPERATIONS_RUNTIME_STATUS=REQUIRES_ACTIVE_CLOSED_PILOT"
+          echo "Operational status requires real telemetry/feedback/incident roundtrips on the deployed candidate."
+          echo "This gate never enables money, binding governance, or public enrollment."
