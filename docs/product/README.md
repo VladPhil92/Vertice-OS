@@ -14,5 +14,6 @@ Documentos principales:
 - `PHASE_GOLDEN_SCREEN_CONVERGENCE.md` — migración visual runtime de las superficies móviles primarias.
 - `PHASE_NATIVE_BRAND_RUNTIME_CERTIFICATION.md` — bundling y certificación nativa de Montserrat, Inter, DM Mono y Lucide.
 - `PHASE_CRITICAL_SECONDARY_SURFACE_CONVERGENCE.md` — convergencia de Notificaciones, Identidad cívica y Eliminación de cuenta sobre el runtime canónico.
+- `PHASE_TERRITORY_TRUST_SURFACE_CONVERGENCE.md` — convergencia de selección territorial, activación comunitaria y residence assurance sin alterar autoridad de backend.
 - `CTG_ONE_MOBILE_AUTH.md` — contrato de federación CTG One con identidad única.
 - `RELEASE_CHECKLIST_COHERENCE.md` — evidencia exigida antes de declarar paridad o release.

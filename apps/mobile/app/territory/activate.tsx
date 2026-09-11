@@ -2,8 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { apiFetch, apiMutation } from '../../lib/api'
 import { useAuth } from '../../providers/AuthProvider'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type {
   ApiList,
   MyTerritory,
@@ -29,6 +33,13 @@ const STATUS_LABEL: Record<TerritoryInterestStatus, string> = {
   approved: 'Interés aprobado',
   declined: 'No aprobado',
   withdrawn: 'Retirado',
+}
+
+function statusTone(status: TerritoryInterestStatus) {
+  if (status === 'approved') return styles.statusApproved
+  if (status === 'pending') return styles.statusPending
+  if (status === 'declined') return styles.statusDeclined
+  return styles.statusWithdrawn
 }
 
 export default function TerritoryActivationScreen() {
@@ -136,6 +147,7 @@ export default function TerritoryActivationScreen() {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.authGate}>
+          <VerticeBrand variant="symbol" width={48} />
           <Text style={styles.muted}>Verificando sesión ciudadana…</Text>
         </View>
       </SafeAreaView>
@@ -147,13 +159,37 @@ export default function TerritoryActivationScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
+            tintColor={colors.navy}
+            colors={[colors.navy]}
+          />
+        )}
       >
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Volver</Text>
+        <View style={styles.brandRow}>
+          <VerticeBrand variant="wordmark" width={120} />
+          <View style={styles.sectionBadge}>
+            <VerticeIcon name="community" color={colors.navy} size={16} />
+            <Text style={styles.sectionBadgeText}>ACTIVACIÓN</Text>
+          </View>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <VerticeIcon name="back" color={colors.navy} size={18} />
+          <Text style={styles.backText}>Volver</Text>
         </Pressable>
 
         <View style={styles.hero}>
+          <View style={styles.heroIcon}>
+            <VerticeIcon name="community" color={colors.white} size={24} />
+          </View>
           <Text style={styles.eyebrow}>ACTIVACIÓN CIUDADANA · PHASE 7D</Text>
           <Text style={styles.title}>Ayuda a activar {territory?.territory_name ?? 'tu comunidad'}</Text>
           <Text style={styles.heroBody}>
@@ -163,8 +199,9 @@ export default function TerritoryActivationScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push({ pathname: '/city/[code]', params: { code: territory.territory_code! } })}
-              style={styles.outlineButton}
+              style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}
             >
+              <VerticeIcon name="territory" color={colors.white} size={18} />
               <Text style={styles.outlineButtonText}>Ver nodo público de {territory.territory_name ?? 'mi ciudad'}</Text>
             </Pressable>
           ) : null}
@@ -174,7 +211,7 @@ export default function TerritoryActivationScreen() {
         {error ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>No pudimos completar la operación</Text>
-            <Text style={styles.errorText}>{error}</Text>
+            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
         {notice ? (
@@ -185,12 +222,18 @@ export default function TerritoryActivationScreen() {
 
         {!loading && !territory?.territory_code ? (
           <View style={styles.card}>
+            <Text style={styles.sectionKicker}>CONTEXTO TERRITORIAL</Text>
             <Text style={styles.sectionTitle}>Primero vincula tu territorio</Text>
             <Text style={styles.body}>Tu cuenta debe tener un municipio o distrito asociado antes de manifestar interés de activación.</Text>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/territory/select')} style={styles.primaryButton}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/territory/select')}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            >
+              <VerticeIcon name="territory" color={colors.white} size={18} />
               <Text style={styles.primaryButtonText}>Seleccionar mi municipio o distrito</Text>
             </Pressable>
-            <Text style={styles.boundaryText}>La vinculación territorial continúa siendo autodeclarada y no equivale a residencia cívica verificada.</Text>
+            <Text style={styles.helper}>La vinculación territorial continúa siendo autodeclarada y no equivale a residencia cívica verificada.</Text>
           </View>
         ) : null}
 
@@ -198,31 +241,38 @@ export default function TerritoryActivationScreen() {
           <>
             <View style={styles.card}>
               <Text style={styles.sectionKicker}>CÓMO QUIERES AYUDAR</Text>
+              <Text style={styles.sectionTitle}>Participación local voluntaria</Text>
               <View style={styles.roleList}>
                 {(Object.keys(ROLE_LABEL) as TerritoryInterestRole[]).map((value) => {
                   const selected = role === value
                   return (
                     <Pressable
                       key={value}
-                      accessibilityRole="button"
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
                       onPress={() => setRole(value)}
-                      style={[styles.roleCard, selected && styles.roleCardSelected]}
+                      style={({ pressed }) => [styles.roleCard, selected && styles.roleCardSelected, pressed && styles.pressed]}
                     >
-                      <Text style={[styles.roleTitle, selected && styles.roleTitleSelected]}>{ROLE_LABEL[value]}</Text>
-                      <Text style={[styles.roleBody, selected && styles.roleBodySelected]}>{ROLE_DESCRIPTION[value]}</Text>
+                      <View style={[styles.roleMark, selected && styles.roleMarkSelected]}>
+                        <VerticeIcon name={selected ? 'checkCircle' : 'circle'} color={selected ? colors.navy : colors.textTertiary} size={18} />
+                      </View>
+                      <View style={styles.roleCopy}>
+                        <Text style={[styles.roleTitle, selected && styles.roleTitleSelected]}>{ROLE_LABEL[value]}</Text>
+                        <Text style={styles.roleBody}>{ROLE_DESCRIPTION[value]}</Text>
+                      </View>
                     </Pressable>
                   )
                 })}
               </View>
 
-              <Text style={styles.inputLabel}>Mensaje opcional</Text>
+              <Text style={styles.inputLabel}>MENSAJE OPCIONAL</Text>
               <TextInput
                 multiline
                 maxLength={500}
                 value={message}
                 onChangeText={setMessage}
                 placeholder="Cuéntanos brevemente qué experiencia o disponibilidad puedes aportar."
-                placeholderTextColor="#8A8E85"
+                placeholderTextColor={colors.placeholder}
                 style={styles.input}
                 textAlignVertical="top"
               />
@@ -236,10 +286,12 @@ export default function TerritoryActivationScreen() {
 
               <Pressable
                 accessibilityRole="button"
+                accessibilityState={{ disabled: saving || Boolean(blockingInterestForSelectedRole) }}
                 disabled={saving || Boolean(blockingInterestForSelectedRole)}
                 onPress={() => void submit()}
-                style={[styles.primaryButton, (saving || Boolean(blockingInterestForSelectedRole)) && styles.disabled]}
+                style={({ pressed }) => [styles.primaryButton, (saving || Boolean(blockingInterestForSelectedRole)) && styles.disabled, pressed && !saving && !blockingInterestForSelectedRole && styles.pressed]}
               >
+                <VerticeIcon name="community" color={colors.white} size={18} />
                 <Text style={styles.primaryButtonText}>{saving ? 'Registrando…' : 'Registrar mi interés'}</Text>
               </Pressable>
               <Text style={styles.helper}>
@@ -251,7 +303,10 @@ export default function TerritoryActivationScreen() {
               <Text style={styles.sectionKicker}>MIS MANIFESTACIONES</Text>
               <Text style={styles.sectionTitle}>Historial de activación</Text>
               {interests.length === 0 ? (
-                <Text style={styles.empty}>Todavía no has registrado interés de activación territorial.</Text>
+                <View style={styles.emptyCard}>
+                  <VerticeIcon name="community" color={colors.textTertiary} size={24} />
+                  <Text style={styles.empty}>Todavía no has registrado interés de activación territorial.</Text>
+                </View>
               ) : (
                 <View style={styles.interestList}>
                   {interests.map((interest) => (
@@ -259,20 +314,24 @@ export default function TerritoryActivationScreen() {
                       <View style={styles.interestHeader}>
                         <View style={styles.interestCopy}>
                           <Text style={styles.interestTitle}>{ROLE_LABEL[interest.interest_role]}</Text>
-                          <Text style={styles.interestMeta}>{STATUS_LABEL[interest.status]} · {new Date(interest.updated_at).toLocaleDateString('es-CO')}</Text>
+                          <Text style={styles.interestMeta}>{new Date(interest.updated_at).toLocaleDateString('es-CO')}</Text>
                         </View>
-                        {interest.status !== 'withdrawn' ? (
-                          <Pressable
-                            accessibilityRole="button"
-                            disabled={busyInterestId === interest.id}
-                            onPress={() => void withdraw(interest)}
-                            style={[styles.withdrawButton, busyInterestId === interest.id && styles.disabled]}
-                          >
-                            <Text style={styles.withdrawText}>{busyInterestId === interest.id ? 'Retirando…' : 'Retirar'}</Text>
-                          </Pressable>
-                        ) : null}
+                        <View style={[styles.statusPill, statusTone(interest.status)]}>
+                          <Text style={styles.statusText}>{STATUS_LABEL[interest.status]}</Text>
+                        </View>
                       </View>
                       {interest.message ? <Text style={styles.interestMessage}>{interest.message}</Text> : null}
+                      {interest.status !== 'withdrawn' ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ disabled: busyInterestId === interest.id }}
+                          disabled={busyInterestId === interest.id}
+                          onPress={() => void withdraw(interest)}
+                          style={({ pressed }) => [styles.withdrawButton, busyInterestId === interest.id && styles.disabled, pressed && busyInterestId !== interest.id && styles.pressed]}
+                        >
+                          <Text style={styles.withdrawText}>{busyInterestId === interest.id ? 'Retirando…' : 'Retirar manifestación'}</Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   ))}
                 </View>
@@ -280,8 +339,8 @@ export default function TerritoryActivationScreen() {
             </View>
 
             <View style={styles.boundaryCard}>
+              <Text style={styles.boundaryKicker}>FRONTERA DE AUTORIDAD</Text>
               <Text style={styles.boundaryText}>
-                <Text style={styles.boundaryStrong}>Frontera de autoridad. </Text>
                 Manifestar interés, ser aprobado o aparecer en una cola operativa no modifica autenticación, identity assurance, territory assurance, reputación, ranking, voto, autoridad cívica ni alcance orgánico.
               </Text>
             </View>
@@ -293,54 +352,68 @@ export default function TerritoryActivationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  authGate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  content: { padding: 20, paddingBottom: 44, gap: 16 },
-  backButton: { alignSelf: 'flex-start', paddingVertical: 6, paddingRight: 12 },
-  backText: { color: '#24573E', fontWeight: '700' },
-  hero: { borderRadius: 24, padding: 22, backgroundColor: '#17382A', gap: 10 },
-  eyebrow: { color: '#C8D9CF', fontSize: 11, letterSpacing: 1.6, fontWeight: '700' },
-  title: { color: '#FFFFFF', fontSize: 30, lineHeight: 36, fontWeight: '800' },
-  body: { color: '#5C625A', lineHeight: 21 },
-  heroBody: { color: '#D9E4DD', lineHeight: 21 },
-  outlineButton: { marginTop: 6, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#769482', paddingHorizontal: 14 },
-  outlineButtonText: { color: '#FFFFFF', fontWeight: '700', textAlign: 'center' },
-  muted: { color: '#6C7068' },
-  errorCard: { borderRadius: 16, padding: 16, backgroundColor: '#FBE9E7', gap: 4 },
-  errorTitle: { color: '#7C2D2D', fontWeight: '700' },
-  errorText: { color: '#7C2D2D', lineHeight: 20 },
-  noticeCard: { borderRadius: 16, padding: 16, backgroundColor: '#E7EFE9' },
-  noticeText: { color: '#2F5B3E', lineHeight: 20 },
-  card: { borderRadius: 22, padding: 20, backgroundColor: '#FFFFFF', gap: 14 },
-  sectionKicker: { color: '#697068', fontSize: 11, letterSpacing: 1.5, fontWeight: '700' },
-  sectionTitle: { color: '#171A15', fontSize: 22, lineHeight: 28, fontWeight: '800' },
-  roleList: { gap: 10 },
-  roleCard: { borderRadius: 17, padding: 15, borderWidth: 1, borderColor: '#DCD9D0', backgroundColor: '#FAF9F5', gap: 4 },
-  roleCardSelected: { borderColor: '#17382A', backgroundColor: '#E6EEE8' },
-  roleTitle: { color: '#2A3029', fontWeight: '800' },
-  roleTitleSelected: { color: '#17382A' },
-  roleBody: { color: '#6C7068', lineHeight: 19, fontSize: 13 },
-  roleBodySelected: { color: '#3E5547' },
-  inputLabel: { color: '#31362F', fontWeight: '700' },
-  input: { minHeight: 122, borderRadius: 16, borderWidth: 1, borderColor: '#D6D3CA', backgroundColor: '#FAF9F5', padding: 14, color: '#20251F', lineHeight: 20 },
-  counter: { alignSelf: 'flex-end', color: '#858980', fontSize: 12 },
-  infoCard: { borderRadius: 14, padding: 13, backgroundColor: '#EEECE4' },
-  infoText: { color: '#62675F', lineHeight: 19 },
-  primaryButton: { minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#17382A', paddingHorizontal: 14 },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '800', textAlign: 'center' },
-  helper: { color: '#72766E', lineHeight: 18, fontSize: 12 },
-  empty: { borderRadius: 14, padding: 14, backgroundColor: '#F1EFE8', color: '#666B62', lineHeight: 20 },
-  interestList: { gap: 10 },
-  interestCard: { borderRadius: 16, padding: 15, borderWidth: 1, borderColor: '#E5E2D9', gap: 10 },
-  interestHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  interestCopy: { flex: 1, gap: 3 },
-  interestTitle: { color: '#252A24', fontWeight: '800' },
-  interestMeta: { color: '#7A7E75', fontSize: 12 },
-  withdrawButton: { minHeight: 38, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#D7C2BE', paddingHorizontal: 12 },
-  withdrawText: { color: '#8A3B34', fontWeight: '700', fontSize: 12 },
-  interestMessage: { color: '#646960', lineHeight: 20 },
-  boundaryCard: { borderRadius: 18, padding: 17, backgroundColor: '#E7EFE9' },
-  boundaryText: { color: '#3E5547', lineHeight: 21 },
-  boundaryStrong: { fontWeight: '800' },
-  disabled: { opacity: 0.5 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  authGate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
+  content: { padding: spacing.lg, paddingBottom: spacing.hero, gap: spacing.md },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.infoBackground, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  sectionBadgeText: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, fontSize: 9, lineHeight: 13, fontWeight: '800', letterSpacing: 0.8 },
+  backButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start', paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  hero: { borderRadius: radius.xxl, padding: spacing.xl, backgroundColor: colors.navy, gap: spacing.sm },
+  heroIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navyLight },
+  eyebrow: { color: colors.citizen, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  title: { color: colors.white, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.hero },
+  heroBody: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  outlineButton: { marginTop: spacing.xs, minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, paddingHorizontal: spacing.md },
+  outlineButtonText: { flex: 1, color: colors.white, textAlign: 'center', fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  muted: { color: colors.textTertiary, textAlign: 'center', fontFamily: typography.bodyFamily, ...typography.roles.body },
+  errorCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, gap: spacing.xxs },
+  errorTitle: { color: colors.errorText, fontFamily: typography.displayBoldFamily, fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  errorText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  noticeCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.successBackground, borderWidth: 1, borderColor: colors.successBorder },
+  noticeText: { color: colors.successText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  card: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.sm, borderWidth: 1, borderColor: colors.border, ...elevation.card },
+  sectionKicker: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  sectionTitle: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
+  body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  roleList: { gap: spacing.sm },
+  roleCard: { minHeight: 78, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+  roleCardSelected: { borderColor: colors.navy, backgroundColor: colors.infoBackground },
+  roleMark: { width: 30, height: 30, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  roleMarkSelected: { backgroundColor: colors.citizen },
+  roleCopy: { flex: 1, gap: spacing.xxs },
+  roleTitle: { color: colors.textPrimary, fontFamily: typography.bodyExtraBoldFamily, fontSize: 15, lineHeight: 20, fontWeight: '800' },
+  roleTitleSelected: { color: colors.navy },
+  roleBody: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  inputLabel: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  input: { minHeight: 122, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.inputBorder, backgroundColor: colors.surfaceAlt, padding: spacing.md, color: colors.textPrimary, fontFamily: typography.bodyFamily, fontSize: 15, lineHeight: 22 },
+  counter: { alignSelf: 'flex-end', color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  infoCard: { borderRadius: radius.md, padding: spacing.sm, backgroundColor: colors.warningBackground, borderWidth: 1, borderColor: colors.warningBorder },
+  infoText: { color: colors.warningText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  primaryButton: { minHeight: interaction.buttonHeight, flexDirection: 'row', gap: spacing.xs, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navy, paddingHorizontal: spacing.md },
+  primaryButtonText: { color: colors.white, textAlign: 'center', fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  helper: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  emptyCard: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, padding: spacing.md },
+  empty: { color: colors.textTertiary, textAlign: 'center', fontFamily: typography.bodyFamily, ...typography.roles.body },
+  interestList: { gap: spacing.sm },
+  interestCard: { borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, gap: spacing.sm },
+  interestHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  interestCopy: { flex: 1, gap: spacing.xxs },
+  interestTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  interestMeta: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  statusPill: { borderRadius: radius.pill, paddingHorizontal: spacing.xs, paddingVertical: spacing.xxs },
+  statusApproved: { backgroundColor: colors.successBackground },
+  statusPending: { backgroundColor: colors.warningBackground },
+  statusDeclined: { backgroundColor: colors.errorBackground },
+  statusWithdrawn: { backgroundColor: colors.surfaceAlt },
+  statusText: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, fontSize: 10, lineHeight: 14, fontWeight: '600' },
+  withdrawButton: { minHeight: interaction.minimumTouchTarget, alignSelf: 'flex-start', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.errorBorder, backgroundColor: colors.errorBackground, paddingHorizontal: spacing.sm },
+  withdrawText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  interestMessage: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  boundaryCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.infoBackground, borderWidth: 1, borderColor: colors.infoBorder, gap: spacing.xs },
+  boundaryKicker: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  boundaryText: { color: colors.infoText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  disabled: { opacity: interaction.disabledOpacity },
+  pressed: { opacity: interaction.pressedOpacity },
 })
