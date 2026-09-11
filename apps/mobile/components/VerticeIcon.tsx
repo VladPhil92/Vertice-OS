@@ -1,3 +1,4 @@
+import type { ColorValue } from 'react-native'
 import {
   CheckCircle,
   ChevronRight,
@@ -24,7 +25,7 @@ export type VerticeIconName = keyof typeof ICONS
 
 interface VerticeIconProps {
   name: VerticeIconName
-  color?: string
+  color?: ColorValue
   size?: number
   strokeWidth?: number
 }
