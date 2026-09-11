@@ -2,7 +2,18 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { requireAdmin, requireAuth, requireModerator } from '../../middleware/auth'
 import { assertClosedPilotEmailAllowed, getClosedPilotAccessState } from '../../lib/closed-pilot-access'
 import { prisma } from '../../lib/prisma'
-import { PilotFeedbackSchema, PilotIncidentSchema, PilotTelemetrySchema } from './pilot.schema'
+import {
+  PilotActivationCommandSchema,
+  PilotFeedbackSchema,
+  PilotIncidentSchema,
+  PilotTelemetrySchema,
+} from './pilot.schema'
+import {
+  activatePilotCohort,
+  assertPilotActivationCurrent,
+  getPilotActivationState,
+  pausePilotCohort,
+} from './pilot-activation.service'
 import {
   getPilotObservabilityState,
   getPilotOperationsSummary,
@@ -46,10 +57,11 @@ async function requirePilotParticipant(request: FastifyRequest, reply: FastifyRe
     return
   }
 
-  // Revalidate the invitation on every participant entry point. This closes the
-  // short access-token window that could otherwise exist if pilot mode is
-  // activated after an uninvited user already authenticated.
+  // Invitation is checked on every participant request, then the Phase 7L
+  // runtime activation record is checked. A new deployment or any cohort
+  // allowlist change invalidates that record and closes the pilot fail-closed.
   assertClosedPilotEmailAllowed(citizen.email)
+  await assertPilotActivationCurrent()
 }
 
 async function requirePilotOperator(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -64,14 +76,20 @@ async function requirePilotAdmin(request: FastifyRequest, reply: FastifyReply): 
   requireConfiguredPilot(reply)
 }
 
+async function requirePilotControlAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await requireAdmin(request, reply)
+}
+
 export async function pilotRoutes(app: FastifyInstance): Promise<void> {
   app.get('/status', { preHandler: requirePilotParticipant }, async (_request, reply) => {
     const access = getClosedPilotAccessState()
     const observability = getPilotObservabilityState()
+    const activation = await getPilotActivationState()
     return reply.send({
       status: 'active',
       mode: access.mode,
       cohort_size: access.cohort_size,
+      activation_revision: activation.revision,
       telemetry_retention_days: observability.retention_days,
       observability_storage: observability.storage,
       money_enabled: false,
@@ -109,6 +127,47 @@ export async function pilotRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return reply.status(202).send(await recordPilotFeedback(request.citizen.sub, parsed.data))
+  })
+
+  // Phase 7L launch control is intentionally available to admins even while
+  // the pilot is disabled. This lets an operator inspect the fail-closed
+  // preflight state before changing any runtime environment flag.
+  app.get('/admin/activation', {
+    preHandler: requirePilotControlAdmin,
+    config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
+  }, async (_request, reply) => reply.send(await getPilotActivationState()))
+
+  app.post('/admin/activation', {
+    preHandler: requirePilotControlAdmin,
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
+    const parsed = PilotActivationCommandSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Comando de activación inválido',
+        code: 'INVALID_PILOT_ACTIVATION_COMMAND',
+        details: parsed.error.flatten().fieldErrors,
+      })
+    }
+
+    try {
+      const state = parsed.data.action === 'activate'
+        ? await activatePilotCohort(parsed.data.expected_revision)
+        : await pausePilotCohort()
+      return reply.send(state)
+    } catch (error) {
+      const err = error as {
+        statusCode?: number
+        code?: string
+        message?: string
+        blockers?: string[]
+      }
+      return reply.status(err.statusCode ?? 500).send({
+        error: err.message ?? 'No fue posible cambiar el estado del piloto',
+        code: err.code ?? 'PILOT_ACTIVATION_ERROR',
+        ...(err.blockers ? { blockers: err.blockers } : {}),
+      })
+    }
   })
 
   app.get('/admin/summary', {
