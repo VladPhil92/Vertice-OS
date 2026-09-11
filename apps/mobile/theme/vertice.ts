@@ -1,5 +1,3 @@
-import { Platform } from 'react-native'
-
 import {
   colors as canonicalColors,
   iconography,
@@ -10,12 +8,14 @@ import {
   spacing,
   typography as canonicalTypography,
 } from '../../../packages/design-tokens/src/index'
+import { nativeFontFamilies } from './fonts'
 
 /**
  * Native adapter for the canonical VÉRTICE product language.
  *
  * Brand values live in packages/design-tokens. Native-only concerns such as
- * platform font fallback, bundled imagery and React Native elevation stay here.
+ * concrete bundled font aliases, packaged imagery and React Native elevation
+ * stay here.
  */
 export const colors = {
   ...canonicalColors,
@@ -23,23 +23,75 @@ export const colors = {
 } as const
 
 export const typography = {
-  // Target families are shared with web. Until the native font binaries are
-  // bundled, platform-safe fallbacks preserve layout without silently changing
-  // the brand contract.
-  displayFamily: Platform.select({ ios: 'Avenir Next', android: 'sans-serif', default: 'sans-serif' }),
-  bodyFamily: Platform.select({ ios: 'System', android: 'sans-serif', default: 'sans-serif' }),
+  // Runtime-certified native aliases. Every weight points to a real bundled
+  // font binary instead of relying on platform font synthesis.
+  displayFamily: nativeFontFamilies.displayExtraBold,
+  displayRegularFamily: nativeFontFamilies.displayRegular,
+  displaySemiboldFamily: nativeFontFamilies.displaySemibold,
+  displayBoldFamily: nativeFontFamilies.displayBold,
+  displayExtraBoldFamily: nativeFontFamilies.displayExtraBold,
+  bodyFamily: nativeFontFamilies.bodyRegular,
+  bodyMediumFamily: nativeFontFamilies.bodyMedium,
+  bodySemiboldFamily: nativeFontFamilies.bodySemibold,
+  bodyBoldFamily: nativeFontFamilies.bodyBold,
+  bodyExtraBoldFamily: nativeFontFamilies.bodyExtraBold,
+  monoFamily: nativeFontFamilies.monoRegular,
+  monoMediumFamily: nativeFontFamilies.monoMedium,
   brandDisplayFamily: canonicalTypography.display,
   brandBodyFamily: canonicalTypography.body,
   brandMonoFamily: canonicalTypography.mono,
-  monoFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
   roles: {
-    hero: { fontSize: 34, lineHeight: 40, fontWeight: '800' as const, letterSpacing: -0.8 },
-    title: { fontSize: 24, lineHeight: 30, fontWeight: '800' as const, letterSpacing: -0.45 },
-    subtitle: { fontSize: 16, lineHeight: 24, fontWeight: '400' as const },
-    body: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
-    label: { fontSize: 12, lineHeight: 17, fontWeight: '800' as const, letterSpacing: 0.8 },
-    button: { fontSize: 15, lineHeight: 20, fontWeight: '800' as const },
-    caption: { fontSize: 12, lineHeight: 18, fontWeight: '600' as const },
+    hero: {
+      fontFamily: nativeFontFamilies.displayExtraBold,
+      fontSize: 34,
+      lineHeight: 40,
+      fontWeight: '800' as const,
+      letterSpacing: -0.8,
+    },
+    title: {
+      fontFamily: nativeFontFamilies.displayExtraBold,
+      fontSize: 24,
+      lineHeight: 30,
+      fontWeight: '800' as const,
+      letterSpacing: -0.45,
+    },
+    subtitle: {
+      fontFamily: nativeFontFamilies.bodyRegular,
+      fontSize: 16,
+      lineHeight: 24,
+      fontWeight: '400' as const,
+    },
+    body: {
+      fontFamily: nativeFontFamilies.bodyRegular,
+      fontSize: 15,
+      lineHeight: 22,
+      fontWeight: '400' as const,
+    },
+    label: {
+      fontFamily: nativeFontFamilies.bodyExtraBold,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '800' as const,
+      letterSpacing: 0.8,
+    },
+    button: {
+      fontFamily: nativeFontFamilies.bodyExtraBold,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '800' as const,
+    },
+    caption: {
+      fontFamily: nativeFontFamilies.bodySemibold,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '600' as const,
+    },
+    mono: {
+      fontFamily: nativeFontFamilies.monoRegular,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '400' as const,
+    },
   },
 } as const
 
