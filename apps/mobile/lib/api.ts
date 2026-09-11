@@ -9,6 +9,20 @@ interface ApiOptions extends Omit<RequestInit, 'headers'> {
   public?: boolean
 }
 
+export interface MobileCtgOneStartResponse {
+  authorize_url: string
+  transaction_id: string
+  state: string
+  callback_uri: string
+  expires_in: number
+}
+
+export interface MobileCtgOneExchangeInput {
+  code: string
+  state: string
+  transaction_id: string
+}
+
 interface PendingMutationKey {
   key: string
   expiresAt: number
@@ -140,8 +154,6 @@ export async function apiMutation<T>(path: string, scope: string, options: ApiOp
     pendingMutationKeys.delete(fingerprint)
     return result
   } catch (error) {
-    // Keep the key while the outcome is uncertain. A retry of the same
-    // method/path/payload reuses it, while an edited payload gets a new key.
     throw error
   }
 }
@@ -151,6 +163,24 @@ export async function loginMobile(email: string, password: string): Promise<Mobi
     method: 'POST',
     public: true,
     body: JSON.stringify({ email, password }),
+  }, false)
+
+  await setSessionTokens(token.access_token, token.refresh_token)
+  return token
+}
+
+export async function startMobileCtgOne(): Promise<MobileCtgOneStartResponse> {
+  return execute<MobileCtgOneStartResponse>('/auth/mobile/ctgone/start', {
+    method: 'POST',
+    public: true,
+  }, false)
+}
+
+export async function exchangeMobileCtgOne(input: MobileCtgOneExchangeInput): Promise<MobileTokenResponse> {
+  const token = await execute<MobileTokenResponse>('/auth/mobile/ctgone/exchange', {
+    method: 'POST',
+    public: true,
+    body: JSON.stringify(input),
   }, false)
 
   await setSessionTokens(token.access_token, token.refresh_token)
