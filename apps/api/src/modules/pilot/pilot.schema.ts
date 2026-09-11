@@ -13,6 +13,7 @@ export const PilotEventNameSchema = z.enum([
   'account_deletion_started',
   'account_deletion_completed',
   'feedback_opened',
+  'feedback_submitted',
 ])
 
 export const PilotSurfaceSchema = z.enum([
