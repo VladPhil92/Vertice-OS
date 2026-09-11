@@ -8,6 +8,7 @@ const files = {
   tests: 'apps/api/src/modules/pilot/__tests__/pilot.service.test.ts',
   app: 'apps/api/src/app.ts',
   web: 'apps/web/app/dashboard/pilot/page.tsx',
+  operatorWeb: 'apps/web/app/dashboard/admin/pilot/observability/page.tsx',
   engineering: 'docs/engineering/PILOT_OPERATIONS_OBSERVABILITY_PHASE7I.md',
   runbook: 'docs/operations/CLOSED_PILOT_OBSERVABILITY_RUNBOOK.md',
   workflow: '.github/workflows/pilot-operations-observability.yml',
@@ -78,6 +79,9 @@ requireText('tests', 'accepts only immutable full commit SHAs')
 requireText('web', "apiFetch<PilotStatus>('/pilot/status')")
 requireText('web', "apiFetch('/pilot/feedback'")
 requireText('web', 'No incluyas contraseñas')
+requireText('operatorWeb', "apiFetch<PilotSummary>('/pilot/admin/summary')")
+requireText('operatorWeb', "apiFetch('/pilot/admin/incidents'")
+requireText('operatorWeb', '/dashboard/admin/pilot')
 requireText('engineering', 'Redis is an **ephemeral operational plane**')
 requireText('engineering', 'OPERATIONAL')
 requireText('runbook', 'STOP conditions')
