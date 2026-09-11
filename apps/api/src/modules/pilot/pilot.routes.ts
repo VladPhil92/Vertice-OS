@@ -89,7 +89,6 @@ export async function pilotRoutes(app: FastifyInstance): Promise<void> {
       status: 'active',
       mode: access.mode,
       cohort_size: access.cohort_size,
-      cohort_fingerprint: activation.cohort_fingerprint,
       activation_revision: activation.revision,
       telemetry_retention_days: observability.retention_days,
       observability_storage: observability.storage,
