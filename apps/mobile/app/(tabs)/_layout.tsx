@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { Redirect, Tabs } from 'expo-router'
 import { useAuth } from '../../providers/AuthProvider'
+import { colors, typography } from '../../theme/vertice'
 
 export default function TabsLayout() {
   const { user, loading } = useAuth()
@@ -8,7 +9,7 @@ export default function TabsLayout() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={colors.navy} />
       </View>
     )
   }
@@ -19,10 +20,21 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1C3D2E',
-        tabBarInactiveTintColor: '#6D7168',
-        tabBarStyle: { minHeight: 68, paddingTop: 8, paddingBottom: 8 },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarActiveTintColor: colors.navy,
+        tabBarInactiveTintColor: colors.textTertiary,
+        tabBarActiveBackgroundColor: colors.surface,
+        tabBarStyle: {
+          minHeight: 68,
+          paddingTop: 8,
+          paddingBottom: 8,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontFamily: typography.bodyFamily,
+          fontWeight: '700',
+        },
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Inicio' }} />
@@ -36,5 +48,10 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
 })
