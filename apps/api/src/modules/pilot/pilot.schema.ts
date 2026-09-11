@@ -54,6 +54,12 @@ export const PilotIncidentSchema = z.object({
   action: z.enum(['observe', 'degrade', 'pause_pilot', 'stop_pilot']),
 }).strict()
 
+export const PilotActivationCommandSchema = z.object({
+  action: z.enum(['activate', 'pause']),
+  expected_revision: z.string().regex(/^[0-9a-f]{40}$/i),
+}).strict()
+
 export type PilotTelemetryInput = z.infer<typeof PilotTelemetrySchema>
 export type PilotFeedbackInput = z.infer<typeof PilotFeedbackSchema>
 export type PilotIncidentInput = z.infer<typeof PilotIncidentSchema>
+export type PilotActivationCommandInput = z.infer<typeof PilotActivationCommandSchema>

@@ -1,0 +1,100 @@
+name: Closed Pilot Cohort Activation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/lib/runtime-probe.ts'
+      - 'apps/api/src/modules/pilot/pilot-activation.service.ts'
+      - 'apps/api/src/modules/pilot/pilot.routes.ts'
+      - 'apps/api/src/modules/pilot/pilot.schema.ts'
+      - 'apps/api/src/modules/pilot/__tests__/pilot-activation.service.test.ts'
+      - 'docs/engineering/CLOSED_PILOT_COHORT_ACTIVATION_PHASE7L.md'
+      - '.github/workflows/closed-pilot-cohort-activation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/lib/runtime-probe.ts'
+      - 'apps/api/src/modules/pilot/pilot-activation.service.ts'
+      - 'apps/api/src/modules/pilot/pilot.routes.ts'
+      - 'apps/api/src/modules/pilot/pilot.schema.ts'
+      - 'apps/api/src/modules/pilot/__tests__/pilot-activation.service.test.ts'
+      - 'docs/engineering/CLOSED_PILOT_COHORT_ACTIVATION_PHASE7L.md'
+      - '.github/workflows/closed-pilot-cohort-activation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: closed-pilot-cohort-activation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.13.0'
+
+jobs:
+  activation-gate:
+    name: Exact SHA + cohort activation policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact submitted SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "CLOSED_PILOT_ACTIVATION_CANDIDATE_SHA=$EXPECTED_SHA"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @vertice/types build
+
+      - name: Typecheck API
+        run: pnpm --filter @vertice/api typecheck
+
+      - name: Test Phase 7L activation policy
+        env:
+          NODE_ENV: test
+        run: >-
+          pnpm --filter @vertice/api exec jest --runInBand
+          src/modules/pilot/__tests__/pilot-activation.service.test.ts
+          src/lib/__tests__/closed-pilot-access.test.ts
+          src/lib/__tests__/closed-pilot-readiness.test.ts
+
+      - name: Verify fail-closed activation wiring
+        run: |
+          set -euo pipefail
+          grep -q "assertPilotActivationCurrent" apps/api/src/modules/pilot/pilot.routes.ts
+          grep -q "probeRuntimeDependencies" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "assessClosedPilotReadiness" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "PILOT_RUNTIME_SAFETY_BLOCKED" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "PAUSE_EPOCH_KEY" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "CONDITIONAL_ACTIVATION_SCRIPT" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "redis.eval" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "runtime_activation_revision_drift" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "runtime_activation_cohort_drift" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "expected_revision" apps/api/src/modules/pilot/pilot.schema.ts
+
+      - name: Emit Phase 7L boundary
+        run: |
+          echo "PHASE7L_CODE_STATUS=READY_FOR_RUNTIME_VALIDATION"
+          echo "REAL_USER_ACTIVATION=BLOCKED_UNTIL_NEO4J_AND_OPERATOR_COHORT_ARE_READY"
+          echo "Active participant requests revalidate live dependencies and money-off policy."
+          echo "Emergency pause wins over any older in-flight activation attempt."
