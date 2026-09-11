@@ -1,0 +1,50 @@
+name: Native Brand Runtime Dependency Sync
+
+on:
+  push:
+    branches:
+      - feat/native-brand-runtime-certification
+
+permissions:
+  contents: write
+
+jobs:
+  sync-native-brand-dependencies:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/native-brand-runtime-certification
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+
+      - name: Install existing workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Expo-compatible native runtime packages
+        run: pnpm --filter @vertice/mobile exec expo install expo-font react-native-svg
+
+      - name: Install VÉRTICE brand runtime packages
+        run: pnpm --filter @vertice/mobile add lucide-react-native @expo-google-fonts/montserrat @expo-google-fonts/inter @expo-google-fonts/dm-mono
+
+      - name: Commit dependency lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/mobile/package.json pnpm-lock.yaml
+          if git diff --cached --quiet; then
+            echo "Dependency lock already synchronized."
+            exit 0
+          fi
+          git commit -m "chore(mobile): lock native brand runtime dependencies"
+          git push origin HEAD:feat/native-brand-runtime-certification
