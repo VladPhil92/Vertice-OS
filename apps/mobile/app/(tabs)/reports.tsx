@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
 import { TerritorialMap } from '../../components/TerritorialMap'
 import { TerritoryTargetPicker } from '../../components/TerritoryTargetPicker'
+import { VerticeBrand } from '../../components/VerticeBrand'
 import { apiFetch, apiMutation } from '../../lib/api'
 import {
   getCurrentReportCoordinates,
@@ -17,6 +19,7 @@ import {
   suggestTerritoryFromCoordinates,
   type TerritoryOption,
 } from '../../lib/territory-context'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { ApiList, NearbyTerritorialReport, ReportCategory, ReportMediaState, TerritorialReportSummary } from '../../types/api'
 
 const categories: ReportCategory[] = [
@@ -114,7 +117,7 @@ export default function ReportsScreen() {
           setTargetSource('manual')
           Alert.alert(
             'Estás fuera de Colombia',
-            'Tu territorio de origen no cambia. Para aportar en Vértice selecciona manualmente el municipio colombiano al que pertenece la contribución y usa las coordenadas del hecho, no tu ubicación actual.',
+            'Tu territorio de origen no cambia. Para aportar en VÉRTICE selecciona manualmente el municipio colombiano al que pertenece la contribución y usa las coordenadas del hecho, no tu ubicación actual.',
           )
         } else {
           setTargetTerritory(null)
@@ -223,16 +226,30 @@ export default function ReportsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
+            tintColor={colors.navy}
+            colors={[colors.navy]}
+          />
+        )}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.headerRow}>
+          <View style={styles.headerBrand}>
+            <VerticeBrand variant="symbol" width={40} />
+          </View>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>TERRITORIO · COLOMBIA</Text>
             <Text style={styles.title}>Reportes ciudadanos</Text>
             <Text style={styles.subtitle}>Tu ciudad de registro es tu origen cívico, no una frontera. Reporta en cualquier territorio colombiano con GPS o selección manual.</Text>
           </View>
-          <Pressable style={styles.primaryButton} onPress={() => setShowCreate((value) => !value)}>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            onPress={() => setShowCreate((value) => !value)}
+          >
             <Text style={styles.primaryButtonText}>{showCreate ? 'Cerrar' : 'Reportar'}</Text>
           </Pressable>
         </View>
@@ -248,7 +265,11 @@ export default function ReportsScreen() {
                 : 'Activa tu ubicación para ver incidencias públicas a 3 km. El GPS no cambia tu ciudad de origen.'}
             </Text>
           </View>
-          <Pressable disabled={locating} style={styles.locationButton} onPress={() => void useCurrentLocation()}>
+          <Pressable
+            disabled={locating}
+            style={({ pressed }) => [styles.locationButton, pressed && styles.pressed, locating && styles.disabled]}
+            onPress={() => void useCurrentLocation()}
+          >
             <Text style={styles.locationButtonText}>{locating ? 'Ubicando…' : currentCoordinates ? 'Actualizar GPS' : 'Usar GPS'}</Text>
           </Pressable>
         </View>
@@ -260,7 +281,7 @@ export default function ReportsScreen() {
             <Text style={styles.sectionTitle}>Cerca de ti</Text>
             <View style={styles.list}>
               {nearbyReports.map((report) => (
-                <Pressable key={report.id} style={styles.nearbyCard} onPress={() => openReport(report.id)}>
+                <Pressable key={report.id} style={({ pressed }) => [styles.nearbyCard, pressed && styles.pressed]} onPress={() => openReport(report.id)}>
                   <View style={styles.cardTop}>
                     <Text style={styles.category}>{report.category.replace(/_/g, ' ')}</Text>
                     <Text style={styles.distance}>{distanceLabel(report.distance_meters)}</Text>
@@ -277,6 +298,8 @@ export default function ReportsScreen() {
 
         {showCreate ? (
           <View style={styles.formCard}>
+            <View style={styles.formAccent} />
+            <Text style={styles.formKicker}>NUEVA EVIDENCIA TERRITORIAL</Text>
             <Text style={styles.cardTitle}>Nuevo reporte territorial</Text>
             <TerritoryTargetPicker
               value={targetTerritory}
@@ -286,8 +309,21 @@ export default function ReportsScreen() {
               }}
               label="Municipio o distrito del reporte"
             />
-            <TextInput style={styles.input} placeholder="Título" value={form.title} onChangeText={(title) => setForm((prev) => ({ ...prev, title }))} />
-            <TextInput style={[styles.input, styles.multiline]} multiline placeholder="Describe la situación" value={form.description} onChangeText={(description) => setForm((prev) => ({ ...prev, description }))} />
+            <TextInput
+              style={styles.input}
+              placeholder="Título"
+              placeholderTextColor={colors.placeholder}
+              value={form.title}
+              onChangeText={(title) => setForm((prev) => ({ ...prev, title }))}
+            />
+            <TextInput
+              style={[styles.input, styles.multiline]}
+              multiline
+              placeholder="Describe la situación"
+              placeholderTextColor={colors.placeholder}
+              value={form.description}
+              onChangeText={(description) => setForm((prev) => ({ ...prev, description }))}
+            />
             <Text style={styles.label}>Categoría</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
               {categories.map((category) => (
@@ -296,25 +332,51 @@ export default function ReportsScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-            <TextInput style={styles.input} placeholder="Barrio o sector (opcional)" value={form.neighborhood} onChangeText={(neighborhood) => setForm((prev) => ({ ...prev, neighborhood }))} />
+            <TextInput
+              style={styles.input}
+              placeholder="Barrio o sector (opcional)"
+              placeholderTextColor={colors.placeholder}
+              value={form.neighborhood}
+              onChangeText={(neighborhood) => setForm((prev) => ({ ...prev, neighborhood }))}
+            />
 
-            <Pressable disabled={locating} style={styles.deviceAction} onPress={() => void useCurrentLocation()}>
+            <Pressable disabled={locating} style={({ pressed }) => [styles.deviceAction, pressed && styles.pressed, locating && styles.disabled]} onPress={() => void useCurrentLocation()}>
               <Text style={styles.deviceActionText}>{locating ? 'Obteniendo GPS…' : 'Usar mi ubicación actual'}</Text>
             </Pressable>
 
             <View style={styles.coordinates}>
-              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Latitud" value={form.lat} onChangeText={(lat) => { setTargetSource('manual'); setForm((prev) => ({ ...prev, lat })) }} />
-              <TextInput autoCapitalize="none" style={[styles.input, styles.coordinateInput]} placeholder="Longitud" value={form.lng} onChangeText={(lng) => { setTargetSource('manual'); setForm((prev) => ({ ...prev, lng })) }} />
+              <TextInput
+                autoCapitalize="none"
+                style={[styles.input, styles.coordinateInput]}
+                placeholder="Latitud"
+                placeholderTextColor={colors.placeholder}
+                value={form.lat}
+                onChangeText={(lat) => { setTargetSource('manual'); setForm((prev) => ({ ...prev, lat })) }}
+              />
+              <TextInput
+                autoCapitalize="none"
+                style={[styles.input, styles.coordinateInput]}
+                placeholder="Longitud"
+                placeholderTextColor={colors.placeholder}
+                value={form.lng}
+                onChangeText={(lng) => { setTargetSource('manual'); setForm((prev) => ({ ...prev, lng })) }}
+              />
             </View>
-            <TextInput style={styles.input} placeholder="Referencia de dirección" value={form.address_reference} onChangeText={(address_reference) => setForm((prev) => ({ ...prev, address_reference }))} />
-            <Text style={styles.hint}>Si niegas el permiso de ubicación, Vértice sigue funcionando: selecciona el municipio y escribe la ubicación del hecho manualmente.</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Referencia de dirección"
+              placeholderTextColor={colors.placeholder}
+              value={form.address_reference}
+              onChangeText={(address_reference) => setForm((prev) => ({ ...prev, address_reference }))}
+            />
+            <Text style={styles.hint}>Si niegas el permiso de ubicación, VÉRTICE sigue funcionando: selecciona el municipio y escribe la ubicación del hecho manualmente.</Text>
 
             <Text style={styles.label}>Evidencia fotográfica opcional</Text>
             <View style={styles.evidenceActions}>
-              <Pressable disabled={selectingEvidence} style={styles.deviceAction} onPress={() => void chooseEvidence('camera')}>
+              <Pressable disabled={selectingEvidence} style={({ pressed }) => [styles.deviceAction, pressed && styles.pressed, selectingEvidence && styles.disabled]} onPress={() => void chooseEvidence('camera')}>
                 <Text style={styles.deviceActionText}>Tomar foto</Text>
               </Pressable>
-              <Pressable disabled={selectingEvidence} style={styles.deviceAction} onPress={() => void chooseEvidence('library')}>
+              <Pressable disabled={selectingEvidence} style={({ pressed }) => [styles.deviceAction, pressed && styles.pressed, selectingEvidence && styles.disabled]} onPress={() => void chooseEvidence('library')}>
                 <Text style={styles.deviceActionText}>Elegir foto</Text>
               </Pressable>
             </View>
@@ -334,7 +396,7 @@ export default function ReportsScreen() {
             ) : null}
 
             <Text style={styles.hint}>La foto se carga directamente al proveedor seguro y el API confirma propiedad/metadata. Si la creación del reporte queda incierta, el mismo asset confirmado se reutiliza para conservar el payload idempotente.</Text>
-            <Pressable disabled={saving} style={styles.submitButton} onPress={() => void createReport()}>
+            <Pressable disabled={saving} style={({ pressed }) => [styles.submitButton, pressed && styles.pressed, saving && styles.disabled]} onPress={() => void createReport()}>
               <Text style={styles.submitButtonText}>{saving ? 'Procesando reporte…' : 'Crear reporte'}</Text>
             </Pressable>
           </View>
@@ -344,7 +406,7 @@ export default function ReportsScreen() {
           <Text style={styles.sectionTitle}>Reportes recientes · Colombia</Text>
           <View style={styles.list}>
             {reports.map((report) => (
-              <Pressable key={report.id} style={styles.card} onPress={() => openReport(report.id)}>
+              <Pressable key={report.id} style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={() => openReport(report.id)}>
                 <View style={styles.cardTop}>
                   <Text style={styles.category}>{report.category.replace(/_/g, ' ')}</Text>
                   <Text style={styles.status}>{report.status.replace(/_/g, ' ')}</Text>
@@ -363,56 +425,61 @@ export default function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 18, paddingBottom: 36, gap: 18 },
-  headerRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  headerCopy: { flex: 1, gap: 5 },
-  eyebrow: { fontSize: 11, letterSpacing: 1.6, fontWeight: '700', color: '#697068' },
-  title: { fontSize: 28, fontWeight: '700', color: '#11130F' },
-  subtitle: { color: '#6D7168', lineHeight: 20 },
-  primaryButton: { backgroundColor: '#17382A', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 14 },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '700' },
-  locationCard: { backgroundColor: '#17382A', borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  locationCopy: { flex: 1, gap: 4 },
-  locationTitle: { color: '#FFFFFF' },
-  locationHint: { color: '#DDE8E0', fontSize: 12, lineHeight: 17 },
-  locationButton: { backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
-  locationButtonText: { color: '#17382A', fontWeight: '700', fontSize: 12 },
-  section: { gap: 10 },
-  sectionTitle: { fontSize: 19, fontWeight: '700', color: '#171A15' },
-  formCard: { backgroundColor: '#E7E4D8', borderRadius: 20, padding: 16, gap: 10 },
-  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7D3C7', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#171A15' },
-  multiline: { minHeight: 88, textAlignVertical: 'top' },
-  label: { color: '#565D54', fontWeight: '700', fontSize: 12 },
-  chips: { gap: 8, paddingVertical: 2 },
-  chip: { borderWidth: 1, borderColor: '#AEB7AF', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999 },
-  chipActive: { backgroundColor: '#1C3D2E', borderColor: '#1C3D2E' },
-  chipText: { color: '#4D554D', fontSize: 12, textTransform: 'capitalize' },
-  chipTextActive: { color: '#FFFFFF' },
-  coordinates: { flexDirection: 'row', gap: 8 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.hero, gap: spacing.lg },
+  headerRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  headerBrand: { borderRadius: radius.md, backgroundColor: colors.surface, padding: spacing.xs },
+  headerCopy: { flex: 1, gap: spacing.xxs },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.title },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  primaryButton: { minHeight: interaction.minimumTouchTarget, backgroundColor: colors.navy, paddingHorizontal: spacing.md, borderRadius: radius.md, justifyContent: 'center' },
+  primaryButtonText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  locationCard: { backgroundColor: colors.navy, borderRadius: radius.lg, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, ...elevation.card },
+  locationCopy: { flex: 1, gap: spacing.xxs },
+  locationTitle: { color: colors.white },
+  locationHint: { color: colors.borderActive, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 17 },
+  locationButton: { minHeight: interaction.minimumTouchTarget, backgroundColor: colors.surface, paddingHorizontal: spacing.sm, borderRadius: radius.md, justifyContent: 'center' },
+  locationButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  section: { gap: spacing.sm },
+  sectionTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 19, fontWeight: '800' },
+  formCard: { overflow: 'hidden', backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: spacing.md, gap: spacing.sm },
+  formAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.citizen },
+  formKicker: { marginTop: spacing.xxs, color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  input: { minHeight: interaction.inputHeight, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, color: colors.textPrimary, fontFamily: typography.bodyFamily },
+  multiline: { minHeight: 96, textAlignVertical: 'top' },
+  label: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  chips: { gap: spacing.xs, paddingVertical: spacing.xxs },
+  chip: { borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.pill },
+  chipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  chipText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, fontSize: 12, textTransform: 'capitalize' },
+  chipTextActive: { color: colors.white, fontWeight: '700' },
+  coordinates: { flexDirection: 'row', gap: spacing.xs },
   coordinateInput: { flex: 1 },
-  deviceAction: { flex: 1, borderWidth: 1, borderColor: '#AEB7AF', backgroundColor: '#FFFFFF', borderRadius: 12, padding: 11, alignItems: 'center' },
-  deviceActionText: { color: '#1C3D2E', fontWeight: '700', fontSize: 12 },
-  evidenceActions: { flexDirection: 'row', gap: 8 },
-  previewCard: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 10, flexDirection: 'row', gap: 12, alignItems: 'center' },
-  previewImage: { width: 74, height: 74, borderRadius: 10, backgroundColor: '#DDD' },
-  previewCopy: { flex: 1, gap: 4 },
-  previewTitle: { fontWeight: '700', color: '#1A1D18' },
-  confirmedEvidence: { color: '#1C3D2E', fontSize: 11, fontWeight: '700' },
-  removeEvidence: { color: '#8A302A', fontWeight: '700', fontSize: 12 },
-  hint: { color: '#6D7168', fontSize: 12, lineHeight: 17 },
-  submitButton: { backgroundColor: '#1C3D2E', borderRadius: 12, padding: 13, alignItems: 'center' },
-  submitButtonText: { color: '#FFFFFF', fontWeight: '700' },
-  list: { gap: 12 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, gap: 9 },
-  nearbyCard: { backgroundColor: '#EEF3EF', borderRadius: 18, padding: 16, gap: 8, borderWidth: 1, borderColor: '#D5E0D7' },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  category: { textTransform: 'uppercase', fontSize: 10, letterSpacing: 1.1, color: '#667067', fontWeight: '700' },
-  status: { textTransform: 'uppercase', fontSize: 10, color: '#1C3D2E', fontWeight: '800' },
-  distance: { fontSize: 11, color: '#1C3D2E', fontWeight: '800' },
-  cardTitle: { fontSize: 17, fontWeight: '700', color: '#171A15' },
-  body: { color: '#343931', lineHeight: 20 },
-  muted: { color: '#70746C', fontSize: 12 },
-  error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
-  empty: { textAlign: 'center', color: '#777B74', paddingVertical: 22 },
+  deviceAction: { flex: 1, minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  deviceActionText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  evidenceActions: { flexDirection: 'row', gap: spacing.xs },
+  previewCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  previewImage: { width: 74, height: 74, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  previewCopy: { flex: 1, gap: spacing.xxs },
+  previewTitle: { color: colors.textPrimary, fontFamily: typography.bodyFamily, fontWeight: '800' },
+  confirmedEvidence: { color: colors.successText, fontFamily: typography.bodyFamily, fontSize: 11, fontWeight: '700' },
+  removeEvidence: { color: colors.errorText, fontFamily: typography.bodyFamily, fontWeight: '700', fontSize: 12 },
+  hint: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 17 },
+  submitButton: { minHeight: interaction.buttonHeight, backgroundColor: colors.navy, borderRadius: radius.md, paddingHorizontal: spacing.md, alignItems: 'center', justifyContent: 'center' },
+  submitButtonText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  list: { gap: spacing.sm },
+  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xs, ...elevation.card },
+  nearbyCard: { backgroundColor: colors.infoBackground, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xs, borderWidth: 1, borderColor: colors.infoBorder },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  category: { textTransform: 'uppercase', color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 10, letterSpacing: 1.1, fontWeight: '800' },
+  status: { textTransform: 'uppercase', color: colors.navy, fontFamily: typography.bodyFamily, fontSize: 10, fontWeight: '800' },
+  distance: { color: colors.infoText, fontFamily: typography.bodyFamily, fontSize: 11, fontWeight: '800' },
+  cardTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 17, fontWeight: '800' },
+  body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, lineHeight: 20 },
+  muted: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 12 },
+  error: { color: colors.errorText, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, padding: spacing.sm, fontFamily: typography.bodyFamily },
+  empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, paddingVertical: spacing.xl },
+  pressed: { opacity: interaction.pressedOpacity },
+  disabled: { opacity: interaction.disabledOpacity },
 })
