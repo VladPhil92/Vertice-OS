@@ -8,6 +8,7 @@ import { getCache, setCache, delCache, TTL } from '../../lib/cache'
 import { redis } from '../../lib/redis'
 import { sendPasswordReset } from '../../lib/email'
 import { runCypher } from '../../lib/neo4j'
+import { assertClosedPilotEmailAllowed } from '../../lib/closed-pilot-access'
 import { config } from '../../config'
 import { logger } from '../../lib/logger'
 import { hashCedula } from '../../lib/identity-hash'
@@ -25,6 +26,7 @@ function generateDid(uuid: string): string {
 }
 
 export async function registerCitizen(input: RegisterInput): Promise<{ citizen_id: string; did: string }> {
+  assertClosedPilotEmailAllowed(input.email)
   const cedulaHash = hashCedula(input.cedula)
 
   const existing = await prisma.citizen.findFirst({
@@ -69,6 +71,8 @@ export async function loginCitizen(
   input: LoginInput,
   meta: { userAgent?: string; ipAddress?: string },
 ): Promise<AuthTokenResponse & { refresh_token: string }> {
+  assertClosedPilotEmailAllowed(input.email)
+
   const citizen = await prisma.citizen.findUnique({
     where: { email: input.email },
     select: { id: true, did: true, passwordHash: true, verificationLevel: true, role: true },
@@ -124,12 +128,14 @@ export async function refreshAccessToken(
 
   const session = await prisma.session.findUnique({
     where: { refreshTokenHash: tokenHash },
-    include: { citizen: { select: { id: true, did: true, verificationLevel: true, role: true } } },
+    include: { citizen: { select: { id: true, did: true, email: true, verificationLevel: true, role: true } } },
   })
 
   if (!session || session.revokedAt || session.expiresAt < new Date()) {
     throw Object.assign(new Error('Sesión inválida o expirada'), { statusCode: 401, code: 'INVALID_SESSION' })
   }
+
+  assertClosedPilotEmailAllowed(session.citizen.email)
 
   await ensureBaselineRoleGrants(session.citizen.id, 'citizen')
   const roleContext = await getRoleContext(session.citizen.id, session.id)

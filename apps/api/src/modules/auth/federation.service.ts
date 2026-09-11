@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify'
 
 import { config } from '../../config'
 import { prisma } from '../../lib/prisma'
+import { assertClosedPilotEmailAllowed } from '../../lib/closed-pilot-access'
 import type { AccessTokenPayload } from '../../lib/jwt'
 import { generateRefreshToken, hashToken, refreshTokenExpiresAt } from '../../lib/jwt'
 import type { AuthTokenResponse } from './auth.types'
@@ -391,6 +392,7 @@ export async function exchangeCtgOneFederation(
 ): Promise<AuthTokenResponse & { refresh_token: string }> {
   const input = normalizeInput(rawInput)
   const identity = await exchangeWithCtgOne(input)
+  assertClosedPilotEmailAllowed(identity.email)
   const citizen = await resolveCitizen(identity.subject, identity.email, identity.assurance)
 
   // Root bootstrap is a durable-grant operation only. Even when this exchange
