@@ -1,8 +1,9 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { Redirect, Tabs } from 'expo-router'
 
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { useAuth } from '../../providers/AuthProvider'
-import { colors, interaction, radius, spacing, typography } from '../../theme/vertice'
+import { colors, iconography, interaction, radius, spacing, typography } from '../../theme/vertice'
 
 export default function TabsLayout() {
   const { user, loading } = useAuth()
@@ -27,7 +28,7 @@ export default function TabsLayout() {
         tabBarActiveBackgroundColor: colors.infoBackground,
         tabBarInactiveBackgroundColor: colors.surface,
         tabBarStyle: {
-          minHeight: 70,
+          minHeight: 72,
           paddingTop: spacing.xs,
           paddingBottom: spacing.xs,
           backgroundColor: colors.surface,
@@ -42,18 +43,54 @@ export default function TabsLayout() {
         tabBarLabelStyle: {
           fontSize: 10,
           lineHeight: 14,
-          fontFamily: typography.bodyFamily,
+          fontFamily: typography.bodyExtraBoldFamily,
           fontWeight: '800',
           letterSpacing: 0.15,
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Inicio' }} />
-      <Tabs.Screen name="community" options={{ title: 'Comunidad' }} />
-      <Tabs.Screen name="actions" options={{ title: 'Acciones' }} />
-      <Tabs.Screen name="reports" options={{ title: 'Territorio' }} />
-      <Tabs.Screen name="governance" options={{ title: 'Gobernanza' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Perfil' }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Inicio',
+          tabBarIcon: ({ color }) => <VerticeIcon name="home" color={color} size={iconography.sizes.navigation} />,
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Comunidad',
+          tabBarIcon: ({ color }) => <VerticeIcon name="community" color={color} size={iconography.sizes.navigation} />,
+        }}
+      />
+      <Tabs.Screen
+        name="actions"
+        options={{
+          title: 'Acciones',
+          tabBarIcon: ({ color }) => <VerticeIcon name="actions" color={color} size={iconography.sizes.navigation} />,
+        }}
+      />
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: 'Territorio',
+          tabBarIcon: ({ color }) => <VerticeIcon name="territory" color={color} size={iconography.sizes.navigation} />,
+        }}
+      />
+      <Tabs.Screen
+        name="governance"
+        options={{
+          title: 'Gobernanza',
+          tabBarIcon: ({ color }) => <VerticeIcon name="governance" color={color} size={iconography.sizes.navigation} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Perfil',
+          tabBarIcon: ({ color }) => <VerticeIcon name="profile" color={color} size={iconography.sizes.navigation} />,
+        }}
+      />
     </Tabs>
   )
 }

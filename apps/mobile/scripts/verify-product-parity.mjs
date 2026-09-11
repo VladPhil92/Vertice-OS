@@ -1,3 +1,4 @@
+import './verify-font-alias-contract.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,7 +26,10 @@ function notContains(source, forbidden, label) {
 }
 
 const canonicalTokens = read('packages/design-tokens/src/index.ts')
+const mobilePackage = read('apps/mobile/package.json')
 const theme = read('apps/mobile/theme/vertice.ts')
+const nativeFonts = read('apps/mobile/theme/fonts.ts')
+const nativeIcons = read('apps/mobile/components/VerticeIcon.tsx')
 const signIn = read('apps/mobile/app/(auth)/sign-in.tsx')
 const register = read('apps/mobile/app/(auth)/register.tsx')
 const tabs = read('apps/mobile/app/(tabs)/_layout.tsx')
@@ -59,8 +63,10 @@ contains(canonicalTokens, "successBackground: '#EAF7EE'", 'canonical semantic fe
 contains(canonicalTokens, "warningBackground: '#FFF7DF'", 'canonical semantic feedback contract')
 
 contains(theme, "from '../../../packages/design-tokens/src/index'", 'native theme adapter')
-contains(theme, 'canonicalTypography.display', 'native typography adapter')
-contains(theme, 'canonicalTypography.body', 'native typography adapter')
+contains(theme, "from './fonts'", 'native typography adapter')
+contains(theme, 'nativeFontFamilies.displayExtraBold', 'native display font adapter')
+contains(theme, 'nativeFontFamilies.bodyRegular', 'native body font adapter')
+contains(theme, 'nativeFontFamilies.monoRegular', 'native mono font adapter')
 contains(theme, "wordmark: require('../assets/brand/vertice-wordmark.webp')", 'native imagery contract')
 contains(webTailwind, "from '../../packages/design-tokens/src/index'", 'web theme adapter')
 contains(webTailwind, 'colors.background', 'web canonical color adapter')
@@ -73,6 +79,42 @@ for (const asset of [
 ]) {
   assert(fs.existsSync(path.join(root, asset)), `canonical brand asset is missing: ${asset}`)
 }
+
+// ── Native brand runtime certification ─────────────────────────────────────
+for (const dependency of [
+  '"expo-font"',
+  '"@expo-google-fonts/montserrat"',
+  '"@expo-google-fonts/inter"',
+  '"@expo-google-fonts/dm-mono"',
+  '"lucide-react-native"',
+  '"react-native-svg"',
+]) {
+  contains(mobilePackage, dependency, 'mobile brand runtime dependencies')
+}
+
+for (const font of [
+  'Montserrat_800ExtraBold',
+  'Montserrat_400Regular',
+  'Inter_400Regular',
+  'Inter_600SemiBold',
+  'Inter_800ExtraBold',
+  'DMMono_400Regular',
+]) {
+  contains(nativeFonts, font, 'native bundled font contract')
+}
+contains(rootLayout, "from 'expo-font'", 'native root font bootstrap')
+contains(rootLayout, 'useFonts(verticeFontAssets)', 'native root font bootstrap')
+contains(rootLayout, "[brand-runtime] canonical VÉRTICE fonts failed to load", 'native root font observability')
+
+contains(nativeIcons, "from 'lucide-react-native'", 'native Lucide adapter')
+contains(nativeIcons, 'iconography.strokeWidth', 'native Lucide stroke contract')
+contains(nativeIcons, 'iconography.sizes.standard', 'native Lucide size contract')
+contains(tabs, 'VerticeIcon', 'mobile tab shell icon contract')
+for (const semanticIcon of ['home', 'community', 'actions', 'territory', 'governance', 'profile']) {
+  contains(tabs, `name="${semanticIcon}"`, 'mobile tab shell icon contract')
+}
+contains(signIn, 'VerticeIcon', 'mobile sign-in icon contract')
+contains(register, 'VerticeIcon', 'mobile registration icon contract')
 
 const primarySurfaces = [
   ['mobile sign-in', signIn],
@@ -93,6 +135,8 @@ for (const [label, source] of primarySurfaces) {
 }
 
 for (const [label, source] of [
+  ['mobile sign-in', signIn],
+  ['mobile registration', register],
   ['mobile dashboard', dashboard],
   ['mobile community', community],
   ['mobile actions', actions],
@@ -105,10 +149,8 @@ for (const [label, source] of [
   assert(!/#[0-9A-Fa-f]{6}/.test(source), `${label} must not declare local hex colors; use canonical theme tokens`)
 }
 
-contains(signIn, "from '../../theme/vertice'", 'mobile sign-in')
-contains(signIn, 'VerticeBrand', 'mobile sign-in')
-contains(register, "from '../../theme/vertice'", 'mobile registration')
 contains(tabs, "from '../../theme/vertice'", 'mobile tab shell')
+assert(!/#[0-9A-Fa-f]{6}/.test(tabs), 'mobile tab shell must not declare local hex colors; use canonical theme tokens')
 
 // ── One identity across web and native ─────────────────────────────────────
 contains(signIn, 'Continuar con CTG One', 'mobile sign-in')
@@ -131,5 +173,5 @@ contains(webCallback, "MOBILE_STATE_PREFIX = 'mobile.'", 'web federation callbac
 contains(webCallback, "MOBILE_CALLBACK_URI = 'vertice://auth/ctgone/callback'", 'web federation callback')
 
 if (!process.exitCode) {
-  console.log('[product-parity] OK: CTG One identity federation and canonical VÉRTICE design language are aligned across web/mobile primary surfaces.')
+  console.log('[product-parity] OK: CTG One federation, canonical VÉRTICE tokens, bundled typography and Lucide runtime are aligned across web/mobile.')
 }

@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import { isPostRegistrationLoginRequiredError } from '../../lib/registration'
 import { useAuth } from '../../providers/AuthProvider'
@@ -106,6 +107,7 @@ export default function RegisterScreen() {
               style={({ pressed }) => [styles.ctgButton, pressed && styles.pressed, (federating || submitting) && styles.disabled]}
             >
               <Text style={styles.ctgButtonText}>{federating ? 'Abriendo CTG One…' : 'Continuar con CTG One'}</Text>
+              <VerticeIcon name="chevronRight" color={colors.navy} size={20} />
             </Pressable>
           </View>
 
@@ -130,7 +132,7 @@ export default function RegisterScreen() {
               value={email}
               onChangeText={setEmail}
               placeholder="ciudadano@ejemplo.com"
-              placeholderTextColor="#A5AFBD"
+              placeholderTextColor={colors.placeholder}
               style={styles.input}
             />
 
@@ -142,7 +144,7 @@ export default function RegisterScreen() {
               value={password}
               onChangeText={setPassword}
               placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número"
-              placeholderTextColor="#A5AFBD"
+              placeholderTextColor={colors.placeholder}
               style={styles.input}
             />
 
@@ -154,7 +156,7 @@ export default function RegisterScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Repite tu contraseña"
-              placeholderTextColor="#A5AFBD"
+              placeholderTextColor={colors.placeholder}
               style={styles.input}
             />
 
@@ -165,7 +167,7 @@ export default function RegisterScreen() {
               value={cedula}
               onChangeText={(value) => setCedula(value.replace(/\D/g, '').slice(0, 10))}
               placeholder="Solo dígitos, 6–10 caracteres"
-              placeholderTextColor="#A5AFBD"
+              placeholderTextColor={colors.placeholder}
               style={styles.input}
             />
             <Text style={styles.helper}>
@@ -210,35 +212,35 @@ const styles = StyleSheet.create({
   content: { padding: spacing.xl, paddingBottom: 44, gap: spacing.lg },
   brandShell: { alignSelf: 'center', borderRadius: radius.lg, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   hero: { paddingTop: spacing.xs, gap: spacing.sm },
-  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.label },
-  title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.hero },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.hero },
   subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
   ctgCard: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, backgroundColor: colors.surfaceAlt, padding: spacing.lg, gap: spacing.sm },
-  ctgTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 18, lineHeight: 23, fontWeight: '800' },
-  ctgText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.caption },
-  ctgButton: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.navy, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, paddingHorizontal: spacing.md },
-  ctgButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  ctgTitle: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, fontSize: 18, lineHeight: 23, fontWeight: '800' },
+  ctgText: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  ctgButton: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.navy, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, paddingHorizontal: spacing.md, flexDirection: 'row', gap: spacing.sm },
+  ctgButtonText: { flex: 1, color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 10, fontWeight: '800', letterSpacing: 0.65 },
+  dividerText: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, fontSize: 10, fontWeight: '800', letterSpacing: 0.65 },
   card: { overflow: 'hidden', borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.sm, ...elevation.card },
   identityStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 5, flexDirection: 'row' },
   stripeSegment: { flex: 1 },
   stripeCitizen: { backgroundColor: colors.citizen },
   stripeNavy: { backgroundColor: colors.navy },
   stripeRed: { backgroundColor: colors.red },
-  label: { marginTop: spacing.xs, color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.label },
-  input: { minHeight: interaction.inputHeight, borderWidth: 1, borderColor: '#D6DFEA', borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.md, fontSize: 16, color: colors.textPrimary, fontFamily: typography.bodyFamily },
-  helper: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.caption },
-  errorCard: { borderWidth: 1, borderColor: '#F2BDC3', borderRadius: radius.md, backgroundColor: '#FCEBED', padding: spacing.sm },
-  error: { color: '#A11D2A', fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  label: { marginTop: spacing.xs, color: colors.textSecondary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  input: { minHeight: interaction.inputHeight, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.md, fontSize: 16, color: colors.textPrimary, fontFamily: typography.bodyFamily },
+  helper: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  errorCard: { borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, backgroundColor: colors.errorBackground, padding: spacing.sm },
+  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   primaryButton: { marginTop: spacing.xs, minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.navy },
-  primaryButtonText: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.button },
+  primaryButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   secondaryButton: { minHeight: interaction.minimumTouchTarget, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyFamily, fontWeight: '800' },
+  secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, fontWeight: '800' },
   boundaryCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
   boundaryText: { color: colors.textSecondary, fontFamily: typography.bodyFamily, lineHeight: 21 },
-  boundaryStrong: { color: colors.textPrimary, fontWeight: '800' },
+  boundaryStrong: { color: colors.textPrimary, fontFamily: typography.bodyExtraBoldFamily, fontWeight: '800' },
   pressed: { opacity: interaction.pressedOpacity },
   disabled: { opacity: interaction.disabledOpacity },
 })

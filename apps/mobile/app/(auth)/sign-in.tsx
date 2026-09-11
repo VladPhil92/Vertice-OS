@@ -13,6 +13,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import { useAuth } from '../../providers/AuthProvider'
 
@@ -123,7 +124,7 @@ export default function SignInScreen() {
                 <Text style={styles.ctgMarkText}>CTG</Text>
               </View>
               <Text style={styles.ctgButtonText}>{federating ? 'Abriendo CTG One…' : 'Continuar con CTG One'}</Text>
-              <Text style={styles.arrow} accessibilityElementsHidden>›</Text>
+              <VerticeIcon name="chevronRight" color={colors.navy} size={20} />
             </Pressable>
 
             <Text style={styles.ctgHelper}>
@@ -145,7 +146,7 @@ export default function SignInScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="ciudadano@ejemplo.com"
-                placeholderTextColor="#A5AFBD"
+                placeholderTextColor={colors.placeholder}
                 style={styles.input}
               />
             </View>
@@ -159,7 +160,7 @@ export default function SignInScreen() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#A5AFBD"
+                placeholderTextColor={colors.placeholder}
                 style={styles.input}
               />
             </View>
@@ -218,21 +219,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   hero: { gap: spacing.sm },
-  eyebrow: {
-    color: colors.textTertiary,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.label,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontFamily: typography.displayFamily,
-    ...typography.roles.hero,
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.subtitle,
-  },
+  eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  title: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.hero },
+  subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.subtitle },
   card: {
     overflow: 'hidden',
     borderWidth: 1,
@@ -262,32 +251,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.xxs,
   },
-  noticeTitle: {
-    color: colors.textPrimary,
-    fontFamily: typography.bodyFamily,
-    fontWeight: '800',
-  },
-  noticeText: {
-    color: colors.textSecondary,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.caption,
-  },
+  noticeTitle: { color: colors.textPrimary, fontFamily: typography.bodyExtraBoldFamily, fontWeight: '800' },
+  noticeText: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   accessHeader: { marginTop: spacing.xs, gap: spacing.xs },
-  accessEyebrow: {
-    color: '#D98B00',
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.label,
-  },
-  accessTitle: {
-    color: colors.textPrimary,
-    fontFamily: typography.displayFamily,
-    ...typography.roles.title,
-  },
-  accessText: {
-    color: colors.textSecondary,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.caption,
-  },
+  accessEyebrow: { color: colors.citizenDark, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  accessTitle: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
+  accessText: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   ctgButton: {
     minHeight: interaction.buttonHeight,
     borderWidth: 1,
@@ -309,42 +278,28 @@ const styles = StyleSheet.create({
   },
   ctgMarkText: {
     color: colors.white,
+    fontFamily: typography.bodyExtraBoldFamily,
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: '800',
     letterSpacing: 0.7,
   },
-  ctgButtonText: {
-    flex: 1,
-    color: colors.navy,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.button,
-  },
-  arrow: { color: colors.navy, fontSize: 26, lineHeight: 28, fontWeight: '400' },
-  ctgHelper: {
-    textAlign: 'center',
-    color: colors.textTertiary,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.caption,
-  },
+  ctgButtonText: { flex: 1, color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  ctgHelper: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.xxs },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: {
-    color: '#9AA6B5',
-    fontFamily: typography.bodyFamily,
+    color: colors.textMuted,
+    fontFamily: typography.bodyExtraBoldFamily,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.7,
   },
   field: { gap: 6 },
-  label: {
-    color: colors.textSecondary,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.label,
-  },
+  label: { color: colors.textSecondary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   input: {
     minHeight: interaction.inputHeight,
     borderWidth: 1,
-    borderColor: '#D6DFEA',
+    borderColor: colors.inputBorder,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
@@ -354,16 +309,12 @@ const styles = StyleSheet.create({
   },
   errorCard: {
     borderWidth: 1,
-    borderColor: '#F2BDC3',
+    borderColor: colors.errorBorder,
     borderRadius: radius.md,
-    backgroundColor: '#FCEBED',
+    backgroundColor: colors.errorBackground,
     padding: spacing.sm,
   },
-  error: {
-    color: '#A11D2A',
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.caption,
-  },
+  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   primaryButton: {
     minHeight: interaction.buttonHeight,
     borderRadius: radius.md,
@@ -372,20 +323,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.lg,
   },
-  primaryButtonText: {
-    color: colors.white,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.button,
-  },
+  primaryButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   footerActions: { alignItems: 'center', gap: spacing.xxs, paddingTop: spacing.xs },
-  footerPrompt: {
-    color: colors.textTertiary,
-    fontFamily: typography.bodyFamily,
-    ...typography.roles.caption,
-  },
+  footerPrompt: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   registerText: {
     color: colors.navy,
-    fontFamily: typography.bodyFamily,
+    fontFamily: typography.bodyExtraBoldFamily,
     fontWeight: '800',
     fontSize: 13,
   },

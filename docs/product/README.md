@@ -12,5 +12,6 @@ Documentos principales:
 - `GOLDEN_SCREENS.md` — superficies usadas para validar paridad.
 - `PHASE_MOBILE_COHERENCE.md` — fase estructural de convergencia Web/Mobile.
 - `PHASE_GOLDEN_SCREEN_CONVERGENCE.md` — migración visual runtime de las superficies móviles primarias.
+- `PHASE_NATIVE_BRAND_RUNTIME_CERTIFICATION.md` — bundling y certificación nativa de Montserrat, Inter, DM Mono y Lucide.
 - `CTG_ONE_MOBILE_AUTH.md` — contrato de federación CTG One con identidad única.
 - `RELEASE_CHECKLIST_COHERENCE.md` — evidencia exigida antes de declarar paridad o release.
