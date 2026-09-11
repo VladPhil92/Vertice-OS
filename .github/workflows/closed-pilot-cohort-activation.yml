@@ -84,6 +84,10 @@ jobs:
           grep -q "assertPilotActivationCurrent" apps/api/src/modules/pilot/pilot.routes.ts
           grep -q "probeRuntimeDependencies" apps/api/src/modules/pilot/pilot-activation.service.ts
           grep -q "assessClosedPilotReadiness" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "PILOT_RUNTIME_SAFETY_BLOCKED" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "PAUSE_EPOCH_KEY" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "CONDITIONAL_ACTIVATION_SCRIPT" apps/api/src/modules/pilot/pilot-activation.service.ts
+          grep -q "redis.eval" apps/api/src/modules/pilot/pilot-activation.service.ts
           grep -q "runtime_activation_revision_drift" apps/api/src/modules/pilot/pilot-activation.service.ts
           grep -q "runtime_activation_cohort_drift" apps/api/src/modules/pilot/pilot-activation.service.ts
           grep -q "expected_revision" apps/api/src/modules/pilot/pilot.schema.ts
@@ -92,4 +96,5 @@ jobs:
         run: |
           echo "PHASE7L_CODE_STATUS=READY_FOR_RUNTIME_VALIDATION"
           echo "REAL_USER_ACTIVATION=BLOCKED_UNTIL_NEO4J_AND_OPERATOR_COHORT_ARE_READY"
-          echo "A new SHA or cohort change invalidates any prior activation automatically."
+          echo "Active participant requests revalidate live dependencies and money-off policy."
+          echo "Emergency pause wins over any older in-flight activation attempt."
