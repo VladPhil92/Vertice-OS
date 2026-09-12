@@ -1,5 +1,6 @@
 import './verify-critical-secondary-surfaces.mjs'
 import './verify-territory-trust-surfaces.mjs'
+import './verify-city-report-surfaces.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
