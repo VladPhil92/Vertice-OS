@@ -30,6 +30,18 @@ function verificationLabel(state: CivicActivity['verification_state']) {
   return 'Declarada'
 }
 
+function verificationIcon(state: CivicActivity['verification_state']) {
+  if (state === 'verified') return 'verified' as const
+  if (state === 'evidence_backed') return 'evidence' as const
+  return 'circle' as const
+}
+
+function verificationColor(state: CivicActivity['verification_state']) {
+  if (state === 'verified') return colors.successText
+  if (state === 'evidence_backed') return colors.infoText
+  return colors.textTertiary
+}
+
 export default function CivicProfileScreen() {
   const params = useLocalSearchParams<{ citizenId?: string | string[] }>()
   const citizenId = useMemo(() => Array.isArray(params.citizenId) ? params.citizenId[0] : params.citizenId, [params.citizenId])
@@ -331,7 +343,7 @@ export default function CivicProfileScreen() {
                   <Text style={styles.body} numberOfLines={2}>{activity.summary}</Text>
                   <View style={styles.actionFooter}>
                     <View style={styles.verificationPill}>
-                      <VerticeIcon name={activity.verification_state === 'verified' ? 'verified' : 'evidence'} color={colors.infoText} size={14} />
+                      <VerticeIcon name={verificationIcon(activity.verification_state)} color={verificationColor(activity.verification_state)} size={14} />
                       <Text style={styles.verificationText}>{verificationLabel(activity.verification_state)}</Text>
                     </View>
                     <Pressable
