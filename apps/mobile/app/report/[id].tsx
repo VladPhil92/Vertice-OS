@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   timelineDotResolved: { backgroundColor: colors.emerald },
   timelineCopy: { flex: 1, gap: spacing.xxs },
   timelineLabel: { color: colors.textPrimary, fontFamily: typography.bodyBoldFamily, fontSize: 14, lineHeight: 20, fontWeight: '700' },
-  timelineValue: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.caption },
+  timelineValue: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   errorCard: { backgroundColor: colors.errorBackground, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, padding: spacing.md, gap: spacing.sm },
   errorTitle: { color: colors.errorText, fontFamily: typography.displayBoldFamily, fontSize: 18, lineHeight: 24, fontWeight: '700' },
   error: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
