@@ -2,6 +2,7 @@ import type { ColorValue } from 'react-native'
 import {
   Activity,
   ArrowLeft,
+  Ban,
   Bell,
   Camera,
   CheckCircle,
@@ -9,14 +10,21 @@ import {
   Circle,
   Clock,
   FileText,
+  Flag,
   Home,
   Landmark,
+  LockOpen,
   Map,
   MapPin,
   RefreshCw,
+  Shield,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
+  Trophy,
   User,
+  UserMinus,
+  UserPlus,
   Users,
 } from 'lucide-react-native'
 
@@ -42,6 +50,14 @@ const ICONS = {
   timeline: Clock,
   refresh: RefreshCw,
   signal: Activity,
+  userPlus: UserPlus,
+  userMinus: UserMinus,
+  block: Ban,
+  unblock: LockOpen,
+  flag: Flag,
+  shield: Shield,
+  moderation: ShieldAlert,
+  leaderboard: Trophy,
 } as const
 
 export type VerticeIconName = keyof typeof ICONS
