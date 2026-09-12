@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { apiMutation } from '../../lib/api'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type {
   CommunitySafetyReason,
   CommunitySafetyReportReceipt,
@@ -22,12 +26,18 @@ const REASONS: Array<{ id: CommunitySafetyReason; label: string; help: string }>
 
 const TARGET_TYPES = new Set<CommunitySafetyTargetType>(['profile', 'report', 'proposal', 'publication'])
 
+function normalizedParam(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value
+}
+
 export default function CommunityReportScreen() {
-  const params = useLocalSearchParams<{ targetType?: string; targetId?: string; label?: string }>()
-  const targetType = TARGET_TYPES.has(params.targetType as CommunitySafetyTargetType)
-    ? params.targetType as CommunitySafetyTargetType
+  const params = useLocalSearchParams<{ targetType?: string | string[]; targetId?: string | string[]; label?: string | string[] }>()
+  const rawTargetType = normalizedParam(params.targetType)
+  const targetType = TARGET_TYPES.has(rawTargetType as CommunitySafetyTargetType)
+    ? rawTargetType as CommunitySafetyTargetType
     : null
-  const targetId = params.targetId ?? null
+  const targetId = normalizedParam(params.targetId) ?? null
+  const targetLabel = normalizedParam(params.label)
   const [reason, setReason] = useState<CommunitySafetyReason>('harassment')
   const [details, setDetails] = useState('')
   const [busy, setBusy] = useState(false)
@@ -63,62 +73,138 @@ export default function CommunityReportScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <View style={styles.brandRow}>
+          <VerticeBrand variant="wordmark" width={120} />
+          <View style={styles.sectionBadge}>
+            <VerticeIcon name="moderation" color={colors.navy} size={16} />
+            <Text style={styles.sectionBadgeText}>MODERACIÓN</Text>
+          </View>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <VerticeIcon name="back" color={colors.navy} size={18} />
           <Text style={styles.backText}>Volver</Text>
         </Pressable>
 
-        <View style={styles.header}>
+        <View style={styles.hero}>
+          <View style={styles.heroIcon}>
+            <VerticeIcon name="moderation" color={colors.white} size={26} />
+          </View>
           <Text style={styles.eyebrow}>SEGURIDAD DE LA COMUNIDAD</Text>
           <Text style={styles.title}>Reportar contenido o perfil</Text>
-          <Text style={styles.subtitle}>
-            La denuncia se envía a moderación. No afecta automáticamente reputación, identidad ni autoridad cívica.
+          <Text style={styles.heroBody}>
+            La denuncia abre un caso de moderación. No sanciona automáticamente, no modifica reputación y no determina identidad ni autoridad cívica.
           </Text>
-          {params.label ? <Text style={styles.target}>{params.label}</Text> : null}
+          {targetLabel ? (
+            <View style={styles.targetPill}>
+              <VerticeIcon name="flag" color={colors.warningText} size={15} />
+              <Text style={styles.targetText} numberOfLines={2}>{targetLabel}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.boundaryCard}>
+          <VerticeIcon name="shield" color={colors.infoText} size={22} />
+          <View style={styles.boundaryCopy}>
+            <Text style={styles.boundaryKicker}>DEBIDO PROCESO DE MODERACIÓN</Text>
+            <Text style={styles.boundaryText}>
+              Reportar es una señal para revisión, no una sentencia. El resultado del caso lo determina el flujo de moderación del backend y puede ser descartado si no corresponde a una infracción.
+            </Text>
+          </View>
         </View>
 
         {!valid ? (
-          <Text style={styles.error}>El objetivo de esta denuncia no es válido.</Text>
+          <View style={styles.errorCard}>
+            <Text accessibilityRole="alert" style={styles.errorText}>El objetivo de esta denuncia no es válido.</Text>
+          </View>
         ) : sent ? (
           <View style={styles.successCard}>
+            <View style={styles.successIcon}>
+              <VerticeIcon name="checkCircle" color={colors.successText} size={26} />
+            </View>
             <Text style={styles.successTitle}>Denuncia recibida</Text>
-            <Text style={styles.successText}>El caso quedó en la cola de moderación para revisión.</Text>
-            <Pressable style={styles.primaryButton} onPress={() => router.back()}>
+            <Text style={styles.successText}>El caso quedó registrado para revisión de moderación. El envío no implica sanción automática.</Text>
+            <Pressable accessibilityRole="button" onPress={() => router.back()} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
               <Text style={styles.primaryButtonText}>Continuar</Text>
+              <VerticeIcon name="chevronRight" color={colors.navy} size={18} />
             </Pressable>
           </View>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>¿Qué ocurre?</Text>
-            <View style={styles.reasonList}>
-              {REASONS.map((item) => (
-                <Pressable
-                  key={item.id}
-                  onPress={() => setReason(item.id)}
-                  style={[styles.reasonCard, reason === item.id && styles.reasonCardActive]}
-                >
-                  <Text style={[styles.reasonTitle, reason === item.id && styles.reasonTitleActive]}>{item.label}</Text>
-                  <Text style={[styles.reasonHelp, reason === item.id && styles.reasonHelpActive]}>{item.help}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.sectionHeadingRow}>
+              <View style={styles.sectionIcon}>
+                <VerticeIcon name="flag" color={colors.navy} size={20} />
+              </View>
+              <View style={styles.sectionCopy}>
+                <Text style={styles.sectionKicker}>MOTIVO</Text>
+                <Text style={styles.sectionTitle}>¿Qué debería revisar moderación?</Text>
+              </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Contexto adicional (opcional)</Text>
+            <View style={styles.reasonList}>
+              {REASONS.map((item) => {
+                const selected = reason === item.id
+                return (
+                  <Pressable
+                    key={item.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => setReason(item.id)}
+                    style={({ pressed }) => [styles.reasonCard, selected && styles.reasonCardActive, pressed && styles.pressed]}
+                  >
+                    <VerticeIcon name={selected ? 'checkCircle' : 'circle'} color={selected ? colors.navy : colors.textTertiary} size={20} />
+                    <View style={styles.reasonCopy}>
+                      <Text style={styles.reasonTitle}>{item.label}</Text>
+                      <Text style={styles.reasonHelp}>{item.help}</Text>
+                    </View>
+                  </Pressable>
+                )
+              })}
+            </View>
+
+            <View style={styles.sectionHeadingRow}>
+              <View style={styles.sectionIcon}>
+                <VerticeIcon name="evidence" color={colors.navy} size={20} />
+              </View>
+              <View style={styles.sectionCopy}>
+                <Text style={styles.sectionKicker}>CONTEXTO ADICIONAL</Text>
+                <Text style={styles.sectionTitle}>Ayuda a revisar el caso</Text>
+              </View>
+            </View>
+
             <TextInput
               value={details}
               onChangeText={setDetails}
               placeholder="Describe brevemente qué debería revisar moderación."
-              placeholderTextColor="#8A8E87"
+              placeholderTextColor={colors.placeholder}
               multiline
               maxLength={1000}
+              textAlignVertical="top"
               style={styles.textArea}
             />
             <Text style={styles.counter}>{details.length}/1000</Text>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? (
+              <View style={styles.errorCard}>
+                <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-            <Pressable disabled={busy || !valid} style={[styles.primaryButton, (busy || !valid) && styles.disabled]} onPress={() => void submit()}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: busy || !valid }}
+              disabled={busy || !valid}
+              onPress={() => void submit()}
+              style={({ pressed }) => [styles.primaryButton, (busy || !valid) && styles.disabled, pressed && !busy && valid && styles.pressed]}
+            >
+              <VerticeIcon name="flag" color={colors.navy} size={18} />
               <Text style={styles.primaryButtonText}>{busy ? 'Enviando…' : 'Enviar a moderación'}</Text>
             </Pressable>
           </>
@@ -129,30 +215,45 @@ export default function CommunityReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 18, paddingBottom: 40, gap: 16 },
-  backButton: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: '#E7E4D8' },
-  backText: { color: '#263228', fontWeight: '700', fontSize: 12 },
-  header: { gap: 7 },
-  eyebrow: { fontSize: 11, letterSpacing: 1.5, color: '#697068', fontWeight: '700' },
-  title: { fontSize: 27, fontWeight: '800', color: '#11130F' },
-  subtitle: { color: '#5F655E', lineHeight: 20 },
-  target: { color: '#17382A', fontWeight: '700', marginTop: 4 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#171A15' },
-  reasonList: { gap: 9 },
-  reasonCard: { backgroundColor: '#FFFFFF', borderRadius: 15, borderWidth: 1, borderColor: '#E2E2DC', padding: 13, gap: 4 },
-  reasonCardActive: { backgroundColor: '#17382A', borderColor: '#17382A' },
-  reasonTitle: { color: '#1D211C', fontWeight: '700' },
-  reasonTitleActive: { color: '#FFFFFF' },
-  reasonHelp: { color: '#6A7068', fontSize: 12, lineHeight: 17 },
-  reasonHelpActive: { color: '#DCE8DF' },
-  textArea: { minHeight: 120, backgroundColor: '#FFFFFF', borderRadius: 15, padding: 14, color: '#171A15', textAlignVertical: 'top', borderWidth: 1, borderColor: '#E2E2DC' },
-  counter: { color: '#777B74', fontSize: 11, textAlign: 'right' },
-  primaryButton: { minHeight: 48, borderRadius: 14, backgroundColor: '#17382A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '800' },
-  disabled: { opacity: 0.5 },
-  error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
-  successCard: { backgroundColor: '#EEF3EF', borderRadius: 18, padding: 18, gap: 12 },
-  successTitle: { color: '#17382A', fontSize: 18, fontWeight: '800' },
-  successText: { color: '#3F5B4B', lineHeight: 19 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.hero, gap: spacing.md },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.warningBackground, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  sectionBadgeText: { color: colors.warningText, fontFamily: typography.bodyExtraBoldFamily, fontSize: 9, lineHeight: 13, fontWeight: '800', letterSpacing: 0.8 },
+  backButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start', paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  hero: { borderRadius: radius.xxl, padding: spacing.xl, backgroundColor: colors.navy, gap: spacing.sm },
+  heroIcon: { width: 48, height: 48, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navyLight },
+  eyebrow: { color: colors.citizen, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  title: { color: colors.white, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
+  heroBody: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  targetPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.warningBackground, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  targetText: { maxWidth: '90%', color: colors.warningText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  boundaryCard: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.infoBackground, borderWidth: 1, borderColor: colors.infoBorder },
+  boundaryCopy: { flex: 1, gap: spacing.xxs },
+  boundaryKicker: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  boundaryText: { color: colors.infoText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  errorCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, backgroundColor: colors.errorBackground, padding: spacing.md },
+  errorText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  successCard: { alignItems: 'center', borderRadius: radius.xl, padding: spacing.xl, gap: spacing.sm, backgroundColor: colors.successBackground, borderWidth: 1, borderColor: colors.successBorder, ...elevation.card },
+  successIcon: { width: 52, height: 52, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  successTitle: { color: colors.successText, fontFamily: typography.displayBoldFamily, fontSize: 20, lineHeight: 26, fontWeight: '700' },
+  successText: { color: colors.successText, textAlign: 'center', fontFamily: typography.bodyFamily, ...typography.roles.body },
+  sectionHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionIcon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
+  sectionCopy: { flex: 1, gap: spacing.xxs },
+  sectionKicker: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  sectionTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 18, lineHeight: 24, fontWeight: '700' },
+  reasonList: { gap: spacing.sm },
+  reasonCard: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: spacing.md },
+  reasonCardActive: { borderColor: colors.navy, backgroundColor: colors.infoBackground },
+  reasonCopy: { flex: 1, gap: spacing.xxs },
+  reasonTitle: { color: colors.textPrimary, fontFamily: typography.bodyBoldFamily, fontSize: 14, lineHeight: 19, fontWeight: '700' },
+  reasonHelp: { color: colors.textSecondary, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 18 },
+  textArea: { minHeight: 132, borderRadius: radius.lg, padding: spacing.md, color: colors.textPrimary, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.inputBorder, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  counter: { color: colors.textTertiary, textAlign: 'right', fontFamily: typography.bodySemiboldFamily, fontSize: 11, lineHeight: 15, fontWeight: '600' },
+  primaryButton: { minHeight: interaction.buttonHeight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.citizen, paddingHorizontal: spacing.md },
+  primaryButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  disabled: { opacity: interaction.disabledOpacity },
+  pressed: { opacity: interaction.pressedOpacity },
 })

@@ -16,5 +16,6 @@ Documentos principales:
 - `PHASE_CRITICAL_SECONDARY_SURFACE_CONVERGENCE.md` — convergencia de Notificaciones, Identidad cívica y Eliminación de cuenta sobre el runtime canónico.
 - `PHASE_TERRITORY_TRUST_SURFACE_CONVERGENCE.md` — convergencia de selección territorial, activación comunitaria y residence assurance sin alterar autoridad de backend.
 - `PHASE_PUBLIC_CITY_REPORT_DOMAIN_CONVERGENCE.md` — convergencia del nodo público de ciudad y detalle de reportes preservando contratos de lectura pública y trazabilidad.
+- `PHASE_COMMUNITY_TRUST_MODERATION_CONVERGENCE.md` — convergencia de perfil cívico, ranking y moderación preservando las fronteras entre interacción social, reputación y autoridad.
 - `CTG_ONE_MOBILE_AUTH.md` — contrato de federación CTG One con identidad única.
 - `RELEASE_CHECKLIST_COHERENCE.md` — evidencia exigida antes de declarar paridad o release.

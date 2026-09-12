@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { VerticeBrand } from '../../components/VerticeBrand'
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { apiFetch, apiMutation } from '../../lib/api'
-import type { FollowState, PublicCivicProfile } from '../../types/api'
+import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
+import type { CivicActivity, FollowState, PublicCivicProfile } from '../../types/api'
 import type { CommunityBlockState } from '../../types/community-safety'
 
 const PROFILE_TYPE_LABEL: Record<string, string> = {
@@ -14,25 +18,55 @@ const PROFILE_TYPE_LABEL: Record<string, string> = {
   public_official: 'Funcionario público',
 }
 
+function activityIcon(type: CivicActivity['type']) {
+  if (type === 'report') return 'report' as const
+  if (type === 'proposal') return 'governance' as const
+  return 'signal' as const
+}
+
+function verificationLabel(state: CivicActivity['verification_state']) {
+  if (state === 'verified') return 'Verificada'
+  if (state === 'evidence_backed') return 'Con evidencia'
+  return 'Declarada'
+}
+
+function verificationIcon(state: CivicActivity['verification_state']) {
+  if (state === 'verified') return 'verified' as const
+  if (state === 'evidence_backed') return 'evidence' as const
+  return 'circle' as const
+}
+
+function verificationColor(state: CivicActivity['verification_state']) {
+  if (state === 'verified') return colors.successText
+  if (state === 'evidence_backed') return colors.infoText
+  return colors.textTertiary
+}
+
 export default function CivicProfileScreen() {
-  const { citizenId } = useLocalSearchParams<{ citizenId: string }>()
+  const params = useLocalSearchParams<{ citizenId?: string | string[] }>()
+  const citizenId = useMemo(() => Array.isArray(params.citizenId) ? params.citizenId[0] : params.citizenId, [params.citizenId])
   const [profile, setProfile] = useState<PublicCivicProfile | null>(null)
   const [followState, setFollowState] = useState<FollowState | null>(null)
   const [blockState, setBlockState] = useState<CommunityBlockState | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [followBusy, setFollowBusy] = useState(false)
   const [blockBusy, setBlockBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!citizenId) return
+    if (!citizenId) {
+      setError('Perfil cívico inválido.')
+      setLoading(false)
+      return
+    }
     setError(null)
     try {
       const profileResponse = await apiFetch<PublicCivicProfile>(`/community/profiles/${citizenId}`)
       setProfile(profileResponse)
 
       const block = await apiFetch<CommunityBlockState>(`/community/profiles/${citizenId}/block-state`).catch(() => null)
-      if (block) setBlockState(block)
+      setBlockState(block)
 
       if (!block?.blocked) {
         const follow = await apiFetch<FollowState>(`/community/profiles/${citizenId}/follow-state`).catch(() => null)
@@ -42,6 +76,8 @@ export default function CivicProfileScreen() {
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar este perfil cívico.')
+    } finally {
+      setLoading(false)
     }
   }, [citizenId])
 
@@ -126,32 +162,72 @@ export default function CivicProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.navy} />}
       >
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <View style={styles.brandRow}>
+          <VerticeBrand variant="wordmark" width={120} />
+          <View style={styles.sectionBadge}>
+            <VerticeIcon name="community" color={colors.navy} size={16} />
+            <Text style={styles.sectionBadgeText}>COMUNIDAD</Text>
+          </View>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <VerticeIcon name="back" color={colors.navy} size={18} />
           <Text style={styles.backText}>Volver</Text>
         </Pressable>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {loading ? (
+          <View style={styles.stateCard}>
+            <VerticeIcon name="profile" color={colors.azure} size={24} />
+            <Text style={styles.muted}>Cargando perfil cívico…</Text>
+          </View>
+        ) : null}
+
+        {error ? (
+          <View style={styles.errorCard}>
+            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
+            <Pressable accessibilityRole="button" onPress={() => void load()} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+              <VerticeIcon name="refresh" color={colors.navy} size={18} />
+              <Text style={styles.secondaryButtonText}>Reintentar</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {profile ? (
           <>
-            <View style={styles.card}>
+            <View style={styles.heroCard}>
+              <View style={styles.profileIcon}>
+                <VerticeIcon name="profile" color={colors.white} size={26} />
+              </View>
               <Text style={styles.eyebrow}>{PROFILE_TYPE_LABEL[profile.profile_type] ?? profile.profile_type}</Text>
               <Text style={styles.name}>{profile.display_name ?? 'Perfil cívico'}</Text>
-              {profile.neighborhood ? <Text style={styles.muted}>{profile.neighborhood}</Text> : null}
-              {profile.organization ? <Text style={styles.muted}>{profile.organization}</Text> : null}
+              {profile.neighborhood ? <Text style={styles.heroMeta}>{profile.neighborhood}</Text> : null}
+              {profile.organization ? <Text style={styles.heroMeta}>{profile.organization}</Text> : null}
               {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
               {!blockState?.blocked && followState ? (
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: followBusy, selected: followState.following }}
                   disabled={followBusy}
                   onPress={() => void toggleFollow()}
-                  style={[styles.followButton, followState.following && styles.followButtonActive, followBusy && styles.disabled]}
+                  style={({ pressed }) => [
+                    styles.followButton,
+                    followState.following && styles.followButtonActive,
+                    followBusy && styles.disabled,
+                    pressed && !followBusy && styles.pressed,
+                  ]}
                 >
+                  <VerticeIcon name={followState.following ? 'userMinus' : 'userPlus'} color={followState.following ? colors.white : colors.navy} size={18} />
                   <Text style={[styles.followButtonText, followState.following && styles.followButtonTextActive]}>
                     {followBusy ? 'Procesando…' : followState.following ? 'Dejar de seguir' : 'Seguir'}
                   </Text>
@@ -160,83 +236,139 @@ export default function CivicProfileScreen() {
 
               {blockState?.blocked ? (
                 <View style={styles.blockedNote}>
-                  <Text style={styles.blockedTitle}>Usuario bloqueado</Text>
-                  <Text style={styles.blockedText}>Su contenido y las interacciones sociales entre ambos están limitados.</Text>
+                  <VerticeIcon name="block" color={colors.warningText} size={20} />
+                  <View style={styles.blockedCopy}>
+                    <Text style={styles.blockedTitle}>Usuario bloqueado</Text>
+                    <Text style={styles.blockedText}>Su contenido y las interacciones sociales entre ambos están limitados.</Text>
+                  </View>
                 </View>
               ) : null}
+            </View>
 
-              <View style={styles.statsRow}>
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{followState?.follower_count ?? profile.follower_count}</Text>
-                  <Text style={styles.statLabel}>Seguidores</Text>
-                </View>
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{profile.actions_count}</Text>
-                  <Text style={styles.statLabel}>Acciones</Text>
-                </View>
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{profile.verified_actions}</Text>
-                  <Text style={styles.statLabel}>Verificadas</Text>
-                </View>
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{profile.average_action_score}</Text>
-                  <Text style={styles.statLabel}>Score medio</Text>
-                </View>
+            <View style={styles.statsGrid}>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{followState?.follower_count ?? profile.follower_count}</Text>
+                <Text style={styles.statLabel}>Seguidores</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{profile.actions_count}</Text>
+                <Text style={styles.statLabel}>Acciones</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{profile.verified_actions}</Text>
+                <Text style={styles.statLabel}>Verificadas</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{profile.average_action_score}</Text>
+                <Text style={styles.statLabel}>Score medio</Text>
               </View>
             </View>
 
-            <View style={styles.neutralityNote}>
-              <Text style={styles.neutralityText}>
-                Seguir, bloquear o denunciar un perfil son controles sociales y de seguridad. No otorgan ni descuentan reputación, identidad o autoridad cívica automáticamente.
-              </Text>
+            <View style={styles.boundaryCard}>
+              <VerticeIcon name="shield" color={colors.infoText} size={22} />
+              <View style={styles.boundaryCopy}>
+                <Text style={styles.boundaryKicker}>FRONTERA DE CONFIANZA</Text>
+                <Text style={styles.boundaryText}>
+                  Seguir a una persona no es respaldo político, voto ni transferencia de reputación. Bloquear o denunciar son controles de seguridad y tampoco modifican automáticamente identidad, reputación o autoridad cívica.
+                </Text>
+              </View>
             </View>
 
             <View style={styles.safetyCard}>
-              <Text style={styles.sectionTitle}>Seguridad</Text>
-              <Text style={styles.safetyText}>Puedes denunciar este perfil para revisión o bloquear la interacción directamente.</Text>
+              <View style={styles.sectionHeadingRow}>
+                <View style={styles.sectionIcon}>
+                  <VerticeIcon name="moderation" color={colors.navy} size={20} />
+                </View>
+                <View style={styles.sectionCopy}>
+                  <Text style={styles.sectionKicker}>SEGURIDAD</Text>
+                  <Text style={styles.sectionTitle}>Controles sobre este perfil</Text>
+                </View>
+              </View>
+              <Text style={styles.body}>Puedes enviar una denuncia para revisión de moderación o limitar la interacción directamente.</Text>
               <View style={styles.safetyActions}>
-                <Pressable style={styles.reportButton} onPress={reportProfile}>
+                <Pressable accessibilityRole="button" onPress={reportProfile} style={({ pressed }) => [styles.reportButton, pressed && styles.pressed]}>
+                  <VerticeIcon name="flag" color={colors.errorText} size={18} />
                   <Text style={styles.reportButtonText}>Reportar usuario</Text>
                 </Pressable>
                 {blockState?.blocked ? (
-                  <Pressable disabled={blockBusy} style={[styles.unblockButton, blockBusy && styles.disabled]} onPress={() => void unblockUser()}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: blockBusy }}
+                    disabled={blockBusy}
+                    onPress={() => void unblockUser()}
+                    style={({ pressed }) => [styles.unblockButton, blockBusy && styles.disabled, pressed && !blockBusy && styles.pressed]}
+                  >
+                    <VerticeIcon name="unblock" color={colors.navy} size={18} />
                     <Text style={styles.unblockButtonText}>{blockBusy ? 'Procesando…' : 'Desbloquear usuario'}</Text>
                   </Pressable>
                 ) : (
-                  <Pressable disabled={blockBusy} style={[styles.blockButton, blockBusy && styles.disabled]} onPress={confirmBlock}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: blockBusy }}
+                    disabled={blockBusy}
+                    onPress={confirmBlock}
+                    style={({ pressed }) => [styles.blockButton, blockBusy && styles.disabled, pressed && !blockBusy && styles.pressed]}
+                  >
+                    <VerticeIcon name="block" color={colors.white} size={18} />
                     <Text style={styles.blockButtonText}>{blockBusy ? 'Procesando…' : 'Bloquear usuario'}</Text>
                   </Pressable>
                 )}
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Acciones recientes</Text>
+            <View style={styles.sectionHeadingRow}>
+              <View style={styles.sectionIcon}>
+                <VerticeIcon name="actions" color={colors.navy} size={20} />
+              </View>
+              <View style={styles.sectionCopy}>
+                <Text style={styles.sectionKicker}>TRAZABILIDAD CÍVICA</Text>
+                <Text style={styles.sectionTitle}>Acciones recientes</Text>
+              </View>
+            </View>
+
             <View style={styles.list}>
               {profile.recent_actions.map((activity) => (
                 <View key={`${activity.type}-${activity.id}`} style={styles.actionCard}>
                   <View style={styles.cardTop}>
-                    <Text style={styles.type}>{activity.category}</Text>
-                    <Text style={styles.score}>{activity.civic_score}</Text>
+                    <View style={styles.activityTypeRow}>
+                      <VerticeIcon name={activityIcon(activity.type)} color={colors.navy} size={16} />
+                      <Text style={styles.type}>{activity.category}</Text>
+                    </View>
+                    <View style={styles.scoreGroup}>
+                      <Text style={styles.score}>{activity.civic_score}</Text>
+                      <Text style={styles.scoreLabel}>score</Text>
+                    </View>
                   </View>
                   <Text style={styles.actionTitle}>{activity.title}</Text>
                   <Text style={styles.body} numberOfLines={2}>{activity.summary}</Text>
-                  <Pressable
-                    style={styles.inlineReport}
-                    onPress={() => router.push({
-                      pathname: '/community/report',
-                      params: {
-                        targetType: activity.type,
-                        targetId: activity.id,
-                        label: activity.title,
-                      },
-                    })}
-                  >
-                    <Text style={styles.inlineReportText}>Reportar</Text>
-                  </Pressable>
+                  <View style={styles.actionFooter}>
+                    <View style={styles.verificationPill}>
+                      <VerticeIcon name={verificationIcon(activity.verification_state)} color={verificationColor(activity.verification_state)} size={14} />
+                      <Text style={styles.verificationText}>{verificationLabel(activity.verification_state)}</Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => router.push({
+                        pathname: '/community/report',
+                        params: {
+                          targetType: activity.type,
+                          targetId: activity.id,
+                          label: activity.title,
+                        },
+                      })}
+                      style={({ pressed }) => [styles.inlineReport, pressed && styles.pressed]}
+                    >
+                      <VerticeIcon name="flag" color={colors.errorText} size={15} />
+                      <Text style={styles.inlineReportText}>Reportar</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ))}
               {profile.recent_actions.length === 0 ? (
-                <Text style={styles.empty}>Todavía no hay acciones públicas registradas.</Text>
+                <View style={styles.emptyCard}>
+                  <VerticeIcon name="actions" color={colors.textTertiary} size={24} />
+                  <Text style={styles.empty}>Todavía no hay acciones públicas registradas.</Text>
+                </View>
               ) : null}
             </View>
           </>
@@ -247,48 +379,71 @@ export default function CivicProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F4EE' },
-  content: { padding: 18, paddingBottom: 36, gap: 16 },
-  backButton: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: '#E7E4D8' },
-  backText: { color: '#263228', fontWeight: '700', fontSize: 12 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, gap: 8 },
-  eyebrow: { fontSize: 11, letterSpacing: 1.5, color: '#697068', fontWeight: '700', textTransform: 'uppercase' },
-  name: { fontSize: 24, fontWeight: '700', color: '#11130F' },
-  muted: { color: '#70746C' },
-  bio: { color: '#343931', lineHeight: 20, marginTop: 6 },
-  followButton: { marginTop: 10, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#17382A' },
-  followButtonActive: { backgroundColor: '#17382A' },
-  followButtonText: { color: '#17382A', fontWeight: '700' },
-  followButtonTextActive: { color: '#FFFFFF' },
-  disabled: { opacity: 0.55 },
-  blockedNote: { marginTop: 10, borderRadius: 14, padding: 12, backgroundColor: '#F4EFE8', gap: 3 },
-  blockedTitle: { color: '#503F2B', fontWeight: '800', fontSize: 13 },
-  blockedText: { color: '#6E5A43', fontSize: 12, lineHeight: 17 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
-  stat: { alignItems: 'center', gap: 3 },
-  statValue: { fontSize: 18, fontWeight: '800', color: '#1C3D2E' },
-  statLabel: { fontSize: 11, color: '#6D7168' },
-  neutralityNote: { backgroundColor: '#EEF3EF', borderRadius: 14, padding: 12 },
-  neutralityText: { color: '#3F5B4B', fontSize: 12, lineHeight: 17 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#171A15' },
-  safetyCard: { backgroundColor: '#FFFFFF', borderRadius: 17, padding: 15, gap: 9 },
-  safetyText: { color: '#656A63', fontSize: 12, lineHeight: 18 },
-  safetyActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  reportButton: { backgroundColor: '#F5ECEA', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 11 },
-  reportButtonText: { color: '#853B35', fontWeight: '800', fontSize: 12 },
-  blockButton: { backgroundColor: '#782E2A', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 11 },
-  blockButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
-  unblockButton: { borderWidth: 1, borderColor: '#53635A', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 11 },
-  unblockButtonText: { color: '#425149', fontWeight: '800', fontSize: 12 },
-  list: { gap: 10 },
-  actionCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, gap: 6 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  type: { textTransform: 'uppercase', fontSize: 10, letterSpacing: 1.1, color: '#667067', fontWeight: '700' },
-  score: { fontSize: 18, color: '#1C3D2E', fontWeight: '800' },
-  actionTitle: { fontSize: 15, fontWeight: '700', color: '#171A15' },
-  body: { color: '#343931', lineHeight: 18, fontSize: 13 },
-  inlineReport: { alignSelf: 'flex-end', marginTop: 2, paddingHorizontal: 8, paddingVertical: 6 },
-  inlineReportText: { color: '#853B35', fontWeight: '700', fontSize: 11 },
-  error: { color: '#8A302A', backgroundColor: '#FBE9E7', borderRadius: 12, padding: 12 },
-  empty: { textAlign: 'center', color: '#777B74', paddingVertical: 20 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.hero, gap: spacing.md },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.infoBackground, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  sectionBadgeText: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, fontSize: 9, lineHeight: 13, fontWeight: '800', letterSpacing: 0.8 },
+  backButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start', paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  stateCard: { minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  muted: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  errorCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, backgroundColor: colors.errorBackground, padding: spacing.md, gap: spacing.sm },
+  errorText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  secondaryButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.md },
+  secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  heroCard: { borderRadius: radius.xxl, padding: spacing.xl, backgroundColor: colors.navy, gap: spacing.sm },
+  profileIcon: { width: 48, height: 48, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navyLight },
+  eyebrow: { color: colors.citizen, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label, textTransform: 'uppercase' },
+  name: { color: colors.white, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
+  heroMeta: { color: colors.white, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  bio: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  followButton: { minHeight: interaction.buttonHeight, marginTop: spacing.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.citizen, backgroundColor: colors.citizen },
+  followButtonActive: { backgroundColor: colors.navyLight, borderColor: colors.white },
+  followButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  followButtonTextActive: { color: colors.white },
+  blockedNote: { marginTop: spacing.xs, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.warningBorder, backgroundColor: colors.warningBackground, padding: spacing.sm },
+  blockedCopy: { flex: 1, gap: spacing.xxs },
+  blockedTitle: { color: colors.warningText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
+  blockedText: { color: colors.warningText, fontFamily: typography.bodyFamily, fontSize: 12, lineHeight: 18 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  statCard: { width: '48%', minHeight: 100, justifyContent: 'center', borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...elevation.card },
+  statValue: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
+  statLabel: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  boundaryCard: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.infoBackground, borderWidth: 1, borderColor: colors.infoBorder },
+  boundaryCopy: { flex: 1, gap: spacing.xxs },
+  boundaryKicker: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  boundaryText: { color: colors.infoText, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  safetyCard: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.sm, ...elevation.card },
+  sectionHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionIcon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
+  sectionCopy: { flex: 1, gap: spacing.xxs },
+  sectionKicker: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  sectionTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 18, lineHeight: 24, fontWeight: '700' },
+  body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
+  safetyActions: { gap: spacing.xs },
+  reportButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, paddingHorizontal: spacing.md },
+  reportButtonText: { color: colors.errorText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  blockButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.red, paddingHorizontal: spacing.md },
+  blockButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  unblockButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.md },
+  unblockButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
+  list: { gap: spacing.sm },
+  actionCard: { borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...elevation.card },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
+  activityTypeRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  type: { flex: 1, textTransform: 'uppercase', color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
+  scoreGroup: { alignItems: 'flex-end' },
+  score: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, fontSize: 20, lineHeight: 24, fontWeight: '800' },
+  scoreLabel: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, fontSize: 10, lineHeight: 14, fontWeight: '600' },
+  actionTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  actionFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  verificationPill: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, borderRadius: radius.pill, backgroundColor: colors.infoBackground, paddingHorizontal: spacing.xs, paddingVertical: spacing.xxs },
+  verificationText: { color: colors.infoText, fontFamily: typography.bodySemiboldFamily, fontSize: 10, lineHeight: 14, fontWeight: '600' },
+  inlineReport: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, paddingHorizontal: spacing.xs },
+  inlineReportText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  emptyCard: { minHeight: 130, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  empty: { color: colors.textTertiary, textAlign: 'center', fontFamily: typography.bodyFamily, ...typography.roles.body },
+  disabled: { opacity: interaction.disabledOpacity },
+  pressed: { opacity: interaction.pressedOpacity },
 })
