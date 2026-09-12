@@ -101,7 +101,7 @@ export default function CommunityLeaderboardScreen() {
             <Pressable
               key={leader.citizen_id}
               accessibilityRole="button"
-              accessibilityLabel={`Abrir perfil de ${leader.display_name}`}
+              accessibilityLabel={`${leader.display_name}, puesto ${leader.rank}, score ${leader.leader_score}, ${leader.actions_count} acciones, ${leader.verified_actions} verificadas. Abrir perfil`}
               onPress={() => router.push(`/community/${leader.citizen_id}`)}
               style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             >
