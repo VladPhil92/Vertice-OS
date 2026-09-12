@@ -1,13 +1,19 @@
 import type { ColorValue } from 'react-native'
 import {
+  Activity,
   ArrowLeft,
   Bell,
+  Camera,
   CheckCircle,
   ChevronRight,
   Circle,
+  Clock,
+  FileText,
   Home,
   Landmark,
+  Map,
   MapPin,
+  RefreshCw,
   ShieldCheck,
   Trash2,
   User,
@@ -30,6 +36,12 @@ const ICONS = {
   checkCircle: CheckCircle,
   circle: Circle,
   delete: Trash2,
+  report: FileText,
+  map: Map,
+  evidence: Camera,
+  timeline: Clock,
+  refresh: RefreshCw,
+  signal: Activity,
 } as const
 
 export type VerticeIconName = keyof typeof ICONS
