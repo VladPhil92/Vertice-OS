@@ -58,6 +58,12 @@ const ICONS = {
   shield: Shield,
   moderation: ShieldAlert,
   leaderboard: Trophy,
+  workflow: Activity,
+  case: FileText,
+  history: Clock,
+  document: FileText,
+  pending: Circle,
+  required: Flag,
 } as const
 
 export type VerticeIconName = keyof typeof ICONS
