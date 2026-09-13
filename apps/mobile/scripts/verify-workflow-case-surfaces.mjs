@@ -24,7 +24,9 @@ const surfaces = [
       'El backend conserva la autoridad sobre el estado administrativo',
       'ARTEFACTOS PERSISTIDOS',
       'Última actualización registrada',
-      'Esta señal es informativa: no autoriza ni ejecuta una transición administrativa.',
+      'VISIBILIDAD DEL EXPEDIENTE',
+      'Su ausencia no significa que sean requisitos previos ni pasos pendientes en una secuencia obligatoria.',
+      'Esta lectura es informativa: la ausencia de un artefacto no implica orden secuencial ni autoriza una transición administrativa.',
       'router.push(`/report/${item.report.id}`)',
     ],
   },
@@ -76,5 +78,5 @@ if (failures.length) {
   for (const failure of failures) console.error(`[workflow-case-surfaces] FAIL: ${failure}`)
   process.exitCode = 1
 } else {
-  console.log('[workflow-case-surfaces] OK: workflow list/detail preserve canonical visuals, traceability and backend transition authority.')
+  console.log('[workflow-case-surfaces] OK: workflow list/detail preserve canonical visuals, traceability, non-sequential artifacts and backend transition authority.')
 }

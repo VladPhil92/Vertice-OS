@@ -52,11 +52,17 @@ function ArtifactStep({
   )
 }
 
-function pendingRequirement(item: CivicCase) {
-  if (!item.analysis) return 'El servidor todavía no expone un análisis territorial persistido para este expediente.'
-  if (!item.proposal) return 'Existe análisis persistido, pero el servidor todavía no expone una propuesta vinculada.'
-  if (!item.control) return 'Existe propuesta persistida, pero el servidor todavía no expone una actuación de control vinculada.'
-  return 'El expediente ya expone reporte, análisis, propuesta y control persistidos. Consulta la etapa actual para el estado administrativo vigente.'
+function artifactVisibilityMessage(item: CivicCase) {
+  const missing: string[] = []
+  if (!item.analysis) missing.push('análisis territorial')
+  if (!item.proposal) missing.push('propuesta')
+  if (!item.control) missing.push('actuación de control')
+
+  if (missing.length === 0) {
+    return 'El expediente expone reporte, análisis, propuesta y control persistidos. La etapa actual del servidor sigue siendo la referencia administrativa vigente.'
+  }
+
+  return `El servidor no expone actualmente ${missing.join(', ')} en este expediente. Su ausencia no significa que sean requisitos previos ni pasos pendientes en una secuencia obligatoria.`
 }
 
 export default function WorkflowDetailScreen() {
@@ -268,10 +274,10 @@ export default function WorkflowDetailScreen() {
             <View style={styles.requirementCard}>
               <VerticeIcon name="required" color={colors.warningText} size={22} />
               <View style={styles.requirementCopy}>
-                <Text style={styles.requirementKicker}>SIGUIENTE SEÑAL VISIBLE</Text>
-                <Text style={styles.requirementText}>{pendingRequirement(item)}</Text>
+                <Text style={styles.requirementKicker}>VISIBILIDAD DEL EXPEDIENTE</Text>
+                <Text style={styles.requirementText}>{artifactVisibilityMessage(item)}</Text>
                 <Text style={styles.requirementBoundary}>
-                  Esta señal es informativa: no autoriza ni ejecuta una transición administrativa.
+                  Esta lectura es informativa: la ausencia de un artefacto no implica orden secuencial ni autoriza una transición administrativa.
                 </Text>
               </View>
             </View>

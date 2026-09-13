@@ -12,7 +12,7 @@ This tranche follows Community Trust & Moderation Convergence. The workflow list
 
 `apps/mobile/app/workflows/index.tsx` now uses the canonical design-token adapter, bundled Montserrat/Inter aliases, VÉRTICE brand assets and the semantic icon adapter.
 
-Each case exposes the backend-provided stage, report status and persisted analysis/proposal/control artifacts. Progress indicators are descriptive only. The existing `/workflows/cases?limit=50` read contract and navigation to the case detail are unchanged.
+Each case exposes the backend-provided stage, report status and persisted analysis/proposal/control artifacts. Progress indicators describe artifact presence only; they do not assert a mandatory sequence. The existing `/workflows/cases?limit=50` read contract and navigation to the case detail are unchanged.
 
 The screen states the authority boundary in-product: the backend retains authority over administrative state and the native client does not create, advance or resolve stages by rendering them.
 
@@ -24,7 +24,7 @@ The screen states the authority boundary in-product: the backend retains authori
 2. temporal traceability for report creation, case creation and last recorded update;
 3. persisted workflow artifacts for report, analysis, proposal and control;
 4. proposal/control metadata already returned by the API;
-5. the next visible signal, described as informational rather than executable authority.
+5. artifact visibility, described without inferring a required order between missing artifacts.
 
 The existing `GET /workflows/cases/:id` contract remains the source of truth. The case detail does not introduce `POST`, mutation, analyze, proposal or control transition calls.
 
@@ -32,7 +32,9 @@ The existing `GET /workflows/cases/:id` contract remains the source of truth. Th
 
 The UI does not manufacture administrative events that are absent from the response. It renders only timestamps and artifacts already present in `CivicCase`: report creation, case creation/update, analysis audit ID, proposal metadata and control metadata.
 
-The product rule is explicit: a missing artifact means only that the server response does not expose that persisted artifact; it does not mean the client is authorized to create it.
+Workflow artifacts are not treated as a mandatory linear chain. A case may expose control without analysis or proposal when the backend permits direct escalation. Missing artifacts are therefore described collectively as not currently exposed; the UI does not call any one of them the "next" required step.
+
+The product rule is explicit: a missing artifact means only that the server response does not expose that persisted artifact; it does not mean the client is authorized to create it or that it is a prerequisite for an artifact already present.
 
 ## Icon boundary extension
 
@@ -58,6 +60,7 @@ Lucide ownership remains centralized in the adapter. Workflow screens do not imp
 - removes the existing case-list/read/detail/report-navigation contracts;
 - removes the explicit backend-authority boundary;
 - removes persisted-artifact or traceability copy;
+- reintroduces language that treats absent artifacts as mandatory sequential prerequisites;
 - introduces `apiMutation`, `POST`, `/analyze`, `/proposal` or `/control` transition tokens into this read-only convergence tranche.
 
 The gate is chained into Mobile Core Parity through `verify-font-alias-contract.mjs`.
@@ -69,6 +72,7 @@ This phase changes presentation, accessibility and case-state comprehension only
 - workflow state-machine rules;
 - analysis creation authority;
 - proposal creation or voting authority;
+- direct escalation/control authority;
 - control/legal workflow authority;
 - report state semantics;
 - identity or residence assurance;
@@ -76,7 +80,7 @@ This phase changes presentation, accessibility and case-state comprehension only
 - moderation disposition;
 - payments, donations or crowdfunding authorization.
 
-The backend remains the system of record for administrative state transitions.
+The backend remains the system of record for administrative state transitions and for which combinations of workflow artifacts are valid.
 
 ## Next tranche
 
