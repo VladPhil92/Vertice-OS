@@ -65,8 +65,13 @@ function summarize(rootDir) {
 }
 
 function gitSha() {
-  if (/^[0-9a-f]{40}$/i.test(process.env.GITHUB_SHA ?? '')) return process.env.GITHUB_SHA.toLowerCase()
-  return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().toLowerCase()
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().toLowerCase()
+  } catch {
+    const eventSha = process.env.GITHUB_SHA ?? ''
+    if (/^[0-9a-f]{40}$/i.test(eventSha)) return eventSha.toLowerCase()
+    throw new Error('Unable to determine the checked-out Git SHA.')
+  }
 }
 
 function main() {
