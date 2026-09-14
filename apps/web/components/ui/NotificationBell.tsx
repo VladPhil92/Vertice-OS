@@ -35,11 +35,17 @@ const TYPE_COLOR: Record<string, string> = {
   system: 'bg-surface text-secondary',
 }
 
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90E2] focus-visible:ring-offset-2'
+const PANEL_ID = 'dashboard-notifications-popover'
+const PANEL_TITLE_ID = 'dashboard-notifications-popover-title'
+
 export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
   const panelRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   const fetchNotifs = useCallback(async () => {
     try {
@@ -49,6 +55,11 @@ export function NotificationBell() {
     } catch {
       // Non-critical shell surface: the dedicated inbox carries explicit errors.
     }
+  }, [])
+
+  const closeAndRestoreFocus = useCallback(() => {
+    setOpen(false)
+    requestAnimationFrame(() => triggerRef.current?.focus())
   }, [])
 
   useEffect(() => {
@@ -64,6 +75,23 @@ export function NotificationBell() {
     if (open) document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const focusFrame = requestAnimationFrame(() => closeButtonRef.current?.focus())
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeAndRestoreFocus()
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      cancelAnimationFrame(focusFrame)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [closeAndRestoreFocus, open])
 
   async function handleMarkAll() {
     try {
@@ -81,20 +109,35 @@ export function NotificationBell() {
     } catch { /* dedicated inbox exposes actionable failures */ }
   }
 
+  const triggerLabel = unread > 0 ? `Notificaciones, ${unread} sin leer` : 'Notificaciones'
+
   return (
     <div className="relative" ref={panelRef}>
-      <button onClick={() => { setOpen((value) => !value); if (!open) void fetchNotifs() }} className="relative flex h-8 w-8 items-center justify-center rounded text-secondary transition hover:bg-surface hover:text-primary" aria-label="Notificaciones">
-        <Bell size={16} />
-        {unread > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gold text-[9px] font-bold text-bg">{unread > 9 ? '9+' : unread}</span>}
+      <button
+        ref={triggerRef}
+        onClick={() => { setOpen((value) => !value); if (!open) void fetchNotifs() }}
+        className={`relative flex h-8 w-8 items-center justify-center rounded text-secondary transition hover:bg-surface hover:text-primary ${FOCUS_RING}`}
+        aria-label={triggerLabel}
+        aria-expanded={open}
+        aria-controls={PANEL_ID}
+        aria-haspopup="dialog"
+      >
+        <Bell size={16} aria-hidden="true" />
+        {unread > 0 && <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gold text-[9px] font-bold text-bg">{unread > 9 ? '9+' : unread}</span>}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 z-50 w-80 overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+        <div
+          id={PANEL_ID}
+          role="dialog"
+          aria-labelledby={PANEL_TITLE_ID}
+          className="absolute right-0 top-10 z-50 w-80 overflow-hidden rounded-xl border border-border bg-surface shadow-xl"
+        >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <span className="font-mono text-xs font-semibold uppercase tracking-widest text-secondary">Notificaciones</span>
+            <span id={PANEL_TITLE_ID} className="font-mono text-xs font-semibold uppercase tracking-widest text-secondary">Notificaciones</span>
             <div className="flex items-center gap-2">
-              {unread > 0 && <button onClick={() => void handleMarkAll()} className="flex items-center gap-1 font-mono text-[10px] text-gold transition hover:text-gold/70" title="Marcar todas como leídas"><CheckCheck size={12} /> Todo leído</button>}
-              <button onClick={() => setOpen(false)} className="text-tertiary hover:text-primary" aria-label="Cerrar notificaciones"><X size={14} /></button>
+              {unread > 0 && <button onClick={() => void handleMarkAll()} className={`flex items-center gap-1 font-mono text-[10px] text-gold transition hover:text-gold/70 ${FOCUS_RING}`}><CheckCheck size={12} aria-hidden="true" /> Todo leído</button>}
+              <button ref={closeButtonRef} onClick={closeAndRestoreFocus} className={`text-tertiary hover:text-primary ${FOCUS_RING}`} aria-label="Cerrar notificaciones"><X size={14} aria-hidden="true" /></button>
             </div>
           </div>
 
@@ -112,15 +155,30 @@ export function NotificationBell() {
                   <p className="mt-0.5 line-clamp-2 font-mono text-[11px] leading-snug text-secondary">{notification.body}</p>
                 </div>
                 <div className="flex flex-shrink-0 flex-col items-end gap-1.5 pt-0.5">
-                  {!notification.read && <button onClick={() => void handleMarkOne(notification.id)} className="h-2 w-2 rounded-full bg-gold" title="Marcar como leída" />}
-                  {notification.href && <Link href={notification.href} className="text-tertiary transition hover:text-gold" title="Ver" onClick={() => setOpen(false)}><ExternalLink size={11} /></Link>}
+                  {!notification.read && (
+                    <button
+                      onClick={() => void handleMarkOne(notification.id)}
+                      className={`h-4 w-4 rounded-full bg-gold ${FOCUS_RING}`}
+                      aria-label={`Marcar “${notification.title}” como leída`}
+                    />
+                  )}
+                  {notification.href && (
+                    <Link
+                      href={notification.href}
+                      className={`text-tertiary transition hover:text-gold ${FOCUS_RING}`}
+                      aria-label={`Abrir “${notification.title}”`}
+                      onClick={() => setOpen(false)}
+                    >
+                      <ExternalLink size={11} aria-hidden="true" />
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          <Link href="/dashboard/notifications" onClick={() => setOpen(false)} className="flex items-center justify-center gap-2 border-t border-border bg-bg px-4 py-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-secondary transition hover:text-gold">
-            <Inbox size={12} /> Abrir bandeja operacional
+          <Link href="/dashboard/notifications" onClick={() => setOpen(false)} className={`flex items-center justify-center gap-2 border-t border-border bg-bg px-4 py-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-secondary transition hover:text-gold ${FOCUS_RING}`}>
+            <Inbox size={12} aria-hidden="true" /> Abrir bandeja operacional
           </Link>
         </div>
       )}
