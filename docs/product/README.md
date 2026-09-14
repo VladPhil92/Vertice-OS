@@ -21,5 +21,6 @@ Documentos principales:
 - `PHASE_FINANCIAL_CROWDFUNDING_SAFETY_CONVERGENCE.md` — convergencia de readiness financiero y campañas preservando autoridad server-side, separación cívica y límites de settlement/payout.
 - `PHASE_RELEASE_CANDIDATE_HARDENING_EVIDENCE_SYNC.md` — sincronización fail-closed del estado RC, matriz de completion, certificación y evidencias externas pendientes.
 - `PHASE_PERFORMANCE_ACCESSIBILITY_BASELINE.md` — medición reproducible de artefactos Web/Mobile y ratchet de accesibilidad sin presupuestos arbitrarios.
+- `PHASE_ACCESSIBILITY_REMEDIATION_RUNTIME_BUDGETS.md` — remediación de deuda pública de accesibilidad, contrato Golden de teclado/foco y expansión de presupuestos reproducibles por ruta.
 - `CTG_ONE_MOBILE_AUTH.md` — contrato de federación CTG One con identidad única.
 - `RELEASE_CHECKLIST_COHERENCE.md` — evidencia exigida antes de declarar paridad o release.
