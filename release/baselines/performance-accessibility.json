@@ -1,14 +1,51 @@
 {
   "schema_version": "1.0",
-  "mode": "bootstrap",
-  "baseline_sha": null,
-  "captured_at": null,
+  "mode": "enforced",
+  "baseline_sha": "40038f0e153cbcd6e10b54debf6c2f485a80f883",
+  "captured_at": "2026-09-14T02:17:02.000Z",
   "policy": {
-    "performance": "Bootstrap only. After the first exact-head measurement, raw web/mobile artifact bytes become controlled ceilings. Decreases pass; increases require a reviewed baseline update with rationale.",
-    "accessibility": "Bootstrap only. After the first exact-head measurement, deterministic issue counts become per-route/per-rule ceilings. Decreases pass; increases fail until explicitly reviewed.",
+    "performance": "The exact-head measured Web/Mobile artifact values are controlled ceilings. Decreases pass; increases require a reviewed baseline update with rationale.",
+    "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. Decreases pass; increases fail until fixed or explicitly reviewed.",
     "runtime_timing": "Observed for diagnostics only. No timing threshold is enforced until a repeatable benchmark environment and variance study exist.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
   },
-  "performance_ceilings": null,
-  "accessibility_ceilings": null
+  "performance_ceilings": {
+    "web_client_static_bytes": 5067542,
+    "web_client_runtime_code_bytes": 4399390,
+    "web_client_css_bytes": 154544,
+    "web_client_largest_bytes": 1766533,
+    "web_public_assets_bytes": 1469154,
+    "web_public_largest_bytes": 1111554,
+    "android_export_bytes": 11025902,
+    "android_runtime_code_bytes": 5471916,
+    "android_largest_bytes": 5471916,
+    "ios_export_bytes": 9751952,
+    "ios_runtime_code_bytes": 5161616,
+    "ios_largest_bytes": 5161616
+  },
+  "accessibility_ceilings": {
+    "total_issues": 2,
+    "routes": {
+      "/": {
+        "total_issues": 0,
+        "issues_by_code": {}
+      },
+      "/auth/login": {
+        "total_issues": 1,
+        "issues_by_code": {
+          "missing_main_landmark": 1
+        }
+      },
+      "/auth/register": {
+        "total_issues": 1,
+        "issues_by_code": {
+          "missing_main_landmark": 1
+        }
+      },
+      "/account-deletion": {
+        "total_issues": 0,
+        "issues_by_code": {}
+      }
+    }
+  }
 }
