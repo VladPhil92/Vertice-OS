@@ -132,12 +132,29 @@ async function inspectRoute(page, baseUrl, route) {
     const resources = performance.getEntriesByType('resource')
     const resourceSummary = resources.reduce((summary, entry) => {
       const url = entry.name.toLowerCase()
-      if (url.includes('.js')) summary.js_encoded_bytes += entry.encodedBodySize || 0
-      if (url.includes('.css')) summary.css_encoded_bytes += entry.encodedBodySize || 0
-      summary.encoded_bytes += entry.encodedBodySize || 0
+      const encoded = entry.encodedBodySize || 0
+      const decoded = entry.decodedBodySize || 0
+      if (url.includes('.js')) {
+        summary.js_encoded_bytes += encoded
+        summary.js_decoded_bytes += decoded
+      }
+      if (url.includes('.css')) {
+        summary.css_encoded_bytes += encoded
+        summary.css_decoded_bytes += decoded
+      }
+      summary.encoded_bytes += encoded
+      summary.decoded_bytes += decoded
       summary.resources += 1
       return summary
-    }, { resources: 0, encoded_bytes: 0, js_encoded_bytes: 0, css_encoded_bytes: 0 })
+    }, {
+      resources: 0,
+      encoded_bytes: 0,
+      decoded_bytes: 0,
+      js_encoded_bytes: 0,
+      js_decoded_bytes: 0,
+      css_encoded_bytes: 0,
+      css_decoded_bytes: 0,
+    })
 
     return {
       title: document.title,
@@ -181,7 +198,7 @@ async function main() {
   }
 
   const report = {
-    schema_version: '1.1',
+    schema_version: '1.2',
     base_url: options.baseUrl,
     measurement_contract: {
       routes: options.routes,
@@ -195,7 +212,7 @@ async function main() {
         'exactly one main landmark',
         'exactly one level-one heading',
       ],
-      runtime_resource_scope: 'Per-route encoded resource bytes are measured independently from wall-clock timings and may be promoted into exact regression ceilings after an exact-head capture.',
+      runtime_resource_scope: 'Per-route decoded resource body bytes are candidates for exact regression ceilings. Encoded transfer bytes and wall-clock timings remain observations because repeated same-source runs demonstrated transport-level variance.',
       note: 'This deterministic browser heuristic is a regression ratchet, not a WCAG conformance certification or substitute for assistive-technology/manual testing.',
     },
     total_issues: routes.reduce((total, route) => total + route.total_issues, 0),
@@ -208,7 +225,7 @@ async function main() {
   console.log(`Accessibility baseline measured across ${routes.length} public routes.`)
   console.log(`Total deterministic heuristic issues: ${report.total_issues}`)
   for (const route of routes) {
-    console.log(`- ${route.route}: ${route.total_issues} issues; ${route.runtime_observation.js_encoded_bytes} encoded JS bytes`)
+    console.log(`- ${route.route}: ${route.total_issues} issues; ${route.runtime_observation.js_decoded_bytes} decoded JS bytes`)
   }
   console.log(`Report: ${path.relative(process.cwd(), output)}`)
 }
