@@ -140,7 +140,7 @@ Tipografía: `display` = Montserrat (headings, 500–800), `body` = Inter (400�
 
 Logo canónico: `apps/web/public/brand/` (`vertice-wordmark.webp`, `vertice-logo.png`, `vertice-symbol.webp`) vía `BrandLogo.tsx`, copiado byte-a-byte a `apps/mobile/assets/brand/`. Reglas de uso en `docs/product/BRAND_ASSET_POLICY.md`.
 
-`apps/web/public/logo.svg` **no es canónico ni una variante válida**: no está referenciado por ningún componente, layout ni manifest (verificado), recrea el logo como texto/SVG en vez de usar los activos oficiales (viola `BRAND_ASSET_POLICY.md` regla "no recrear el logo con texto") y usa los colores del tema oscuro obsoleto (`#C8A84B`, `#F0EDE8`) ya retirado de este documento. Es un huérfano de la identidad anterior — pendiente de borrado, no de uso.
+No usar los activos de `apps/web/public/brand/` fuera de `BrandLogo.tsx`, ni recrear el logo como texto/SVG suelto: un asset huérfano así (`apps/web/public/logo.svg`) existió en este repo, violaba esa regla y usaba los colores del tema oscuro obsoleto (`#C8A84B`, `#F0EDE8`) — ya fue eliminado.
 
 `apps/mobile` ya consume `packages/design-tokens/src/index.ts` vía `apps/mobile/theme/vertice.ts` sin duplicar valores de marca — mantenerlo así. `apps/web/app/globals.css` hoy duplica los hex a mano en vez de llamar a `cssVariables()` de `web.ts`; al tocar ese archivo, migrar a la función en lugar de perpetuar la duplicación.
 
