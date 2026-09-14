@@ -163,11 +163,13 @@ export default function NotificationsPage() {
       </div>
 
       <div id="notification-results" aria-busy={refreshing}>
-        {error ? (
+        {error && (
           <div className="mt-5 rounded-2xl border border-[#F0C7CB] bg-[#FFF7F8] p-4 text-sm font-semibold text-[#A51E2D]" role="alert">
             {error}
           </div>
-        ) : visible.length === 0 ? (
+        )}
+
+        {visible.length === 0 ? (
           <div className="mt-6 rounded-[24px] border border-dashed border-[#C9D6E5] bg-white p-10 text-center">
             <Filter size={25} className="mx-auto text-[#8AA0BB]" aria-hidden="true" />
             <h2 className="mt-4 text-lg font-extrabold text-[#0A2A66]">No hay elementos en este filtro</h2>
