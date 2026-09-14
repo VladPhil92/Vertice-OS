@@ -78,11 +78,13 @@ async function inspectRoute(page, baseUrl, route) {
 
     document.querySelectorAll('[role="button"]').forEach((element, index) => {
       const selector = `[role="button"]:nth-of-type(${index + 1})`
-      if (element.tagName.toLowerCase() !== 'button' && !accessibleNameLike(element)) {
+      const tagName = element.tagName.toLowerCase()
+      if (tagName !== 'button' && !accessibleNameLike(element)) {
         push('role_button_missing_name', selector, 'Element with button role has no accessible-name signal.')
       }
-      if (!['button', 'a', 'input'].includes(element.tagName.toLowerCase()) && element.tabIndex < 0) {
-        push('role_button_not_tabbable', selector, 'Non-native button role is not keyboard-tabbable.')
+      const disabled = element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true'
+      if (!disabled && element.tabIndex < 0) {
+        push('role_button_not_tabbable', selector, 'Enabled element with button role is not keyboard-tabbable.')
       }
     })
 
@@ -205,7 +207,7 @@ async function main() {
       rule_scope: [
         'img alt presence',
         'button/link/role=button accessible-name signals',
-        'non-native role=button keyboard tabbability',
+        'enabled role=button keyboard tabbability',
         'form-control programmatic labels',
         'duplicate ids',
         'document language',
