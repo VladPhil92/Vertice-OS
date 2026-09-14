@@ -17,6 +17,7 @@ import type {
 
 const READINESS_LABELS: Record<ReadinessState | string, string> = {
   ready: 'Listo',
+  active: 'Activa',
   action_required: 'Acción requerida',
   pending_review: 'En revisión',
   platform_blocked: 'Bloqueo de plataforma',
@@ -49,14 +50,14 @@ function formatDate(value: string | null | undefined) {
 }
 
 function stateIcon(value: string): VerticeIconName {
-  if (value === 'ready' || value === 'verified') return 'checkCircle'
+  if (value === 'ready' || value === 'verified' || value === 'active') return 'checkCircle'
   if (value === 'pending_review' || value === 'pending') return 'pending'
   if (value === 'blocked' || value === 'platform_blocked' || value === 'disabled' || value === 'misconfigured') return 'block'
   return 'required'
 }
 
 function StatePill({ label, value }: { label: string; value: string }) {
-  const ready = value === 'ready' || value === 'verified'
+  const ready = value === 'ready' || value === 'verified' || value === 'active'
   const pending = value === 'pending_review' || value === 'pending'
   const blocked = value === 'blocked' || value === 'platform_blocked' || value === 'disabled' || value === 'misconfigured'
   const iconColor = ready
@@ -117,10 +118,10 @@ function BlockerRow({ blocker }: { blocker: ReadinessBlocker }) {
 
 function campaignSafetyState(campaign: CrowdfundingCampaignReadiness | undefined) {
   if (!campaign) return 'pending' as const
-  if (campaign.can_accept_contributions) return 'ready' as const
-  if (campaign.can_activate) return 'action_required' as const
   if (campaign.status === 'review' || campaign.compliance_status === 'in_review') return 'pending_review' as const
   if (campaign.status === 'suspended' || campaign.compliance_status === 'suspended' || campaign.compliance_status === 'rejected') return 'blocked' as const
+  if (campaign.blockers.some((blocker) => blocker.scope === 'platform')) return 'platform_blocked' as const
+  if (campaign.blockers.length > 0) return 'action_required' as const
   return 'action_required' as const
 }
 
@@ -317,15 +318,21 @@ export default function CrowdfundingScreen() {
                 const goal = Math.max(1, campaign.goal_amount_cop)
                 const progress = Math.max(0, Math.min(100, Math.round((campaign.raised_amount_cop / goal) * 100)))
                 const campaignReadiness = readiness.campaigns.find((item) => item.id === campaign.id)
-                const financialState = campaignSafetyState(campaignReadiness)
+                const blockerState = campaignSafetyState(campaignReadiness)
+                const lifecycleState = campaignReadiness?.status === 'active'
+                  ? 'active'
+                  : campaignReadiness?.lifecycle_ready
+                    ? 'ready'
+                    : blockerState
+                const activationState = campaignReadiness?.status === 'active'
+                  ? 'active'
+                  : campaignReadiness?.can_activate
+                    ? 'ready'
+                    : blockerState
+                const contributionState = campaignReadiness?.can_accept_contributions ? 'ready' : blockerState
 
                 return (
-                  <View
-                    accessible
-                    accessibilityLabel={`${campaign.title}. ${progress}% del objetivo registrado. Estado ${campaign.status}. Compliance ${campaign.compliance_status}.`}
-                    key={campaign.id}
-                    style={styles.campaignCard}
-                  >
+                  <View key={campaign.id} style={styles.campaignCard}>
                     <View style={styles.campaignTop}>
                       <View style={styles.campaignTitleRow}>
                         <VerticeIcon name="case" color={colors.navy} size={18} />
@@ -341,9 +348,9 @@ export default function CrowdfundingScreen() {
                     <Text style={styles.amountBoundary}>Monto registrado por API; no constituye prueba local de settlement bancario.</Text>
 
                     <View style={styles.campaignStateGrid}>
-                      <StatePill label="Lifecycle" value={campaignReadiness?.lifecycle_ready ? 'ready' : 'action_required'} />
-                      <StatePill label="Activación" value={campaignReadiness?.can_activate ? 'ready' : financialState} />
-                      <StatePill label="Recaudo" value={campaignReadiness?.can_accept_contributions ? 'ready' : financialState} />
+                      <StatePill label="Lifecycle" value={lifecycleState} />
+                      <StatePill label="Activación" value={activationState} />
+                      <StatePill label="Recaudo" value={contributionState} />
                     </View>
 
                     {campaignReadiness?.review_notes ? (
@@ -433,7 +440,7 @@ const styles = StyleSheet.create({
   statePillBlocked: { backgroundColor: colors.errorBackground, borderColor: colors.errorBorder },
   stateLabelRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   stateLabel: { flex: 1, color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  stateValue: { color: colors.warningText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
+  stateValue: { color: colors.warningText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   stateValueReady: { color: colors.successText },
   stateValuePending: { color: colors.infoText },
   stateValueBlocked: { color: colors.errorText },
@@ -465,7 +472,7 @@ const styles = StyleSheet.create({
   campaignTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
   campaignTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   campaignTitle: { flex: 1, color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 17, lineHeight: 23, fontWeight: '700' },
-  progress: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
+  progress: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   campaignMeta: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   progressTrack: { height: 8, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   progressFill: { height: 8, backgroundColor: colors.navy },
@@ -481,7 +488,7 @@ const styles = StyleSheet.create({
   emptyHint: { color: colors.textTertiary, textAlign: 'center', fontFamily: typography.bodyFamily, ...typography.roles.body },
   boundaryCard: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.infoBackground, borderWidth: 1, borderColor: colors.infoBorder },
   boundaryCopy: { flex: 1, gap: spacing.xxs },
-  boundaryTitle: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
+  boundaryTitle: { color: colors.infoText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   boundaryText: { color: colors.infoText, fontFamily: typography.bodyFamily, ...typography.roles.body },
   pressed: { opacity: interaction.pressedOpacity },
 })

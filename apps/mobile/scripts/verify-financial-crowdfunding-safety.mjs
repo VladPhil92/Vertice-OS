@@ -18,10 +18,10 @@ const required = [
   'Pagos, donaciones, KYC/KYB, suscripciones, settlement y payouts no modifican reputación, ranking, voto ni autoridad cívica.',
   'Math.max(0, Math.min(100',
   "router.push('/identity')",
+  "campaignReadiness?.status === 'active'",
 ]
 
 const forbiddenMutationTokens = [
-  'apiMutation(',
   "method: 'POST'",
   'method: "POST"',
   "'/crowdfunding/contributions'",
@@ -49,6 +49,9 @@ if (/#[0-9a-fA-F]{3,8}\b/.test(source)) {
 }
 if (/fontFamily:\s*['"]/.test(source)) {
   failures.push('crowdfunding safety surface cannot use raw font-family strings')
+}
+if (/\bapiMutation\b/.test(source)) {
+  failures.push('crowdfunding safety convergence is read-only and cannot introduce the apiMutation helper, including generic or whitespace variants')
 }
 for (const glyph of ['←', '→', '✓', '○']) {
   if (source.includes(glyph)) failures.push(`crowdfunding safety surface cannot substitute semantic icons with Unicode glyph ${glyph}`)
