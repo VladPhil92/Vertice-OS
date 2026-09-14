@@ -4,7 +4,7 @@ Evidence sync: **2026-09-13**.
 
 ## Objective
 
-Establish a reproducible, exact-head baseline for Web and Mobile artifact size plus deterministic accessibility debt before introducing release budgets. This phase deliberately avoids invented thresholds: the first measured release-candidate artifact becomes the controlled ceiling, and future growth requires an explicit reviewed baseline update.
+Establish a reproducible, exact-head baseline for Web and Mobile artifact size plus deterministic accessibility debt before introducing release budgets. This phase deliberately avoids invented thresholds: only measurements proven repeatable under the controlled CI boundary become enforced ceilings, and future growth requires an explicit reviewed baseline update.
 
 This is a regression-control phase. It is not a claim of physical-device performance, production Core Web Vitals, WCAG conformance, assistive-technology certification or store/market approval.
 
@@ -17,9 +17,17 @@ This is a regression-control phase. It is not a claim of physical-device perform
 - Expo Android export;
 - Expo iOS export.
 
-For each surface it records total files/bytes, JavaScript, CSS, fonts, images and largest artifact. The controlled regression gate uses a compact set of byte ceilings derived from the first exact-head measurement.
+For each surface it records total files/bytes, runtime code, CSS, fonts, images and largest artifact. The controlled regression gate enforces only the subset that proved reproducible across repeated builds.
 
-The gate intentionally does **not** budget wall-clock build duration, local navigation time, device startup, memory, CPU or network latency. Those signals require a stable benchmark/device environment and a variance study before a numeric threshold can be defensible.
+The first repeated export exposed a one-byte variance in Hermes bytecode without any change to mobile application source: Android moved by +1 byte while iOS moved by -1 byte, and the non-runtime asset bytes remained identical. Treating raw Hermes byte length as a hard ceiling would therefore create a false deterministic contract. The enforced baseline consequently:
+
+- budgets Web build/static bytes directly;
+- budgets Android and iOS **non-runtime asset bytes** exactly;
+- records raw Hermes runtime-code bytes as diagnostic observations only.
+
+A deterministic runtime-code metric may be promoted into the enforced set only after a repeatability study establishes a stable measurement boundary. This is not a tolerance band: unstable measurements are excluded rather than given an arbitrary percentage allowance.
+
+The gate also intentionally does **not** budget wall-clock build duration, local navigation time, device startup, memory, CPU or network latency. Those signals require a stable benchmark/device environment and a variance study before a numeric threshold can be defensible.
 
 ## Accessibility measurement contract
 
@@ -48,18 +56,19 @@ This heuristic is intentionally narrower than WCAG. Manual keyboard testing, scr
 `release/baselines/performance-accessibility.json` has two lifecycle states:
 
 1. `bootstrap` — measurement infrastructure is being proven and no ceiling is claimed yet;
-2. `enforced` — the exact-head measured values are frozen as ceilings.
+2. `enforced` — reproducible exact-head values are frozen as ceilings.
 
-The bootstrap state is temporary and must not be merged as the completed phase. The PR becomes complete only after CI produces the exact-head reports, those values are frozen into the controlled baseline, and the workflow re-runs in enforced mode.
+The bootstrap state is temporary. Completion requires CI evidence, an enforced baseline derived from reproducible signals, and a final exact-head run that passes that ratchet.
 
 ## Regression policy
 
 The enforced policy is a **ratchet**, not an arbitrary allowance:
 
-- artifact byte count below or equal to the baseline: pass;
-- artifact byte count above the baseline: fail until a reviewed baseline update explains the intentional growth;
+- reproducible artifact byte count below or equal to the baseline: pass;
+- reproducible artifact byte count above the baseline: fail until a reviewed baseline update explains the intentional growth;
 - accessibility issue count below or equal to the baseline: pass;
-- any route/rule accessibility increase: fail until fixed or explicitly reviewed.
+- any route/rule accessibility increase: fail until fixed or explicitly reviewed;
+- unstable measurements remain informational until reproducibility is demonstrated.
 
 This makes growth visible without pretending that an unmeasured percentage such as 5% or 10% is inherently safe.
 
@@ -72,14 +81,14 @@ This makes growth visible without pretending that an unmeasured percentage such 
 3. builds Web in production mode;
 4. starts the compiled Web artifact;
 5. exports production-like Android/iOS bundles using non-secret release-contract placeholders;
-6. measures deterministic artifact bytes;
+6. measures artifact bytes and classifies runtime code;
 7. measures deterministic public-route accessibility signals;
-8. enforces the controlled baseline;
+8. enforces the controlled reproducible baseline;
 9. uploads the exact-head JSON reports and Web log as 14-day CI evidence.
 
 ## Authority and certification boundaries
 
-Passing this gate means only that the measured build/export artifact did not grow past its controlled ceiling and deterministic accessibility debt did not increase.
+Passing this gate means only that reproducible build/export signals did not grow past their controlled ceilings and deterministic accessibility debt did not increase.
 
 It does not prove:
 
@@ -99,7 +108,7 @@ It does not prove:
 The phase is complete when:
 
 - the workflow produces performance and accessibility reports for the exact PR head;
-- the bootstrap baseline is replaced by an `enforced` baseline derived from those reports;
+- the bootstrap baseline is replaced by an `enforced` baseline derived only from reproducible signals;
 - the final exact-head run passes the enforced ratchet;
 - existing required CI/security/governance checks are green;
 - review findings are resolved;
@@ -107,4 +116,4 @@ The phase is complete when:
 
 ## Next logical phase
 
-After the baseline is frozen, the next repository-automatable tranche is **Accessibility Remediation & Runtime Budget Expansion**: reduce measurable debt, add keyboard/focus and authenticated golden-route accessibility coverage, and only then consider stable timing/Core Web Vitals budgets once a reproducible environment exists.
+After the baseline is frozen, the next repository-automatable tranche is **Accessibility Remediation & Runtime Budget Expansion**: remove the known public-route accessibility debt, add keyboard/focus and authenticated golden-route accessibility coverage, and establish a deterministic runtime-code measurement before promoting runtime bundle budgets into enforcement.
