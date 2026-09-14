@@ -147,7 +147,7 @@ test.describe('@golden authenticated accessibility and release UX', () => {
     await expect(bell).toBeFocused()
   })
 
-  test('@golden GJ-B08 notification mutation failures surface as an alert', async ({ page }) => {
+  test('@golden GJ-B08 notification mutation failures surface as an alert without discarding results', async ({ page }) => {
     await setupAuthenticatedDashboard(page, { failMarkOne: true })
     await page.goto('/dashboard/notifications')
 
@@ -157,5 +157,7 @@ test.describe('@golden authenticated accessibility and release UX', () => {
 
     const operationalAlert = page.locator('#notification-results').getByRole('alert')
     await expect(operationalAlert).toContainText(/servicio temporalmente no disponible|no fue posible marcar/i)
+    await expect(page.getByRole('heading', { level: 2, name: 'Gestión actualizada' })).toBeVisible()
+    await expect(markRead).toBeVisible()
   })
 })
