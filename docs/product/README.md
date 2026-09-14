@@ -20,5 +20,6 @@ Documentos principales:
 - `PHASE_WORKFLOW_CASE_MANAGEMENT_CONVERGENCE.md` — convergencia de expedientes, trazabilidad y artefactos de workflow preservando la autoridad del backend sobre transiciones administrativas.
 - `PHASE_FINANCIAL_CROWDFUNDING_SAFETY_CONVERGENCE.md` — convergencia de readiness financiero y campañas preservando autoridad server-side, separación cívica y límites de settlement/payout.
 - `PHASE_RELEASE_CANDIDATE_HARDENING_EVIDENCE_SYNC.md` — sincronización fail-closed del estado RC, matriz de completion, certificación y evidencias externas pendientes.
+- `PHASE_PERFORMANCE_ACCESSIBILITY_BASELINE.md` — medición reproducible de artefactos Web/Mobile y ratchet de accesibilidad sin presupuestos arbitrarios.
 - `CTG_ONE_MOBILE_AUTH.md` — contrato de federación CTG One con identidad única.
 - `RELEASE_CHECKLIST_COHERENCE.md` — evidencia exigida antes de declarar paridad o release.

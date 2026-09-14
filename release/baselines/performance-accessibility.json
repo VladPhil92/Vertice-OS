@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "mode": "bootstrap",
+  "baseline_sha": null,
+  "captured_at": null,
+  "policy": {
+    "performance": "Bootstrap only. After the first exact-head measurement, raw web/mobile artifact bytes become controlled ceilings. Decreases pass; increases require a reviewed baseline update with rationale.",
+    "accessibility": "Bootstrap only. After the first exact-head measurement, deterministic issue counts become per-route/per-rule ceilings. Decreases pass; increases fail until explicitly reviewed.",
+    "runtime_timing": "Observed for diagnostics only. No timing threshold is enforced until a repeatable benchmark environment and variance study exist.",
+    "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
+  },
+  "performance_ceilings": null,
+  "accessibility_ceilings": null
+}

@@ -1,0 +1,122 @@
+name: Performance & Accessibility Baseline
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'apps/mobile/**'
+      - 'packages/design-tokens/**'
+      - 'scripts/measure-performance-baseline.mjs'
+      - 'scripts/verify-performance-accessibility-baseline.mjs'
+      - 'release/baselines/performance-accessibility.json'
+      - 'docs/product/PHASE_PERFORMANCE_ACCESSIBILITY_BASELINE.md'
+      - 'docs/product/README.md'
+      - 'docs/CURRENT_STATE.md'
+      - 'docs/engineering/MARKET_RELEASE_COMPLETION.md'
+      - 'docs/engineering/MARKET_RELEASE_CERTIFICATION.md'
+      - '.github/workflows/performance-accessibility-baseline.yml'
+      - 'pnpm-lock.yaml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/web/**'
+      - 'apps/mobile/**'
+      - 'packages/design-tokens/**'
+      - 'scripts/measure-performance-baseline.mjs'
+      - 'scripts/verify-performance-accessibility-baseline.mjs'
+      - 'release/baselines/performance-accessibility.json'
+      - 'docs/product/PHASE_PERFORMANCE_ACCESSIBILITY_BASELINE.md'
+      - 'docs/product/README.md'
+      - 'docs/CURRENT_STATE.md'
+      - 'docs/engineering/MARKET_RELEASE_COMPLETION.md'
+      - 'docs/engineering/MARKET_RELEASE_CERTIFICATION.md'
+      - '.github/workflows/performance-accessibility-baseline.yml'
+      - 'pnpm-lock.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-accessibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.13.0'
+  RELEASE_CONTRACT_API_URL: https://api.release-contract.test
+  RELEASE_CONTRACT_EAS_PROJECT_ID: 11111111-1111-4111-8111-111111111111
+  RELEASE_CONTRACT_MAPS_KEY: ci-release-contract-placeholder
+
+jobs:
+  baseline:
+    name: Performance & Accessibility Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout exact submitted SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @vertice/web exec playwright install --with-deps chromium
+
+      - name: Build web production artifact
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_MAPBOX_TOKEN: test-mapbox-token
+        run: pnpm --filter @vertice/web build
+
+      - name: Start production web artifact
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_MAPBOX_TOKEN: test-mapbox-token
+        run: |
+          pnpm --filter @vertice/web start > /tmp/vertice-baseline-web.log 2>&1 &
+          pnpm --filter @vertice/web exec wait-on http://localhost:3000 --timeout 120000
+
+      - name: Export production-like Android and iOS artifacts
+        env:
+          APP_VARIANT: production
+          EXPO_PUBLIC_RELEASE_CHANNEL: production
+          EXPO_PUBLIC_API_URL: ${{ env.RELEASE_CONTRACT_API_URL }}
+          EAS_PROJECT_ID: ${{ env.RELEASE_CONTRACT_EAS_PROJECT_ID }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ env.RELEASE_CONTRACT_MAPS_KEY }}
+        run: pnpm --filter @vertice/mobile build
+
+      - name: Measure deterministic build/export size signals
+        run: node scripts/measure-performance-baseline.mjs --output /tmp/performance-baseline.json
+
+      - name: Measure deterministic public-route accessibility signals
+        run: node apps/web/scripts/measure-accessibility-baseline.mjs --base-url http://localhost:3000 --output /tmp/accessibility-baseline.json
+
+      - name: Enforce controlled regression ceilings
+        run: node scripts/verify-performance-accessibility-baseline.mjs --baseline release/baselines/performance-accessibility.json --performance /tmp/performance-baseline.json --accessibility /tmp/accessibility-baseline.json
+
+      - name: Upload exact-head baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-accessibility-baseline-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/performance-baseline.json
+            /tmp/accessibility-baseline.json
+            /tmp/vertice-baseline-web.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Emit certification boundary
+        if: success()
+        run: |
+          echo 'Performance/accessibility regression baseline: PASS'
+          echo 'This gate controls deterministic artifact-size and browser-heuristic regressions only.'
+          echo 'It does NOT certify physical-device startup/runtime performance, Core Web Vitals in production, WCAG conformance, assistive-technology behavior, store approval or market-release readiness.'
