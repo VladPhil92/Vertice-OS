@@ -8,6 +8,8 @@ import { requireApiBaseUrl } from '@/lib/api'
 
 type ApiErrorBody = { error?: string; message?: string; code?: string }
 
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-azure focus-visible:ring-offset-2'
+
 async function registrationErrorMessage(res: Response): Promise<string> {
   const data = await res.json().catch(() => ({})) as ApiErrorBody
   if (res.status === 502 || data.code === 'API_UPSTREAM_UNAVAILABLE') return 'El servicio de VÉRTICE no respondió. Intenta nuevamente en unos minutos.'
@@ -53,25 +55,25 @@ export default function RegisterPage() {
 
   if (done) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-6">
+      <main className="flex min-h-screen items-center justify-center px-6">
         <motion.div className="w-full max-w-md text-center" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-          <CheckCircle size={48} className="mx-auto mb-6 text-gold" strokeWidth={1} />
+          <CheckCircle size={48} className="mx-auto mb-6 text-gold" strokeWidth={1} aria-hidden="true" />
           <h1 className="mb-3 font-display text-2xl font-700 text-primary">Cuenta creada</h1>
           <p className="mb-8 font-mono text-sm leading-6 text-secondary">
             Tu cuenta nacional ya existe. Ingresa y selecciona tu municipio o distrito para personalizar VÉRTICE. Esa selección será autodeclarada y no equivale a residencia cívica verificada.
           </p>
-          <Link href="/auth/login?intent=territory-onboarding" className="btn-primary">Ingresar y elegir territorio</Link>
+          <Link href="/auth/login?intent=territory-onboarding" className={`btn-primary ${FOCUS_RING}`}>Ingresar y elegir territorio</Link>
         </motion.div>
-      </div>
+      </main>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 py-20">
+    <main className="flex min-h-screen items-center justify-center px-6 py-20">
       <motion.div className="w-full max-w-md" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
         <div className="mb-10 text-center">
-          <Link href="/" className="inline-flex flex-col items-center gap-3">
-            <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none">
+          <Link href="/" className={`inline-flex flex-col items-center gap-3 rounded-sm ${FOCUS_RING}`}>
+            <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none" aria-hidden="true">
               <polygon points="20,3 37,35 3,35" stroke="#C8A84B" strokeWidth="1.5" fill="none" />
               <polygon points="20,11 31,33 9,33" stroke="#C8A84B" strokeWidth="0.75" fill="none" opacity="0.4" />
             </svg>
@@ -89,8 +91,8 @@ export default function RegisterPage() {
           </div>
 
           {error && (
-            <div className="mb-6 flex items-start gap-3 border border-red/30 bg-red/5 px-4 py-3" role="alert">
-              <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red" />
+            <div className="mb-6 flex items-start gap-3 border border-red/30 bg-red/5 px-4 py-3" role="alert" aria-live="polite">
+              <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red" aria-hidden="true" />
               <span className="font-mono text-xs text-red">{error}</span>
             </div>
           )}
@@ -98,39 +100,39 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="register-email" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">Correo electrónico</label>
-              <input id="register-email" type="email" required autoComplete="email" value={form.email} onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))} className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary" placeholder="ciudadano@ejemplo.com" />
+              <input id="register-email" type="email" required autoComplete="email" value={form.email} onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))} className={`border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary ${FOCUS_RING}`} placeholder="ciudadano@ejemplo.com" />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor="register-password" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">Contraseña</label>
               <div className="relative">
-                <input id="register-password" type={showPassword ? 'text' : 'password'} required autoComplete="new-password" value={form.password} onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))} className="w-full border border-border bg-bg px-4 py-3 pr-12 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary" placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" />
-                <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 text-tertiary hover:text-secondary" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
-                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                <input id="register-password" type={showPassword ? 'text' : 'password'} required autoComplete="new-password" value={form.password} onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))} className={`w-full border border-border bg-bg px-4 py-3 pr-14 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary ${FOCUS_RING}`} placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" />
+                <button type="button" className={`absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-tertiary hover:text-secondary ${FOCUS_RING}`} onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={showPassword}>
+                  {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                 </button>
               </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor="register-cedula" className="font-mono text-[10px] uppercase tracking-[0.2em] text-tertiary">Cédula de ciudadanía</label>
-              <input id="register-cedula" type="text" required inputMode="numeric" pattern="[0-9]{6,10}" autoComplete="off" value={form.cedula} onChange={(e) => setForm(prev => ({ ...prev, cedula: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className="border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary" placeholder="Solo dígitos, 6–10 caracteres" />
-              <span className="font-mono text-[10px] leading-4 text-tertiary">
+              <input id="register-cedula" type="text" required inputMode="numeric" pattern="[0-9]{6,10}" autoComplete="off" aria-describedby="register-cedula-help" value={form.cedula} onChange={(e) => setForm(prev => ({ ...prev, cedula: e.target.value.replace(/\D/g, '').slice(0, 10) }))} className={`border border-border bg-bg px-4 py-3 font-mono text-sm text-primary outline-none transition-colors focus:border-border-active placeholder:text-tertiary ${FOCUS_RING}`} placeholder="Solo dígitos, 6–10 caracteres" />
+              <span id="register-cedula-help" className="font-mono text-[10px] leading-4 text-tertiary">
                 Se protege mediante HMAC-SHA-256 con secreto del servidor y no se almacena en texto plano. Su registro no equivale a identity assurance ni habilita gobernanza por sí solo.
               </span>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
-              {loading ? <span className="font-mono text-[11px] uppercase tracking-[0.1em]">Creando cuenta…</span> : <><span>Crear cuenta</span><ArrowRight size={14} /></>}
+            <button type="submit" disabled={loading} className={`btn-primary flex min-h-11 items-center justify-center gap-2 disabled:opacity-50 ${FOCUS_RING}`}>
+              {loading ? <span className="font-mono text-[11px] uppercase tracking-[0.1em]">Creando cuenta…</span> : <><span>Crear cuenta</span><ArrowRight size={14} aria-hidden="true" /></>}
             </button>
           </form>
 
           <div className="mt-6 border-t border-border pt-6 text-center">
-            <p className="font-mono text-xs text-tertiary">¿Ya tienes cuenta? <Link href="/auth/login" className="text-gold hover:underline">Ingresar</Link></p>
+            <p className="font-mono text-xs text-tertiary">¿Ya tienes cuenta? <Link href="/auth/login" className={`rounded-sm text-gold hover:underline ${FOCUS_RING}`}>Ingresar</Link></p>
           </div>
         </div>
 
         <p className="mt-6 text-center font-mono text-[10px] text-tertiary">Tus datos están protegidos bajo la Ley 1581 de 2012 (Habeas Data Colombia)</p>
       </motion.div>
-    </div>
+    </main>
   )
 }

@@ -1,18 +1,18 @@
 {
   "schema_version": "1.0",
   "mode": "enforced",
-  "baseline_sha": "40038f0e153cbcd6e10b54debf6c2f485a80f883",
-  "captured_at": "2026-09-14T02:17:02.000Z",
+  "baseline_sha": "dce58da27c6c74f5eb285af7e23f51f9061f8b7b",
+  "captured_at": "2026-09-14T02:57:02.445Z",
   "policy": {
-    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. Raw Hermes bytecode size is observed but not enforced because repeat builds of unchanged app source showed one-byte variance.",
-    "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. Decreases pass; increases fail until fixed or explicitly reviewed.",
-    "runtime_timing": "Observed for diagnostics only. No timing threshold is enforced until a repeatable benchmark environment and variance study exist.",
+    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The Web ceiling increase in this capture is the reviewed cost of the authentication accessibility remediation. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
+    "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. The public-route baseline is zero after remediation; any new deterministic issue fails.",
+    "runtime_timing": "Wall-clock timings and encoded transfer bytes remain diagnostic only. Per-route decoded total/JS/CSS resource body bytes are the deterministic release signals enforced separately.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
   },
   "performance_ceilings": {
-    "web_client_static_bytes": 5067542,
-    "web_client_runtime_code_bytes": 4399390,
-    "web_client_css_bytes": 154544,
+    "web_client_static_bytes": 5068563,
+    "web_client_runtime_code_bytes": 4400215,
+    "web_client_css_bytes": 154740,
     "web_client_largest_bytes": 1766533,
     "web_public_assets_bytes": 1469154,
     "web_public_largest_bytes": 1111554,
@@ -20,32 +20,54 @@
     "ios_non_runtime_assets_bytes": 4590336
   },
   "non_enforced_observations": {
-    "android_runtime_code_bytes": 5471916,
-    "ios_runtime_code_bytes": 5161616,
-    "repeatability_note": "On unchanged mobile application source, a subsequent exact-head export observed Android Hermes bytecode +1 byte and iOS Hermes bytecode -1 byte. These raw bytecode lengths therefore remain diagnostic until a deterministic runtime-code measurement is established."
+    "android_runtime_code_bytes": 5471917,
+    "ios_runtime_code_bytes": 5161614,
+    "repeatability_note": "Raw Hermes bytecode length and route encoded transfer bytes are retained as diagnostic observations only. Repeated unchanged builds/requests demonstrated byte-level variance, while Web build bytes, Mobile non-runtime assets and decoded route body bytes remained the reproducible signals selected for enforcement."
   },
   "accessibility_ceilings": {
-    "total_issues": 2,
+    "total_issues": 0,
     "routes": {
       "/": {
         "total_issues": 0,
         "issues_by_code": {}
       },
       "/auth/login": {
-        "total_issues": 1,
-        "issues_by_code": {
-          "missing_main_landmark": 1
-        }
+        "total_issues": 0,
+        "issues_by_code": {}
       },
       "/auth/register": {
-        "total_issues": 1,
-        "issues_by_code": {
-          "missing_main_landmark": 1
-        }
+        "total_issues": 0,
+        "issues_by_code": {}
       },
       "/account-deletion": {
         "total_issues": 0,
         "issues_by_code": {}
+      }
+    }
+  },
+  "runtime_resource_budget": {
+    "mode": "enforced",
+    "policy": "Exact-capture decoded total/JS/CSS resource body bytes are controlled per public route. Lower values pass; growth requires an explicit reviewed baseline update. Encoded transfer bytes and wall-clock navigation timings are not budgeted.",
+    "routes": {
+      "/": {
+        "decoded_bytes": 1186964,
+        "js_decoded_bytes": 886961,
+        "css_decoded_bytes": 113865
+      },
+      "/auth/login": {
+        "decoded_bytes": 1291631,
+        "js_decoded_bytes": 900603,
+        "css_decoded_bytes": 113865
+      },
+      "/auth/register": {
+        "decoded_bytes": 1253644,
+        "js_decoded_bytes": 886961,
+        "css_decoded_bytes": 113865
+      },
+      "/account-deletion": {
+        "decoded_bytes": 1147542,
+        "js_decoded_bytes": 872396,
+        "css_decoded_bytes": 113865
       }
     }
   }
