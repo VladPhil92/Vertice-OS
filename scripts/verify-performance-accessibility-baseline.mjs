@@ -21,6 +21,11 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(path.resolve(process.cwd(), filePath), 'utf8'))
 }
 
+function nonRuntimeBytes(surface) {
+  if (!Number.isInteger(surface?.bytes) || !Number.isInteger(surface?.runtime_code?.bytes)) return NaN
+  return surface.bytes - surface.runtime_code.bytes
+}
+
 function performanceMetrics(report) {
   return {
     web_client_static_bytes: report.web.client_static.bytes,
@@ -29,12 +34,8 @@ function performanceMetrics(report) {
     web_client_largest_bytes: report.web.client_static.largest.bytes,
     web_public_assets_bytes: report.web.public_assets.bytes,
     web_public_largest_bytes: report.web.public_assets.largest.bytes,
-    android_export_bytes: report.mobile.android_export.bytes,
-    android_runtime_code_bytes: report.mobile.android_export.runtime_code.bytes,
-    android_largest_bytes: report.mobile.android_export.largest.bytes,
-    ios_export_bytes: report.mobile.ios_export.bytes,
-    ios_runtime_code_bytes: report.mobile.ios_export.runtime_code.bytes,
-    ios_largest_bytes: report.mobile.ios_export.largest.bytes,
+    android_non_runtime_assets_bytes: nonRuntimeBytes(report.mobile.android_export),
+    ios_non_runtime_assets_bytes: nonRuntimeBytes(report.mobile.ios_export),
   }
 }
 
@@ -54,7 +55,7 @@ function validateBootstrap(baseline, performance, accessibility) {
   }
   if (errors.length > 0) throw new Error(errors.join('\n'))
   console.log('Performance & Accessibility Baseline: BOOTSTRAP MEASUREMENT PASS')
-  console.log('No regression ceiling is enforced yet. Freeze the measured artifact into the controlled baseline before merge.')
+  console.log('No regression ceiling is enforced yet. Freeze reproducible measurements into the controlled baseline before merge.')
 }
 
 function validateEnforced(baseline, performance, accessibility) {
@@ -73,6 +74,12 @@ function validateEnforced(baseline, performance, accessibility) {
   }
 
   const currentPerformance = performanceMetrics(performance)
+  const expectedPerformanceMetrics = Object.keys(currentPerformance).sort()
+  const configuredPerformanceMetrics = Object.keys(baseline.performance_ceilings ?? {}).sort()
+  if (JSON.stringify(expectedPerformanceMetrics) !== JSON.stringify(configuredPerformanceMetrics)) {
+    fail(errors, `Performance metric set drifted. expected=${expectedPerformanceMetrics.join(',')} configured=${configuredPerformanceMetrics.join(',')}`)
+  }
+
   for (const [metric, current] of Object.entries(currentPerformance)) {
     const ceiling = baseline.performance_ceilings?.[metric]
     if (!Number.isInteger(ceiling) || ceiling < 0) {
@@ -134,7 +141,8 @@ function validateEnforced(baseline, performance, accessibility) {
   }
 
   console.log(`Performance & Accessibility Baseline: PASS against ${baseline.baseline_sha}`)
-  console.log('Current artifact bytes do not exceed the measured ceilings and deterministic accessibility debt did not increase.')
+  console.log('Reproducible Web bytes and Mobile non-runtime assets do not exceed their controlled ceilings; deterministic accessibility debt did not increase.')
+  console.log('Raw Hermes bytecode size remains an observation only until a repeatability study yields a deterministic runtime-code metric.')
   console.log('Timing observations remain informational and are intentionally not budgeted by this gate.')
 }
 
