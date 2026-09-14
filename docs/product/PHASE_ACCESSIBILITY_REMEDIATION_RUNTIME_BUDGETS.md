@@ -4,7 +4,7 @@ Evidence sync: **2026-09-13**.
 
 ## Objective
 
-Turn the first reproducible performance/accessibility baseline into an active quality ratchet: remove the known deterministic accessibility debt on public authentication surfaces, add keyboard/focus behavior to Golden Browser Journeys, expand the browser heuristic, and establish a controlled lifecycle for per-route encoded resource budgets.
+Turn the first reproducible performance/accessibility baseline into an active quality ratchet: remove the known deterministic accessibility debt on public authentication surfaces, add keyboard/focus behavior to Golden Browser Journeys, expand the browser heuristic, and establish controlled per-route encoded resource budgets.
 
 This phase is repository-level release hardening. It does not claim WCAG certification, assistive-technology certification, physical-device performance or market-release certification.
 
@@ -50,28 +50,44 @@ It also records the number of focusable elements per controlled route.
 
 The controlled public-route accessibility ceiling is now zero. Any new deterministic issue or new issue code therefore fails without requiring a baseline update.
 
-## Runtime resource budget lifecycle
+## Runtime resource budgets
 
-The browser measurement already records route-level resource transfer signals independent of wall-clock navigation timing:
+The browser measurement records route-level resource transfer signals independent of wall-clock navigation timing:
 
 - total encoded resource bytes;
 - encoded JavaScript bytes;
 - encoded CSS bytes.
 
-This phase introduces `runtime_resource_budget` inside `release/baselines/performance-accessibility.json` with its own lifecycle:
+`runtime_resource_budget` inside `release/baselines/performance-accessibility.json` uses a bootstrap → enforced lifecycle. The exact-head capture at `8d152ff22e1e56931f9b77d22cfcb8052f872393` produced the reviewed ceilings now enforced:
 
-1. `bootstrap` — exact-head route resource bytes are captured but not yet enforced;
-2. `enforced` — the reviewed exact-head values become route ceilings.
+| Route | Total encoded | JS encoded | CSS encoded |
+| --- | ---: | ---: | ---: |
+| `/` | 450,732 B | 269,820 B | 17,788 B |
+| `/auth/login` | 482,725 B | 287,672 B | 17,788 B |
+| `/auth/register` | 467,988 B | 281,832 B | 17,788 B |
+| `/account-deletion` | 448,206 B | 276,739 B | 17,788 B |
 
-The verifier requires the route set to remain exact and enforces each encoded byte category independently once the budget is frozen.
+The verifier requires the route set to remain exact and enforces each encoded byte category independently. No percentage tolerance is introduced. Lower values pass. Higher values require an explicit reviewed baseline update explaining intentional growth.
 
-No percentage tolerance is introduced. Lower values pass. Higher values require an explicit reviewed baseline update explaining intentional growth.
+## Reviewed build cost of remediation
+
+The accessibility changes intentionally increased the reproducible Web artifact relative to the previous baseline:
+
+- `.next/static`: 5,067,542 B → **5,068,563 B** (+1,021 B);
+- Web runtime code: 4,399,390 B → **4,400,215 B** (+825 B);
+- CSS: 154,544 B → **154,740 B** (+196 B);
+- largest Web artifact: unchanged at **1,766,533 B**;
+- public assets: unchanged at **1,469,154 B**;
+- Android non-runtime assets: unchanged at **5,553,986 B**;
+- iOS non-runtime assets: unchanged at **4,590,336 B**.
+
+This growth is not hidden behind a tolerance. It is explicitly reviewed as the measured cost of semantic landmarks, focus treatment and accessibility-state wiring, and the new values become the controlled ceiling.
+
+Raw Hermes bytecode length remains diagnostic because repeated unchanged exports already demonstrated byte-level variance. Mobile non-runtime assets remain the reproducible enforced signal until a deterministic runtime-code measurement is established.
 
 ## Timing boundary
 
 Navigation duration, DOMContentLoaded and load-event timings remain diagnostic only. Shared GitHub runners are not a defensible environment for a hard latency/SLO budget without a variance study. This phase therefore does not turn volatile wall-clock observations into false performance guarantees.
-
-Likewise, raw Hermes bytecode length remains diagnostic because repeated unchanged exports already demonstrated byte-level variance. Mobile non-runtime assets remain the reproducible enforced signal until a deterministic runtime-code measurement is established.
 
 ## Certification boundary
 
@@ -80,7 +96,7 @@ A pass proves only that:
 - the controlled public-route heuristic has no known deterministic issues;
 - Golden Browser keyboard/focus contracts still pass;
 - reproducible build/export size signals remain within controlled ceilings;
-- once frozen, controlled public-route encoded resource bytes do not regress.
+- controlled public-route encoded resource bytes do not regress.
 
 It does **not** prove:
 
@@ -100,7 +116,7 @@ The phase is complete when:
 - Login and Registration produce zero deterministic accessibility issues;
 - the Golden keyboard/focus contract passes on the exact final PR head;
 - the expanded accessibility heuristic passes with a zero issue ceiling;
-- exact-head route encoded resource values are captured and frozen into `runtime_resource_budget.mode=enforced`;
+- exact-head route encoded resource values are frozen into `runtime_resource_budget.mode=enforced`;
 - the final Performance & Accessibility Baseline workflow passes in fully enforced mode;
 - required CI/security/governance checks are green;
 - review findings are resolved;
