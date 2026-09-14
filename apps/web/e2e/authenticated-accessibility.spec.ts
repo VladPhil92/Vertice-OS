@@ -155,6 +155,7 @@ test.describe('@golden authenticated accessibility and release UX', () => {
     await expect(markRead).toBeVisible()
     await markRead.click()
 
-    await expect(page.getByRole('alert')).toContainText(/servicio temporalmente no disponible|no fue posible marcar/i)
+    const operationalAlert = page.locator('#notification-results').getByRole('alert')
+    await expect(operationalAlert).toContainText(/servicio temporalmente no disponible|no fue posible marcar/i)
   })
 })
