@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
   "mode": "enforced",
-  "baseline_sha": "8d152ff22e1e56931f9b77d22cfcb8052f872393",
-  "captured_at": "2026-09-14T02:45:06.000Z",
+  "baseline_sha": "dce58da27c6c74f5eb285af7e23f51f9061f8b7b",
+  "captured_at": "2026-09-14T02:57:02.445Z",
   "policy": {
     "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The Web ceiling increase in this capture is the reviewed cost of the authentication accessibility remediation. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
     "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. The public-route baseline is zero after remediation; any new deterministic issue fails.",
-    "runtime_timing": "Wall-clock timings remain diagnostic only. Per-route encoded total/JS/CSS resource bytes are deterministic release signals and are enforced separately.",
+    "runtime_timing": "Wall-clock timings and encoded transfer bytes remain diagnostic only. Per-route decoded total/JS/CSS resource body bytes are the deterministic release signals enforced separately.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
   },
   "performance_ceilings": {
@@ -20,9 +20,9 @@
     "ios_non_runtime_assets_bytes": 4590336
   },
   "non_enforced_observations": {
-    "android_runtime_code_bytes": 5471916,
-    "ios_runtime_code_bytes": 5161615,
-    "repeatability_note": "Raw Hermes bytecode length is retained as a diagnostic observation only. Repeated exports of unchanged mobile application source demonstrated byte-level variance, while non-runtime assets remained stable."
+    "android_runtime_code_bytes": 5471917,
+    "ios_runtime_code_bytes": 5161614,
+    "repeatability_note": "Raw Hermes bytecode length and route encoded transfer bytes are retained as diagnostic observations only. Repeated unchanged builds/requests demonstrated byte-level variance, while Web build bytes, Mobile non-runtime assets and decoded route body bytes remained the reproducible signals selected for enforcement."
   },
   "accessibility_ceilings": {
     "total_issues": 0,
@@ -47,27 +47,27 @@
   },
   "runtime_resource_budget": {
     "mode": "enforced",
-    "policy": "Exact-head encoded total/JS/CSS resource bytes are controlled per public route. Lower values pass; growth requires an explicit reviewed baseline update. Wall-clock navigation timings are not budgeted.",
+    "policy": "Exact-capture decoded total/JS/CSS resource body bytes are controlled per public route. Lower values pass; growth requires an explicit reviewed baseline update. Encoded transfer bytes and wall-clock navigation timings are not budgeted.",
     "routes": {
       "/": {
-        "encoded_bytes": 450732,
-        "js_encoded_bytes": 269820,
-        "css_encoded_bytes": 17788
+        "decoded_bytes": 1186964,
+        "js_decoded_bytes": 886961,
+        "css_decoded_bytes": 113865
       },
       "/auth/login": {
-        "encoded_bytes": 482725,
-        "js_encoded_bytes": 287672,
-        "css_encoded_bytes": 17788
+        "decoded_bytes": 1291631,
+        "js_decoded_bytes": 900603,
+        "css_decoded_bytes": 113865
       },
       "/auth/register": {
-        "encoded_bytes": 467988,
-        "js_encoded_bytes": 281832,
-        "css_encoded_bytes": 17788
+        "decoded_bytes": 1253644,
+        "js_decoded_bytes": 886961,
+        "css_decoded_bytes": 113865
       },
       "/account-deletion": {
-        "encoded_bytes": 448206,
-        "js_encoded_bytes": 276739,
-        "css_encoded_bytes": 17788
+        "decoded_bytes": 1147542,
+        "js_decoded_bytes": 872396,
+        "css_decoded_bytes": 113865
       }
     }
   }

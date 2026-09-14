@@ -4,7 +4,7 @@ Evidence sync: **2026-09-13**.
 
 ## Objective
 
-Turn the first reproducible performance/accessibility baseline into an active quality ratchet: remove the known deterministic accessibility debt on public authentication surfaces, add keyboard/focus behavior to Golden Browser Journeys, expand the browser heuristic, and establish controlled per-route encoded resource budgets.
+Turn the first reproducible performance/accessibility baseline into an active quality ratchet: remove the known deterministic accessibility debt on public authentication surfaces, add keyboard/focus behavior to Golden Browser Journeys, expand the browser heuristic, and establish controlled per-route decoded resource budgets.
 
 This phase is repository-level release hardening. It does not claim WCAG certification, assistive-technology certification, physical-device performance or market-release certification.
 
@@ -35,7 +35,7 @@ This is stronger than static markup inspection but remains narrower than full ma
 
 ## Expanded browser accessibility heuristic
 
-`apps/web/scripts/measure-accessibility-baseline.mjs` advances its report schema to `1.1` and now checks:
+`apps/web/scripts/measure-accessibility-baseline.mjs` advances its report schema to `1.2` and now checks:
 
 - image `alt` presence;
 - accessible-name signals for buttons, links and button roles;
@@ -52,22 +52,24 @@ The controlled public-route accessibility ceiling is now zero. Any new determini
 
 ## Runtime resource budgets
 
-The browser measurement records route-level resource transfer signals independent of wall-clock navigation timing:
+The browser measurement records route-level resource signals independent of wall-clock navigation timing:
 
-- total encoded resource bytes;
-- encoded JavaScript bytes;
-- encoded CSS bytes.
+- total decoded resource body bytes;
+- decoded JavaScript body bytes;
+- decoded CSS body bytes.
 
-`runtime_resource_budget` inside `release/baselines/performance-accessibility.json` uses a bootstrap → enforced lifecycle. The exact-head capture at `8d152ff22e1e56931f9b77d22cfcb8052f872393` produced the reviewed ceilings now enforced:
+Encoded transfer bytes continue to be captured as diagnostics, but are not used as hard ceilings because repeated same-source requests showed transport-level byte variance.
 
-| Route | Total encoded | JS encoded | CSS encoded |
+`runtime_resource_budget` inside `release/baselines/performance-accessibility.json` uses a bootstrap → enforced lifecycle. The exact-head capture at `dce58da27c6c74f5eb285af7e23f51f9061f8b7b` produced the reviewed deterministic ceilings now enforced:
+
+| Route | Total decoded | JS decoded | CSS decoded |
 | --- | ---: | ---: | ---: |
-| `/` | 450,732 B | 269,820 B | 17,788 B |
-| `/auth/login` | 482,725 B | 287,672 B | 17,788 B |
-| `/auth/register` | 467,988 B | 281,832 B | 17,788 B |
-| `/account-deletion` | 448,206 B | 276,739 B | 17,788 B |
+| `/` | 1,186,964 B | 886,961 B | 113,865 B |
+| `/auth/login` | 1,291,631 B | 900,603 B | 113,865 B |
+| `/auth/register` | 1,253,644 B | 886,961 B | 113,865 B |
+| `/account-deletion` | 1,147,542 B | 872,396 B | 113,865 B |
 
-The verifier requires the route set to remain exact and enforces each encoded byte category independently. No percentage tolerance is introduced. Lower values pass. Higher values require an explicit reviewed baseline update explaining intentional growth.
+The verifier requires the route set to remain exact and enforces each decoded byte category independently. No percentage tolerance is introduced. Lower values pass. Higher values require an explicit reviewed baseline update explaining intentional growth.
 
 ## Reviewed build cost of remediation
 
@@ -87,7 +89,7 @@ Raw Hermes bytecode length remains diagnostic because repeated unchanged exports
 
 ## Timing boundary
 
-Navigation duration, DOMContentLoaded and load-event timings remain diagnostic only. Shared GitHub runners are not a defensible environment for a hard latency/SLO budget without a variance study. This phase therefore does not turn volatile wall-clock observations into false performance guarantees.
+Navigation duration, DOMContentLoaded and load-event timings remain diagnostic only. Shared GitHub runners are not a defensible environment for a hard latency/SLO budget without a variance study. Encoded transfer bytes are likewise diagnostic because transport compression introduced same-source byte variance. This phase therefore does not turn volatile transport or wall-clock observations into false performance guarantees.
 
 ## Certification boundary
 
@@ -96,7 +98,7 @@ A pass proves only that:
 - the controlled public-route heuristic has no known deterministic issues;
 - Golden Browser keyboard/focus contracts still pass;
 - reproducible build/export size signals remain within controlled ceilings;
-- controlled public-route encoded resource bytes do not regress.
+- controlled public-route decoded resource body bytes do not regress.
 
 It does **not** prove:
 
@@ -116,7 +118,7 @@ The phase is complete when:
 - Login and Registration produce zero deterministic accessibility issues;
 - the Golden keyboard/focus contract passes on the exact final PR head;
 - the expanded accessibility heuristic passes with a zero issue ceiling;
-- exact-head route encoded resource values are frozen into `runtime_resource_budget.mode=enforced`;
+- exact-capture route decoded resource values are frozen into `runtime_resource_budget.mode=enforced`;
 - the final Performance & Accessibility Baseline workflow passes in fully enforced mode;
 - required CI/security/governance checks are green;
 - review findings are resolved;
