@@ -22,7 +22,7 @@ The new `scripts/verify-release-candidate-state.mjs` makes that synchronization 
 
 ## Release Candidate State Sync contract
 
-The verifier requires the synchronized evidence marker `2026-09-13` in the three release-state documents and this phase document. It also verifies that:
+The verifier requires the three mutable release-state documents (`CURRENT_STATE`, completion and certification) to carry the same machine-readable `Evidence sync` date. This phase document records when the contract was introduced; because it is a historical phase record, its marker is validated for format but is not required to move with future release snapshots. The verifier also checks that:
 
 - the current-state document reports `NOT CERTIFIED`;
 - the completion matrix preserves critical EAS/signing, physical-device, provider, resilience, legal and store items as unchecked;
