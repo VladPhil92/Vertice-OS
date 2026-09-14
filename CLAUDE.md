@@ -110,27 +110,29 @@ No volver a convertir `/dashboard` en una simple vista de analytics urbanos. Deb
 
 ### Design system
 
-**Fuente de verdad canónica:** `packages/design-tokens/src/index.ts`. Ningún componente nuevo (web o mobile) debe definir colores de marca, tipografía o spacing directamente — debe importar de aquí (`web.ts` para CSS vars en `apps/web`, `native.ts` para tema RN en `apps/mobile`).
+**Fuente de verdad canónica:** `packages/design-tokens/src/index.ts` (objeto `colors`/`moduleColors`/`typography`, en TypeScript, no CSS). Ningún componente nuevo (web o mobile) debe definir colores de marca, tipografía o spacing directamente. `apps/mobile/theme/vertice.ts` es el adaptador nativo real en uso (importa `index.ts` directamente y añade alias de fuente/imagery/elevation); `packages/design-tokens/src/native.ts` existe como export adicional del paquete pero **no** es el que consume la app hoy — no documentarlo como el adaptador activo hasta que se migre. `apps/web` puede usar `web.ts` → `cssVariables()`, que expone un subconjunto con prefijo `--color-*`/`--mod-*` (ver tabla abajo); no inventar nombres de variable CSS fuera de esa función.
 
-Tema institucional activo (claro, no oscuro):
+Tema institucional activo (claro, no oscuro) — claves TS de `colors` en `index.ts`:
 
-```css
---background: #F7F9FC
---surface: #FFFFFF
---surface-alt: #F0F4F9
---border: #E1E7EF
---navy: #0A2A66        /* identidad/institución */
---navy-light: #163F86
---citizen: #F5B700      /* acción ciudadana */
---citizen-dark: #D98B00
---red: #D72638          /* reservado para alertas críticas/seguridad */
---azure: #4A90E2
---emerald: #2BA745
---cyan: #178C8C
---text-primary: #0A2A66
---text-secondary: #4B5870
---text-muted: #9AA6B5
+```ts
+colors.background   // #F7F9FC
+colors.surface       // #FFFFFF
+colors.surfaceAlt    // #F0F4F9
+colors.border        // #E1E7EF
+colors.navy          // #0A2A66   — identidad/institución
+colors.navyLight     // #163F86
+colors.citizen       // #F5B700   — acción ciudadana
+colors.citizenDark   // #D98B00
+colors.red           // #D72638   — reservado para alertas críticas/seguridad
+colors.azure         // #4A90E2
+colors.emerald       // #2BA745
+colors.cyan          // #178C8C
+colors.textPrimary   // #0A2A66
+colors.textSecondary // #4B5870
+colors.textMuted     // #9AA6B5
 ```
+
+Equivalentes CSS realmente exportados por `web.ts::cssVariables()` (subconjunto, prefijo obligatorio): `--color-bg`, `--color-surface`, `--color-surface-2`, `--color-border`, `--color-border-active`, `--color-navy`, `--color-navy-light`, `--color-citizen`, `--color-red`, `--color-azure`, `--color-emerald`, `--color-cyan`, `--color-text-primary`, `--color-text-secondary`, `--color-text-tertiary`, `--mod-*` (8 dominios), `--radius-md`, `--space-lg`, `--font-display-name`, `--font-body-name`. No todos los tokens TS tienen equivalente CSS hoy (p. ej. `citizenDark`, `textMuted`, la escala completa de radius/spacing, las paletas semánticas de banners) — si un componente web los necesita, ampliar `cssVariables()` en vez de inventar el nombre de variable.
 
 Semántica de banners (info/success/warning/error) y 8 `moduleColors` por dominio cívico (mobility, water, security, health, education, services, culture, economy) también viven en `colors`/`moduleColors` de `packages/design-tokens` — consultar el archivo antes de introducir un color nuevo.
 
@@ -138,7 +140,7 @@ Tipografía: `display` = Montserrat (headings, 500–800), `body` = Inter (400�
 
 Logo canónico: `apps/web/public/brand/` (`vertice-wordmark.webp`, `vertice-logo.png`, `vertice-symbol.webp`), copiado byte-a-byte a `apps/mobile/assets/brand/`. Reglas de uso en `docs/product/BRAND_ASSET_POLICY.md`. `apps/web/public/logo.svg` es un asset separado no referenciado por `BrandLogo.tsx` — no tratarlo como canónico sin verificar su uso real primero.
 
-`apps/mobile` ya consume `packages/design-tokens/native.ts` sin duplicar valores — mantenerlo así. `apps/web/app/globals.css` hoy duplica los hex a mano en vez de llamar a `cssVariables()` de `web.ts`; al tocar ese archivo, migrar a la función en lugar de perpetuar la duplicación.
+`apps/mobile` ya consume `packages/design-tokens/src/index.ts` vía `apps/mobile/theme/vertice.ts` sin duplicar valores de marca — mantenerlo así. `apps/web/app/globals.css` hoy duplica los hex a mano en vez de llamar a `cssVariables()` de `web.ts`; al tocar ese archivo, migrar a la función en lugar de perpetuar la duplicación.
 
 Mantener el lenguaje visual institucional existente salvo solicitud explícita de rediseño.
 
