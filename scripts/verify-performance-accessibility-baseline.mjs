@@ -24,16 +24,16 @@ function readJson(filePath) {
 function performanceMetrics(report) {
   return {
     web_client_static_bytes: report.web.client_static.bytes,
-    web_client_js_bytes: report.web.client_static.js.bytes,
+    web_client_runtime_code_bytes: report.web.client_static.runtime_code.bytes,
     web_client_css_bytes: report.web.client_static.css.bytes,
     web_client_largest_bytes: report.web.client_static.largest.bytes,
     web_public_assets_bytes: report.web.public_assets.bytes,
     web_public_largest_bytes: report.web.public_assets.largest.bytes,
     android_export_bytes: report.mobile.android_export.bytes,
-    android_js_bytes: report.mobile.android_export.js.bytes,
+    android_runtime_code_bytes: report.mobile.android_export.runtime_code.bytes,
     android_largest_bytes: report.mobile.android_export.largest.bytes,
     ios_export_bytes: report.mobile.ios_export.bytes,
-    ios_js_bytes: report.mobile.ios_export.js.bytes,
+    ios_runtime_code_bytes: report.mobile.ios_export.runtime_code.bytes,
     ios_largest_bytes: report.mobile.ios_export.largest.bytes,
   }
 }
@@ -46,8 +46,8 @@ function validateBootstrap(baseline, performance, accessibility) {
   const errors = []
   if (baseline.schema_version !== '1.0') fail(errors, 'Baseline schema_version must be 1.0.')
   if (baseline.mode !== 'bootstrap') fail(errors, 'Bootstrap baseline must declare mode=bootstrap.')
-  if (!performance?.web?.client_static || !performance?.mobile?.android_export || !performance?.mobile?.ios_export) {
-    fail(errors, 'Performance measurement is incomplete.')
+  if (!performance?.web?.client_static?.runtime_code || !performance?.mobile?.android_export?.runtime_code || !performance?.mobile?.ios_export?.runtime_code) {
+    fail(errors, 'Performance measurement is incomplete or lacks runtime-code classification.')
   }
   if (!Array.isArray(accessibility?.routes) || accessibility.routes.length === 0) {
     fail(errors, 'Accessibility measurement contains no routes.')
