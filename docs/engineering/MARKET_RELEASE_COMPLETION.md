@@ -1,8 +1,10 @@
 # VÉRTICE OS — Market Release Completion Matrix
 
-Snapshot: 9 September 2026.
+Snapshot: 13 September 2026.  
+Evidence sync: **2026-09-13**.  
+Current market-release status: **NOT CERTIFIED**.
 
-This document separates work that can be completed and evidenced by repository automation from work that necessarily requires an operator, external account owner, provider, physical device or legal/commercial decision.
+This document separates work that can be completed and evidenced by repository automation from work that necessarily requires an operator, external account owner, provider, physical device or legal/commercial decision. A checked repository item is not a substitute for external observation.
 
 ## A. Repository-automatable completion
 
@@ -10,20 +12,21 @@ This document separates work that can be completed and evidenced by repository a
 
 - [x] Web/PWA civic command center.
 - [x] REST API and canonical server authority.
-- [x] Community/feed, social graph and civic ranking.
+- [x] Community/feed, social graph, civic ranking and Trust & Safety controls.
 - [x] Civic actions and evidence.
-- [x] Territorial reports/PostGIS/maps.
+- [x] Territorial reports/PostGIS/maps and national territory hierarchy.
 - [x] Governance and reconstructible participation ledger.
-- [x] Reputation separated from identity and money.
-- [x] Workflows/civic cases.
+- [x] Reputation separated from identity, popularity and money.
+- [x] Workflows/civic cases with backend-authoritative transitions.
 - [x] Civic Identity Assurance server boundary.
 - [x] Crowdfunding lifecycle, fee policy, readiness and financial control plane.
 - [x] National territorial architecture and account onboarding.
 - [x] Native mobile civic core, device/media/map/push code.
-- [x] Native Community/Feed parity.
-- [x] Native Workflows parity.
+- [x] Native Community/Feed/moderation parity.
+- [x] Native Workflows/case-management parity.
 - [x] Native Identity Assurance parity.
-- [x] Native Crowdfunding tracking/readiness parity.
+- [x] Native Crowdfunding tracking/readiness parity with read-only money boundary.
+- [x] Canonical Web/Mobile visual runtime for primary, trust, territory, community, workflow and financial secondary surfaces.
 - [x] Account deletion API with irreversible identifier/credential erasure.
 - [x] In-app mobile account deletion surface.
 - [x] Authenticated web account deletion surface.
@@ -51,8 +54,9 @@ This document separates work that can be completed and evidenced by repository a
 - [x] Account Deletion Privacy source/unit/type/export gate.
 - [x] Cartagena same-SHA production canary infrastructure.
 - [x] Market Release Certification evidence schema and fail-closed verifier.
+- [x] Release Candidate State Sync contract for docs/index/example-manifest consistency.
 
-These gates can prove source/build/integration/runtime properties when the required infrastructure already exists. They cannot create or attest third-party credentials, legal approvals or physical-device evidence. The Market Release Certification framework makes those external requirements machine-verifiable once real evidence exists; it never fabricates that evidence.
+These gates prove source/build/integration properties and, where a real runtime is queried, specific runtime properties. They cannot create or attest third-party credentials, bank settlement, legal approval, store approval or physical-device evidence. The Market Release Certification framework only makes those external requirements machine-verifiable **after real evidence exists**.
 
 ## B. Operator/external completion — mandatory human boundary
 
@@ -61,27 +65,17 @@ These gates can prove source/build/integration/runtime properties when the requi
 - [x] `Golden Main Protection` repository ruleset active.
 - [x] Require pull request before merge.
 - [x] Require conversation resolution.
-- [x] Require seven stable CI/security/governance GitHub Actions checks.
+- [x] Require stable CI/security/governance GitHub Actions checks.
 - [x] Require branch to be up to date before merge.
 - [x] Block force pushes and branch deletion.
 - [x] Bypass actors = none.
 - [x] Operational PR test confirmed both blocked and permitted merge states.
 
-GitHub reports `main.protected = true`. Operational evidence is recorded in `docs/engineering/MAIN_PROTECTION_VERIFICATION.md` and PR #148; governance issue #128 is closed.
+Repository governance is complete. This does not complete any external market-release domain below.
 
 ### B2. Mobile ownership and signing
 
-Repository-side Phase 8A/8B:
-
-- [x] Canonical Expo slug/scheme and Android/iOS application identifiers are contract-checked.
-- [x] EAS preview/production profiles are explicit and environment-bound.
-- [x] EAS builds require committed source state.
-- [x] Production uses remote build versions, auto-increment and Android app-bundle/store distribution.
-- [x] Preview/production config fails closed without HTTPS public API URL, EAS project UUID and Android Maps key.
-- [x] Release URL validation rejects loopback/private/link-local/ULA and IPv4-mapped private forms.
-- [x] CI resolves/introspects/exports a production-like configuration using non-secret placeholders.
-- [x] Required `Security Scan` rejects tracked mobile signing/private-key/service-account artifacts.
-- [x] `.gitignore` covers mobile signing credentials and generated `.apk/.aab/.ipa` artifacts.
+Repository-side controls are implemented: canonical Expo/app identifiers, explicit preview/production profiles, fail-closed public release configuration, private-origin rejection, production-like CI introspection/export, signing-secret repository hygiene and generated binary exclusions.
 
 External/account-owner boundary:
 
@@ -102,8 +96,8 @@ Secrets and signing identities must never be committed to Git. See `docs/enginee
 On at least one production-representative Android device and one iOS device:
 
 - [ ] install signed preview/release build;
-- [ ] signup/login/refresh/logout;
-- [ ] national territory selection;
+- [ ] signup/login/refresh/logout and CTG One federation where applicable;
+- [ ] national territory selection and residence-assurance navigation;
 - [ ] GPS permission and location accuracy;
 - [ ] map rendering;
 - [ ] camera/gallery selection;
@@ -111,17 +105,20 @@ On at least one production-representative Android device and one iOS device:
 - [ ] push opt-in and device registration;
 - [ ] foreground/background push delivery;
 - [ ] deep-link routing;
-- [ ] Community follow/unfollow/feed;
-- [ ] Workflows/case detail;
+- [ ] Community follow/unfollow/feed/block/report;
+- [ ] Workflows/case detail and traceability;
 - [ ] Identity Assurance/provider handoff;
-- [ ] Crowdfunding readiness/tracking;
+- [ ] Crowdfunding readiness/tracking and financial-boundary copy;
 - [ ] account deletion from the in-app profile surface;
 - [ ] confirm the deleted identity cannot refresh/login and no longer receives push;
 - [ ] confirm avatar/provider cleanup completes when an avatar existed.
 
+Source export success is not physical-device certification.
+
 ### B4. External provider certification
 
 #### Veriff
+
 - [ ] production account/contract;
 - [ ] `VERIFF_BASE_URL`, API key and shared secret provisioned server-side;
 - [ ] callback/webhook configured;
@@ -129,12 +126,14 @@ On at least one production-representative Android device and one iOS device:
 - [ ] evidence-backed external canary promoted current.
 
 #### Cloudflare Images
+
 - [ ] production credentials;
 - [ ] upload/confirm canary from physical device;
 - [ ] delivery URL verified;
 - [ ] account-deletion avatar purge canary verified.
 
 #### Mercado Pago
+
 - [ ] production merchant account/credentials;
 - [ ] bounded real checkout;
 - [ ] authenticated webhook/provider refetch;
@@ -143,6 +142,7 @@ On at least one production-representative Android device and one iOS device:
 - [ ] bank reconciliation evidence retained.
 
 #### Wompi / BRE-B
+
 - [ ] Pagos a Terceros production access;
 - [ ] source account and operator controls;
 - [ ] webhook/signing configuration;
@@ -150,7 +150,14 @@ On at least one production-representative Android device and one iOS device:
 - [ ] bounded real payout;
 - [ ] provider reconciliation and bank evidence retained.
 
-### B5. Legal/commercial approval
+Financial source readiness, feature flags and CI do not certify real settlement or payout.
+
+### B5. Resilience
+
+- [ ] Execute a documented backup/restore drill against a release-compatible dataset/environment.
+- [ ] Retain durable evidence of restore result, operator and observation time.
+
+### B6. Legal/commercial approval
 
 Repository drafts/checklists can be automated, but the organization must approve:
 
@@ -163,7 +170,7 @@ Repository drafts/checklists can be automated, but the organization must approve
 - [ ] support/contact and incident-response ownership;
 - [ ] legal characterization of civic/consultative governance surfaces.
 
-### B6. Stores
+### B7. Stores
 
 - [ ] App Store Connect listing/privacy labels/screenshots/content declarations;
 - [ ] Confirm the App Store reviewer can locate in-app account deletion;
@@ -174,13 +181,21 @@ Repository drafts/checklists can be automated, but the organization must approve
 - [ ] closed/open testing as required;
 - [ ] Google Play production submission/review.
 
-The completed external/operator results above are recorded through the controlled evidence manifest described in `MARKET_RELEASE_CERTIFICATION.md`. A pending or blocked item must remain pending/blocked; source code or configuration presence cannot be used as a substitute for observation.
+The external/operator results above must be recorded through the controlled evidence manifest described in `MARKET_RELEASE_CERTIFICATION.md`. A pending or blocked item must remain pending/blocked; source code, UI text, configuration presence or a source-only CI pass cannot substitute for observation.
 
-## C. Final certification rule
+## C. Release-candidate pre-flight rule
 
-VÉRTICE may be described as `CERTIFIED FOR MARKET RELEASE` only when the release SHA satisfies all repository gates that apply **and** all mandatory external/operator evidence above has been completed.
+The repository may be described as **RC-preflight capable** when its internal source/security/integration gates pass for the candidate SHA and `Release Candidate State Sync` confirms that release documentation and the example evidence manifest remain fail-closed.
 
-A suggested final release bundle is:
+That state is intentionally weaker than `CERTIFIED FOR MARKET RELEASE`. It does not assert that the candidate is deployed, signed, tested on hardware, financially settled, legally approved or accepted by stores.
+
+The current example manifest must remain a placeholder (`release_sha = 000…000`) with every external item `pending`; real completion belongs only in a controlled candidate manifest backed by evidence.
+
+## D. Final certification rule
+
+VÉRTICE may be described as `CERTIFIED FOR MARKET RELEASE` only when the exact release SHA satisfies all repository gates that apply **and** all mandatory external/operator evidence has been completed and validated in strict mode.
+
+The final bundle must include, at minimum:
 
 ```text
 CI                                  PASS
@@ -190,6 +205,7 @@ Golden Financial Integrity          PASS
 Golden Governance                   PASS
 Production Hardening                PASS
 Account Deletion Privacy            PASS
+Release Candidate State Sync        PASS
 Web/API production SHA              MATCH
 /health/live                        PASS
 /health/ready                       PASS
@@ -209,6 +225,6 @@ App Store release                   APPROVED
 Google Play release                 APPROVED
 ```
 
-The strict Market Release Certification evidence gate must pass for that exact release SHA. It remains a companion to, not a replacement for, the existing automated CI/security/runtime gates.
+The strict Market Release Certification evidence gate remains a companion to, not a replacement for, existing automated CI/security/runtime gates.
 
-Until then, use evidence-specific states (`IMPLEMENTED`, `INTEGRATED`, `DEPLOYED`, `READY`, `CERTIFIED`) rather than a generic “100%”.
+Until then, use evidence-specific states (`IMPLEMENTED`, `INTEGRATED`, `DEPLOYED`, `READY`, `CERTIFIED`) and explicit blockers rather than a generic “100%”.

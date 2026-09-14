@@ -6,16 +6,24 @@ on:
     paths:
       - 'release/evidence/**'
       - 'scripts/verify-market-release-evidence.mjs'
+      - 'scripts/verify-release-candidate-state.mjs'
+      - 'docs/CURRENT_STATE.md'
       - 'docs/engineering/MARKET_RELEASE_CERTIFICATION.md'
       - 'docs/engineering/MARKET_RELEASE_COMPLETION.md'
+      - 'docs/product/README.md'
+      - 'docs/product/PHASE_RELEASE_CANDIDATE_HARDENING_EVIDENCE_SYNC.md'
       - '.github/workflows/market-release-certification.yml'
   push:
     branches: [main]
     paths:
       - 'release/evidence/**'
       - 'scripts/verify-market-release-evidence.mjs'
+      - 'scripts/verify-release-candidate-state.mjs'
+      - 'docs/CURRENT_STATE.md'
       - 'docs/engineering/MARKET_RELEASE_CERTIFICATION.md'
       - 'docs/engineering/MARKET_RELEASE_COMPLETION.md'
+      - 'docs/product/README.md'
+      - 'docs/product/PHASE_RELEASE_CANDIDATE_HARDENING_EVIDENCE_SYNC.md'
       - '.github/workflows/market-release-certification.yml'
   workflow_dispatch:
     inputs:
@@ -51,10 +59,14 @@ jobs:
       - name: Validate evidence schema and required categories
         run: node scripts/verify-market-release-evidence.mjs --mode structure --manifest release/evidence/market-release.example.json
 
+      - name: Validate release-candidate state synchronization
+        run: node scripts/verify-release-candidate-state.mjs
+
       - name: Emit certification boundary
         run: |
           echo 'Market release evidence contract: PASS'
-          echo 'This is schema/source validation only. It does NOT certify VÉRTICE for market release.'
+          echo 'Release Candidate State Sync: PASS'
+          echo 'These are schema/source synchronization checks only. They do NOT certify VÉRTICE for market release.'
 
   strict-evidence-validation:
     if: github.event_name == 'workflow_dispatch'
@@ -80,6 +92,9 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin "$RELEASE_SHA"
           git cat-file -e "$RELEASE_SHA^{commit}"
+
+      - name: Validate release-candidate state synchronization
+        run: node scripts/verify-release-candidate-state.mjs
 
       - name: Verify completed external/operator evidence
         env:
