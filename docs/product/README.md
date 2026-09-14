@@ -22,5 +22,6 @@ Documentos principales:
 - `PHASE_RELEASE_CANDIDATE_HARDENING_EVIDENCE_SYNC.md` — sincronización fail-closed del estado RC, matriz de completion, certificación y evidencias externas pendientes.
 - `PHASE_PERFORMANCE_ACCESSIBILITY_BASELINE.md` — medición reproducible de artefactos Web/Mobile y ratchet de accesibilidad sin presupuestos arbitrarios.
 - `PHASE_ACCESSIBILITY_REMEDIATION_RUNTIME_BUDGETS.md` — remediación de deuda pública de accesibilidad, contrato Golden de teclado/foco y expansión de presupuestos reproducibles por ruta.
+- `PHASE_AUTHENTICATED_ACCESSIBILITY_RELEASE_UX_HARDENING.md` — cobertura determinista de accesibilidad autenticada, foco/teclado en notificaciones, live regions y endurecimiento UX previo a release.
 - `CTG_ONE_MOBILE_AUTH.md` — contrato de federación CTG One con identidad única.
 - `RELEASE_CHECKLIST_COHERENCE.md` — evidencia exigida antes de declarar paridad o release.

@@ -1,17 +1,17 @@
 {
   "schema_version": "1.0",
   "mode": "enforced",
-  "baseline_sha": "dce58da27c6c74f5eb285af7e23f51f9061f8b7b",
-  "captured_at": "2026-09-14T02:57:02.445Z",
+  "baseline_sha": "29ab07707193124708a6e18100cdd74036623fee",
+  "captured_at": "2026-09-14T11:14:43.942Z",
   "policy": {
-    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The Web ceiling increase in this capture is the reviewed cost of the authentication accessibility remediation. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
-    "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. The public-route baseline is zero after remediation; any new deterministic issue fails.",
+    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The latest Web ceiling increase is the reviewed exact-byte cost of authenticated notification accessibility and release UX hardening. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
+    "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. The public-route baseline remains zero after authenticated-shell hardening; any new deterministic public issue fails.",
     "runtime_timing": "Wall-clock timings and encoded transfer bytes remain diagnostic only. Per-route decoded total/JS/CSS resource body bytes are the deterministic release signals enforced separately.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
   },
   "performance_ceilings": {
-    "web_client_static_bytes": 5068563,
-    "web_client_runtime_code_bytes": 4400215,
+    "web_client_static_bytes": 5071035,
+    "web_client_runtime_code_bytes": 4402687,
     "web_client_css_bytes": 154740,
     "web_client_largest_bytes": 1766533,
     "web_public_assets_bytes": 1469154,
@@ -21,7 +21,7 @@
   },
   "non_enforced_observations": {
     "android_runtime_code_bytes": 5471917,
-    "ios_runtime_code_bytes": 5161614,
+    "ios_runtime_code_bytes": 5161615,
     "repeatability_note": "Raw Hermes bytecode length and route encoded transfer bytes are retained as diagnostic observations only. Repeated unchanged builds/requests demonstrated byte-level variance, while Web build bytes, Mobile non-runtime assets and decoded route body bytes remained the reproducible signals selected for enforcement."
   },
   "accessibility_ceilings": {
