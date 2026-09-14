@@ -110,17 +110,35 @@ No volver a convertir `/dashboard` en una simple vista de analytics urbanos. Deb
 
 ### Design system
 
-Paleta base:
+**Fuente de verdad canónica:** `packages/design-tokens/src/index.ts`. Ningún componente nuevo (web o mobile) debe definir colores de marca, tipografía o spacing directamente — debe importar de aquí (`web.ts` para CSS vars en `apps/web`, `native.ts` para tema RN en `apps/mobile`).
+
+Tema institucional activo (claro, no oscuro):
 
 ```css
---bg: #050508
---surface: #0c0c14
---gold: #C8A84B
---red: #C0392B
---navy: #1A2744
---cyan: #4ECDC4
---text-primary: #F0EDE8
+--background: #F7F9FC
+--surface: #FFFFFF
+--surface-alt: #F0F4F9
+--border: #E1E7EF
+--navy: #0A2A66        /* identidad/institución */
+--navy-light: #163F86
+--citizen: #F5B700      /* acción ciudadana */
+--citizen-dark: #D98B00
+--red: #D72638          /* reservado para alertas críticas/seguridad */
+--azure: #4A90E2
+--emerald: #2BA745
+--cyan: #178C8C
+--text-primary: #0A2A66
+--text-secondary: #4B5870
+--text-muted: #9AA6B5
 ```
+
+Semántica de banners (info/success/warning/error) y 8 `moduleColors` por dominio cívico (mobility, water, security, health, education, services, culture, economy) también viven en `colors`/`moduleColors` de `packages/design-tokens` — consultar el archivo antes de introducir un color nuevo.
+
+Tipografía: `display` = Montserrat (headings, 500–800), `body` = Inter (400–800), `mono` = DM Mono (datos técnicos), `serif` = Fraunces (solo editorial).
+
+Logo canónico: `apps/web/public/brand/` (`vertice-wordmark.webp`, `vertice-logo.png`, `vertice-symbol.webp`), copiado byte-a-byte a `apps/mobile/assets/brand/`. Reglas de uso en `docs/product/BRAND_ASSET_POLICY.md`. `apps/web/public/logo.svg` es un asset separado no referenciado por `BrandLogo.tsx` — no tratarlo como canónico sin verificar su uso real primero.
+
+`apps/mobile` ya consume `packages/design-tokens/native.ts` sin duplicar valores — mantenerlo así. `apps/web/app/globals.css` hoy duplica los hex a mano en vez de llamar a `cssVariables()` de `web.ts`; al tocar ese archivo, migrar a la función en lugar de perpetuar la duplicación.
 
 Mantener el lenguaje visual institucional existente salvo solicitud explícita de rediseño.
 
