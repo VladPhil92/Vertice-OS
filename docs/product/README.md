@@ -18,5 +18,6 @@ Documentos principales:
 - `PHASE_PUBLIC_CITY_REPORT_DOMAIN_CONVERGENCE.md` — convergencia del nodo público de ciudad y detalle de reportes preservando contratos de lectura pública y trazabilidad.
 - `PHASE_COMMUNITY_TRUST_MODERATION_CONVERGENCE.md` — convergencia de perfil cívico, ranking y moderación preservando las fronteras entre interacción social, reputación y autoridad.
 - `PHASE_WORKFLOW_CASE_MANAGEMENT_CONVERGENCE.md` — convergencia de expedientes, trazabilidad y artefactos de workflow preservando la autoridad del backend sobre transiciones administrativas.
+- `PHASE_FINANCIAL_CROWDFUNDING_SAFETY_CONVERGENCE.md` — convergencia de readiness financiero y campañas preservando autoridad server-side, separación cívica y límites de settlement/payout.
 - `CTG_ONE_MOBILE_AUTH.md` — contrato de federación CTG One con identidad única.
 - `RELEASE_CHECKLIST_COHERENCE.md` — evidencia exigida antes de declarar paridad o release.
