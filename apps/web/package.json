@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",
-    "e2e:golden": "playwright test auth.spec.ts accessibility-auth.spec.ts civic-actions.spec.ts reports.spec.ts proposals.spec.ts ctgone-auth.spec.ts golden-safety.spec.ts",
+    "e2e:golden": "playwright test auth.spec.ts accessibility-auth.spec.ts authenticated-accessibility.spec.ts civic-actions.spec.ts reports.spec.ts proposals.spec.ts ctgone-auth.spec.ts golden-safety.spec.ts",
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
@@ -29,7 +29,6 @@
     "react-dom": "^18.3.0",
     "react-map-gl": "^7.1.7",
     "recharts": "^2.12.0",
-    "tailwind-merge": "^2.4.0",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
@@ -43,11 +42,11 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@eslint/eslintrc": "^3.0.0",
-    "eslint": "^9.0.0",
+    "eslint": "^9.39.4",
     "eslint-config-next": "15.5.24",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.5.0",
+    "typescript": "^5.9.3",
     "wait-on": "^9.0.10"
   }
 }
