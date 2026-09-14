@@ -75,7 +75,7 @@ The journey proves that:
 
 ### GJ-B08 — Mutation failure visibility
 
-The journey forces a notification-read mutation to fail and proves that the authenticated UI surfaces the failure through an alert instead of silently swallowing it.
+The journey forces a notification-read mutation to fail and proves that the authenticated UI surfaces the failure through an alert instead of silently swallowing it. The assertion is scoped to the operational notification result region so the contract remains independent from Next.js' own route-announcer live region.
 
 All backend responses used by these browser contracts are deterministic test fixtures; the tests do not weaken or bypass production authorization logic.
 
@@ -91,11 +91,29 @@ This phase preserves the following boundaries:
 - public-route accessibility debt remains controlled by the existing zero-debt baseline;
 - wall-clock timing and transport-compressed byte observations remain diagnostic only where reproducibility has not been proven.
 
+## Reviewed reproducible Web cost
+
+The exact-head capture at `29ab07707193124708a6e18100cdd74036623fee` measured the production cost of the authenticated notification accessibility hardening. The later GJ-B08 locator correction changes only Playwright test code and does not alter the production artifact.
+
+The reviewed reproducible deltas are:
+
+- `.next/static`: **5,068,563 B → 5,071,035 B** (**+2,472 B**);
+- Web runtime code: **4,400,215 B → 4,402,687 B** (**+2,472 B**);
+- Web CSS: unchanged at **154,740 B**;
+- largest Web artifact: unchanged at **1,766,533 B**;
+- public assets: unchanged at **1,469,154 B**;
+- Android non-runtime assets: unchanged at **5,553,986 B**;
+- iOS non-runtime assets: unchanged at **4,590,336 B**.
+
+The increase is frozen as an exact reviewed ceiling rather than hidden behind a percentage allowance. Public-route deterministic accessibility debt remains **0**, and the decoded per-route runtime budgets remain unchanged because the controlled public routes did not regress.
+
+Raw Hermes bytecode and transport-compressed route bytes remain diagnostic-only signals where byte-level variance has already been demonstrated.
+
 ## Performance and bundle boundary
 
-The additional ARIA state, focus management and Golden coverage may change reproducible Web artifact bytes. Any increase must be measured on the exact PR head by the existing **Performance & Accessibility Baseline** workflow.
+The additional ARIA state and focus-management logic changes reproducible Web artifact bytes. The exact increase above is captured by the existing **Performance & Accessibility Baseline** workflow and frozen explicitly in `release/baselines/performance-accessibility.json`.
 
-If a reproducible Web ceiling increases, it may be frozen only as an explicit reviewed exact-byte baseline update. The phase does not permit percentage buffers or arbitrary tolerance widening.
+No percentage buffer or arbitrary tolerance widening is permitted. Future reproducible growth still requires a new exact-head measurement and explicit baseline review.
 
 ## Exit criteria
 
@@ -106,8 +124,9 @@ This phase is complete when:
 - realtime dashboard toasts expose a polite live region;
 - authenticated notification controls have visible keyboard focus treatment;
 - `e2e:golden` includes the authenticated accessibility contract;
-- Performance & Accessibility Baseline passes on the exact final PR head, with any intentional reproducible artifact growth explicitly frozen;
-- CI, SAST, Golden Governance, Federation and Golden E2E gates are green;
+- the reviewed exact-byte Web growth is frozen without widening unrelated ceilings;
+- Performance & Accessibility Baseline passes on the final PR head;
+- CI, SAST, Golden Governance, Federation, Dashboard Browser and Golden E2E gates are green;
 - review findings are resolved;
 - protected `main` is current before merge.
 
