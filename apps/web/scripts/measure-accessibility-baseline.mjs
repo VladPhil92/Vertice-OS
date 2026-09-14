@@ -77,8 +77,12 @@ async function inspectRoute(page, baseUrl, route) {
     })
 
     document.querySelectorAll('[role="button"]').forEach((element, index) => {
+      const selector = `[role="button"]:nth-of-type(${index + 1})`
       if (element.tagName.toLowerCase() !== 'button' && !accessibleNameLike(element)) {
-        push('role_button_missing_name', `[role="button"]:nth-of-type(${index + 1})`, 'Element with button role has no accessible-name signal.')
+        push('role_button_missing_name', selector, 'Element with button role has no accessible-name signal.')
+      }
+      if (!['button', 'a', 'input'].includes(element.tagName.toLowerCase()) && element.tabIndex < 0) {
+        push('role_button_not_tabbable', selector, 'Non-native button role is not keyboard-tabbable.')
       }
     })
 
@@ -106,9 +110,23 @@ async function inspectRoute(page, baseUrl, route) {
       push('html_missing_lang', 'html', 'Root HTML element has no lang attribute.')
     }
 
-    if (!document.querySelector('main, [role="main"]')) {
-      push('missing_main_landmark', 'body', 'Page has no main landmark.')
-    }
+    const mainLandmarks = document.querySelectorAll('main, [role="main"]')
+    if (mainLandmarks.length === 0) push('missing_main_landmark', 'body', 'Page has no main landmark.')
+    if (mainLandmarks.length > 1) push('multiple_main_landmarks', 'body', `Page exposes ${mainLandmarks.length} main landmarks.`)
+
+    const h1s = document.querySelectorAll('h1')
+    if (h1s.length === 0) push('missing_h1', 'body', 'Page has no level-one heading.')
+    if (h1s.length > 1) push('multiple_h1', 'body', `Page exposes ${h1s.length} level-one headings.`)
+
+    const focusableElements = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), textarea, select, [tabindex]'))
+      .filter((element) => {
+        const style = getComputedStyle(element)
+        return !element.hasAttribute('disabled')
+          && element.getAttribute('aria-hidden') !== 'true'
+          && element.tabIndex >= 0
+          && style.display !== 'none'
+          && style.visibility !== 'hidden'
+      }).length
 
     const navigation = performance.getEntriesByType('navigation')[0]
     const resources = performance.getEntriesByType('resource')
@@ -124,6 +142,7 @@ async function inspectRoute(page, baseUrl, route) {
     return {
       title: document.title,
       dom_nodes: document.querySelectorAll('*').length,
+      focusable_elements: focusableElements,
       issues,
       runtime_observation: {
         navigation_duration_ms: navigation ? Math.round(navigation.duration) : null,
@@ -138,6 +157,7 @@ async function inspectRoute(page, baseUrl, route) {
     route,
     title: result.title,
     dom_nodes: result.dom_nodes,
+    focusable_elements: result.focusable_elements,
     total_issues: result.issues.length,
     issues_by_code: countByCode(result.issues),
     issues: result.issues,
@@ -161,18 +181,21 @@ async function main() {
   }
 
   const report = {
-    schema_version: '1.0',
+    schema_version: '1.1',
     base_url: options.baseUrl,
     measurement_contract: {
       routes: options.routes,
       rule_scope: [
         'img alt presence',
         'button/link/role=button accessible-name signals',
+        'non-native role=button keyboard tabbability',
         'form-control programmatic labels',
         'duplicate ids',
         'document language',
-        'main landmark',
+        'exactly one main landmark',
+        'exactly one level-one heading',
       ],
+      runtime_resource_scope: 'Per-route encoded resource bytes are measured independently from wall-clock timings and may be promoted into exact regression ceilings after an exact-head capture.',
       note: 'This deterministic browser heuristic is a regression ratchet, not a WCAG conformance certification or substitute for assistive-technology/manual testing.',
     },
     total_issues: routes.reduce((total, route) => total + route.total_issues, 0),
@@ -184,7 +207,9 @@ async function main() {
   fs.writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`)
   console.log(`Accessibility baseline measured across ${routes.length} public routes.`)
   console.log(`Total deterministic heuristic issues: ${report.total_issues}`)
-  for (const route of routes) console.log(`- ${route.route}: ${route.total_issues}`)
+  for (const route of routes) {
+    console.log(`- ${route.route}: ${route.total_issues} issues; ${route.runtime_observation.js_encoded_bytes} encoded JS bytes`)
+  }
   console.log(`Report: ${path.relative(process.cwd(), output)}`)
 }
 
