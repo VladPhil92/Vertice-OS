@@ -4,7 +4,7 @@
   "baseline_sha": "40038f0e153cbcd6e10b54debf6c2f485a80f883",
   "captured_at": "2026-09-14T02:17:02.000Z",
   "policy": {
-    "performance": "The exact-head measured Web/Mobile artifact values are controlled ceilings. Decreases pass; increases require a reviewed baseline update with rationale.",
+    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. Raw Hermes bytecode size is observed but not enforced because repeat builds of unchanged app source showed one-byte variance.",
     "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. Decreases pass; increases fail until fixed or explicitly reviewed.",
     "runtime_timing": "Observed for diagnostics only. No timing threshold is enforced until a repeatable benchmark environment and variance study exist.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
@@ -16,12 +16,13 @@
     "web_client_largest_bytes": 1766533,
     "web_public_assets_bytes": 1469154,
     "web_public_largest_bytes": 1111554,
-    "android_export_bytes": 11025902,
+    "android_non_runtime_assets_bytes": 5553986,
+    "ios_non_runtime_assets_bytes": 4590336
+  },
+  "non_enforced_observations": {
     "android_runtime_code_bytes": 5471916,
-    "android_largest_bytes": 5471916,
-    "ios_export_bytes": 9751952,
     "ios_runtime_code_bytes": 5161616,
-    "ios_largest_bytes": 5161616
+    "repeatability_note": "On unchanged mobile application source, a subsequent exact-head export observed Android Hermes bytecode +1 byte and iOS Hermes bytecode -1 byte. These raw bytecode lengths therefore remain diagnostic until a deterministic runtime-code measurement is established."
   },
   "accessibility_ceilings": {
     "total_issues": 2,
