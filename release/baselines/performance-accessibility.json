@@ -5,7 +5,7 @@
   "captured_at": "2026-09-14T02:17:02.000Z",
   "policy": {
     "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. Raw Hermes bytecode size is observed but not enforced because repeat builds of unchanged app source showed one-byte variance.",
-    "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. Decreases pass; increases fail until fixed or explicitly reviewed.",
+    "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. The public-route baseline is zero after remediation; any new deterministic issue fails.",
     "runtime_timing": "Observed for diagnostics only. No timing threshold is enforced until a repeatable benchmark environment and variance study exist.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
   },
@@ -25,28 +25,29 @@
     "repeatability_note": "On unchanged mobile application source, a subsequent exact-head export observed Android Hermes bytecode +1 byte and iOS Hermes bytecode -1 byte. These raw bytecode lengths therefore remain diagnostic until a deterministic runtime-code measurement is established."
   },
   "accessibility_ceilings": {
-    "total_issues": 2,
+    "total_issues": 0,
     "routes": {
       "/": {
         "total_issues": 0,
         "issues_by_code": {}
       },
       "/auth/login": {
-        "total_issues": 1,
-        "issues_by_code": {
-          "missing_main_landmark": 1
-        }
+        "total_issues": 0,
+        "issues_by_code": {}
       },
       "/auth/register": {
-        "total_issues": 1,
-        "issues_by_code": {
-          "missing_main_landmark": 1
-        }
+        "total_issues": 0,
+        "issues_by_code": {}
       },
       "/account-deletion": {
         "total_issues": 0,
         "issues_by_code": {}
       }
     }
+  },
+  "runtime_resource_budget": {
+    "mode": "bootstrap",
+    "routes": null,
+    "policy": "Capture encoded total/JS/CSS resource bytes per controlled public route on the exact PR head. Freeze the measured values only after the capture is reviewed; wall-clock timings remain informational."
   }
 }
