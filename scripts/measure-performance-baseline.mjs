@@ -49,6 +49,8 @@ function largestFile(files, rootDir) {
 function summarize(rootDir) {
   const files = walkFiles(rootDir)
   const js = files.filter((file) => /\.(?:js|mjs|cjs)$/i.test(file))
+  const hermes = files.filter((file) => /\.hbc$/i.test(file))
+  const runtimeCode = files.filter((file) => /\.(?:js|mjs|cjs|hbc)$/i.test(file))
   const css = files.filter((file) => /\.css$/i.test(file))
   const fonts = files.filter((file) => /\.(?:woff2?|ttf|otf)$/i.test(file))
   const images = files.filter((file) => /\.(?:png|jpe?g|webp|avif|gif|svg)$/i.test(file))
@@ -56,7 +58,9 @@ function summarize(rootDir) {
   return {
     files: files.length,
     bytes: bytes(files),
+    runtime_code: { files: runtimeCode.length, bytes: bytes(runtimeCode), largest: largestFile(runtimeCode, rootDir) },
     js: { files: js.length, bytes: bytes(js), largest: largestFile(js, rootDir) },
+    hermes: { files: hermes.length, bytes: bytes(hermes), largest: largestFile(hermes, rootDir) },
     css: { files: css.length, bytes: bytes(css), largest: largestFile(css, rootDir) },
     fonts: { files: fonts.length, bytes: bytes(fonts), largest: largestFile(fonts, rootDir) },
     images: { files: images.length, bytes: bytes(images), largest: largestFile(images, rootDir) },
@@ -85,6 +89,7 @@ function main() {
       source_maps_excluded: true,
       compression: 'raw build/export artifact bytes',
       timing_budgeted: false,
+      runtime_code: 'JavaScript plus Hermes bytecode (.hbc) where applicable',
       note: 'Artifact bytes are deterministic release-engineering signals. They are not a substitute for physical-device startup, runtime memory, network or Core Web Vitals evidence.',
     },
     web: {
@@ -103,8 +108,8 @@ function main() {
   console.log(`Performance artifact baseline measured for ${report.source_sha}`)
   console.log(`- Web client static: ${report.web.client_static.bytes} bytes`)
   console.log(`- Web public assets: ${report.web.public_assets.bytes} bytes`)
-  console.log(`- Android export: ${report.mobile.android_export.bytes} bytes`)
-  console.log(`- iOS export: ${report.mobile.ios_export.bytes} bytes`)
+  console.log(`- Android export: ${report.mobile.android_export.bytes} bytes (${report.mobile.android_export.runtime_code.bytes} runtime-code bytes)`)
+  console.log(`- iOS export: ${report.mobile.ios_export.bytes} bytes (${report.mobile.ios_export.runtime_code.bytes} runtime-code bytes)`)
   console.log(`Report: ${normalize(path.relative(root, output))}`)
 }
 
