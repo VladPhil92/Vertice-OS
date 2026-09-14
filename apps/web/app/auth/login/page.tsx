@@ -9,6 +9,7 @@ import { BrandLogo } from '@/components/ui/BrandLogo'
 import { requireApiBaseUrl } from '@/lib/api'
 
 const TERRITORY_ONBOARDING_INTENT = 'territory-onboarding'
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90E2] focus-visible:ring-offset-2'
 
 export default function LoginPage() {
   const searchParams = useSearchParams()
@@ -60,7 +61,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F7F9FC] px-6 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-[#F7F9FC] px-6 py-12">
       <motion.div
         className="w-full max-w-md"
         initial={{ opacity: 0, y: 24 }}
@@ -68,7 +69,7 @@ export default function LoginPage() {
         transition={{ duration: 0.6 }}
       >
         <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex rounded-2xl bg-white px-5 py-3 shadow-sm">
+          <Link href="/" className={`inline-flex rounded-2xl bg-white px-5 py-3 shadow-sm ${FOCUS_RING}`}>
             <BrandLogo compact priority />
           </Link>
         </div>
@@ -92,8 +93,12 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="mb-6 flex items-start gap-3 rounded-xl border border-[#D72638]/25 bg-[#FCEBED] px-4 py-3">
-                <AlertCircle size={15} className="mt-0.5 flex-shrink-0 text-[#D72638]" />
+              <div
+                className="mb-6 flex items-start gap-3 rounded-xl border border-[#D72638]/25 bg-[#FCEBED] px-4 py-3"
+                role="alert"
+                aria-live="polite"
+              >
+                <AlertCircle size={15} className="mt-0.5 flex-shrink-0 text-[#D72638]" aria-hidden="true" />
                 <span className="text-xs font-semibold leading-5 text-[#A11D2A]">{error}</span>
               </div>
             )}
@@ -102,7 +107,7 @@ export default function LoginPage() {
               <Link
                 href="/auth/ctgone/start"
                 aria-label="Registrarse o ingresar con CTG One"
-                className="group flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#0A2A66] bg-white px-5 py-3 text-xs font-extrabold text-[#0A2A66] transition hover:bg-[#F3F7FC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90E2] focus-visible:ring-offset-2"
+                className={`group flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#0A2A66] bg-white px-5 py-3 text-xs font-extrabold text-[#0A2A66] transition hover:bg-[#F3F7FC] ${FOCUS_RING}`}
               >
                 <ShieldCheck size={17} aria-hidden="true" />
                 <span>Continuar con CTG One</span>
@@ -133,7 +138,7 @@ export default function LoginPage() {
                   autoComplete="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="rounded-xl border border-[#D6DFEA] bg-white px-4 py-3 text-sm text-[#0A2A66] outline-none transition-colors focus:border-[#4A90E2] placeholder:text-[#A5AFBD]"
+                  className={`rounded-xl border border-[#D6DFEA] bg-white px-4 py-3 text-sm text-[#0A2A66] outline-none transition-colors focus:border-[#4A90E2] placeholder:text-[#A5AFBD] ${FOCUS_RING}`}
                   placeholder="ciudadano@ejemplo.com"
                 />
               </div>
@@ -150,16 +155,17 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className="w-full rounded-xl border border-[#D6DFEA] bg-white px-4 py-3 pr-12 text-sm text-[#0A2A66] outline-none transition-colors focus:border-[#4A90E2] placeholder:text-[#A5AFBD]"
+                    className={`w-full rounded-xl border border-[#D6DFEA] bg-white px-4 py-3 pr-14 text-sm text-[#0A2A66] outline-none transition-colors focus:border-[#4A90E2] placeholder:text-[#A5AFBD] ${FOCUS_RING}`}
                     placeholder="••••••••"
                   />
                   <button
                     type="button"
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7B8799] hover:text-[#0A2A66]"
+                    className={`absolute right-2 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-lg text-[#7B8799] hover:text-[#0A2A66] ${FOCUS_RING}`}
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    aria-pressed={showPassword}
                   >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    {showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
                   </button>
                 </div>
               </div>
@@ -167,19 +173,19 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#0A2A66] px-5 py-3 text-xs font-extrabold text-white transition hover:bg-[#123B7A] disabled:opacity-50"
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#0A2A66] px-5 py-3 text-xs font-extrabold text-white transition hover:bg-[#123B7A] disabled:opacity-50 ${FOCUS_RING}`}
               >
-                {loading ? <span>Verificando…</span> : <><span>Ingresar</span><ArrowRight size={14} /></>}
+                {loading ? <span>Verificando…</span> : <><span>Ingresar</span><ArrowRight size={14} aria-hidden="true" /></>}
               </button>
             </form>
 
             <div className="mt-6 border-t border-[#E1E7EF] pt-6 text-center">
               <p className="text-xs font-semibold text-[#7B8799]">
                 ¿No tienes cuenta?{' '}
-                <Link href="/auth/register" className="font-extrabold text-[#0A2A66] hover:underline">Regístrate aquí</Link>
+                <Link href="/auth/register" className={`rounded-sm font-extrabold text-[#0A2A66] hover:underline ${FOCUS_RING}`}>Regístrate aquí</Link>
               </p>
               <p className="mt-3 text-xs font-semibold text-[#7B8799]">
-                <Link href="/auth/forgot-password" className="hover:text-[#0A2A66]">¿Olvidaste tu contraseña?</Link>
+                <Link href="/auth/forgot-password" className={`rounded-sm hover:text-[#0A2A66] ${FOCUS_RING}`}>¿Olvidaste tu contraseña?</Link>
               </p>
             </div>
           </div>
@@ -189,6 +195,6 @@ export default function LoginPage() {
           Tus datos están protegidos bajo la Ley 1581 de 2012 (Habeas Data Colombia)
         </p>
       </motion.div>
-    </div>
+    </main>
   )
 }
