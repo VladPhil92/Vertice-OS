@@ -17,8 +17,6 @@ interface LiveToastProps {
 const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90E2] focus-visible:ring-offset-2'
 
 export function LiveToast({ messages, onDismiss }: LiveToastProps) {
-  if (messages.length === 0) return null
-
   return (
     <div
       className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 items-end"
