@@ -26,10 +26,13 @@ import {
   getReputationAnalytics,
   getLeaderboard,
   getCitizenGraph,
+  recordDelegation,
+  removeDelegation,
 } from '../reputation.service'
 import type { ReputationEvent } from '../reputation.types'
 
 const CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440001'
+const OTHER_CITIZEN_ID = '550e8400-e29b-41d4-a716-446655440002'
 const PROPOSAL_ID = 'proposal-uuid-001'
 
 beforeEach(() => {
@@ -306,5 +309,91 @@ describe('getCitizenGraph', () => {
     expect(graph.voted_on).toEqual([])
     expect(graph.created_proposals).toEqual([])
     expect(graph.submitted_reports).toEqual([])
+  })
+})
+
+describe('recordDelegation', () => {
+  it('merges a DELEGATED_TO relation with the given domain', async () => {
+    await recordDelegation(CITIZEN_ID, OTHER_CITIZEN_ID, 'territorial')
+
+    expect(mockRunCypher).toHaveBeenCalledTimes(1)
+    const [query, params] = mockRunCypher.mock.calls[0]
+    expect(query).toContain('DELEGATED_TO')
+    expect(query).toContain('MERGE')
+    expect(params).toEqual({
+      fromCitizenId: CITIZEN_ID,
+      toCitizenId: OTHER_CITIZEN_ID,
+      domain: 'territorial',
+    })
+  })
+
+  it('accepts a null domain for a general delegation', async () => {
+    await recordDelegation(CITIZEN_ID, OTHER_CITIZEN_ID, null)
+
+    const [, params] = mockRunCypher.mock.calls[0]
+    expect(params).toMatchObject({ domain: null })
+  })
+})
+
+describe('removeDelegation', () => {
+  it('deletes the DELEGATED_TO relation between the two citizens', async () => {
+    await removeDelegation(CITIZEN_ID, OTHER_CITIZEN_ID)
+
+    expect(mockRunCypher).toHaveBeenCalledTimes(1)
+    const [query, params] = mockRunCypher.mock.calls[0]
+    expect(query).toContain('DELETE r')
+    expect(params).toEqual({ fromCitizenId: CITIZEN_ID, toCitizenId: OTHER_CITIZEN_ID })
+  })
+})
+
+describe('getReputationAnalytics streak computation', () => {
+  const TODAY_UTC_NOON = new Date('2026-09-15T12:00:00Z') // 07:00 America/Bogota, still 2026-09-15 there
+
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(TODAY_UTC_NOON)
+  })
+
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  function mockAnalyticsQueries(activeDates: string[]) {
+    mockQueryRaw
+      .mockResolvedValueOnce([]) // score_history
+      .mockResolvedValueOnce([{ rank: 1n, participants: 1n }]) // community standing
+      .mockResolvedValueOnce(activeDates.map((d) => ({ activity_date: d }))) // active dates
+      .mockResolvedValueOnce([]) // event breakdown
+  }
+
+  it('counts a run of consecutive active days ending today', async () => {
+    mockAnalyticsQueries(['2026-09-15', '2026-09-14', '2026-09-13'])
+
+    const analytics = await getReputationAnalytics(CITIZEN_ID)
+
+    expect(analytics.streak.current_days).toBe(3)
+  })
+
+  it('still counts the streak when the last active day was yesterday', async () => {
+    mockAnalyticsQueries(['2026-09-14', '2026-09-13'])
+
+    const analytics = await getReputationAnalytics(CITIZEN_ID)
+
+    expect(analytics.streak.current_days).toBe(2)
+  })
+
+  it('resets to zero once more than a day has passed since the last activity', async () => {
+    mockAnalyticsQueries(['2026-09-12'])
+
+    const analytics = await getReputationAnalytics(CITIZEN_ID)
+
+    expect(analytics.streak.current_days).toBe(0)
+  })
+
+  it('stops counting at the first gap in the sequence', async () => {
+    mockAnalyticsQueries(['2026-09-15', '2026-09-14', '2026-09-11', '2026-09-10'])
+
+    const analytics = await getReputationAnalytics(CITIZEN_ID)
+
+    expect(analytics.streak.current_days).toBe(2)
   })
 })
