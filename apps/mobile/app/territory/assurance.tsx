@@ -8,15 +8,9 @@ import { VerticeIcon } from '../../components/VerticeIcon'
 import { Alert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
+import type { MyTerritory } from '../../types/api'
 
 type EvidenceType = 'secure_document' | 'institutional_attestation' | 'provider_attestation'
-
-interface MyTerritory {
-  territory_code: string | null
-  territory_name: string | null
-  territory_level: string | null
-  neighborhood: string | null
-}
 
 interface AssuranceRequest {
   id: string

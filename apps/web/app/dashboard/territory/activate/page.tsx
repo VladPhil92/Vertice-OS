@@ -3,16 +3,10 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch } from '@/lib/api'
+import type { MyTerritory } from '@vertice/types'
 
 type InterestRole = 'ambassador' | 'organizer' | 'observer'
 type InterestStatus = 'pending' | 'approved' | 'declined' | 'withdrawn'
-
-interface MyTerritory {
-  territory_code: string | null
-  territory_name: string | null
-  activation_status: string | null
-  department_name: string | null
-}
 
 interface Interest {
   id: string

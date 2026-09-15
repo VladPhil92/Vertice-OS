@@ -280,6 +280,33 @@ export interface CivicQueryResponse {
   actions?: string[]
 }
 
+// ── Territorio (contrato real de /territories/me, snake_case) ──────────────────
+//
+// A diferencia de los tipos anteriores en este archivo (aspiracionales, en
+// camelCase, para el módulo de identidad DID), esto espeja exactamente el JSON
+// que ya devuelve apps/api hoy. Existía duplicado de forma independiente en
+// apps/web (dos páginas) y apps/mobile (types/api.ts + una copia local en
+// territory/assurance.tsx) con drift real de campos entre copias — este es el
+// único punto de verdad que ambos clientes deben importar.
+
+export type TerritoryActivationStatus =
+  | 'available'
+  | 'emerging'
+  | 'community_active'
+  | 'pilot_ready'
+  | 'verified_network'
+
+export interface MyTerritory {
+  territory_code: string | null
+  neighborhood: string | null
+  locality_id: number | null
+  territory_name: string | null
+  territory_level: string | null
+  activation_status: TerritoryActivationStatus | null
+  department_code: string | null
+  department_name: string | null
+}
+
 // ── Paginación ────────────────────────────────────────────────────────────────
 
 export interface PaginatedResponse<T> {
