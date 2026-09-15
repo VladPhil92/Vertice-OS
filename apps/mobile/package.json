@@ -51,9 +51,5 @@
   },
   "engines": {
     "node": ">=22.13.0"
-  },
-  "jest": {
-    "preset": "jest-expo",
-    "testPathIgnorePatterns": ["/node_modules/", "/.expo/", "/dist/"]
   }
 }

@@ -1,6 +1,8 @@
 import type { ColorValue } from 'react-native'
 import {
   Activity,
+  AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   Ban,
   Bell,
@@ -12,6 +14,7 @@ import {
   FileText,
   Flag,
   Home,
+  Info,
   Landmark,
   LockOpen,
   Map,
@@ -64,6 +67,9 @@ const ICONS = {
   document: FileText,
   pending: Circle,
   required: Flag,
+  alertCircle: AlertCircle,
+  alertTriangle: AlertTriangle,
+  info: Info,
 } as const
 
 export type VerticeIconName = keyof typeof ICONS
