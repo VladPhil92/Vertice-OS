@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 import { useDashboardRuntime } from '@/components/dashboard/DashboardIdentityProvider'
+import type { MyTerritory, TerritoryActivationStatus } from '@vertice/types'
 
 type EvidenceType = 'secure_document' | 'institutional_attestation' | 'provider_attestation'
 
@@ -13,21 +14,12 @@ interface Territory {
   name: string
   level: 'municipality' | 'district' | string
   parent_code: string | null
-  activation_status: 'available' | 'emerging' | 'community_active' | 'pilot_ready' | 'verified_network'
+  activation_status: TerritoryActivationStatus
 }
 
 interface TerritoryListResponse {
   data: Territory[]
   count: number
-}
-
-interface MyTerritory {
-  territory_code: string | null
-  neighborhood: string | null
-  territory_name: string | null
-  territory_level: string | null
-  activation_status: string | null
-  department_name: string | null
 }
 
 interface RankingEntry extends Territory {

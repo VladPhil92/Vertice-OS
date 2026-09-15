@@ -1,3 +1,7 @@
+import type { MyTerritory, TerritoryActivationStatus } from '../../../packages/types/src/index'
+
+export type { MyTerritory, TerritoryActivationStatus }
+
 export interface MobileTokenResponse {
   access_token: string
   refresh_token: string
@@ -313,27 +317,9 @@ export interface CivicLeaderEntry {
   rank: number
 }
 
-export type TerritoryActivationStatus =
-  | 'available'
-  | 'emerging'
-  | 'community_active'
-  | 'pilot_ready'
-  | 'verified_network'
-
 export type TerritoryLaunchState = 'observing' | 'recruiting' | 'launch_ready' | 'launched' | 'paused'
 export type TerritoryInterestRole = 'ambassador' | 'organizer' | 'observer'
 export type TerritoryInterestStatus = 'pending' | 'approved' | 'declined' | 'withdrawn'
-
-export interface MyTerritory {
-  territory_code: string | null
-  neighborhood: string | null
-  locality_id: number | null
-  territory_name: string | null
-  territory_level: string | null
-  activation_status: TerritoryActivationStatus | null
-  department_code: string | null
-  department_name: string | null
-}
 
 export interface TerritoryActivationInterest {
   id: string
