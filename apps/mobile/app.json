@@ -8,16 +8,31 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/icons/icon.png",
+    "backgroundColor": "#F7F9FC",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ctgone.verticeos"
     },
     "android": {
-      "package": "com.ctgone.verticeos"
+      "package": "com.ctgone.verticeos",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icons/adaptive-icon-foreground.png",
+        "backgroundColor": "#F7F9FC"
+      }
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icons/splash-icon.png",
+          "imageWidth": 240,
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F9FC"
+        }
+      ],
       [
         "expo-location",
         {

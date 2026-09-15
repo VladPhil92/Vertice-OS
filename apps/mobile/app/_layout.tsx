@@ -3,12 +3,17 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import * as SplashScreen from 'expo-splash-screen'
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context'
 
 import { NotificationBridge } from '../components/NotificationBridge'
 import { AuthProvider } from '../providers/AuthProvider'
 import { verticeFontAssets } from '../theme/fonts'
 import { colors } from '../theme/vertice'
+
+// Keep the branded native splash on screen through font loading instead of
+// letting it auto-hide into a blank frame before the fallback view mounts.
+void SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(verticeFontAssets)
@@ -17,7 +22,10 @@ export default function RootLayout() {
     if (fontError) {
       console.error('[brand-runtime] canonical VÉRTICE fonts failed to load', fontError)
     }
-  }, [fontError])
+    if (fontsLoaded || fontError) {
+      void SplashScreen.hideAsync()
+    }
+  }, [fontsLoaded, fontError])
 
   if (!fontsLoaded && !fontError) {
     return (
