@@ -132,6 +132,9 @@ importers:
       jest:
         specifier: ^30.0.0
         version: 30.4.2(@types/node@20.19.41)(ts-node@10.9.2(@types/node@20.19.41)(typescript@5.9.3))
+      jest-environment-node:
+        specifier: 30.4.1
+        version: 30.4.1
       prisma:
         specifier: ^5.14.0
         version: 5.22.0
