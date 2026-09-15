@@ -211,15 +211,15 @@ export default function GovernanceScreen() {
                   </Pressable>
                 ) : null}
 
-                {proposal.status === 'voting' ? (
+                {canVote ? (
                   <View style={styles.voteRow}>
-                    <Pressable disabled={busy || !canVote} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, !canVote && styles.disabled]} onPress={() => void vote(proposal, 1)}>
+                    <Pressable disabled={busy} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed]} onPress={() => void vote(proposal, 1)}>
                       <Text style={styles.voteButtonText}>A favor</Text>
                     </Pressable>
-                    <Pressable disabled={busy || !canVote} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, !canVote && styles.disabled]} onPress={() => void vote(proposal, -1)}>
+                    <Pressable disabled={busy} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed]} onPress={() => void vote(proposal, -1)}>
                       <Text style={styles.voteButtonText}>En contra</Text>
                     </Pressable>
-                    <Pressable disabled={busy || !canVote} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, !canVote && styles.disabled]} onPress={() => void vote(proposal, 0)}>
+                    <Pressable disabled={busy} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed]} onPress={() => void vote(proposal, 0)}>
                       <Text style={styles.voteButtonText}>Abstenerme</Text>
                     </Pressable>
                   </View>
@@ -270,7 +270,6 @@ const styles = StyleSheet.create({
   voteRow: { flexDirection: 'row', gap: spacing.xs },
   voteButton: { flex: 1, minHeight: interaction.minimumTouchTarget, backgroundColor: colors.navy, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxs },
   voteButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, fontSize: 11, fontWeight: '800', textAlign: 'center' },
-  disabled: { opacity: 0.35 },
   disabledBusy: { opacity: interaction.disabledOpacity },
   empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, paddingVertical: spacing.xxl },
   pressed: { opacity: interaction.pressedOpacity },
