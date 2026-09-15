@@ -1,5 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react-native'
 
+// This suite is the first in the project to combine expo-router, the
+// AuthProvider hook and a real bundled brand asset (VerticeBrand) in one
+// render, so its first cold-cache jest-expo transform is measurably heavier
+// than the other component suites. Give it headroom above the 5s default so
+// a slow CI runner's cold cache doesn't fail it before any assertion runs.
+jest.setTimeout(20000)
+
 const mockReplace = jest.fn()
 const mockUseLocalSearchParams = jest.fn()
 
@@ -10,11 +17,11 @@ jest.mock('expo-router', () => ({
 
 const mockCompleteCtgOneSignIn = jest.fn()
 
-jest.mock('../../../providers/AuthProvider', () => ({
+jest.mock('../../../../providers/AuthProvider', () => ({
   useAuth: () => ({ completeCtgOneSignIn: mockCompleteCtgOneSignIn }),
 }))
 
-import CtgOneCallbackScreen from './callback'
+import CtgOneCallbackScreen from '../../../../app/auth/ctgone/callback'
 
 describe('CtgOneCallbackScreen (vertice://auth/ctgone/callback)', () => {
   beforeEach(() => {
