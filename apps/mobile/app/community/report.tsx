@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiMutation } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type {
@@ -121,9 +122,7 @@ export default function CommunityReportScreen() {
         </View>
 
         {!valid ? (
-          <View style={styles.errorCard}>
-            <Text accessibilityRole="alert" style={styles.errorText}>El objetivo de esta denuncia no es válido.</Text>
-          </View>
+          <Alert type="error" message="El objetivo de esta denuncia no es válido." />
         ) : sent ? (
           <View style={styles.successCard}>
             <View style={styles.successIcon}>
@@ -191,11 +190,7 @@ export default function CommunityReportScreen() {
             />
             <Text style={styles.counter}>{details.length}/1000</Text>
 
-            {error ? (
-              <View style={styles.errorCard}>
-                <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+            {error ? <Alert type="error" message={error} /> : null}
 
             <Pressable
               accessibilityRole="button"
@@ -233,8 +228,6 @@ const styles = StyleSheet.create({
   boundaryCopy: { flex: 1, gap: spacing.xxs },
   boundaryKicker: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   boundaryText: { color: colors.infoText, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, backgroundColor: colors.errorBackground, padding: spacing.md },
-  errorText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   successCard: { alignItems: 'center', borderRadius: radius.xl, padding: spacing.xl, gap: spacing.sm, backgroundColor: colors.successBackground, borderWidth: 1, borderColor: colors.successBorder, ...elevation.card },
   successIcon: { width: 52, height: 52, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   successTitle: { color: colors.successText, fontFamily: typography.displayBoldFamily, fontSize: 20, lineHeight: 26, fontWeight: '700' },

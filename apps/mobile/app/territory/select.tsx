@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { ApiList, TerritoryActivationStatus } from '../../types/api'
@@ -132,11 +133,7 @@ export default function TerritorySelectScreen() {
               <Text style={styles.searchButtonText}>{searching ? 'Buscando…' : 'Buscar'}</Text>
             </Pressable>
           </View>
-          {error ? (
-            <View style={styles.errorCard}>
-              <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
+          {error ? <Alert type="error" message={error} /> : null}
         </View>
 
         {results.length > 0 ? (
@@ -208,8 +205,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, minHeight: interaction.inputHeight, borderRadius: radius.md, borderWidth: 1, borderColor: colors.inputBorder, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.md, color: colors.textPrimary, fontFamily: typography.bodyFamily, fontSize: 15 },
   searchButton: { minHeight: interaction.inputHeight, minWidth: 96, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navy, paddingHorizontal: spacing.sm },
   searchButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
-  errorCard: { borderRadius: radius.md, borderWidth: 1, borderColor: colors.errorBorder, backgroundColor: colors.errorBackground, padding: spacing.sm },
-  errorText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   sectionKicker: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   sectionTitle: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },
   resultList: { gap: spacing.sm },
