@@ -60,7 +60,7 @@ async function execute<T>(path: string, options: ApiOptions, retryAuth: boolean)
   const token = isPublic ? null : await getAccessToken()
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(rest.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...extraHeaders,
   }
   if (token) headers.Authorization = `Bearer ${token}`

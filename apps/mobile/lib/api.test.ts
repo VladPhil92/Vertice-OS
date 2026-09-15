@@ -55,6 +55,30 @@ describe('apps/mobile lib/api', () => {
       expect(headers.Authorization).toBeUndefined()
     })
 
+    it('omits Content-Type on a bodyless call so Android does not send Content-Length: 0 with a JSON content-type', async () => {
+      // Regression: Fastify's default JSON parser rejects any request declaring
+      // application/json with an empty body (FST_ERR_CTP_EMPTY_JSON_BODY). Android's
+      // OkHttp-backed fetch adds Content-Length: 0 to bodyless requests, so a
+      // hardcoded Content-Type here breaks every GET (and bodyless POST, e.g. the
+      // CTG One start call) against the real API — undetectable with a mocked fetch
+      // unless this header is asserted directly.
+      ;(globalThis.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse({ ok: true }))
+
+      await api.apiFetch('/auth/me')
+
+      const headers = (globalThis.fetch as jest.Mock).mock.calls[0][1].headers
+      expect(headers['Content-Type']).toBeUndefined()
+    })
+
+    it('sends Content-Type: application/json when a call does carry a body', async () => {
+      ;(globalThis.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse({ ok: true }))
+
+      await api.apiFetch('/auth/mobile/token', { method: 'POST', public: true, body: JSON.stringify({ email: 'a@b.com', password: 'x' }) })
+
+      const headers = (globalThis.fetch as jest.Mock).mock.calls[0][1].headers
+      expect(headers['Content-Type']).toBe('application/json')
+    })
+
     it('refreshes the access token once on 401 and retries the original request', async () => {
       session.getAccessToken.mockResolvedValue('stale-token')
       session.getRefreshToken.mockResolvedValueOnce('refresh-token')
