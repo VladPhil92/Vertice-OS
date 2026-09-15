@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
@@ -14,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert, Button, Input } from '../../components/ui'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import { useAuth } from '../../providers/AuthProvider'
 
@@ -137,52 +137,36 @@ export default function SignInScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                value={email}
-                onChangeText={setEmail}
-                placeholder="ciudadano@ejemplo.com"
-                placeholderTextColor={colors.placeholder}
-                style={styles.input}
-              />
-            </View>
+            <Input
+              label="CORREO ELECTRÓNICO"
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="ciudadano@ejemplo.com"
+            />
 
-            <View style={styles.field}>
-              <Text style={styles.label}>CONTRASEÑA</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoComplete="current-password"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                placeholderTextColor={colors.placeholder}
-                style={styles.input}
-              />
-            </View>
+            <Input
+              label="CONTRASEÑA"
+              autoCapitalize="none"
+              autoComplete="current-password"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+            />
 
-            {error ? (
-              <View style={styles.errorCard}>
-                <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-              </View>
-            ) : null}
+            {error ? <Alert type="error" message={error} /> : null}
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={submitting || federating}
+            <Button
+              variant="primary"
+              loading={submitting}
+              disabled={federating}
               onPress={() => void handleSubmit()}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.pressed,
-                (submitting || federating) && styles.disabled,
-              ]}
             >
-              <Text style={styles.primaryButtonText}>{submitting ? 'Verificando…' : 'Ingresar'}</Text>
-            </Pressable>
+              {submitting ? 'Verificando…' : 'Ingresar'}
+            </Button>
 
             <View style={styles.footerActions}>
               <Text style={styles.footerPrompt}>¿No tienes cuenta VÉRTICE?</Text>
@@ -294,36 +278,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.7,
   },
-  field: { gap: 6 },
-  label: { color: colors.textSecondary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
-  input: {
-    minHeight: interaction.inputHeight,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.textPrimary,
-    fontFamily: typography.bodyFamily,
-  },
-  errorCard: {
-    borderWidth: 1,
-    borderColor: colors.errorBorder,
-    borderRadius: radius.md,
-    backgroundColor: colors.errorBackground,
-    padding: spacing.sm,
-  },
-  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  primaryButton: {
-    minHeight: interaction.buttonHeight,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.navy,
-    paddingHorizontal: spacing.lg,
-  },
-  primaryButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   footerActions: { alignItems: 'center', gap: spacing.xxs, paddingTop: spacing.xs },
   footerPrompt: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   registerText: {

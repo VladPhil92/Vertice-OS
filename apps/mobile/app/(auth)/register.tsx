@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert, Button, Input } from '../../components/ui'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import { isPostRegistrationLoginRequiredError } from '../../lib/registration'
 import { useAuth } from '../../providers/AuthProvider'
@@ -124,70 +125,56 @@ export default function RegisterScreen() {
               <View style={[styles.stripeSegment, styles.stripeRed]} />
             </View>
 
-            <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
-            <TextInput
+            <Input
+              label="CORREO ELECTRÓNICO"
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
               placeholder="ciudadano@ejemplo.com"
-              placeholderTextColor={colors.placeholder}
-              style={styles.input}
             />
 
-            <Text style={styles.label}>CONTRASEÑA</Text>
-            <TextInput
+            <Input
+              label="CONTRASEÑA"
               autoCapitalize="none"
               autoComplete="new-password"
               secureTextEntry
               value={password}
               onChangeText={setPassword}
               placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número"
-              placeholderTextColor={colors.placeholder}
-              style={styles.input}
             />
 
-            <Text style={styles.label}>CONFIRMAR CONTRASEÑA</Text>
-            <TextInput
+            <Input
+              label="CONFIRMAR CONTRASEÑA"
               autoCapitalize="none"
               autoComplete="new-password"
               secureTextEntry
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Repite tu contraseña"
-              placeholderTextColor={colors.placeholder}
-              style={styles.input}
             />
 
-            <Text style={styles.label}>CÉDULA DE CIUDADANÍA</Text>
-            <TextInput
+            <Input
+              label="CÉDULA DE CIUDADANÍA"
               autoComplete="off"
               keyboardType="number-pad"
               value={cedula}
               onChangeText={(value) => setCedula(value.replace(/\D/g, '').slice(0, 10))}
               placeholder="Solo dígitos, 6–10 caracteres"
-              placeholderTextColor={colors.placeholder}
-              style={styles.input}
+              hint="El servidor transforma la cédula mediante HMAC-SHA-256 y no la almacena en texto plano. Registrar este dato no equivale a identidad cívica verificada ni a residencia territorial verificada."
             />
-            <Text style={styles.helper}>
-              El servidor transforma la cédula mediante HMAC-SHA-256 y no la almacena en texto plano. Registrar este dato no equivale a identidad cívica verificada ni a residencia territorial verificada.
-            </Text>
 
-            {error ? (
-              <View style={styles.errorCard}>
-                <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-              </View>
-            ) : null}
+            {error ? <Alert type="error" message={error} /> : null}
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={submitting || federating}
+            <Button
+              variant="primary"
+              loading={submitting}
+              disabled={federating}
               onPress={() => void handleSubmit()}
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, (submitting || federating) && styles.disabled]}
             >
-              <Text style={styles.primaryButtonText}>{submitting ? 'Creando cuenta…' : 'Crear cuenta VÉRTICE'}</Text>
-            </Pressable>
+              {submitting ? 'Creando cuenta…' : 'Crear cuenta VÉRTICE'}
+            </Button>
 
             <Pressable accessibilityRole="button" onPress={() => router.replace('/(auth)/sign-in')} style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>Ya tengo cuenta · Ingresar</Text>
@@ -229,13 +216,6 @@ const styles = StyleSheet.create({
   stripeCitizen: { backgroundColor: colors.citizen },
   stripeNavy: { backgroundColor: colors.navy },
   stripeRed: { backgroundColor: colors.red },
-  label: { marginTop: spacing.xs, color: colors.textSecondary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
-  input: { minHeight: interaction.inputHeight, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.md, fontSize: 16, color: colors.textPrimary, fontFamily: typography.bodyFamily },
-  helper: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  errorCard: { borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, backgroundColor: colors.errorBackground, padding: spacing.sm },
-  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  primaryButton: { marginTop: spacing.xs, minHeight: interaction.buttonHeight, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.navy },
-  primaryButtonText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   secondaryButton: { minHeight: interaction.minimumTouchTarget, alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, fontWeight: '800' },
   boundaryCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
