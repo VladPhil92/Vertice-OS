@@ -17,10 +17,20 @@ const mockSet = redis.set as jest.Mock
 const mockEval = redis.eval as jest.Mock
 const mockExchange = exchangeCtgOneFederation as jest.Mock
 
+// The exact Lua source mobile-federation.service.ts sends to redis.eval for
+// single-use consumption. Asserted verbatim below so that a regression to a
+// non-atomic or non-deleting script (e.g. GET without the DEL) fails the
+// single-use tests instead of silently passing through an unconditioned mock.
+const ATOMIC_GET_AND_DELETE_SCRIPT =
+  "local value = redis.call('GET', KEYS[1]); if value then redis.call('DEL', KEYS[1]); end; return value"
+
 /**
  * In-memory stand-in for the Redis-backed transaction store. `set` honors NX
- * (refuses to overwrite an existing key) and `eval` reproduces the atomic
- * GET-then-DEL Lua script the service relies on for single-use consumption.
+ * (refuses to overwrite an existing key). `eval` first verifies the caller is
+ * still sending the known atomic GET-then-DEL Lua script against exactly one
+ * key — a defense against the mock quietly validating a service that no
+ * longer performs atomic single-use consumption — and only then reproduces
+ * that script's real effect against the fake store.
  */
 function installFakeTransactionStore(): Map<string, string> {
   const store = new Map<string, string>()
@@ -31,7 +41,14 @@ function installFakeTransactionStore(): Map<string, string> {
     return Promise.resolve('OK')
   })
 
-  mockEval.mockImplementation((_script: string, _numKeys: number, key: string) => {
+  mockEval.mockImplementation((script: string, numKeys: number, key: string) => {
+    if (script !== ATOMIC_GET_AND_DELETE_SCRIPT || numKeys !== 1) {
+      throw new Error(
+        'mobile-federation.service.ts no envió el script Lua atómico GET+DEL de un solo uso esperado; '
+        + 'la simulación de Redis no puede validar un contrato distinto al implementado.',
+      )
+    }
+
     const value = store.get(key)
     if (value !== undefined) store.delete(key)
     return Promise.resolve(value ?? null)
