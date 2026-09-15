@@ -308,6 +308,41 @@ describe('submitLegalDocument', () => {
   })
 })
 
+// ── normalizeDoc fallbacks ────────────────────────────────────────────────────
+
+describe('normalizeDoc defaults', () => {
+  it('defaults target_entity to Alcaldía Distrital de Cartagena when the column is null', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ ...RAW_ROW, target_entity: null }])
+
+    const doc = await getLegalDocument(DOCUMENT_ID, CITIZEN_ID)
+
+    expect(doc?.target_entity).toEqual({
+      name: 'Alcaldía Distrital de Cartagena',
+      type: 'distrital',
+      address: 'Calle 36 No. 6-60, Centro Histórico',
+      email: 'alcaldia@cartagena.gov.co',
+      phone: '(605) 650-5000',
+      contact_person: 'Secretario(a) General',
+    })
+  })
+
+  it('falls back to an empty array when a JSONB field is malformed', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ ...RAW_ROW, rights_affected: '{not valid json' }])
+
+    const doc = await getLegalDocument(DOCUMENT_ID, CITIZEN_ID)
+
+    expect(doc?.rights_affected).toEqual([])
+  })
+
+  it('does not fall back to the default target when a real target_entity is stored', async () => {
+    mockQueryRaw.mockResolvedValueOnce([RAW_ROW])
+
+    const doc = await getLegalDocument(DOCUMENT_ID, CITIZEN_ID)
+
+    expect(doc?.target_entity.name).toBe('Secretaría Distrital de Infraestructura')
+  })
+})
+
 // ── deleteLegalDocument ───────────────────────────────────────────────────────
 
 describe('deleteLegalDocument', () => {
