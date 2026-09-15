@@ -1,12 +1,14 @@
 # Release checklist — Web/Mobile coherence
 
-- [ ] CTG One federation works in web and mobile for the same `citizen_id`.
-- [ ] Native VÉRTICE login remains functional.
-- [ ] Mobile login does not capture CTG One password directly.
-- [ ] Web and mobile consume `@vertice/design-tokens`.
-- [ ] No brand colors are hardcoded in new mobile screens.
-- [ ] Montserrat/Inter are loaded and mapped consistently.
-- [ ] Lucide iconography is used for primary UI/navigation.
-- [ ] Official brand assets are bundled without visual reinterpretation.
-- [ ] Login, Inicio, Territorio, Reportes, Perfil/Reputación and Comunidad pass visual/semantic parity review.
-- [ ] Android and iOS deep-link callback paths are tested.
+> Cada ítem marcado enlaza a la evidencia verificable (código, test o gate de CI) que lo sostiene. Un ítem sin evidencia reproducible se deja sin marcar aunque "parezca" cierto — ver `CLAUDE.md`: "No describir como producción una integración únicamente porque el código compila".
+
+- [x] CTG One federation works in web and mobile for the same `citizen_id`. — `apps/api/src/modules/auth/federation.service.ts::resolveCitizen` resuelve por `externalIdentity` (provider+subject) independientemente de si la llamante es `exchangeCtgOneFederation` (web) o `exchangeMobileCtgOneFederation` (mobile); ambas comparten el mismo servicio y nunca crean un segundo `citizen` para el mismo subject.
+- [x] Native VÉRTICE login remains functional. — `apps/mobile/app/(auth)/sign-in.tsx` conserva el flujo de correo/contraseña además de CTG One; cubierto por `providers/AuthProvider.test.tsx`.
+- [x] Mobile login does not capture CTG One password directly. — `apps/mobile/lib/ctgone.ts` solo abre `authorize_url` (HTTPS) vía `Linking.openURL`; el PKCE `code_verifier` se genera y custodia en `apps/api/src/modules/auth/mobile-federation.service.ts` (Redis), nunca en el bundle móvil — verificado por comportamiento en `mobile-federation.service.test.ts`.
+- [x] Web and mobile consume the same canonical design tokens. — **Corrección de redacción:** ninguna app importa el paquete `@vertice/design-tokens` por nombre; ambas consumen `packages/design-tokens/src/index.ts` directamente (mobile por ruta relativa vía `theme/vertice.ts`, web vía `web.ts::cssVariables()`), tal como documenta `CLAUDE.md` § Design system. El nombre de paquete en este ítem estaba desactualizado respecto al mecanismo real.
+- [x] No brand colors are hardcoded in new mobile screens. — `apps/mobile/scripts/verify-product-parity.mjs` falla si `sign-in`/`register`/dashboard/territory/community/actions/governance/profile declaran un literal `#RRGGBB`; corre en CI (`Mobile Core Parity`).
+- [x] Montserrat/Inter are loaded and mapped consistently. — certificado en `docs/product/PHASE_NATIVE_BRAND_RUNTIME_CERTIFICATION.md`; gate en `verify-product-parity.mjs` (`font-alias-contract`).
+- [x] Lucide iconography is used for primary UI/navigation. — `apps/mobile/components/VerticeIcon.tsx` es el único límite de iconos del runtime nativo; gate en `verify-critical-secondary-surfaces.mjs`/`verify-city-report-surfaces.mjs`/`verify-community-trust-surfaces.mjs`/`verify-workflow-case-surfaces.mjs`.
+- [x] Official brand assets are bundled without visual reinterpretation. — `apps/mobile/assets/brand/` es copia byte-a-byte de `apps/web/public/brand/`; el ícono/splash nativo (Fase 2) deriva de `vertice-symbol.webp`, no de una recreación en texto/SVG — ver `docs/product/BRAND_ASSET_POLICY.md`.
+- [ ] Login, Inicio, Territorio, Reportes, Perfil/Reputación and Comunidad pass visual/semantic parity review. — **Pendiente de revisión formal lado a lado.** Los scripts `verify-*-surfaces.mjs` certifican que cada pantalla mobile usa tokens/iconografía canónicos de forma aislada, pero no comparan layout/jerarquía contra su equivalente en `apps/web` pantalla por pantalla. No marcar como hecho sin esa revisión explícita.
+- [x] Android and iOS deep-link callback paths are tested. — `apps/mobile/app/auth/ctgone/callback.test.tsx` cubre el contrato real de `vertice://auth/ctgone/callback` vía `expo-router` (`scheme: "vertice"` en `app.json`): código/estado ausentes falla cerrado, intercambio exitoso navega a `/(tabs)`, error del backend se muestra sin navegar, y params en forma de arreglo (comportamiento documentado de `useLocalSearchParams`) toman el primer valor.
