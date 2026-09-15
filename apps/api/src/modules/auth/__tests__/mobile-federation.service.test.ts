@@ -71,7 +71,7 @@ describe('mobile-federation.service', () => {
       const url = new URL(result.authorize_url)
       expect(url.searchParams.get('code_challenge')).toBeTruthy()
       expect(url.searchParams.get('state')).toBe(result.state)
-      expect(result.state.startsWith('mobile.')).toBe(true)
+      expect(result.state.startsWith('mobile-')).toBe(true)
       expect(result.callback_uri).toBe('vertice://auth/ctgone/callback')
       expect(result.expires_in).toBe(10 * 60)
     })
@@ -101,7 +101,7 @@ describe('mobile-federation.service', () => {
       await expect(
         exchangeMobileCtgOneFederation(
           {} as never,
-          { code: 'abc', state: 'mobile.unknown', transaction_id: 'nonexistent' },
+          { code: 'abc', state: 'mobile-unknown', transaction_id: 'nonexistent' },
           meta,
         ),
       ).rejects.toMatchObject({
@@ -117,7 +117,7 @@ describe('mobile-federation.service', () => {
       await expect(
         exchangeMobileCtgOneFederation(
           {} as never,
-          { code: 'abc', state: 'mobile.forged', transaction_id: start.transaction_id },
+          { code: 'abc', state: 'mobile-forged', transaction_id: start.transaction_id },
           meta,
         ),
       ).rejects.toMatchObject({

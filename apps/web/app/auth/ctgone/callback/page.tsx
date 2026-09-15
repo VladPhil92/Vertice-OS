@@ -6,7 +6,10 @@ import { requireApiBaseUrl } from '@/lib/api'
 
 const VERIFIER_KEY = 'vertice.ctgone.pkce_verifier'
 const STATE_KEY = 'vertice.ctgone.state'
-const MOBILE_STATE_PREFIX = 'mobile.'
+// '-', not '.': CTG One's federation state validator (shared across every
+// federated partner) only accepts [A-Za-z0-9_-] in `state`, so this prefix
+// must stay in that charset too — see mobile-federation.service.ts.
+const MOBILE_STATE_PREFIX = 'mobile-'
 const MOBILE_CALLBACK_URI = 'vertice://auth/ctgone/callback'
 
 export default function CtgOneFederationCallbackPage() {
