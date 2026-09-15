@@ -12,6 +12,7 @@ import {
   exchangeMobileCtgOneFederation,
   startMobileCtgOneFederation,
 } from '../mobile-federation.service'
+import { NativeFederationExchangeSchema } from '../mobile-auth.routes'
 
 const mockSet = redis.set as jest.Mock
 const mockEval = redis.eval as jest.Mock
@@ -74,6 +75,25 @@ describe('mobile-federation.service', () => {
       expect(result.state.startsWith('mobile-')).toBe(true)
       expect(result.callback_uri).toBe('vertice://auth/ctgone/callback')
       expect(result.expires_in).toBe(10 * 60)
+    })
+
+    it('produces a state that the /ctgone/exchange route Zod schema actually accepts', async () => {
+      // Regression: the exchange route validates its request body with its own
+      // independent Zod schema (defense-in-depth ahead of the service layer),
+      // which previously hardcoded the state's separator as a literal dot
+      // ('mobile.') while mobile-federation.service.ts generated 'mobile-'.
+      // Both sides must agree on the real format, or every native CTG One
+      // exchange fails with INVALID_MOBILE_FEDERATION_REQUEST regardless of
+      // how correct the federation logic itself is.
+      const result = await startMobileCtgOneFederation()
+
+      const parsed = NativeFederationExchangeSchema.safeParse({
+        code: '1'.repeat(43),
+        state: result.state,
+        transaction_id: result.transaction_id,
+      })
+
+      expect(parsed.success).toBe(true)
     })
 
     it('never leaks the PKCE code_verifier to the caller', async () => {
