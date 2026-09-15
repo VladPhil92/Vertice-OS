@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CivicCase, CivicCaseListResponse } from '../../types/domain-parity'
@@ -148,15 +149,12 @@ export default function WorkflowsScreen() {
         ) : null}
 
         {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>No disponible</Text>
-            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-            <Text style={styles.errorHint}>Los expedientes requieren una cuenta verificada.</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}>
-              <VerticeIcon name="refresh" color={colors.navy} size={18} />
-              <Text style={styles.retryText}>Reintentar</Text>
-            </Pressable>
-          </View>
+          <Alert
+            type="error"
+            title="No disponible"
+            message={`${error} Los expedientes requieren una cuenta verificada.`}
+            action={{ label: 'Reintentar', icon: 'refresh', onPress: () => void load() }}
+          />
         ) : null}
 
         <View style={styles.list}>
@@ -208,12 +206,6 @@ const styles = StyleSheet.create({
   progressTextComplete: { color: colors.successText },
   openRow: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.xxs, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs },
   openText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
-  errorCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, gap: spacing.xs },
-  errorTitle: { color: colors.errorText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
-  errorText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorHint: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  retryButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.errorBorder },
-  retryText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   emptyCard: { minHeight: 160, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   empty: { color: colors.textPrimary, textAlign: 'center', fontFamily: typography.bodyBoldFamily, fontSize: 15, lineHeight: 21, fontWeight: '700' },
   emptyHint: { color: colors.textTertiary, textAlign: 'center', fontFamily: typography.bodyFamily, ...typography.roles.body },

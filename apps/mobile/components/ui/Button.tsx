@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { VerticeIcon, type VerticeIconName } from '../VerticeIcon'
 import { colors, interaction, radius, spacing, typography } from '../../theme/vertice'
 
-export type ButtonVariant = 'primary' | 'ghost' | 'danger'
+export type ButtonVariant = 'primary' | 'ghost' | 'danger' | 'citizen'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps extends Omit<ComponentProps<typeof Pressable>, 'style' | 'children'> {
@@ -39,6 +39,10 @@ const VARIANT: Record<ButtonVariant, { container: object; textColor: string }> =
   danger: {
     container: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.red },
     textColor: colors.red,
+  },
+  citizen: {
+    container: { backgroundColor: colors.citizen, borderWidth: 1, borderColor: colors.citizen },
+    textColor: colors.navy,
   },
 }
 

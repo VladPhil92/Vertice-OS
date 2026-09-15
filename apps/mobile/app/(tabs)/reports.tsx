@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { TerritorialMap } from '../../components/TerritorialMap'
 import { TerritoryTargetPicker } from '../../components/TerritoryTargetPicker'
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { Alert as UiAlert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import {
   getCurrentReportCoordinates,
@@ -254,7 +255,7 @@ export default function ReportsScreen() {
           </Pressable>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <UiAlert type="error" message={error} /> : null}
 
         <View style={styles.locationCard}>
           <View style={styles.locationCopy}>
@@ -478,7 +479,6 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 17, fontWeight: '800' },
   body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, lineHeight: 20 },
   muted: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 12 },
-  error: { color: colors.errorText, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, padding: spacing.sm, fontFamily: typography.bodyFamily },
   empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, paddingVertical: spacing.xl },
   pressed: { opacity: interaction.pressedOpacity },
   disabled: { opacity: interaction.disabledOpacity },

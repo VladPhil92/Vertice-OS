@@ -1,5 +1,6 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { Redirect } from 'expo-router'
+import { Spinner } from '../components/ui'
 import { useAuth } from '../providers/AuthProvider'
 
 export default function IndexScreen() {
@@ -8,7 +9,7 @@ export default function IndexScreen() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" />
+        <Spinner size="large" />
       </View>
     )
   }

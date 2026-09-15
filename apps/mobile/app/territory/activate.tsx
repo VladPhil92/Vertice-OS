@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import { useAuth } from '../../providers/AuthProvider'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
@@ -209,16 +210,9 @@ export default function TerritoryActivationScreen() {
 
         {loading ? <Text style={styles.muted}>Cargando activación comunitaria…</Text> : null}
         {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>No pudimos completar la operación</Text>
-            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-          </View>
+          <Alert type="error" title="No pudimos completar la operación" message={error} />
         ) : null}
-        {notice ? (
-          <View style={styles.noticeCard}>
-            <Text style={styles.noticeText}>{notice}</Text>
-          </View>
-        ) : null}
+        {notice ? <Alert type="success" message={notice} /> : null}
 
         {!loading && !territory?.territory_code ? (
           <View style={styles.card}>
@@ -368,11 +362,6 @@ const styles = StyleSheet.create({
   outlineButton: { marginTop: spacing.xs, minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, paddingHorizontal: spacing.md },
   outlineButtonText: { flex: 1, color: colors.white, textAlign: 'center', fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   muted: { color: colors.textTertiary, textAlign: 'center', fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, gap: spacing.xxs },
-  errorTitle: { color: colors.errorText, fontFamily: typography.displayBoldFamily, fontSize: 16, lineHeight: 21, fontWeight: '700' },
-  errorText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  noticeCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.successBackground, borderWidth: 1, borderColor: colors.successBorder },
-  noticeText: { color: colors.successText, fontFamily: typography.bodyFamily, ...typography.roles.body },
   card: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.sm, borderWidth: 1, borderColor: colors.border, ...elevation.card },
   sectionKicker: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   sectionTitle: { color: colors.textPrimary, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.title },

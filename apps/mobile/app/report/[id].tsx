@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert, Button } from '../../components/ui'
 import { apiFetch } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { ReportCategory, ReportStatus, TerritorialReportDetail } from '../../types/api'
@@ -111,14 +112,12 @@ export default function ReportDetailScreen() {
           </View>
         ) : null}
         {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>No pudimos cargar el reporte</Text>
-            <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-              <VerticeIcon name="refresh" color={colors.navy} size={18} />
-              <Text style={styles.secondaryText}>Reintentar</Text>
-            </Pressable>
-          </View>
+          <Alert
+            type="error"
+            title="No pudimos cargar el reporte"
+            message={error}
+            action={{ label: 'Reintentar', icon: 'refresh', onPress: () => void load() }}
+          />
         ) : null}
 
         {report ? (
@@ -148,10 +147,9 @@ export default function ReportDetailScreen() {
               <Text style={styles.body}>{report.neighborhood ?? 'Barrio no especificado'}</Text>
               {report.address_reference ? <Text style={styles.muted}>{report.address_reference}</Text> : null}
               <Text style={styles.coordinates}>{report.lat.toFixed(6)}, {report.lng.toFixed(6)}</Text>
-              <Pressable accessibilityRole="link" onPress={() => void openMap()} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
-                <VerticeIcon name="map" color={colors.navy} size={18} />
-                <Text style={styles.primaryText}>Abrir ubicación en mapa</Text>
-              </Pressable>
+              <Button accessibilityRole="link" variant="citizen" icon="map" onPress={() => void openMap()}>
+                Abrir ubicación en mapa
+              </Button>
             </View>
 
             {report.urgency_score !== null ? (
@@ -277,10 +275,6 @@ const styles = StyleSheet.create({
   body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
   muted: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
   coordinates: { color: colors.navy, fontFamily: typography.monoFamily, ...typography.roles.mono },
-  primaryButton: { minHeight: interaction.buttonHeight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.citizen, paddingHorizontal: spacing.md },
-  primaryText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
-  secondaryButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderWidth: 1, borderColor: colors.borderActive, borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.md },
-  secondaryText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   mediaRow: { gap: spacing.sm },
   mediaImage: { width: 240, height: 180, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt },
   emptyCard: { minHeight: 110, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
@@ -297,9 +291,6 @@ const styles = StyleSheet.create({
   timelineCopy: { flex: 1, gap: spacing.xxs },
   timelineLabel: { color: colors.textPrimary, fontFamily: typography.bodyBoldFamily, fontSize: 14, lineHeight: 20, fontWeight: '700' },
   timelineValue: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  errorCard: { backgroundColor: colors.errorBackground, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, padding: spacing.md, gap: spacing.sm },
-  errorTitle: { color: colors.errorText, fontFamily: typography.displayBoldFamily, fontSize: 18, lineHeight: 24, fontWeight: '700' },
-  error: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
   boundaryCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.infoBackground, borderWidth: 1, borderColor: colors.infoBorder, gap: spacing.xs },
   boundaryKicker: { color: colors.infoText, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   boundaryText: { color: colors.infoText, fontFamily: typography.bodyFamily, ...typography.roles.body },
