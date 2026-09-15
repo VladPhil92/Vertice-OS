@@ -11,9 +11,9 @@ const NativeRefreshTokenSchema = z.object({
   refresh_token: z.string().regex(/^[a-f0-9]{80}$/i, 'Refresh token inválido'),
 })
 
-const NativeFederationExchangeSchema = z.object({
+export const NativeFederationExchangeSchema = z.object({
   code: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-  state: z.string().regex(/^mobile\.[A-Za-z0-9_-]{24}$/),
+  state: z.string().regex(/^mobile-[A-Za-z0-9_-]{24}$/),
   transaction_id: z.string().regex(/^[A-Za-z0-9_-]{32}$/),
 })
 

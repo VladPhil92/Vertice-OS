@@ -169,7 +169,7 @@ contains(mobileRoutes, "app.post('/ctgone/exchange'", 'native auth routes')
 contains(mobileFederation, 'exchangeCtgOneFederation', 'native federation service')
 contains(mobileFederation, "MOBILE_CALLBACK_SCHEME = 'vertice://auth/ctgone/callback'", 'native federation service')
 contains(mobileFederation, "redis.call('DEL', KEYS[1])", 'native federation service')
-contains(webCallback, "MOBILE_STATE_PREFIX = 'mobile.'", 'web federation callback')
+contains(webCallback, "MOBILE_STATE_PREFIX = 'mobile-'", 'web federation callback')
 contains(webCallback, "MOBILE_CALLBACK_URI = 'vertice://auth/ctgone/callback'", 'web federation callback')
 
 // ── App icon / splash brand contract ───────────────────────────────────────

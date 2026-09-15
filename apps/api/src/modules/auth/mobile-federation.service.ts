@@ -76,8 +76,12 @@ export async function startMobileCtgOneFederation(): Promise<MobileFederationSta
   const { verifier, challenge } = createPkcePair()
   const transactionId = crypto.randomBytes(24).toString('base64url')
   // Prefix lets the existing web callback identify a native handoff and relay
-  // the one-time code to the registered VÉRTICE custom scheme.
-  const state = `mobile.${crypto.randomBytes(18).toString('base64url')}`
+  // the one-time code to the registered VÉRTICE custom scheme. Uses '-', not
+  // '.', because CTG One's federation state validator (shared across every
+  // federated partner, not just VÉRTICE) only accepts [A-Za-z0-9_-]; a literal
+  // dot makes CTG One reject the whole authorize request as malformed before
+  // it ever reaches the login/consent step.
+  const state = `mobile-${crypto.randomBytes(18).toString('base64url')}`
 
   const stored: StoredMobileFederationTransaction = {
     codeVerifier: verifier,
