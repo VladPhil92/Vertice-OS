@@ -136,8 +136,6 @@ export default function ProposalDetailPage() {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
   const [endorsing, setEndorsing] = useState(false)
-  const [voting, setVoting]       = useState(false)
-  const [voteResult, setVoteResult] = useState<'cast' | 'error' | null>(null)
 
   const loadProposal = useCallback(async () => {
     if (!id) return
@@ -166,24 +164,6 @@ export default function ProposalDetailPage() {
       setProposal(prev => prev ? { ...prev, endorsement_count: res.endorsement_count } : prev)
     } catch { /* apiFetch handles 401 redirect */ }
     finally { setEndorsing(false) }
-  }
-
-  async function handleVote(voteValue: 1 | -1 | 0) {
-    if (!proposal || voting) return
-    setVoting(true)
-    try {
-      await apiFetch(`/governance/proposals/${id}/vote`, {
-        method: 'POST',
-        body: JSON.stringify({ vote_value: voteValue }),
-      })
-      setVoteResult('cast')
-      const updated = await apiFetch<VoteTally>(`/governance/proposals/${id}/tally`, { public: true })
-      setTally(updated)
-    } catch {
-      setVoteResult('error')
-    } finally {
-      setVoting(false)
-    }
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────
@@ -340,62 +320,6 @@ export default function ProposalDetailPage() {
               <span>Umbral: {Math.round(tally.approval_threshold * 100)}%</span>
             )}
           </div>
-        </div>
-      )}
-
-      {/* ── Voting action ─────────────────────────────────────────────── */}
-      {inVoting && voteResult !== 'cast' && (
-        <div className="space-y-3 border border-gold/20 bg-gold/5 p-5">
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-gold flex items-center gap-2">
-            <Vote size={12} />
-            Emite tu voto
-          </h2>
-          {voteResult === 'error' && (
-            <p className="font-mono text-[11px] text-red-400">
-              No se pudo registrar tu voto. Verifica que hayas iniciado sesión.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => handleVote(1)}
-              disabled={voting}
-              className="flex items-center gap-2 border border-emerald/40 bg-emerald/10 px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-emerald transition-colors hover:bg-emerald/20 disabled:opacity-50"
-            >
-              <CheckCircle size={12} strokeWidth={1.5} />
-              A favor
-            </button>
-            <button
-              onClick={() => handleVote(-1)}
-              disabled={voting}
-              className="flex items-center gap-2 border border-red/40 bg-red/10 px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-red transition-colors hover:bg-red/20 disabled:opacity-50"
-            >
-              <XCircle size={12} strokeWidth={1.5} />
-              En contra
-            </button>
-            <button
-              onClick={() => handleVote(0)}
-              disabled={voting}
-              className="flex items-center gap-2 border border-border px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-tertiary transition-colors hover:text-secondary disabled:opacity-50"
-            >
-              <Minus size={12} strokeWidth={1.5} />
-              Abstención
-            </button>
-          </div>
-          {voting && (
-            <div className="flex items-center gap-2">
-              <Loader2 size={12} className="animate-spin text-gold" />
-              <span className="font-mono text-[10px] text-tertiary">Registrando voto…</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {voteResult === 'cast' && (
-        <div className="flex items-center gap-3 border border-emerald/30 bg-emerald/5 px-5 py-4">
-          <CheckCircle size={14} className="text-emerald flex-shrink-0" strokeWidth={1.5} />
-          <span className="font-mono text-[12px] text-secondary">
-            Voto registrado correctamente. Gracias por participar.
-          </span>
         </div>
       )}
 

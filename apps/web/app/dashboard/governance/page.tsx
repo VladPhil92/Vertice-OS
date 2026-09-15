@@ -265,25 +265,25 @@ export default function GovernancePage() {
                     <div className="border border-emerald-500/30 bg-emerald-500/10 p-3 text-center font-mono text-sm text-emerald-400">
                       ✓ Voto registrado — {voted[proposal.id] === 1 ? 'A favor' : voted[proposal.id] === -1 ? 'En contra' : 'Abstención'}
                     </div>
-                  ) : (
+                  ) : canVote ? (
                     <div className="grid grid-cols-3 gap-3">
                       <button
                         onClick={() => castVote(proposal.id, 1)}
-                        disabled={!canVote || isVoting}
+                        disabled={isVoting}
                         className="border border-emerald-500/40 bg-emerald-500/10 py-3 font-mono text-[11px] uppercase tracking-wider text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-30"
                       >A favor</button>
                       <button
                         onClick={() => castVote(proposal.id, 0)}
-                        disabled={!canVote || isVoting}
+                        disabled={isVoting}
                         className="border border-gold/30 bg-gold/5 py-3 font-mono text-[11px] uppercase tracking-wider text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-30"
                       >Abstención</button>
                       <button
                         onClick={() => castVote(proposal.id, -1)}
-                        disabled={!canVote || isVoting}
+                        disabled={isVoting}
                         className="border border-red-500/40 bg-red-500/10 py-3 font-mono text-[11px] uppercase tracking-wider text-red-400 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-30"
                       >En contra</button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )
             })}
