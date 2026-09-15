@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 
@@ -204,16 +205,8 @@ export default function TerritoryAssuranceScreen() {
         </View>
 
         {loading ? <Text style={styles.muted}>Cargando estado…</Text> : null}
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-          </View>
-        ) : null}
-        {message ? (
-          <View style={styles.successCard}>
-            <Text style={styles.success}>{message}</Text>
-          </View>
-        ) : null}
+        {error ? <Alert type="error" message={error} /> : null}
+        {message ? <Alert type="success" message={message} /> : null}
 
         {!loading ? (
           <>
@@ -345,10 +338,6 @@ const styles = StyleSheet.create({
   title: { color: colors.white, fontFamily: typography.displayExtraBoldFamily, ...typography.roles.hero },
   heroBody: { color: colors.white, fontFamily: typography.bodyFamily, ...typography.roles.body },
   muted: { color: colors.textTertiary, textAlign: 'center', paddingVertical: spacing.lg, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorCard: { borderRadius: radius.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, padding: spacing.sm },
-  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  successCard: { borderRadius: radius.md, backgroundColor: colors.successBackground, borderWidth: 1, borderColor: colors.successBorder, padding: spacing.sm },
-  success: { color: colors.successText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   card: { borderRadius: radius.xl, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.sm, borderWidth: 1, borderColor: colors.border, ...elevation.card },
   label: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   sectionKicker: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },

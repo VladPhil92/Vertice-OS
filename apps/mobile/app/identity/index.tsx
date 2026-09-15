@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type {
@@ -119,11 +120,7 @@ export default function IdentityAssuranceScreen() {
           </Text>
         </View>
 
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <Alert type="error" message={error} /> : null}
 
         <View style={[styles.statusCard, assurance?.assured && styles.statusCardReady]}>
           <View style={styles.statusIcon}>
@@ -236,8 +233,6 @@ const styles = StyleSheet.create({
   proofProvider: { color: colors.textPrimary, fontFamily: typography.bodyBoldFamily, fontWeight: '700', textTransform: 'capitalize' },
   proofMeta: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   proofDate: { color: colors.textTertiary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  errorCard: { borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, backgroundColor: colors.errorBackground, padding: spacing.sm },
-  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   empty: { color: colors.textTertiary, textAlign: 'center', paddingVertical: spacing.sm, fontFamily: typography.bodyFamily, ...typography.roles.body },
   disabled: { opacity: interaction.disabledOpacity },
   pressed: { opacity: interaction.pressedOpacity },

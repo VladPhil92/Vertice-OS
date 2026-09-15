@@ -172,6 +172,34 @@ contains(mobileFederation, "redis.call('DEL', KEYS[1])", 'native federation serv
 contains(webCallback, "MOBILE_STATE_PREFIX = 'mobile.'", 'web federation callback')
 contains(webCallback, "MOBILE_CALLBACK_URI = 'vertice://auth/ctgone/callback'", 'web federation callback')
 
+// ── App icon / splash brand contract ───────────────────────────────────────
+const appJsonRaw = read('apps/mobile/app.json')
+const appJson = JSON.parse(appJsonRaw).expo
+
+assert(typeof appJson.icon === 'string' && appJson.icon.length > 0, 'app.json must declare expo.icon')
+assert(
+  typeof appJson.android?.adaptiveIcon?.foregroundImage === 'string',
+  'app.json must declare expo.android.adaptiveIcon.foregroundImage',
+)
+const splashPlugin = (appJson.plugins ?? []).find(
+  (p) => Array.isArray(p) && p[0] === 'expo-splash-screen',
+)
+assert(splashPlugin != null, 'app.json must configure the expo-splash-screen plugin')
+
+for (const relativeAssetPath of [
+  appJson.icon,
+  appJson.android?.adaptiveIcon?.foregroundImage,
+  splashPlugin?.[1]?.image,
+]) {
+  if (!relativeAssetPath) continue
+  const assetPath = path.join(root, 'apps/mobile', relativeAssetPath.replace(/^\.\//, ''))
+  assert(fs.existsSync(assetPath), `declared brand asset must exist on disk: ${relativeAssetPath}`)
+}
+
+contains(rootLayout, "from 'expo-splash-screen'", 'native root layout')
+contains(rootLayout, 'preventAutoHideAsync', 'native root layout')
+contains(rootLayout, 'SplashScreen.hideAsync', 'native root layout')
+
 if (!process.exitCode) {
   console.log('[product-parity] OK: CTG One federation, canonical VÉRTICE tokens, bundled typography and Lucide runtime are aligned across web/mobile.')
 }

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../components/VerticeBrand'
 import { VerticeIcon } from '../components/VerticeIcon'
+import { Alert } from '../components/ui'
 import { apiFetch } from '../lib/api'
 import { navigateFromNotificationData } from '../lib/push-notifications'
 import { colors, elevation, interaction, radius, spacing, typography } from '../theme/vertice'
@@ -114,11 +115,7 @@ export default function NotificationsScreen() {
           ) : null}
         </View>
 
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <Alert type="error" message={error} /> : null}
 
         <View style={styles.list}>
           {notifications.map((notification) => (
@@ -177,8 +174,6 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.textPrimary, fontFamily: typography.displayBoldFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
   body: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
   time: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 11, lineHeight: 16 },
-  errorCard: { borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, backgroundColor: colors.errorBackground, padding: spacing.sm },
-  error: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   emptyCard: { minHeight: 140, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surface },
   empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
   pressed: { opacity: interaction.pressedOpacity },

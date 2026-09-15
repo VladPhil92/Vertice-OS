@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon, type VerticeIconName } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type {
@@ -297,10 +298,7 @@ export default function CrowdfundingScreen() {
                 ) : null}
               </View>
             ) : (
-              <View style={styles.successCard}>
-                <VerticeIcon name="checkCircle" color={colors.successText} size={21} />
-                <Text style={styles.successText}>El snapshot no reporta bloqueos de readiness generales.</Text>
-              </View>
+              <Alert type="success" message="El snapshot no reporta bloqueos de readiness generales." />
             )}
 
             <View style={styles.sectionHeadingRow}>
@@ -460,8 +458,6 @@ const styles = StyleSheet.create({
   secondaryButton: { minHeight: interaction.buttonHeight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.warningBorder, paddingHorizontal: spacing.md },
   secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   webActionHint: { color: colors.warningText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  successCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.successBackground, borderWidth: 1, borderColor: colors.successBorder },
-  successText: { flex: 1, color: colors.successText, fontFamily: typography.bodyFamily, ...typography.roles.body },
   sectionHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   sectionIcon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
   sectionHeadingCopy: { flex: 1, gap: spacing.xxs },
