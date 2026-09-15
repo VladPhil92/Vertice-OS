@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { Alert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CivicActivity, CommunityFeedResponse } from '../../types/api'
@@ -211,7 +212,7 @@ export default function CommunityScreen() {
           </View>
         ) : null}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Alert type="error" message={error} /> : null}
 
         <View style={styles.list}>
           {activities.map((activity) => (
@@ -313,7 +314,6 @@ const styles = StyleSheet.create({
   textButtonText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   reportButton: { minHeight: interaction.minimumTouchTarget, paddingHorizontal: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.errorBackground, justifyContent: 'center' },
   reportButtonText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  error: { color: colors.errorText, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, padding: spacing.sm, fontFamily: typography.bodyFamily },
   empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, paddingVertical: spacing.xxl },
   pressed: { opacity: interaction.pressedOpacity },
   disabled: { opacity: interaction.disabledOpacity },

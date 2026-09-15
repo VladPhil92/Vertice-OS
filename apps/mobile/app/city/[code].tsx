@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch } from '../../lib/api'
 import { useAuth } from '../../providers/AuthProvider'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
@@ -151,14 +152,12 @@ export default function PublicCityScreen() {
           </View>
         ) : null}
         {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>No pudimos cargar la ciudad</Text>
-            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-              <VerticeIcon name="refresh" color={colors.navy} size={18} />
-              <Text style={styles.secondaryButtonText}>Reintentar</Text>
-            </Pressable>
-          </View>
+          <Alert
+            type="error"
+            title="No pudimos cargar la ciudad"
+            message={error}
+            action={{ label: 'Reintentar', icon: 'refresh', onPress: () => void load() }}
+          />
         ) : null}
 
         {overview ? (
@@ -308,11 +307,6 @@ const styles = StyleSheet.create({
   backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   stateCard: { minHeight: 120, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   muted: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, gap: spacing.sm },
-  errorTitle: { color: colors.errorText, fontFamily: typography.displayBoldFamily, fontSize: 18, lineHeight: 24, fontWeight: '700' },
-  errorText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  secondaryButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', gap: spacing.xs, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.md },
-  secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   hero: { borderRadius: radius.xxl, padding: spacing.xl, backgroundColor: colors.navy, gap: spacing.sm },
   heroIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navyLight },
   eyebrow: { color: colors.citizen, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },

@@ -211,13 +211,7 @@ export default function CrowdfundingScreen() {
         ) : null}
 
         {error ? (
-          <View style={styles.errorCard}>
-            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}>
-              <VerticeIcon name="refresh" color={colors.navy} size={18} />
-              <Text style={styles.retryText}>Reintentar</Text>
-            </Pressable>
-          </View>
+          <Alert type="error" message={error} action={{ label: 'Reintentar', icon: 'refresh', onPress: () => void load() }} />
         ) : null}
 
         {readiness ? (
@@ -413,10 +407,6 @@ const styles = StyleSheet.create({
   authorityText: { color: colors.infoText, fontFamily: typography.bodyFamily, ...typography.roles.body },
   stateCard: { minHeight: 104, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   stateText: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, gap: spacing.sm },
-  errorText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  retryButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.errorBorder },
-  retryText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   summaryCard: { borderRadius: radius.xl, padding: spacing.lg, gap: spacing.sm, borderWidth: 1, ...elevation.card },
   summaryReady: { backgroundColor: colors.successBackground, borderColor: colors.successBorder },
   summaryPending: { backgroundColor: colors.warningBackground, borderColor: colors.warningBorder },

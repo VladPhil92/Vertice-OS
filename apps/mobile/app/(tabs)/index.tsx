@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { Alert } from '../../components/ui'
 import { apiFetch } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CitizenDashboard, MyTerritory } from '../../types/api'
@@ -84,10 +85,7 @@ export default function DashboardScreen() {
         </View>
 
         {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>No pudimos actualizar el panel</Text>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
+          <Alert type="error" title="No pudimos actualizar el panel" message={error} />
         ) : null}
 
         <View style={styles.territoryCard}>
@@ -206,9 +204,6 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.textTertiary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },
   title: { color: colors.textPrimary, fontFamily: typography.displayFamily, ...typography.roles.hero },
   subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.subtitle },
-  errorCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, padding: spacing.md, backgroundColor: colors.errorBackground, gap: spacing.xxs },
-  errorTitle: { color: colors.errorText, fontFamily: typography.bodyExtraBoldFamily, fontWeight: '800' },
-  errorText: { color: colors.errorText, fontFamily: typography.bodyFamily, ...typography.roles.body },
   territoryCard: { overflow: 'hidden', borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.xs, ...elevation.card },
   cardAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.citizen },
   territoryName: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 23, lineHeight: 29, fontWeight: '800' },

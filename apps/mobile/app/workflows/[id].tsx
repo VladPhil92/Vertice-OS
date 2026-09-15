@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon, type VerticeIconName } from '../../components/VerticeIcon'
+import { Alert } from '../../components/ui'
 import { apiFetch } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CivicCase } from '../../types/domain-parity'
@@ -128,13 +129,7 @@ export default function WorkflowDetailScreen() {
         ) : null}
 
         {error ? (
-          <View style={styles.errorCard}>
-            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}>
-              <VerticeIcon name="refresh" color={colors.navy} size={18} />
-              <Text style={styles.retryText}>Reintentar</Text>
-            </Pressable>
-          </View>
+          <Alert type="error" message={error} action={{ label: 'Reintentar', icon: 'refresh', onPress: () => void load() }} />
         ) : null}
 
         {item ? (
@@ -309,10 +304,6 @@ const styles = StyleSheet.create({
   backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   stateCard: { minHeight: 104, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   stateText: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorCard: { borderRadius: radius.lg, padding: spacing.md, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, gap: spacing.sm },
-  errorText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  retryButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.errorBorder },
-  retryText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   hero: { borderRadius: radius.xxl, padding: spacing.xl, backgroundColor: colors.navy, gap: spacing.sm },
   heroIcon: { width: 50, height: 50, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navyLight },
   eyebrow: { color: colors.citizen, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label },

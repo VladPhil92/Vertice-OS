@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
 import { VerticeIcon } from '../../components/VerticeIcon'
+import { Alert as UiAlert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CivicActivity, FollowState, PublicCivicProfile } from '../../types/api'
@@ -193,13 +194,7 @@ export default function CivicProfileScreen() {
         ) : null}
 
         {error ? (
-          <View style={styles.errorCard}>
-            <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-              <VerticeIcon name="refresh" color={colors.navy} size={18} />
-              <Text style={styles.secondaryButtonText}>Reintentar</Text>
-            </Pressable>
-          </View>
+          <UiAlert type="error" message={error} action={{ label: 'Reintentar', icon: 'refresh', onPress: () => void load() }} />
         ) : null}
 
         {profile ? (
@@ -388,10 +383,6 @@ const styles = StyleSheet.create({
   backText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   stateCard: { minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   muted: { color: colors.textTertiary, fontFamily: typography.bodyFamily, ...typography.roles.body },
-  errorCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.errorBorder, backgroundColor: colors.errorBackground, padding: spacing.md, gap: spacing.sm },
-  errorText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
-  secondaryButton: { minHeight: interaction.minimumTouchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, paddingHorizontal: spacing.md },
-  secondaryButtonText: { color: colors.navy, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.button },
   heroCard: { borderRadius: radius.xxl, padding: spacing.xl, backgroundColor: colors.navy, gap: spacing.sm },
   profileIcon: { width: 48, height: 48, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.navyLight },
   eyebrow: { color: colors.citizen, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.label, textTransform: 'uppercase' },

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { TerritoryTargetPicker } from '../../components/TerritoryTargetPicker'
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { Alert as UiAlert } from '../../components/ui'
 import { apiFetch, apiMutation } from '../../lib/api'
 import type { TerritoryOption } from '../../lib/territory-context'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
@@ -140,7 +141,7 @@ export default function ActionsScreen() {
           </Pressable>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <UiAlert type="error" message={error} /> : null}
 
         {showCreate ? (
           <View style={styles.formCard}>
@@ -236,7 +237,6 @@ const styles = StyleSheet.create({
   secondaryButton: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.borderActive, borderRadius: radius.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   evidenceForm: { gap: spacing.xs, paddingTop: spacing.xxs },
-  error: { color: colors.errorText, backgroundColor: colors.errorBackground, borderWidth: 1, borderColor: colors.errorBorder, borderRadius: radius.md, padding: spacing.sm, fontFamily: typography.bodyFamily },
   empty: { textAlign: 'center', color: colors.textTertiary, fontFamily: typography.bodyFamily, paddingVertical: spacing.xxl },
   pressed: { opacity: interaction.pressedOpacity },
   disabled: { opacity: interaction.disabledOpacity },

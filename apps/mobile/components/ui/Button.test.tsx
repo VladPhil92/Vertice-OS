@@ -50,7 +50,7 @@ describe('Button', () => {
   })
 
   it('renders the label text for every variant', async () => {
-    for (const variant of ['primary', 'ghost', 'danger'] as const) {
+    for (const variant of ['primary', 'ghost', 'danger', 'citizen'] as const) {
       await render(
         <Button onPress={jest.fn()} variant={variant}>
           {`Acción ${variant}`}
