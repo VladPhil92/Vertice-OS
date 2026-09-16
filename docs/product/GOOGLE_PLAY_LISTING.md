@@ -61,8 +61,9 @@ Basado en lo que el código realmente recolecta hoy (`apps/api/prisma/schema.pri
 | Contraseña | Sí (solo hash) | No | Autenticación |
 | Identificador de documento (cédula) | Sí (solo hash irreversible) | No | Prevención de duplicados/identidad |
 | Nombre | Sí (nombre a mostrar, autodeclarado) | No | Perfil público |
-| Identificadores de dispositivo/publicidad | No | No | — |
+| Identificadores de dispositivo/publicidad | Sí — token de push Expo (`mobile_push_devices`), solo si el usuario activa notificaciones; no es un identificador de publicidad | Sí — Expo/Google/Apple (entrega técnica de la notificación) | Funcionalidad de la app |
 | Información de app activity (interacciones) | Parcial (reportes, propuestas, follows — no analítica de terceros) | No | Funcionalidad de la app |
+| Dirección IP / user-agent de sesión | Sí — se guarda en el registro de cada sesión (`sessions`); no se purga automáticamente al expirar/revocar | No | Seguridad y prevención de fraude |
 | Datos financieros | No todavía (crear campaña no mueve dinero; el cobro no está activo) | No | — |
 
 Declaraciones sugeridas:

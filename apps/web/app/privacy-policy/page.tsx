@@ -18,7 +18,7 @@ const DATA_COLLECTED = [
   { title: 'Notificaciones push', body: 'Un identificador de tu dispositivo para poder enviarte notificaciones, si las activas.' },
   { title: 'Federación CTG One (opcional)', body: 'Si eliges "Continuar con CTG One" recibimos un identificador de esa cuenta y el correo asociado al vincularla — nunca tu contraseña de CTG One.' },
   { title: 'Billetera blockchain (opcional)', body: 'Una dirección pública, si decides vincular una.' },
-  { title: 'Datos técnicos', body: 'Dirección IP y metadatos de solicitud, usados de forma transitoria para seguridad y prevención de abuso.' },
+  { title: 'Datos técnicos', body: 'Tu dirección IP y user-agent se registran junto con cada inicio de sesión para seguridad y prevención de fraude. Quedan asociados a ese registro de sesión; revocar la sesión o eliminar tu cuenta la invalida de inmediato, pero el registro histórico (incluida esa IP) puede conservarse por motivos de seguridad y auditoría.' },
 ] as const
 
 const USES = [
