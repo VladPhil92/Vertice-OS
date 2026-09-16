@@ -45,8 +45,13 @@ if (!providerRoutes.includes("app.get('/availability'")) throw new Error('Canoni
 if (!providerRoutes.includes("app.post('/veriff/session'")) throw new Error('Canonical Veriff session route is missing')
 if (!identity.includes("url.protocol !== 'https:'")) throw new Error('Native provider handoff must fail closed for non-HTTPS URLs')
 
-for (const token of ["'/crowdfunding/me/readiness'", "'/crowdfunding/me/campaigns'"]) {
-  if (!crowdfunding.includes(token)) throw new Error(`Native crowdfunding missing canonical API token: ${token}`)
+// Crowdfunding is a pre-launch announcement on mobile until payment
+// providers and payout certification are live (see docs/CURRENT_STATE.md
+// section 6) — it deliberately does not call the readiness/campaigns API
+// today. The canonical route still has to exist server-side for the web
+// client and for the day the mobile surface reconnects to it.
+for (const token of ["LAUNCH_MONTH = 'octubre de 2026'", 'esta sección no procesa dinero ni recibe compromisos financieros.']) {
+  if (!crowdfunding.includes(token)) throw new Error(`Native crowdfunding missing canonical announcement token: ${token}`)
 }
 if (!crowdfundingRoutes.includes("app.get('/me/readiness'")) throw new Error('Canonical crowdfunding readiness route is missing')
 

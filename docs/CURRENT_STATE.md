@@ -121,7 +121,7 @@ El stack implementado incluye:
 - Financial Operations Command Center;
 - emergency stops separados para checkout, collection y payouts;
 - Golden Financial Integrity;
-- superficie móvil de readiness/campañas con frontera read-only y estados server-authoritative.
+- superficie móvil de anuncio pre-lanzamiento (`octubre de 2026`), sin llamadas a readiness/campañas mientras los proveedores de pago no estén certificados.
 
 Un monto mostrado por API no constituye evidencia local de settlement bancario. Un estado `ready` no equivale a una transferencia o payout ejecutado. Pagos, donaciones, KYC/KYB, settlement y payouts no modifican reputación, ranking, voto ni autoridad cívica.
 

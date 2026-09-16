@@ -33,14 +33,14 @@ The provider handoff accepts HTTPS only. Starting a Veriff session does not mean
 
 Production Veriff credentials and the external evidence-backed canary remain external/operator-controlled release evidence.
 
-## Phase 2D-4 — Crowdfunding tracking/readiness
+## Phase 2D-4 — Crowdfunding (pre-launch announcement)
 
-Native route `/crowdfunding` consumes:
+Native route `/crowdfunding` no longer consumes the readiness/campaigns API. Until Mercado Pago/Wompi credentials and payout certification are live (`docs/CURRENT_STATE.md` section 6), the route shows a static announcement (launch month `octubre de 2026`) instead of a technical readiness/blockers dashboard, so a citizen is never shown jargon-heavy compliance state (`platform_blocked`, raw blocker codes) it cannot act on.
+
+The canonical routes remain implemented and tested server-side for the web client and for reconnecting mobile once the surface is built for real:
 
 - `GET /crowdfunding/me/readiness`;
 - `GET /crowdfunding/me/campaigns`.
-
-It displays identity, payout-profile, payout-destination, collection/payout provider readiness, blockers and owned campaign progress.
 
 This slice intentionally does **not** execute:
 
