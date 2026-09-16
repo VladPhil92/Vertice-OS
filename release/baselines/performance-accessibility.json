@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
   "mode": "enforced",
-  "baseline_sha": "8c3799a8b755b0ed2470d6a3b1fe28be94760b1b",
-  "captured_at": "2026-09-16T19:32:52.758Z",
+  "baseline_sha": "61d6e8a2c3c3eaa795331e23871ddf44c3f24ed2",
+  "captured_at": "2026-09-16T23:47:11.112Z",
   "policy": {
-    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The latest Web ceiling increase is the reviewed exact-byte cost of the new public /privacy-policy route reusing the shared Navbar/Footer, which promoted their code into a shared chunk loaded by /auth/login, /auth/register and /account-deletion — a fixed +54 bytes on each, not a per-visit or per-route-scaling cost. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
+    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The latest Web ceiling increase is the reviewed exact-byte cost of the public /account-deletion route adopting the same real Navbar/Footer/BrandLogo design already used by /privacy-policy: its own bundle grew substantially (it now pulls the shared chunk directly), a handful of new Tailwind utility classes grew the global CSS bundle by 30 bytes shared across every route, and that same 30-byte CSS delta shows up as a small decoded_bytes increase on every other measured route. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
     "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. The public-route baseline remains zero after authenticated-shell hardening; any new deterministic public issue fails.",
     "runtime_timing": "Wall-clock timings and encoded transfer bytes remain diagnostic only. Per-route decoded total/JS/CSS resource body bytes are the deterministic release signals enforced separately.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
@@ -12,7 +12,7 @@
   "performance_ceilings": {
     "web_client_static_bytes": 5071035,
     "web_client_runtime_code_bytes": 4402687,
-    "web_client_css_bytes": 154740,
+    "web_client_css_bytes": 154770,
     "web_client_largest_bytes": 1766533,
     "web_public_assets_bytes": 1469154,
     "web_public_largest_bytes": 1111554,
@@ -52,22 +52,22 @@
       "/": {
         "decoded_bytes": 1186964,
         "js_decoded_bytes": 886961,
-        "css_decoded_bytes": 113865
+        "css_decoded_bytes": 113895
       },
       "/auth/login": {
-        "decoded_bytes": 1291631,
+        "decoded_bytes": 1291715,
         "js_decoded_bytes": 900657,
-        "css_decoded_bytes": 113865
+        "css_decoded_bytes": 113895
       },
       "/auth/register": {
-        "decoded_bytes": 1253644,
+        "decoded_bytes": 1253728,
         "js_decoded_bytes": 887015,
-        "css_decoded_bytes": 113865
+        "css_decoded_bytes": 113895
       },
       "/account-deletion": {
-        "decoded_bytes": 1147542,
-        "js_decoded_bytes": 872450,
-        "css_decoded_bytes": 113865
+        "decoded_bytes": 1273021,
+        "js_decoded_bytes": 887547,
+        "css_decoded_bytes": 113895
       }
     }
   }
