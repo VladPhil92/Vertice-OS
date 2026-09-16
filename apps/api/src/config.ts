@@ -123,6 +123,15 @@ const schema = z.object({
   VOTING_REGISTRY_ADDRESS:  z.string().optional(),
   DID_COMMITMENT_PEPPER:    z.string().min(32).optional(),
   IPFS_GATEWAY:             z.string().url().default('https://ipfs.io/ipfs'),
+
+  // Closed-pilot invite gate (see lib/closed-pilot-access.ts). The allowlist
+  // itself is validated below (cross-field check against CLOSED_PILOT_MODE),
+  // not here. CLOSED_PILOT_MODE is constrained to the exact values
+  // getClosedPilotAccessState() understands — a typo like "TRUE" would
+  // otherwise pass this schema, read as not-enabled, and silently boot with
+  // public registration open when the operator meant to restrict it.
+  CLOSED_PILOT_MODE: z.enum(['true', 'false']).default('false'),
+  CLOSED_PILOT_EMAIL_ALLOWLIST: z.string().default(''),
 })
 
 const parsed = schema.safeParse(process.env)
@@ -139,6 +148,36 @@ if (!parsed.success) {
     'Set the required value(s) in the Railway service Variables tab and redeploy.\n',
   )
   process.exit(1)
+}
+
+// CLOSED_PILOT_MODE=true with an empty/oversized allowlist does not disable
+// the gate — assertClosedPilotEmailAllowed() still runs and rejects every
+// email, including the founder's, because `configured` comes back false.
+// That silent full lockout is worse than refusing to boot, so catch it here
+// instead of only in a support ticket after every login starts 403ing.
+if (parsed.data.CLOSED_PILOT_MODE === 'true') {
+  const cohort = Array.from(new Set(
+    parsed.data.CLOSED_PILOT_EMAIL_ALLOWLIST.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean),
+  ))
+  const MAX_CLOSED_PILOT_COHORT = 30
+  // A cohort of the right size but full of malformed entries (a stray
+  // "not-an-email", a typo missing the @) locks everyone out just as
+  // completely as an empty allowlist — no real login can ever match a
+  // string auth.schema.ts's z.string().email() would already reject.
+  const malformedEntries = cohort.filter((email) => !z.string().email().safeParse(email).success)
+  if (cohort.length === 0 || cohort.length > MAX_CLOSED_PILOT_COHORT || malformedEntries.length > 0) {
+    const reason = cohort.length === 0
+      ? 'empty'
+      : cohort.length > MAX_CLOSED_PILOT_COHORT
+        ? `too large (${cohort.length} > ${MAX_CLOSED_PILOT_COHORT})`
+        : `contains invalid email(s): ${malformedEntries.join(', ')}`
+    process.stdout.write(
+      `[config] FATAL: CLOSED_PILOT_MODE=true but CLOSED_PILOT_EMAIL_ALLOWLIST is ${reason}. ` +
+      'This would silently lock out every registration and login, with no invited user able to get in. ' +
+      'Set a valid CLOSED_PILOT_EMAIL_ALLOWLIST (1-30 real emails) or set CLOSED_PILOT_MODE=false.\n',
+    )
+    process.exit(1)
+  }
 }
 
 // Feature-scoped configuration never decides whether the entire API can boot.
