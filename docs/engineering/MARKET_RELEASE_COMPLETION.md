@@ -25,7 +25,7 @@ This document separates work that can be completed and evidenced by repository a
 - [x] Native Community/Feed/moderation parity.
 - [x] Native Workflows/case-management parity.
 - [x] Native Identity Assurance parity.
-- [x] Native Crowdfunding tracking/readiness parity with read-only money boundary.
+- [x] Native Crowdfunding pre-launch announcement (no readiness/campaigns calls) with explicit launch-month copy.
 - [x] Canonical Web/Mobile visual runtime for primary, trust, territory, community, workflow and financial secondary surfaces.
 - [x] Account deletion API with irreversible identifier/credential erasure.
 - [x] In-app mobile account deletion surface.
@@ -108,7 +108,7 @@ On at least one production-representative Android device and one iOS device:
 - [ ] Community follow/unfollow/feed/block/report;
 - [ ] Workflows/case detail and traceability;
 - [ ] Identity Assurance/provider handoff;
-- [ ] Crowdfunding readiness/tracking and financial-boundary copy;
+- [ ] Crowdfunding pre-launch announcement copy;
 - [ ] account deletion from the in-app profile surface;
 - [ ] confirm the deleted identity cannot refresh/login and no longer receives push;
 - [ ] confirm avatar/provider cleanup completes when an avatar existed.

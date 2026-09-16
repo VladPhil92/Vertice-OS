@@ -8,7 +8,7 @@ This phase consumes existing server contracts for:
 
 1. civic workflows/cases;
 2. Civic Identity Assurance and provider bootstrap;
-3. crowdfunding campaign/readiness tracking.
+3. crowdfunding (pre-launch announcement, no readiness/campaigns calls).
 
 ## Phase 2D-2 — Workflows / civic cases
 
