@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
   "mode": "enforced",
-  "baseline_sha": "29ab07707193124708a6e18100cdd74036623fee",
-  "captured_at": "2026-09-14T11:14:43.942Z",
+  "baseline_sha": "8c3799a8b755b0ed2470d6a3b1fe28be94760b1b",
+  "captured_at": "2026-09-16T19:32:52.758Z",
   "policy": {
-    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The latest Web ceiling increase is the reviewed exact-byte cost of authenticated notification accessibility and release UX hardening. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
+    "performance": "Only reproducible artifact signals are controlled ceilings. Web build bytes and Mobile non-runtime asset bytes must not grow without an explicit reviewed baseline update. The latest Web ceiling increase is the reviewed exact-byte cost of the new public /privacy-policy route reusing the shared Navbar/Footer, which promoted their code into a shared chunk loaded by /auth/login, /auth/register and /account-deletion — a fixed +54 bytes on each, not a per-visit or per-route-scaling cost. Raw Hermes bytecode size remains diagnostic because repeat builds of unchanged app source showed byte-level variance.",
     "accessibility": "Deterministic issue counts are controlled per-route/per-rule ceilings. The public-route baseline remains zero after authenticated-shell hardening; any new deterministic public issue fails.",
     "runtime_timing": "Wall-clock timings and encoded transfer bytes remain diagnostic only. Per-route decoded total/JS/CSS resource body bytes are the deterministic release signals enforced separately.",
     "certification_boundary": "This baseline is a regression-control artifact. It is not physical-device performance evidence, WCAG certification, store approval or market-release certification."
@@ -56,17 +56,17 @@
       },
       "/auth/login": {
         "decoded_bytes": 1291631,
-        "js_decoded_bytes": 900603,
+        "js_decoded_bytes": 900657,
         "css_decoded_bytes": 113865
       },
       "/auth/register": {
         "decoded_bytes": 1253644,
-        "js_decoded_bytes": 886961,
+        "js_decoded_bytes": 887015,
         "css_decoded_bytes": 113865
       },
       "/account-deletion": {
         "decoded_bytes": 1147542,
-        "js_decoded_bytes": 872396,
+        "js_decoded_bytes": 872450,
         "css_decoded_bytes": 113865
       }
     }
