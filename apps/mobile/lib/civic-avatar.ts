@@ -81,6 +81,12 @@ export async function uploadAndConfirmCivicAvatar(
   // implementation" — it only accepts a real Blob-like value (something with
   // .bytes()). expo-file-system's File implements that.
   form.append('file', new File(photo.uri), fileName)
+  const uploadFile = {
+    uri: photo.uri,
+    name: fileName,
+    type: photo.mimeType || 'image/jpeg',
+  }
+  form.append('file', uploadFile as unknown as Blob)
 
   const uploadResponse = await fetch(intent.upload_url, {
     method: 'POST',
