@@ -18,7 +18,7 @@ const DATA_COLLECTED = [
   { title: 'Notificaciones push', body: 'Un identificador de tu dispositivo para poder enviarte notificaciones, si las activas.' },
   { title: 'Federación CTG One (opcional)', body: 'Si eliges "Continuar con CTG One" recibimos un identificador de esa cuenta y el correo asociado al vincularla — nunca tu contraseña de CTG One.' },
   { title: 'Billetera blockchain (opcional)', body: 'Una dirección pública, si decides vincular una.' },
-  { title: 'Datos técnicos', body: 'Dirección IP y metadatos de solicitud, usados de forma transitoria para seguridad y prevención de abuso.' },
+  { title: 'Datos técnicos', body: 'Tu dirección IP y user-agent se registran junto con cada inicio de sesión para seguridad y prevención de fraude, y quedan asociados a ese registro de sesión. Revocar la sesión o eliminar tu cuenta la marca como revocada de inmediato, pero una credencial de acceso ya emitida puede seguir funcionando en solicitudes ordinarias hasta por 15 minutos (su tiempo de vida natural) antes de dejar de aceptarse; el registro histórico de la sesión, incluida esa IP, puede conservarse por motivos de seguridad y auditoría.' },
 ] as const
 
 const USES = [
