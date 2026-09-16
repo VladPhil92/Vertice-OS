@@ -64,17 +64,22 @@ for (const token of forbiddenCollectionTokens) {
 // apiMutation is allowed here now, but only ever pointed at campaign
 // creation — any other mutation target would be a collection capability
 // sneaking in without a matching literal in forbiddenCollectionTokens above.
-const mutationCalls = [...source.matchAll(/apiMutation<[^>]*>\(\s*['"]([^'"]+)['"]/g)].map((match) => match[1])
-if (mutationCalls.length === 0) {
+// Every invocation is inspected individually (not just "does at least one
+// typed call exist") so a second, untyped or dynamic-target call can't hide
+// next to a legitimate one and still pass this gate.
+const mutationInvocations = [...source.matchAll(/\bapiMutation(?:<[^>]*>)?\(\s*([^,]+),/g)]
+if (mutationInvocations.length === 0) {
   failures.push('crowdfunding safety surface must call apiMutation to create campaign drafts (the announcement-only contract is gone)')
 }
-for (const targetPath of mutationCalls) {
-  if (targetPath !== ALLOWED_MUTATION_PATH) {
-    failures.push(`crowdfunding safety convergence only allows apiMutation against ${ALLOWED_MUTATION_PATH}, found: ${targetPath}`)
+for (const [, rawArg] of mutationInvocations) {
+  const literal = /^(['"])([^'"]+)\1$/.exec(rawArg.trim())
+  if (!literal) {
+    failures.push(`crowdfunding safety convergence requires a literal apiMutation path so this gate can verify it; found non-literal target: ${rawArg.trim()}`)
+    continue
   }
-}
-if (/apiMutation\(/.test(source) && !/apiMutation<[^>]*>\(/.test(source)) {
-  failures.push('crowdfunding safety surface must call apiMutation with an explicit response type so the path-allowlist check above stays effective')
+  if (literal[2] !== ALLOWED_MUTATION_PATH) {
+    failures.push(`crowdfunding safety convergence only allows apiMutation against ${ALLOWED_MUTATION_PATH}, found: ${literal[2]}`)
+  }
 }
 
 if (/router\.push\(['"]\/dashboard\//.test(source)) {

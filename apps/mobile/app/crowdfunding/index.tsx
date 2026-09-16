@@ -231,7 +231,7 @@ export default function CrowdfundingScreen() {
           <Text style={styles.eyebrow}>RECAUDO COMUNITARIO</Text>
           <Text style={styles.title}>Crea tu campaña</Text>
           <Text style={styles.heroBody}>
-            Puedes crear tu campaña hoy: queda como borrador y pasa a revisión de cumplimiento. Recibir aportes (activación, contribuciones y cobro) llega junto con los proveedores de pago en {COLLECTION_LAUNCH_MONTH}.
+            Puedes crear tu campaña hoy: queda guardada como borrador. Enviarla a revisión de cumplimiento y activarla para recibir aportes llega junto con los proveedores de pago en {COLLECTION_LAUNCH_MONTH}.
           </Text>
         </View>
 
