@@ -172,7 +172,7 @@ export default function DashboardScreen() {
             <Pressable onPress={() => router.push('/crowdfunding')} style={({ pressed }) => [styles.launchCardWide, pressed && styles.pressed]}>
               <Text style={styles.launchKicker}>FINANCIACIÓN CÍVICA</Text>
               <Text style={styles.launchTitle}>Crowdfunding</Text>
-              <Text style={styles.launchBody}>Disponible a partir de octubre de 2026.</Text>
+              <Text style={styles.launchBody}>Crea tu campaña hoy. Recibir aportes llega en octubre de 2026.</Text>
             </Pressable>
           </View>
         </View>
