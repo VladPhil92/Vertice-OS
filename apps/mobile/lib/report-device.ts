@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
 import { apiFetch } from './api'
@@ -89,13 +90,11 @@ export async function uploadAndConfirmReportEvidence(
   const form = new FormData()
   const extension = evidence.mimeType?.split('/')[1] || 'jpg'
   const fileName = evidence.fileName || `vertice-report-${Date.now()}.${extension}`
-  const uploadFile = {
-    uri: evidence.uri,
-    name: fileName,
-    type: evidence.mimeType || 'image/jpeg',
-  }
-
-  form.append('file', uploadFile as unknown as Blob)
+  // Expo SDK 57's global fetch/FormData rejects React Native's classic
+  // {uri, name, type} part shape with "Unsupported FormDataPart
+  // implementation" — it only accepts a real Blob-like value (something with
+  // .bytes()). expo-file-system's File implements that.
+  form.append('file', new File(evidence.uri), fileName)
 
   const uploadResponse = await fetch(intent.upload_url, {
     method: 'POST',
