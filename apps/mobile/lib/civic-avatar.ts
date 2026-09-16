@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import { apiFetch } from './api'
 import type { CivicAvatarState, CivicAvatarUploadIntent } from '../types/api'
@@ -66,7 +67,20 @@ export async function selectCivicAvatarPhoto(
 
 export async function uploadAndConfirmCivicAvatar(
   photo: SelectedAvatarPhoto,
+  policyAttested: boolean,
 ): Promise<CivicAvatarState> {
+  // Mirrors the web upload flow's required checkbox (apps/web/app/dashboard/
+  // community/profile/page.tsx): the caller must have shown the portrait
+  // policy and gotten explicit confirmation before this function is even
+  // invoked. Refusing here too means a UI regression that skips the
+  // checkbox can never fabricate a consent record server-side.
+  if (!policyAttested) {
+    throw Object.assign(
+      new Error('Debes confirmar que la fotografía cumple la política de retrato antes de continuar.'),
+      { code: 'CIVIC_AVATAR_POLICY_NOT_ATTESTED' },
+    )
+  }
+
   const intent = await apiFetch<CivicAvatarUploadIntent>('/community/profile/me/avatar/upload-intent', {
     method: 'POST',
     body: '{}',
@@ -75,12 +89,11 @@ export async function uploadAndConfirmCivicAvatar(
   const form = new FormData()
   const extension = photo.mimeType?.split('/')[1] || 'jpg'
   const fileName = photo.fileName || `vertice-avatar-${Date.now()}.${extension}`
-  const uploadFile = {
-    uri: photo.uri,
-    name: fileName,
-    type: photo.mimeType || 'image/jpeg',
-  }
-  form.append('file', uploadFile as unknown as Blob)
+  // Expo SDK 57's global fetch/FormData rejects React Native's classic
+  // {uri, name, type} part shape with "Unsupported FormDataPart
+  // implementation" — it only accepts a real Blob-like value (something with
+  // .bytes()). expo-file-system's File implements that.
+  form.append('file', new File(photo.uri), fileName)
 
   const uploadResponse = await fetch(intent.upload_url, {
     method: 'POST',

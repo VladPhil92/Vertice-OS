@@ -42,8 +42,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Vértice accede a tus fotos solo cuando eliges evidencia para un reporte ciudadano.",
-          "cameraPermission": "Vértice usa la cámara solo cuando decides capturar evidencia para un reporte ciudadano.",
+          "photosPermission": "Vértice accede a tus fotos solo cuando eliges evidencia para un reporte ciudadano o una foto para tu perfil.",
+          "cameraPermission": "Vértice usa la cámara solo cuando decides capturar evidencia para un reporte ciudadano o una foto para tu perfil.",
           "microphonePermission": false
         }
       ],
