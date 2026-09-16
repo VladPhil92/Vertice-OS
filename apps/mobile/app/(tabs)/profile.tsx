@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react'
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { Alert as UiAlert } from '../../components/ui'
 import { useAuth } from '../../providers/AuthProvider'
+import {
+  getCivicAvatarState,
+  removeCivicAvatar,
+  selectCivicAvatarPhoto,
+  uploadAndConfirmCivicAvatar,
+} from '../../lib/civic-avatar'
 import {
   deactivatePushRegistration,
   enablePushNotifications,
   getPushPreferenceState,
 } from '../../lib/push-notifications'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
+import type { CivicAvatarState } from '../../types/api'
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile } = useAuth()
@@ -18,6 +26,9 @@ export default function ProfileScreen() {
   const [pushBusy, setPushBusy] = useState(false)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushRegistered, setPushRegistered] = useState(false)
+  const [avatar, setAvatar] = useState<CivicAvatarState | null>(null)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   useEffect(() => {
     void getPushPreferenceState().then((state) => {
@@ -25,6 +36,53 @@ export default function ProfileScreen() {
       setPushRegistered(state.registeredToken)
     })
   }, [])
+
+  useEffect(() => {
+    void getCivicAvatarState()
+      .then(setAvatar)
+      .catch(() => setAvatar(null))
+  }, [])
+
+  async function chooseAvatarPhoto(source: 'camera' | 'library') {
+    setAvatarBusy(true)
+    setAvatarError(null)
+    try {
+      const photo = await selectCivicAvatarPhoto(source)
+      if (!photo) return
+      setAvatar(await uploadAndConfirmCivicAvatar(photo))
+    } catch (cause) {
+      setAvatarError(cause instanceof Error ? cause.message : 'No fue posible actualizar tu foto de perfil.')
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  function confirmRemoveAvatar() {
+    Alert.alert(
+      'Eliminar foto de perfil',
+      'Tu foto de perfil dejará de mostrarse en VÉRTICE.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setAvatarBusy(true)
+              setAvatarError(null)
+              try {
+                setAvatar(await removeCivicAvatar())
+              } catch (cause) {
+                setAvatarError(cause instanceof Error ? cause.message : 'No fue posible eliminar tu foto de perfil.')
+              } finally {
+                setAvatarBusy(false)
+              }
+            })()
+          },
+        },
+      ],
+    )
+  }
 
   async function handleSignOut() {
     setBusy(true)
@@ -75,6 +133,46 @@ export default function ProfileScreen() {
 
         <View style={styles.card}>
           <View style={styles.identityAccent} />
+
+          <View style={styles.avatarRow}>
+            <View style={styles.avatarCircle}>
+              {avatar?.avatar_url ? (
+                <Image source={{ uri: avatar.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarInitial}>{(user?.email ?? '?').charAt(0).toUpperCase()}</Text>
+              )}
+            </View>
+            <View style={styles.avatarActions}>
+              <Pressable
+                disabled={avatarBusy}
+                accessibilityRole="button"
+                onPress={() => void chooseAvatarPhoto('camera')}
+                style={({ pressed }) => [styles.avatarAction, pressed && styles.pressed, avatarBusy && styles.disabled]}
+              >
+                <Text style={styles.avatarActionText}>Tomar foto</Text>
+              </Pressable>
+              <Pressable
+                disabled={avatarBusy}
+                accessibilityRole="button"
+                onPress={() => void chooseAvatarPhoto('library')}
+                style={({ pressed }) => [styles.avatarAction, pressed && styles.pressed, avatarBusy && styles.disabled]}
+              >
+                <Text style={styles.avatarActionText}>Elegir foto</Text>
+              </Pressable>
+              {avatar?.avatar_url ? (
+                <Pressable
+                  disabled={avatarBusy}
+                  accessibilityRole="button"
+                  onPress={confirmRemoveAvatar}
+                  style={({ pressed }) => [styles.avatarRemove, pressed && styles.pressed, avatarBusy && styles.disabled]}
+                >
+                  <Text style={styles.avatarRemoveText}>Eliminar</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+          {avatarError ? <UiAlert type="error" message={avatarError} /> : null}
+
           <Text style={styles.email}>{user?.email ?? '—'}</Text>
           <Text style={styles.did}>{user?.did ?? 'Sin DID disponible'}</Text>
 
@@ -205,6 +303,15 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.textSecondary, fontFamily: typography.bodyFamily, ...typography.roles.body },
   card: { overflow: 'hidden', borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, backgroundColor: colors.surface, gap: spacing.sm, ...elevation.card },
   identityAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.citizen },
+  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  avatarCircle: { width: 64, height: 64, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: 64, height: 64, borderRadius: radius.pill },
+  avatarInitial: { color: colors.navy, fontFamily: typography.displayFamily, fontSize: 24, fontWeight: '800' },
+  avatarActions: { flex: 1, flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
+  avatarAction: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  avatarActionText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  avatarRemove: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.errorText, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  avatarRemoveText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   email: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 20, fontWeight: '800' },
   did: { color: colors.textTertiary, fontFamily: typography.monoFamily, fontSize: 11, lineHeight: 18 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },

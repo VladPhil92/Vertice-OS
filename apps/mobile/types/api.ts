@@ -28,6 +28,21 @@ export interface CitizenProfile {
   last_active_at: string | null
 }
 
+export type CivicAvatarStatus = 'missing' | 'approved' | 'rejected'
+
+export interface CivicAvatarState {
+  citizen_id: string
+  avatar_url: string | null
+  status: CivicAvatarStatus
+  updated_at: string | null
+  upload_enabled: boolean
+}
+
+export interface CivicAvatarUploadIntent {
+  asset_id: string
+  upload_url: string
+}
+
 export interface CitizenDashboard {
   profile: {
     id: string
