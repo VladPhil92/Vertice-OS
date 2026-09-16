@@ -51,10 +51,10 @@ Paridad de dominio implementada:
 - Community/Feed, leaderboard, perfiles, follow/unfollow, block/report y moderación;
 - Workflows/expedientes, detalle de caso, timeline y artefactos persistidos;
 - Civic Identity Assurance, proofing y handoff HTTPS a Veriff;
-- crowdfunding/readiness y campañas en modo de observación financiera segura;
+- crowdfunding: anuncio estático de prelanzamiento (`octubre de 2026`), sin llamadas a readiness/campañas;
 - eliminación irreversible de cuenta desde la app.
 
-Las fases de convergencia recientes dejaron las superficies móviles primarias y secundarias sobre el runtime visual canónico de VÉRTICE: design tokens compartidos, Montserrat/Inter/DM Mono, `VerticeBrand`, `VerticeIcon`/Lucide y gates antirregresión. Esto incluye Notificaciones/Identidad/Eliminación, Territorio, Ciudad/Reportes, Community/Moderación, Workflows/Expedientes y Crowdfunding/Readiness.
+Las fases de convergencia recientes dejaron las superficies móviles primarias y secundarias sobre el runtime visual canónico de VÉRTICE: design tokens compartidos, Montserrat/Inter/DM Mono, `VerticeBrand`, `VerticeIcon`/Lucide y gates antirregresión. Esto incluye Notificaciones/Identidad/Eliminación, Territorio, Ciudad/Reportes, Community/Moderación, Workflows/Expedientes y el anuncio de Crowdfunding.
 
 El móvil consume contratos existentes y no calcula por su cuenta reputación, autoridad, elegibilidad de gobernanza, settlement, payout ni elegibilidad financiera. En crowdfunding, lifecycle, activación y aceptación de contribuciones permanecen estados distintos provenientes del servidor.
 
@@ -121,7 +121,7 @@ El stack implementado incluye:
 - Financial Operations Command Center;
 - emergency stops separados para checkout, collection y payouts;
 - Golden Financial Integrity;
-- superficie móvil de readiness/campañas con frontera read-only y estados server-authoritative.
+- superficie móvil de anuncio pre-lanzamiento (`octubre de 2026`), sin llamadas a readiness/campañas mientras los proveedores de pago no estén certificados.
 
 Un monto mostrado por API no constituye evidencia local de settlement bancario. Un estado `ready` no equivale a una transferencia o payout ejecutado. Pagos, donaciones, KYC/KYB, settlement y payouts no modifican reputación, ranking, voto ni autoridad cívica.
 

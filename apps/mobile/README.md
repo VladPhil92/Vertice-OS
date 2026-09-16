@@ -97,14 +97,9 @@ Implemented:
 
 Starting a provider session does not establish assurance. The backend remains fail-closed until verified contact, provider ingress, active proof and external provider certification all pass.
 
-### 2D-4 — Crowdfunding tracking/readiness
+### 2D-4 — Crowdfunding (pre-launch announcement)
 
-Implemented:
-
-- `/crowdfunding` user/platform readiness;
-- blocker visibility;
-- owned campaign progress;
-- campaign lifecycle/readiness visibility.
+`/crowdfunding` no longer calls the readiness/campaigns API. Until Mercado Pago/Wompi credentials and payout certification are live, it shows a static announcement (launch month `octubre de 2026`) instead of the previous technical readiness/blockers dashboard.
 
 This mobile slice intentionally does not execute checkout, activation, payout, BRE-B destination mutation, settlement/refund reconciliation or admin compliance decisions. Financial authority remains server-side.
 
@@ -133,7 +128,7 @@ Before the native client can be called READY/CERTIFIED, operators must provide e
 3. restricted Google Maps production key;
 4. APNs/FCM/EAS push credentials;
 5. signed preview installations on real Android and iOS devices;
-6. physical smoke for signup/login, territory, GPS, map, camera/gallery, media, push/deep links, Community, Workflows, Identity and Crowdfunding readiness;
+6. physical smoke for signup/login, territory, GPS, map, camera/gallery, media, push/deep links, Community, Workflows, Identity and the Crowdfunding announcement copy;
 7. production Cloudflare Images canary;
 8. production Veriff external canary where identity assurance is enabled;
 9. App Store and Google Play metadata/privacy/signing/review.
