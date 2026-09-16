@@ -55,6 +55,10 @@ export default function AccountDeletionPublicPage() {
         <p className="mt-7 text-xs leading-5 text-[#7B8799]">
           La eliminación de cuenta es irreversible. Si una cuenta administrativa mantiene delegaciones activas, VÉRTICE exige transferir o revocar primero esa autoridad para no dejar permisos huérfanos. La autoridad raíz del sistema está excluida del autoservicio por continuidad y seguridad operacional.
         </p>
+
+        <p className="mt-4 text-xs leading-5 text-[#7B8799]">
+          Consulta también nuestra <Link href="/privacy-policy" className="font-bold text-[#0A2A66] underline underline-offset-4">política de privacidad completa</Link>.
+        </p>
       </div>
     </main>
   )
