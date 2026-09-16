@@ -9,16 +9,9 @@ const source = fs.readFileSync(screenPath, 'utf8')
 const failures = []
 
 const required = [
-  "apiFetch<CrowdfundingReadiness>('/crowdfunding/me/readiness')",
-  "apiFetch<OwnCampaignsResponse>('/crowdfunding/me/campaigns')",
-  'El backend y sus proveedores certificados conservan la autoridad',
-  'Esta pantalla es de lectura y no ejecuta checkout ni desembolsos.',
-  'no equivale a settlement, transferencia bancaria ni payout ejecutado.',
-  'Monto registrado por API; no constituye prueba local de settlement bancario.',
-  'Pagos, donaciones, KYC/KYB, suscripciones, settlement y payouts no modifican reputación, ranking, voto ni autoridad cívica.',
-  'Math.max(0, Math.min(100',
-  "router.push('/identity')",
-  "campaignReadiness?.status === 'active'",
+  "LAUNCH_MONTH = 'octubre de 2026'",
+  'esta sección no procesa dinero ni recibe compromisos financieros.',
+  'El recaudo, los pagos, KYC/KYB y los desembolsos nunca modifican tu reputación, ranking, voto ni autoridad cívica.',
 ]
 
 const forbiddenMutationTokens = [
@@ -70,5 +63,5 @@ if (failures.length) {
   for (const failure of failures) console.error(`[financial-crowdfunding-safety] FAIL: ${failure}`)
   process.exitCode = 1
 } else {
-  console.log('[financial-crowdfunding-safety] OK: crowdfunding mobile preserves canonical visuals, server readiness authority and the read-only money boundary.')
+  console.log('[financial-crowdfunding-safety] OK: crowdfunding mobile is a pre-launch announcement, preserves canonical visuals and introduces no monetary capability.')
 }
