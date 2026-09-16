@@ -8,7 +8,7 @@ This phase consumes existing server contracts for:
 
 1. civic workflows/cases;
 2. Civic Identity Assurance and provider bootstrap;
-3. crowdfunding (pre-launch announcement, no readiness/campaigns calls).
+3. crowdfunding campaign draft creation (collection stays pre-launch).
 
 ## Phase 2D-2 — Workflows / civic cases
 
@@ -33,14 +33,19 @@ The provider handoff accepts HTTPS only. Starting a Veriff session does not mean
 
 Production Veriff credentials and the external evidence-backed canary remain external/operator-controlled release evidence.
 
-## Phase 2D-4 — Crowdfunding (pre-launch announcement)
+## Phase 2D-4 — Crowdfunding (campaign creation, collection pre-launch)
 
-Native route `/crowdfunding` no longer consumes the readiness/campaigns API. Until Mercado Pago/Wompi credentials and payout certification are live (`docs/CURRENT_STATE.md` section 6), the route shows a static announcement (launch month `octubre de 2026`) instead of a technical readiness/blockers dashboard, so a citizen is never shown jargon-heavy compliance state (`platform_blocked`, raw blocker codes) it cannot act on.
+Native route `/crowdfunding` consumes the same campaign-creation contract as `apps/web/app/dashboard/crowdfunding/new/page.tsx`:
 
-The canonical routes remain implemented and tested server-side for the web client and for reconnecting mobile once the surface is built for real:
+- `GET /crowdfunding/config` (category catalog, funding models/policies);
+- `GET /crowdfunding/me/campaigns` (the citizen's own draft/review/active campaigns);
+- `POST /crowdfunding/campaigns` (creates a draft, identical validation to web: title/summary/description length, goal 50.000–2.000.000.000 COP, itemized budget not exceeding the goal).
 
-- `GET /crowdfunding/me/readiness`;
-- `GET /crowdfunding/me/campaigns`.
+Creating a draft never requires civic identity assurance — the server route uses `requireAuth`, not `requireVerified`. Until Mercado Pago/Wompi credentials and payout certification are live (`docs/CURRENT_STATE.md` section 6), the route does not call `GET /crowdfunding/me/readiness` and shows collection (activation, contributions, checkout) as launching `octubre de 2026` instead of a technical readiness/blockers dashboard, so a citizen is never shown jargon-heavy compliance state (`platform_blocked`, raw blocker codes) it cannot act on.
+
+The remaining canonical routes stay implemented and tested server-side for the web client and for reconnecting mobile once collection is certified:
+
+- `GET /crowdfunding/me/readiness`.
 
 This slice intentionally does **not** execute:
 

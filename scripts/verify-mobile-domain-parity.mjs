@@ -45,14 +45,16 @@ if (!providerRoutes.includes("app.get('/availability'")) throw new Error('Canoni
 if (!providerRoutes.includes("app.post('/veriff/session'")) throw new Error('Canonical Veriff session route is missing')
 if (!identity.includes("url.protocol !== 'https:'")) throw new Error('Native provider handoff must fail closed for non-HTTPS URLs')
 
-// Crowdfunding is a pre-launch announcement on mobile until payment
-// providers and payout certification are live (see docs/CURRENT_STATE.md
-// section 6) — it deliberately does not call the readiness/campaigns API
-// today. The canonical route still has to exist server-side for the web
-// client and for the day the mobile surface reconnects to it.
-for (const token of ["LAUNCH_MONTH = 'octubre de 2026'", 'esta sección no procesa dinero ni recibe compromisos financieros.']) {
+// Crowdfunding lets a citizen create a campaign draft from mobile (mirrors
+// apps/web/app/dashboard/crowdfunding/new/page.tsx), but collection —
+// activation, contributions, checkout, payouts — stays web-only until
+// payment providers and payout certification are live (see
+// docs/CURRENT_STATE.md section 6).
+for (const token of ["COLLECTION_LAUNCH_MONTH = 'octubre de 2026'", 'El recaudo, los pagos, KYC/KYB y los desembolsos nunca modifican tu reputación, ranking, voto ni autoridad cívica.']) {
   if (!crowdfunding.includes(token)) throw new Error(`Native crowdfunding missing canonical announcement token: ${token}`)
 }
+if (!crowdfunding.includes("apiMutation<CreatedCampaignResponse>('/crowdfunding/campaigns'")) throw new Error('Native crowdfunding must create campaign drafts through the canonical /crowdfunding/campaigns contract')
+if (!crowdfundingRoutes.includes("app.post('/campaigns'")) throw new Error('Canonical crowdfunding campaign creation route is missing')
 if (!crowdfundingRoutes.includes("app.get('/me/readiness'")) throw new Error('Canonical crowdfunding readiness route is missing')
 
 for (const forbidden of [

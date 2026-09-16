@@ -51,12 +51,12 @@ Paridad de dominio implementada:
 - Community/Feed, leaderboard, perfiles, follow/unfollow, block/report y moderación;
 - Workflows/expedientes, detalle de caso, timeline y artefactos persistidos;
 - Civic Identity Assurance, proofing y handoff HTTPS a Veriff;
-- crowdfunding: anuncio estático de prelanzamiento (`octubre de 2026`), sin llamadas a readiness/campañas;
+- crowdfunding: creación de campaña (borrador) con el mismo contrato de `/crowdfunding/campaigns` que usa la web; recaudo (activación, contribuciones, cobro) sigue anunciado para `octubre de 2026`;
 - eliminación irreversible de cuenta desde la app.
 
-Las fases de convergencia recientes dejaron las superficies móviles primarias y secundarias sobre el runtime visual canónico de VÉRTICE: design tokens compartidos, Montserrat/Inter/DM Mono, `VerticeBrand`, `VerticeIcon`/Lucide y gates antirregresión. Esto incluye Notificaciones/Identidad/Eliminación, Territorio, Ciudad/Reportes, Community/Moderación, Workflows/Expedientes y el anuncio de Crowdfunding.
+Las fases de convergencia recientes dejaron las superficies móviles primarias y secundarias sobre el runtime visual canónico de VÉRTICE: design tokens compartidos, Montserrat/Inter/DM Mono, `VerticeBrand`, `VerticeIcon`/Lucide y gates antirregresión. Esto incluye Notificaciones/Identidad/Eliminación, Territorio, Ciudad/Reportes, Community/Moderación, Workflows/Expedientes y Crowdfunding (creación de campaña).
 
-El móvil consume contratos existentes y no calcula por su cuenta reputación, autoridad, elegibilidad de gobernanza, settlement, payout ni elegibilidad financiera. En crowdfunding, lifecycle, activación y aceptación de contribuciones permanecen estados distintos provenientes del servidor.
+El móvil consume contratos existentes y no calcula por su cuenta reputación, autoridad, elegibilidad de gobernanza, settlement, payout ni elegibilidad financiera. Crear una campaña no requiere civic identity assurance (la ruta usa `requireAuth`, no `requireVerified`); lifecycle, activación y aceptación de contribuciones permanecen estados distintos provenientes del servidor y no se exponen todavía desde el móvil.
 
 La configuración de release mantiene identidad canónica `com.ctgone.verticeos`, perfiles EAS separados y una frontera fail-closed: preview/production requieren API HTTPS pública, UUID real de proyecto EAS y credencial Android Maps inyectada durante build. CI usa placeholders no secretos para probar wiring/configuración; no representa signing real.
 
@@ -121,7 +121,7 @@ El stack implementado incluye:
 - Financial Operations Command Center;
 - emergency stops separados para checkout, collection y payouts;
 - Golden Financial Integrity;
-- superficie móvil de anuncio pre-lanzamiento (`octubre de 2026`), sin llamadas a readiness/campañas mientras los proveedores de pago no estén certificados.
+- superficie móvil de creación de campaña (borrador) con el mismo contrato que la web; recaudo (activación, contribuciones, cobro) permanece anunciado para `octubre de 2026` mientras los proveedores de pago no estén certificados.
 
 Un monto mostrado por API no constituye evidencia local de settlement bancario. Un estado `ready` no equivale a una transferencia o payout ejecutado. Pagos, donaciones, KYC/KYB, settlement y payouts no modifican reputación, ranking, voto ni autoridad cívica.
 

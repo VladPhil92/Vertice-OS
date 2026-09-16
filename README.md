@@ -36,7 +36,7 @@ La arquitectura territorial soporta Colombia → departamento → municipio/dist
 | Identity Assurance | 🟡 Integrado | Frontera fail-closed; Veriff requiere credenciales/canary externo real |
 | Crowdfunding | 🟡 Integrado | Lifecycle, fees, readiness, payment/payout control plane; proveedores reales requieren certificación |
 | VÉRTICE Pro | ✅ Implementado | Metering, cuotas y operaciones Pro sin alterar reputación |
-| App móvil | ✅ Paridad de dominio implementada | Auth, territorio, acciones, mapa/media, gobernanza, push, community, workflows, identity; crowdfunding es anuncio de prelanzamiento |
+| App móvil | ✅ Paridad de dominio implementada | Auth, territorio, acciones, mapa/media, gobernanza, push, community, workflows, identity; crowdfunding permite crear campaña, recaudo llega en octubre 2026 |
 | Blockchain | 🟡 Opcional | Contratos Polygon disponibles; despliegue productivo no es requisito del core |
 | Producción | 🟡 Release por evidencia | Código, deploy, readiness y proveedores se certifican por separado |
 
@@ -93,7 +93,7 @@ La paridad de dominio base incluye:
 - Community/Feed, ranking y perfiles públicos;
 - Workflows/expedientes;
 - Civic Identity Assurance/proofing/provider handoff;
-- crowdfunding: anuncio estático de prelanzamiento (octubre de 2026), sin llamadas a readiness/campañas.
+- crowdfunding: creación de campaña (borrador) con el mismo contrato que la web; recaudo (activación, contribuciones, cobro) anunciado para octubre de 2026.
 
 La deuda móvil restante es principalmente externa: signing, EAS, APNs/FCM, Maps key, dispositivos físicos y stores. Ver [`apps/mobile/README.md`](./apps/mobile/README.md).
 
