@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { VerticeBrand } from '../../components/VerticeBrand'
+import { VerticeIcon } from '../../components/VerticeIcon'
 import { Alert as UiAlert } from '../../components/ui'
 import { useAuth } from '../../providers/AuthProvider'
 import {
@@ -11,6 +12,7 @@ import {
   removeCivicAvatar,
   selectCivicAvatarPhoto,
   uploadAndConfirmCivicAvatar,
+  type SelectedAvatarPhoto,
 } from '../../lib/civic-avatar'
 import {
   deactivatePushRegistration,
@@ -19,6 +21,8 @@ import {
 } from '../../lib/push-notifications'
 import { colors, elevation, interaction, radius, spacing, typography } from '../../theme/vertice'
 import type { CivicAvatarState } from '../../types/api'
+
+const AVATAR_POLICY_TEXT = 'Confirmo que esta fotografía me representa, muestra un solo rostro claramente visible y no utiliza suplantación, logo, ilustración ni alteraciones que impidan reconocerme.'
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile } = useAuth()
@@ -29,6 +33,8 @@ export default function ProfileScreen() {
   const [avatar, setAvatar] = useState<CivicAvatarState | null>(null)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [avatarError, setAvatarError] = useState<string | null>(null)
+  const [pendingAvatarPhoto, setPendingAvatarPhoto] = useState<SelectedAvatarPhoto | null>(null)
+  const [avatarPolicyAttested, setAvatarPolicyAttested] = useState(false)
 
   useEffect(() => {
     void getPushPreferenceState().then((state) => {
@@ -49,7 +55,28 @@ export default function ProfileScreen() {
     try {
       const photo = await selectCivicAvatarPhoto(source)
       if (!photo) return
-      setAvatar(await uploadAndConfirmCivicAvatar(photo))
+      setAvatarPolicyAttested(false)
+      setPendingAvatarPhoto(photo)
+    } catch (cause) {
+      setAvatarError(cause instanceof Error ? cause.message : 'No fue posible actualizar tu foto de perfil.')
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  function cancelAvatarPreview() {
+    setPendingAvatarPhoto(null)
+    setAvatarPolicyAttested(false)
+  }
+
+  async function confirmAvatarUpload() {
+    if (!pendingAvatarPhoto) return
+    setAvatarBusy(true)
+    setAvatarError(null)
+    try {
+      setAvatar(await uploadAndConfirmCivicAvatar(pendingAvatarPhoto, avatarPolicyAttested))
+      setPendingAvatarPhoto(null)
+      setAvatarPolicyAttested(false)
     } catch (cause) {
       setAvatarError(cause instanceof Error ? cause.message : 'No fue posible actualizar tu foto de perfil.')
     } finally {
@@ -144,18 +171,18 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.avatarActions}>
               <Pressable
-                disabled={avatarBusy}
+                disabled={avatarBusy || avatar?.upload_enabled === false}
                 accessibilityRole="button"
                 onPress={() => void chooseAvatarPhoto('camera')}
-                style={({ pressed }) => [styles.avatarAction, pressed && styles.pressed, avatarBusy && styles.disabled]}
+                style={({ pressed }) => [styles.avatarAction, pressed && styles.pressed, (avatarBusy || avatar?.upload_enabled === false) && styles.disabled]}
               >
                 <Text style={styles.avatarActionText}>Tomar foto</Text>
               </Pressable>
               <Pressable
-                disabled={avatarBusy}
+                disabled={avatarBusy || avatar?.upload_enabled === false}
                 accessibilityRole="button"
                 onPress={() => void chooseAvatarPhoto('library')}
-                style={({ pressed }) => [styles.avatarAction, pressed && styles.pressed, avatarBusy && styles.disabled]}
+                style={({ pressed }) => [styles.avatarAction, pressed && styles.pressed, (avatarBusy || avatar?.upload_enabled === false) && styles.disabled]}
               >
                 <Text style={styles.avatarActionText}>Elegir foto</Text>
               </Pressable>
@@ -171,7 +198,51 @@ export default function ProfileScreen() {
               ) : null}
             </View>
           </View>
+          {avatar?.upload_enabled === false ? (
+            <UiAlert type="warning" message="La carga de imágenes está temporalmente deshabilitada. El resto del perfil puede editarse normalmente." />
+          ) : null}
           {avatarError ? <UiAlert type="error" message={avatarError} /> : null}
+
+          {pendingAvatarPhoto ? (
+            <View style={styles.avatarPreviewCard}>
+              <View style={styles.avatarPreviewRow}>
+                <Image source={{ uri: pendingAvatarPhoto.uri }} style={styles.avatarPreviewImage} />
+                <View style={styles.avatarPreviewCopy}>
+                  <Text style={styles.avatarPreviewTitle}>Confirmar retrato</Text>
+                  <Text style={styles.avatarPreviewMeta}>{pendingAvatarPhoto.width} × {pendingAvatarPhoto.height} px</Text>
+                </View>
+              </View>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: avatarPolicyAttested }}
+                onPress={() => setAvatarPolicyAttested((prev) => !prev)}
+                style={styles.avatarPolicyRow}
+              >
+                <View style={[styles.avatarPolicyBox, avatarPolicyAttested && styles.avatarPolicyBoxChecked]}>
+                  {avatarPolicyAttested ? <VerticeIcon name="checkCircle" color={colors.white} size={14} /> : null}
+                </View>
+                <Text style={styles.avatarPolicyText}>{AVATAR_POLICY_TEXT}</Text>
+              </Pressable>
+              <View style={styles.avatarPreviewActions}>
+                <Pressable
+                  disabled={avatarBusy}
+                  accessibilityRole="button"
+                  onPress={cancelAvatarPreview}
+                  style={({ pressed }) => [styles.avatarPreviewCancel, pressed && styles.pressed, avatarBusy && styles.disabled]}
+                >
+                  <Text style={styles.avatarPreviewCancelText}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  disabled={avatarBusy || !avatarPolicyAttested}
+                  accessibilityRole="button"
+                  onPress={() => void confirmAvatarUpload()}
+                  style={({ pressed }) => [styles.avatarPreviewConfirm, pressed && styles.pressed, (avatarBusy || !avatarPolicyAttested) && styles.disabled]}
+                >
+                  <Text style={styles.avatarPreviewConfirmText}>{avatarBusy ? 'Subiendo…' : 'Usar esta foto'}</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
 
           <Text style={styles.email}>{user?.email ?? '—'}</Text>
           <Text style={styles.did}>{user?.did ?? 'Sin DID disponible'}</Text>
@@ -312,6 +383,21 @@ const styles = StyleSheet.create({
   avatarActionText: { color: colors.navy, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
   avatarRemove: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.errorText, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
   avatarRemoveText: { color: colors.errorText, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  avatarPreviewCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, padding: spacing.sm, gap: spacing.sm },
+  avatarPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  avatarPreviewImage: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.surface },
+  avatarPreviewCopy: { flex: 1, gap: spacing.xxs },
+  avatarPreviewTitle: { color: colors.textPrimary, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
+  avatarPreviewMeta: { color: colors.textTertiary, fontFamily: typography.bodyFamily, fontSize: 11 },
+  avatarPolicyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
+  avatarPolicyBox: { width: 20, height: 20, marginTop: 1, borderRadius: radius.sm, borderWidth: 1.5, borderColor: colors.borderActive, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  avatarPolicyBoxChecked: { backgroundColor: colors.navy, borderColor: colors.navy },
+  avatarPolicyText: { flex: 1, color: colors.textSecondary, fontFamily: typography.bodyFamily, fontSize: 11, lineHeight: 16 },
+  avatarPreviewActions: { flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end' },
+  avatarPreviewCancel: { minHeight: interaction.minimumTouchTarget, borderWidth: 1, borderColor: colors.borderActive, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  avatarPreviewCancelText: { color: colors.textSecondary, fontFamily: typography.bodySemiboldFamily, ...typography.roles.caption },
+  avatarPreviewConfirm: { minHeight: interaction.minimumTouchTarget, backgroundColor: colors.navy, borderRadius: radius.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  avatarPreviewConfirmText: { color: colors.white, fontFamily: typography.bodyExtraBoldFamily, ...typography.roles.caption },
   email: { color: colors.textPrimary, fontFamily: typography.displayFamily, fontSize: 20, fontWeight: '800' },
   did: { color: colors.textTertiary, fontFamily: typography.monoFamily, fontSize: 11, lineHeight: 18 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },

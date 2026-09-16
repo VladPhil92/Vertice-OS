@@ -79,9 +79,22 @@ describe('apps/mobile lib/civic-avatar', () => {
         citizen_id: 'c1', avatar_url: 'https://cdn.example/asset-1', status: 'approved', updated_at: '2026-09-16T00:00:00Z', upload_enabled: true,
       })
 
-      await uploadAndConfirmCivicAvatar(photo)
+      await uploadAndConfirmCivicAvatar(photo, true)
 
       expect(MockFile).toHaveBeenCalledWith(photo.uri)
+    })
+
+    it('refuses to upload without explicit policy attestation, before any network call', async () => {
+      // Regression: the mobile UI must show the portrait policy and require
+      // an explicit checkbox, mirroring apps/web/app/dashboard/community/
+      // profile/page.tsx's policyAttested gate. This is defense-in-depth so
+      // a UI regression that skips the checkbox can never fabricate a
+      // consent record by calling this function with an implicit `true`.
+      await expect(uploadAndConfirmCivicAvatar(photo, false)).rejects.toMatchObject({
+        code: 'CIVIC_AVATAR_POLICY_NOT_ATTESTED',
+      })
+      expect(mockApiFetch).not.toHaveBeenCalled()
+      expect(globalThis.fetch).not.toHaveBeenCalled()
     })
 
     it('reports an honest face_detector_available: false, face_count: null since React Native has no FaceDetector API', async () => {
@@ -95,7 +108,7 @@ describe('apps/mobile lib/civic-avatar', () => {
         citizen_id: 'c1', avatar_url: 'https://cdn.example/asset-1', status: 'approved', updated_at: '2026-09-16T00:00:00Z', upload_enabled: true,
       })
 
-      await uploadAndConfirmCivicAvatar(photo)
+      await uploadAndConfirmCivicAvatar(photo, true)
 
       const confirmCall = mockApiFetch.mock.calls[1]
       expect(confirmCall[0]).toBe('/community/profile/me/avatar/confirm')
@@ -110,7 +123,7 @@ describe('apps/mobile lib/civic-avatar', () => {
       mockApiFetch.mockResolvedValueOnce({ asset_id: 'asset-1', upload_url: 'https://upload.example/asset-1' })
       ;(globalThis.fetch as jest.Mock).mockResolvedValueOnce({ ok: false })
 
-      await expect(uploadAndConfirmCivicAvatar(photo)).rejects.toMatchObject({
+      await expect(uploadAndConfirmCivicAvatar(photo, true)).rejects.toMatchObject({
         code: 'CIVIC_AVATAR_DIRECT_UPLOAD_FAILED',
       })
       expect(mockApiFetch).toHaveBeenCalledTimes(1)

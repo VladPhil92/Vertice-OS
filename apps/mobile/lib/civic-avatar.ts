@@ -67,7 +67,20 @@ export async function selectCivicAvatarPhoto(
 
 export async function uploadAndConfirmCivicAvatar(
   photo: SelectedAvatarPhoto,
+  policyAttested: boolean,
 ): Promise<CivicAvatarState> {
+  // Mirrors the web upload flow's required checkbox (apps/web/app/dashboard/
+  // community/profile/page.tsx): the caller must have shown the portrait
+  // policy and gotten explicit confirmation before this function is even
+  // invoked. Refusing here too means a UI regression that skips the
+  // checkbox can never fabricate a consent record server-side.
+  if (!policyAttested) {
+    throw Object.assign(
+      new Error('Debes confirmar que la fotografía cumple la política de retrato antes de continuar.'),
+      { code: 'CIVIC_AVATAR_POLICY_NOT_ATTESTED' },
+    )
+  }
+
   const intent = await apiFetch<CivicAvatarUploadIntent>('/community/profile/me/avatar/upload-intent', {
     method: 'POST',
     body: '{}',
