@@ -4,15 +4,15 @@ import { BrandLogo } from '@/components/ui/BrandLogo'
 
 const FOOTER_LINKS = {
   Plataforma: [
-    { label: 'Propósito', href: '#proposito' },
-    { label: 'Cómo funciona', href: '#como-funciona' },
-    { label: 'Qué puedes hacer', href: '#capacidades' },
-    { label: 'IA cívica', href: '#ia' },
+    { label: 'Propósito', href: '/#proposito' },
+    { label: 'Cómo funciona', href: '/#como-funciona' },
+    { label: 'Qué puedes hacer', href: '/#capacidades' },
+    { label: 'IA cívica', href: '/#ia' },
   ],
   Participa: [
     { label: 'Crear cuenta', href: '/auth/register' },
     { label: 'Ingresar', href: '/auth/login' },
-    { label: 'Visión', href: '#vision' },
+    { label: 'Visión', href: '/#vision' },
   ],
 } as const
 
