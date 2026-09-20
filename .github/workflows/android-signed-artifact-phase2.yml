@@ -162,7 +162,7 @@ jobs:
       - name: Capture Android submission metadata
         if: steps.submit.outcome == 'success'
         working-directory: apps/mobile
-        run: eas submit:list --platform android --limit 5 --json --non-interactive > "$EVIDENCE_DIR/eas-submit-list.json"
+        run: eas submission:list --platform android --limit 5 --json --non-interactive > "$EVIDENCE_DIR/eas-submit-list.json"
 
       - name: Publish signed-build evidence artifact
         if: always()
