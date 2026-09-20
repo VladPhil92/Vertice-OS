@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "phase": "android-signed-artifact-and-play-testing",
+  "release_source": "triggering_main_commit",
+  "platform": "android",
+  "android_package": "com.ctgone.verticeos",
+  "eas_project_id": "4ee77781-adec-42f6-be19-64a68848f4c7",
+  "eas_cli_version": "24.7.0",
+  "build_profile": "production",
+  "artifact_type": "aab",
+  "freeze_credentials": true,
+  "submit_after_build": true,
+  "submit_profile": "production",
+  "google_play_track": "internal",
+  "google_play_release_status": "completed",
+  "evidence_retention_days": 30,
+  "notes": "The merge commit that introduces this request is the exact build source. The workflow must fail closed if EXPO_TOKEN, EAS signing credentials, the production Maps key, or Google Play service credentials are unavailable."
+}
