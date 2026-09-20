@@ -14,5 +14,5 @@
   "google_play_track": "internal",
   "google_play_release_status": "completed",
   "evidence_retention_days": 30,
-  "notes": "The merge commit that introduces this request is the exact build source. The workflow must fail closed if EXPO_TOKEN, EAS signing credentials, the production Maps key, or Google Play service credentials are unavailable."
+  "notes": "Phase 2 execution retry after correcting GitHub runner-context validation. The merge commit is the exact build source. Fail closed if EXPO_TOKEN, EAS signing credentials, production Maps key, or Google Play service credentials are unavailable."
 }
