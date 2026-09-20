@@ -15,6 +15,7 @@ on:
     branches: [main]
     paths:
       - 'release/android/phase2-signed-artifact.json'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,12 +43,11 @@ jobs:
 
   signed-build-and-internal-submit:
     name: Signed AAB + Google Play Internal
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [contract]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      EVIDENCE_DIR: ${{ runner.temp }}/vertice-android-phase2
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
     steps:
@@ -66,6 +66,8 @@ jobs:
 
       - name: Initialize evidence directory
         run: |
+          EVIDENCE_DIR="$RUNNER_TEMP/vertice-android-phase2"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
           mkdir -p "$EVIDENCE_DIR"
           printf '%s\n' "${{ github.sha }}" > "$EVIDENCE_DIR/release-sha.txt"
           git show -s --format='%H%n%T%n%P%n%aI%n%s' "${{ github.sha }}" > "$EVIDENCE_DIR/git-release.txt"
