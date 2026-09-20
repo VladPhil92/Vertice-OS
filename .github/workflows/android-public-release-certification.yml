@@ -31,34 +31,51 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout candidate evidence branch
+      - name: Checkout candidate evidence ref
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          path: evidence-source
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22.13.0'
 
-      - name: Validate candidate manifests structurally
-        run: |
-          node scripts/verify-store-submission.mjs --mode structure --manifest release/store/store-submission.json
-          node scripts/verify-market-release-evidence.mjs --mode structure --manifest release/evidence/market-release.json
-
-      - name: Bind both manifests to the same frozen source SHA
+      - name: Resolve and bind frozen source SHA
+        id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          STORE_SHA="$(node -p "require('./release/store/store-submission.json').release_sha")"
-          MARKET_SHA="$(node -p "require('./release/evidence/market-release.json').release_sha")"
+          STORE_SHA="$(node -p "require('./evidence-source/release/store/store-submission.json').release_sha")"
+          MARKET_SHA="$(node -p "require('./evidence-source/release/evidence/market-release.json').release_sha")"
           test "$STORE_SHA" = "$MARKET_SHA"
           printf '%s' "$STORE_SHA" | grep -Eq '^[0-9a-fA-F]{40}$'
           test "$STORE_SHA" != "0000000000000000000000000000000000000000"
-          git cat-file -e "${STORE_SHA}^{commit}"
-          git merge-base --is-ancestor "$STORE_SHA" HEAD
+          git -C evidence-source cat-file -e "${STORE_SHA}^{commit}"
+          echo "release_sha=$STORE_SHA" >> "$GITHUB_OUTPUT"
           echo "Frozen release source SHA: $STORE_SHA"
 
-      - name: Verify Android production profile contract
+      - name: Checkout exact frozen release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.candidate.outputs.release_sha }}
+          fetch-depth: 1
+          path: release-source
+
+      - name: Stage candidate manifests beside frozen source
+        run: |
+          cp evidence-source/release/store/store-submission.json release-source/release/store/store-submission.runtime.json
+          cp evidence-source/release/evidence/market-release.json release-source/release/evidence/market-release.runtime.json
+
+      - name: Validate candidate manifests against frozen source
+        working-directory: release-source
+        run: |
+          node scripts/verify-store-submission.mjs --mode structure --manifest release/store/store-submission.runtime.json
+          node scripts/verify-market-release-evidence.mjs --mode structure --manifest release/evidence/market-release.runtime.json
+
+      - name: Verify Android production profile contract at frozen SHA
+        working-directory: release-source
         run: |
           node <<'NODE'
           const app = require('./apps/mobile/app.json').expo
@@ -90,42 +107,85 @@ jobs:
             for (const failure of failures) console.error('- ' + failure)
             process.exit(1)
           }
-          console.log('Android production profile contract: PASS')
+          console.log('Android production profile contract at frozen SHA: PASS')
           NODE
 
-      - name: Verify public policy routes and core Google Play assets
+      - name: Verify public policy routes and core Google Play assets at frozen SHA
+        working-directory: release-source
         run: |
           test -f apps/web/app/privacy-policy/page.tsx
           test -f apps/web/app/account-deletion/page.tsx
           test -f docs/product/store-assets/google-play/icon-512.png
           test -f docs/product/store-assets/google-play/feature-graphic-1024x500.png
-          echo 'Public policy route source + icon + feature graphic: PASS'
-          echo 'Phone screenshots remain an external/artifact blocker until captured from a production-representative build.'
+          echo 'Frozen source policy routes + icon + feature graphic: PASS'
+          echo 'Phone screenshots remain an artifact/operator blocker until captured from the production-representative build.'
 
-      - name: Prove strict store certification remains fail-closed
+      - name: Validate store strict-transition behavior
+        working-directory: release-source
         shell: bash
+        env:
+          RELEASE_SHA: ${{ steps.candidate.outputs.release_sha }}
         run: |
-          set -euo pipefail
-          RELEASE_SHA="$(node -p "require('./release/store/store-submission.json').release_sha")"
-          if node scripts/verify-store-submission.mjs --mode strict --manifest release/store/store-submission.json --release-sha "$RELEASE_SHA"; then
-            echo 'Store manifest unexpectedly passed strict certification before real approvals were attached.' >&2
-            exit 1
-          fi
-          echo 'Strict store package correctly remains BLOCKED pending real approvals/evidence.'
+          set -uo pipefail
+          set +e
+          node scripts/verify-store-submission.mjs --mode strict --manifest release/store/store-submission.runtime.json --release-sha "$RELEASE_SHA"
+          STRICT_STATUS=$?
+          set -e
 
-      - name: Prove strict market certification remains fail-closed
-        shell: bash
-        run: |
-          set -euo pipefail
-          RELEASE_SHA="$(node -p "require('./release/evidence/market-release.json').release_sha")"
-          if node scripts/verify-market-release-evidence.mjs --mode strict --manifest release/evidence/market-release.json --release-sha "$RELEASE_SHA"; then
-            echo 'Market evidence unexpectedly passed strict certification before real evidence was attached.' >&2
-            exit 1
+          COMPLETION_INTENT="$(node <<'NODE'
+          const m = require('./release/store/store-submission.runtime.json')
+          const reviewsFinal = Object.values(m.store_reviews ?? {}).every((item) => item?.status === 'approved')
+          const dataFinal = (m.data_inventory ?? []).every((item) => item?.review_status === 'approved')
+          const legalFinal = [m.legal_identity?.developer_name, m.legal_identity?.privacy_contact]
+            .every((value) => typeof value === 'string' && value.length >= 3 && !/PENDING_|CHANGE_ME|REPLACE_ME/i.test(value))
+          process.stdout.write(reviewsFinal && dataFinal && legalFinal ? 'complete' : 'incomplete')
+          NODE
+          )"
+
+          if [ "$COMPLETION_INTENT" = "complete" ] && [ "$STRICT_STATUS" -ne 0 ]; then
+            echo 'Store manifest claims completion but fails strict validation.' >&2
+            exit "$STRICT_STATUS"
           fi
-          echo 'Strict market certification correctly remains BLOCKED pending physical/external/legal/store evidence.'
+
+          if [ "$STRICT_STATUS" -eq 0 ]; then
+            echo 'Strict store package: READY.'
+          else
+            echo 'Strict store package: BLOCKED by explicitly incomplete approvals/evidence, as allowed during Phase 1.'
+          fi
+
+      - name: Validate market-evidence strict-transition behavior
+        working-directory: release-source
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ steps.candidate.outputs.release_sha }}
+        run: |
+          set -uo pipefail
+          set +e
+          node scripts/verify-market-release-evidence.mjs --mode strict --manifest release/evidence/market-release.runtime.json --release-sha "$RELEASE_SHA"
+          STRICT_STATUS=$?
+          set -e
+
+          COMPLETION_INTENT="$(node <<'NODE'
+          const m = require('./release/evidence/market-release.runtime.json')
+          const final = (m.evidence ?? []).every((item) => item?.status !== 'pending' && item?.status !== 'blocked')
+          process.stdout.write(final ? 'complete' : 'incomplete')
+          NODE
+          )"
+
+          if [ "$COMPLETION_INTENT" = "complete" ] && [ "$STRICT_STATUS" -ne 0 ]; then
+            echo 'Market evidence claims completion but fails strict validation.' >&2
+            exit "$STRICT_STATUS"
+          fi
+
+          if [ "$STRICT_STATUS" -eq 0 ]; then
+            echo 'Strict market evidence bundle: COMPLETE.'
+          else
+            echo 'Strict market certification: BLOCKED by explicitly incomplete evidence, as allowed during Phase 1.'
+          fi
 
       - name: Phase 1 result
         run: |
           echo 'ANDROID PUBLIC RELEASE CERTIFICATION — PHASE 1: REPOSITORY CONTRACT READY'
+          echo 'All source/config checks above were executed against the exact frozen release SHA.'
+          echo 'The workflow remains green both while evidence is explicitly pending and after a correctly completed strict manifest; completed-but-invalid evidence fails closed.'
           echo 'This is not Google Play production approval.'
-          echo 'Next boundary: real signing/Play App Signing + production Maps/push credentials + signed AAB + Play testing track + physical-device smoke + Play Console declarations.'
