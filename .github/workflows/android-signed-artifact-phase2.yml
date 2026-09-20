@@ -161,6 +161,7 @@ jobs:
 
       - name: Capture Android submission metadata
         if: steps.submit.outcome == 'success'
+        continue-on-error: true
         working-directory: apps/mobile
         run: eas submit:list --platform android --limit 5 --json --non-interactive > "$EVIDENCE_DIR/eas-submit-list.json"
 
