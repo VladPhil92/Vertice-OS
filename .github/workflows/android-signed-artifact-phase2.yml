@@ -1,0 +1,213 @@
+name: Android Signed Artifact & Play Testing Phase 2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/mobile/eas.json'
+      - 'apps/mobile/app.json'
+      - 'apps/mobile/app.config.js'
+      - 'release/android/phase2-signed-artifact.json'
+      - 'scripts/verify-android-signed-artifact-phase2.mjs'
+      - 'docs/engineering/ANDROID_SIGNED_ARTIFACT_PLAY_TESTING_PHASE_2.md'
+      - '.github/workflows/android-signed-artifact-phase2.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'release/android/phase2-signed-artifact.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-signed-artifact-phase2-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    name: Android Signed Artifact Phase 2 Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+      - name: Verify deterministic release contract
+        run: node scripts/verify-android-signed-artifact-phase2.mjs
+      - name: Certification boundary
+        run: |
+          echo 'Phase 2 repository contract: PASS'
+          echo 'PR validation does not claim that signing, EAS provider credentials, Google Maps restrictions, or Google Play submission have occurred.'
+
+  signed-build-and-internal-submit:
+    name: Signed AAB + Google Play Internal
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [contract]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EVIDENCE_DIR: ${{ runner.temp }}/vertice-android-phase2
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Initialize evidence directory
+        run: |
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "${{ github.sha }}" > "$EVIDENCE_DIR/release-sha.txt"
+          git show -s --format='%H%n%T%n%P%n%aI%n%s' "${{ github.sha }}" > "$EVIDENCE_DIR/git-release.txt"
+
+      - name: Require Expo CI authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo '::error::Missing GitHub Actions secret EXPO_TOKEN. Create an Expo personal access token and store it as repository secret EXPO_TOKEN; never commit it.'
+            exit 1
+          fi
+          echo 'Expo CI token: PRESENT (value not printed)'
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Phase 2 contract at exact source
+        run: node scripts/verify-android-signed-artifact-phase2.mjs
+
+      - name: Install pinned EAS CLI
+        run: |
+          npm install --global eas-cli@24.7.0
+          EAS_VERSION="$(eas --version | tr -d '\r' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
+          test "$EAS_VERSION" = "24.7.0"
+
+      - name: Authenticate EAS account
+        working-directory: apps/mobile
+        run: eas whoami
+
+      - name: Build signed production AAB
+        id: build
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          eas build \
+            --platform android \
+            --profile production \
+            --freeze-credentials \
+            --non-interactive \
+            --wait \
+            --json > "$EVIDENCE_DIR/eas-build.json"
+
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const evidence = process.env.EVIDENCE_DIR
+          const payload = JSON.parse(fs.readFileSync(path.join(evidence, 'eas-build.json'), 'utf8'))
+          const build = Array.isArray(payload) ? payload[0] : payload
+          const id = build && build.id
+          const status = String((build && build.status) || '').toLowerCase()
+          const artifacts = (build && build.artifacts) || {}
+          const archiveUrl = artifacts.applicationArchiveUrl || artifacts.buildUrl
+          if (!id) throw new Error('EAS build JSON did not contain a build id')
+          if (status !== 'finished') throw new Error('EAS build did not finish successfully: ' + ((build && build.status) || 'unknown'))
+          if (!archiveUrl) throw new Error('EAS build did not expose an Android application archive URL')
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'build_id=' + id + '\n')
+          fs.writeFileSync(path.join(evidence, '.archive-url'), archiveUrl)
+          fs.writeFileSync(path.join(evidence, 'build-id.txt'), id + '\n')
+          console.log('Signed EAS Android build finished: ' + id)
+          NODE
+
+      - name: Capture canonical EAS build metadata
+        working-directory: apps/mobile
+        run: eas build:view "${{ steps.build.outputs.build_id }}" --json > "$EVIDENCE_DIR/eas-build-view.json"
+
+      - name: Download and hash signed AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_URL="$(cat "$EVIDENCE_DIR/.archive-url")"
+          rm -f "$EVIDENCE_DIR/.archive-url"
+          AAB="$EVIDENCE_DIR/vertice-os-${{ github.sha }}.aab"
+          curl --fail --location --silent --show-error "$ARTIFACT_URL" --output "$AAB"
+          test -s "$AAB"
+          sha256sum "$AAB" > "$EVIDENCE_DIR/aab.sha256"
+          echo 'Signed AAB captured and hashed.'
+
+      - name: Submit exact build to Google Play internal testing
+        id: submit
+        continue-on-error: true
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -o pipefail
+          eas submit \
+            --platform android \
+            --profile production \
+            --id "${{ steps.build.outputs.build_id }}" \
+            --non-interactive \
+            --wait 2>&1 | tee "$EVIDENCE_DIR/eas-submit.log"
+
+      - name: Capture Android submission metadata
+        if: steps.submit.outcome == 'success'
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: eas submit:list --platform android --limit 5 --json --non-interactive > "$EVIDENCE_DIR/eas-submit-list.json"
+
+      - name: Publish signed-build evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertice-android-phase2-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/vertice-android-phase2/release-sha.txt
+            ${{ runner.temp }}/vertice-android-phase2/git-release.txt
+            ${{ runner.temp }}/vertice-android-phase2/build-id.txt
+            ${{ runner.temp }}/vertice-android-phase2/eas-build.json
+            ${{ runner.temp }}/vertice-android-phase2/eas-build-view.json
+            ${{ runner.temp }}/vertice-android-phase2/vertice-os-${{ github.sha }}.aab
+            ${{ runner.temp }}/vertice-android-phase2/aab.sha256
+            ${{ runner.temp }}/vertice-android-phase2/eas-submit.log
+            ${{ runner.temp }}/vertice-android-phase2/eas-submit-list.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Require Google Play internal submission
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.build.outcome }}" != "success" ]; then
+            echo '::error::Signed AAB build did not complete. Inspect the EAS build step for the exact credential/configuration blocker.'
+            exit 1
+          fi
+          if [ "${{ steps.submit.outcome }}" != "success" ]; then
+            echo '::error::Signed AAB exists, but Google Play internal submission failed. Verify that the Google Play app exists and that a Google Service Account key with Play access is uploaded to EAS credentials.'
+            exit 1
+          fi
+
+      - name: Phase 2 result
+        run: |
+          {
+            echo '## Android Phase 2 result'
+            echo
+            echo "- Release SHA: ${{ github.sha }}"
+            echo "- EAS build: ${{ steps.build.outputs.build_id }}"
+            echo '- Artifact: signed production AAB'
+            echo '- SHA-256: recorded in uploaded evidence artifact'
+            echo '- Google Play track: internal'
+            echo '- Public production exposure: NO'
+            echo
+            echo 'Next mandatory step: install this exact Play-distributed build on a physical Android device and execute the release smoke suite.'
+          } >> "$GITHUB_STEP_SUMMARY"
