@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "release_sha": "284ee6c1a0eba9a3695c34e50ddb19d5e91b0b35",
+  "generated_at": "2026-09-20T00:00:00.000Z",
+  "release_candidate": "android-public-release-candidate-2026-09-20",
+  "evidence": [
+    { "id": "production_web_api_sha_match", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Candidate baseline created; durable same-SHA production evidence must be attached before strict certification." },
+    { "id": "health_live", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Record production /health/live observation for the release SHA." },
+    { "id": "health_ready", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Record production /health/ready observation for the release SHA." },
+    { "id": "health_release", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Production /health/release must pass; /health/ready alone is insufficient." },
+    { "id": "same_sha_runtime_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Attach same-SHA production canary evidence." },
+    { "id": "android_signed_physical_smoke", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Requires signed Android AAB delivered through a production-representative Play testing track and physical-device smoke." },
+    { "id": "ios_signed_physical_smoke", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Not part of Android Phase 1 execution, but remains mandatory for full cross-store market certification." },
+    { "id": "account_deletion_physical_smoke", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Delete in-app; verify refresh/login/push are dead and provider cleanup completes." },
+    { "id": "veriff_external_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Keep identity assurance fail-closed unless production Veriff lifecycle is certified." },
+    { "id": "cloudflare_images_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Requires physical upload/confirm/delivery evidence." },
+    { "id": "cloudflare_deletion_purge_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Requires provider-side deletion observation." },
+    { "id": "mercadopago_bounded_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Real-money collection must remain disabled until bounded checkout/settlement/refund evidence exists." },
+    { "id": "wompi_breb_payout_canary", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Real payout must remain disabled until provider and bank reconciliation evidence exists." },
+    { "id": "backup_restore_drill", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Execute and retain a release-compatible restore drill." },
+    { "id": "legal_approval", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Terms, privacy/Habeas Data, retention, community and crowdfunding/KYC disclosures require approval." },
+    { "id": "app_store_release_approval", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Apple release remains outside this Android Phase 1 execution and is not inferred." },
+    { "id": "google_play_release_approval", "status": "pending", "observed_at": null, "evidence_ref": null, "operator": null, "notes": "Requires Play Console forms, testing eligibility, signed artifact and production review approval." }
+  ]
+}
