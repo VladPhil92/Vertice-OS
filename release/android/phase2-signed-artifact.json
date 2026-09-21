@@ -18,6 +18,7 @@
   "google_play_track": "internal",
   "google_play_release_status": "completed",
   "evidence_retention_days": 30,
-  "notes": "Phase 2 retry after binding apps/mobile/app.json to the canonical EAS project before environment resolution. Production preflight remains fail-closed for Maps visibility/configuration, captures diagnostics, and no credential value is committed or logged.",
-  "static_eas_project_link": true
+  "notes": "Phase 2 retry after proving the production preflight. The signed EAS build command now runs inside eas env:exec production so dynamic app.config.js sees GOOGLE_MAPS_ANDROID_API_KEY during EAS CLI local config resolution as well as on the remote builder. No credential value is committed or logged.",
+  "static_eas_project_link": true,
+  "build_inside_eas_environment": true
 }
