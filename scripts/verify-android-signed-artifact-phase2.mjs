@@ -44,6 +44,7 @@ requireValue(request.google_play_release_status === 'completed', 'internal relea
 requireValue(Number.isInteger(request.evidence_retention_days) && request.evidence_retention_days >= 1 && request.evidence_retention_days <= 90, 'evidence retention must be 1..90 days')
 
 requireValue(app?.android?.package === canonical.package, 'app.json Android package drifted')
+requireValue(app?.extra?.eas?.projectId === canonical.projectId, 'app.json must statically link the canonical EAS project before env resolution')
 requireValue(eas?.cli?.requireCommit === true, 'EAS must require a committed source')
 requireValue(eas?.cli?.appVersionSource === 'remote', 'EAS version source must remain remote')
 requireValue(eas?.cli?.version === '>= 24.7.0 < 25.0.0', 'EAS CLI compatibility range must remain >=24.7.0 <25.0.0')
