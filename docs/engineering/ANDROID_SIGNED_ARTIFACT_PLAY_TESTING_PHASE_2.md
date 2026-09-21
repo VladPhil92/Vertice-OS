@@ -10,6 +10,8 @@ For the automated execution triggered by the merge of this phase, the exact GitH
 The workflow checks out github.sha explicitly. EAS therefore receives a clean committed source tree, and the evidence artifact records:
 
 - release Git SHA;
+- EAS production-environment preflight diagnostics;
+- EAS build stderr when a build cannot start or finish;
 - EAS build ID and canonical build metadata;
 - the signed .aab;
 - SHA-256 of that exact AAB;
@@ -41,6 +43,29 @@ The real execution requires:
 3. EAS production environment variable GOOGLE_MAPS_ANDROID_API_KEY, restricted in Google Cloud to package com.ctgone.verticeos and the real signing/Play certificate SHA-1.
 4. Google Play application for com.ctgone.verticeos.
 5. Google Service Account key uploaded to EAS Android service credentials with sufficient Google Play permissions.
+
+### Required visibility for GOOGLE_MAPS_ANDROID_API_KEY
+
+GOOGLE_MAPS_ANDROID_API_KEY participates in dynamic app.config.js resolution before the remote Android builder starts. For that reason it must be readable by EAS CLI during configuration resolution.
+
+Use EAS visibility `sensitive`, not `secret`.
+
+The key is embedded into the Android application configuration and must be protected operationally through Google Cloud Android restrictions (package name + signing SHA-1), not by relying on the value being unrecoverable from the client binary.
+
+Canonical operator command:
+
+```bash
+eas env:set production \
+  --name GOOGLE_MAPS_ANDROID_API_KEY \
+  --value "<REAL_RESTRICTED_ANDROID_MAPS_KEY>" \
+  --visibility sensitive \
+  --scope project \
+  --non-interactive
+```
+
+Never place the value in Git, workflow YAML, issue comments, build logs, or release evidence.
+
+The Phase 2 workflow runs an EAS production-environment preflight before invoking `eas build`. It verifies that the key is available without printing it and that `expo config --json` resolves under the exact production configuration.
 
 If any boundary is missing, the workflow must fail and identify that boundary instead of downgrading to a placeholder.
 
