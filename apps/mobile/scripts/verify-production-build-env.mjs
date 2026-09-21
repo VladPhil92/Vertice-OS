@@ -30,8 +30,15 @@ if (!mapsKey) {
     'Configure it in the EAS production environment with visibility "sensitive" (not "secret"), ' +
     'because EAS CLI cannot read secret-visibility variables while resolving app.config.js.'
   )
-} else if (mapsKey === 'replace-with-restricted-build-secret' || mapsKey.length < 20) {
-  fail('GOOGLE_MAPS_ANDROID_API_KEY is present but does not look like a real production Android Maps key.')
+} else if (
+  mapsKey === 'replace-with-restricted-build-secret'
+  || mapsKey === '<REAL_RESTRICTED_ANDROID_MAPS_KEY>'
+  || !/^AIza[0-9A-Za-z_-]{35}$/.test(mapsKey)
+) {
+  fail(
+    'GOOGLE_MAPS_ANDROID_API_KEY is present but does not match the expected Google API-key format. ' +
+    'Replace placeholders with the real Android-restricted key.'
+  )
 }
 
 if (process.exitCode) {
