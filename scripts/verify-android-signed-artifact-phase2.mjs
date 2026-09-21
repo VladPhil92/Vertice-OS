@@ -6,11 +6,12 @@ const failures = []
 const requireValue = (condition, message) => { if (!condition) failures.push(message) }
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'))
 
-let request, eas, app
+let request, eas, app, workflow
 try {
   request = readJson('release/android/phase2-signed-artifact.json')
   eas = readJson('apps/mobile/eas.json')
   app = readJson('apps/mobile/app.json').expo
+  workflow = fs.readFileSync(path.join(root, '.github/workflows/android-signed-artifact-phase2.yml'), 'utf8')
 } catch (error) {
   console.error('Android signed artifact Phase 2 contract: FAIL')
   console.error(error instanceof Error ? error.message : String(error))
@@ -34,6 +35,13 @@ requireValue(request.build_profile === 'production', 'build profile must be prod
 requireValue(request.eas_environment === 'production', 'EAS environment must be production')
 requireValue(request.production_config_preflight === true, 'production Expo config preflight must remain enabled')
 requireValue(request.static_eas_project_link === true, 'release request must require static EAS project linkage')
+requireValue(request.build_inside_eas_environment === true, 'signed build must execute inside the EAS production environment')
+
+const buildStepMatch = workflow.match(/- name: Build signed production AAB\n([\s\S]*?)(?=\n      - name: |\n$)/)
+requireValue(Boolean(buildStepMatch), 'signed AAB workflow step is missing')
+const buildStep = buildStepMatch?.[1] ?? ''
+requireValue(/eas env:exec production/.test(buildStep), 'signed AAB workflow must enter the EAS production environment')
+requireValue(/eas build --platform android/.test(buildStep), 'signed AAB workflow must run the Android EAS build inside the production environment wrapper')
 requireValue(request.google_maps_variable === 'GOOGLE_MAPS_ANDROID_API_KEY', 'Google Maps variable contract drifted')
 requireValue(request.google_maps_visibility_required === 'sensitive', 'Google Maps EAS visibility must remain sensitive so EAS CLI can resolve dynamic config')
 requireValue(request.artifact_type === 'aab', 'artifact type must be aab')

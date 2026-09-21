@@ -116,15 +116,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          eas build \
-            --platform android \
-            --profile production \
-            --freeze-credentials \
-            --non-interactive \
-            --wait \
-            --json \
-            > "$EVIDENCE_DIR/eas-build.json" \
-            2> >(tee "$EVIDENCE_DIR/eas-build.stderr.log" >&2)
+
+          if ! eas env:exec production \
+            'APP_VARIANT=production EXPO_PUBLIC_RELEASE_CHANNEL=production EAS_PROJECT_ID=4ee77781-adec-42f6-be19-64a68848f4c7 EXPO_PUBLIC_API_URL=https://vertice-os-production.up.railway.app eas build --platform android --profile production --freeze-credentials --non-interactive --wait --json > "$EVIDENCE_DIR/eas-build.json" 2> "$EVIDENCE_DIR/eas-build.stderr.log"' \
+            --non-interactive; then
+            cat "$EVIDENCE_DIR/eas-build.stderr.log" >&2 || true
+            exit 1
+          fi
 
           node <<'NODE'
           const fs = require('node:fs')
