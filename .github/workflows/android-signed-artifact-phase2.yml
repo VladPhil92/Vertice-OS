@@ -7,6 +7,7 @@ on:
       - 'apps/mobile/eas.json'
       - 'apps/mobile/app.json'
       - 'apps/mobile/app.config.js'
+      - 'apps/mobile/scripts/verify-production-build-env.mjs'
       - 'release/android/phase2-signed-artifact.json'
       - 'scripts/verify-android-signed-artifact-phase2.mjs'
       - 'docs/engineering/ANDROID_SIGNED_ARTIFACT_PLAY_TESTING_PHASE_2.md'
@@ -98,6 +99,17 @@ jobs:
         working-directory: apps/mobile
         run: eas whoami
 
+      - name: Preflight EAS production environment and Expo config
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          eas env:exec production \
+            'APP_VARIANT=production EXPO_PUBLIC_RELEASE_CHANNEL=production EAS_PROJECT_ID=4ee77781-adec-42f6-be19-64a68848f4c7 EXPO_PUBLIC_API_URL=https://vertice-os-production.up.railway.app node scripts/verify-production-build-env.mjs && APP_VARIANT=production EXPO_PUBLIC_RELEASE_CHANNEL=production EAS_PROJECT_ID=4ee77781-adec-42f6-be19-64a68848f4c7 EXPO_PUBLIC_API_URL=https://vertice-os-production.up.railway.app npx expo config --json >/dev/null' \
+            --non-interactive \
+            2> >(tee "$EVIDENCE_DIR/eas-production-preflight.stderr.log" >&2)
+          echo 'EAS production environment + Expo config: PASS'
+
       - name: Build signed production AAB
         id: build
         working-directory: apps/mobile
@@ -110,7 +122,9 @@ jobs:
             --freeze-credentials \
             --non-interactive \
             --wait \
-            --json > "$EVIDENCE_DIR/eas-build.json"
+            --json \
+            > "$EVIDENCE_DIR/eas-build.json" \
+            2> >(tee "$EVIDENCE_DIR/eas-build.stderr.log" >&2)
 
           node <<'NODE'
           const fs = require('node:fs')
@@ -175,8 +189,10 @@ jobs:
           path: |
             ${{ runner.temp }}/vertice-android-phase2/release-sha.txt
             ${{ runner.temp }}/vertice-android-phase2/git-release.txt
+            ${{ runner.temp }}/vertice-android-phase2/eas-production-preflight.stderr.log
             ${{ runner.temp }}/vertice-android-phase2/build-id.txt
             ${{ runner.temp }}/vertice-android-phase2/eas-build.json
+            ${{ runner.temp }}/vertice-android-phase2/eas-build.stderr.log
             ${{ runner.temp }}/vertice-android-phase2/eas-build-view.json
             ${{ runner.temp }}/vertice-android-phase2/vertice-os-${{ github.sha }}.aab
             ${{ runner.temp }}/vertice-android-phase2/aab.sha256
@@ -191,7 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ steps.build.outcome }}" != "success" ]; then
-            echo '::error::Signed AAB build did not complete. Inspect the EAS build step for the exact credential/configuration blocker.'
+            echo '::error::Signed AAB build did not complete. Inspect eas-production-preflight.stderr.log and eas-build.stderr.log in the uploaded evidence artifact for the exact environment/configuration blocker.'
             exit 1
           fi
           if [ "${{ steps.submit.outcome }}" != "success" ]; then
