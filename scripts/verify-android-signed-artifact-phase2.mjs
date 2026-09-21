@@ -34,6 +34,7 @@ requireValue(request.build_profile === 'production', 'build profile must be prod
 requireValue(request.eas_environment === 'production', 'EAS environment must be production')
 requireValue(request.production_config_preflight === true, 'production Expo config preflight must remain enabled')
 requireValue(request.static_eas_project_link === true, 'release request must require static EAS project linkage')
+requireValue(request.build_inside_eas_environment === true, 'signed build must execute inside the EAS production environment')
 requireValue(request.google_maps_variable === 'GOOGLE_MAPS_ANDROID_API_KEY', 'Google Maps variable contract drifted')
 requireValue(request.google_maps_visibility_required === 'sensitive', 'Google Maps EAS visibility must remain sensitive so EAS CLI can resolve dynamic config')
 requireValue(request.artifact_type === 'aab', 'artifact type must be aab')
