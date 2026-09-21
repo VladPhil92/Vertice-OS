@@ -33,6 +33,7 @@ requireValue(request.eas_cli_version === canonical.cli, 'request EAS CLI pin dri
 requireValue(request.build_profile === 'production', 'build profile must be production')
 requireValue(request.eas_environment === 'production', 'EAS environment must be production')
 requireValue(request.production_config_preflight === true, 'production Expo config preflight must remain enabled')
+requireValue(request.static_eas_project_link === true, 'release request must require static EAS project linkage')
 requireValue(request.google_maps_variable === 'GOOGLE_MAPS_ANDROID_API_KEY', 'Google Maps variable contract drifted')
 requireValue(request.google_maps_visibility_required === 'sensitive', 'Google Maps EAS visibility must remain sensitive so EAS CLI can resolve dynamic config')
 requireValue(request.artifact_type === 'aab', 'artifact type must be aab')
@@ -44,6 +45,7 @@ requireValue(request.google_play_release_status === 'completed', 'internal relea
 requireValue(Number.isInteger(request.evidence_retention_days) && request.evidence_retention_days >= 1 && request.evidence_retention_days <= 90, 'evidence retention must be 1..90 days')
 
 requireValue(app?.android?.package === canonical.package, 'app.json Android package drifted')
+requireValue(app?.extra?.eas?.projectId === canonical.projectId, 'app.json must statically link the canonical EAS project before env resolution')
 requireValue(eas?.cli?.requireCommit === true, 'EAS must require a committed source')
 requireValue(eas?.cli?.appVersionSource === 'remote', 'EAS version source must remain remote')
 requireValue(eas?.cli?.version === '>= 24.7.0 < 25.0.0', 'EAS CLI compatibility range must remain >=24.7.0 <25.0.0')

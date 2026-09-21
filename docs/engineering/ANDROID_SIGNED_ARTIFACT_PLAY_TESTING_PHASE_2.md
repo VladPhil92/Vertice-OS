@@ -32,6 +32,24 @@ Canonical Android identity remains:
 
 EAS CLI is pinned by the execution request and CI to 24.7.0.
 
+## EAS project linkage
+
+The Expo app configuration must statically contain the canonical EAS project link:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "4ee77781-adec-42f6-be19-64a68848f4c7"
+      }
+    }
+  }
+}
+```
+
+This ID is not a credential. EAS CLI needs it before it can resolve the named EAS environment, so relying on an environment variable alone creates a circular dependency: the CLI needs the project ID to fetch the environment that would otherwise provide the project ID.
+
 ## Credential boundary
 
 No credential is stored in Git.

@@ -18,5 +18,6 @@
   "google_play_track": "internal",
   "google_play_release_status": "completed",
   "evidence_retention_days": 30,
-  "notes": "Phase 2 production-environment hardening. The workflow now validates that the EAS production environment can resolve dynamic Expo config before starting the signed build, captures preflight/build stderr as evidence, and fails explicitly when GOOGLE_MAPS_ANDROID_API_KEY is missing or configured with unreadable secret visibility. No credential value is committed or logged."
+  "notes": "Phase 2 retry after binding apps/mobile/app.json to the canonical EAS project before environment resolution. Production preflight remains fail-closed for Maps visibility/configuration, captures diagnostics, and no credential value is committed or logged.",
+  "static_eas_project_link": true
 }
