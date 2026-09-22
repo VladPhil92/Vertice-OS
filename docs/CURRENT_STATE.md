@@ -1,8 +1,8 @@
 # VÉRTICE OS — Current State
 
-> Snapshot técnico-funcional: **13 de septiembre de 2026**  
-> Evidence sync: **2026-09-13**  
-> Baseline auditado antes de esta fase: `ad21e7ae916fc071113fe007ae27b4523bd425fd`  
+> Snapshot técnico-funcional: **22 de septiembre de 2026**  
+> Evidence sync: **2026-09-22**  
+> Baseline auditado antes de esta fase: `a314524fa6e960d8b86d04bf406ef3478d8a5a4e`  
 > Estado de promoción: **RC PRE-FLIGHT / NOT CERTIFIED FOR MARKET RELEASE**.
 
 Estados de evidencia:
@@ -62,7 +62,9 @@ La configuración de release mantiene identidad canónica `com.ctgone.verticeos`
 
 `Security Scan` mantiene además la frontera de credenciales de firma móvil: rechaza keystores, claves `.p8`, bundles `.p12`, provisioning profiles, Firebase/service-account files y material de private key accidentalmente versionado. `.gitignore` excluye también `.apk`, `.aab` e `.ipa` generados.
 
-**Estado:** ✅ code/domain/design parity + production configuration + repository signing hygiene implemented; 🟡 EAS ownership/signing, provider credentials, physical-device and store certification pending.
+**Release Android — Phase 1/Phase 2 (nuevo desde el 20-21 de sept. de 2026):** `.github/workflows/android-public-release-certification.yml` (contrato de evidencia de certificación pública, `release/evidence/market-release.json` y `release/store/store-submission.json`, todo en `status: pending` — correcto, no hay evidencia externa real todavía) y `.github/workflows/android-signed-artifact-phase2.yml` (build firmado + envío a Google Play Internal). El proyecto EAS ya está vinculado de forma estática (`apps/mobile/app.json` → `extra.eas.projectId`) y el pipeline ya ejecutó, contra el commit exacto de `main`, un build production AAB firmado real que sí compiló con éxito (4 corridas entre el 20 y 21 de sept., artefacto verificado con SHA-256, retenido 30 días como artifact de GitHub Actions). El envío a Google Play Internal testing (`eas submit`) **falló las 4 veces** con `Google Service Account Keys cannot be set up in --non-interactive mode` — falta subir a EAS la credencial de cuenta de servicio de Google Play con acceso a la app. Mientras esa credencial no exista, ninguna publicación a Play es posible; el campo `google_play_release_status: "completed"` en `release/android/phase2-signed-artifact.json` es la configuración deseada del release una vez sometido (terminología de Play/EAS), no una confirmación de que la publicación ya ocurrió.
+
+**Estado:** ✅ code/domain/design parity + production configuration + repository signing hygiene + EAS project linkage + successful signed AAB build implemented; 🟡 Google Play Service Account credential, Google Play Internal submission, physical-device smoke and store certification pending.
 
 ## 2. Plataforma territorial nacional
 
@@ -139,7 +141,7 @@ El repositorio separa estrictamente:
 
 `IMPLEMENTED → INTEGRATED → DEPLOYED → READY → CERTIFIED`
 
-Gates especializados incluyen CI general, Semgrep Community SAST, Golden E2E, Golden Main Governance, Golden Financial Integrity, Financial Operations Command Center, Frontend Runtime, Railway Runtime, Production Hardening, Identity Provider Certification, National Platform Readiness/Activation/Onboarding, Mobile Core Parity, Mobile Device Release, Mobile Domain Parity, Account Deletion Privacy, Cartagena Pilot Same-SHA Runtime Canary y Market Release Certification Evidence.
+Gates especializados incluyen CI general, Semgrep Community SAST, Golden E2E, Golden Main Governance, Golden Financial Integrity, Financial Operations Command Center, Frontend Runtime, Railway Runtime, Production Hardening, Identity Provider Certification, National Platform Readiness/Activation/Onboarding, Mobile Core Parity, Mobile Device Release, Mobile Domain Parity, Account Deletion Privacy, Cartagena Pilot Same-SHA Runtime Canary, Market Release Certification Evidence, Android Public Release Certification Phase 1 y Android Signed Artifact & Play Testing Phase 2 (build firmado real ejecutado, envío a Play todavía bloqueado por credencial faltante — ver sección 1, App móvil nativa).
 
 Esta fase añade una segunda barrera documental/mecánica: **Release Candidate State Sync**. Su función es impedir que `CURRENT_STATE.md`, la matriz de completion, el contrato de certificación, el índice de fases y el manifest de ejemplo diverjan o presenten como certificadas capacidades que todavía dependen de evidencia externa.
 
@@ -176,11 +178,12 @@ No se declara un budget de performance o bundle arbitrario en esta fase: primero
 
 ### Requiere intervención de operador/terceros
 
-- crear/vincular el proyecto EAS real y provisionar variables por ambiente;
-- Apple Developer, Google Play Console y signing;
-- Google Maps production key restringida con package + signing SHA-1 real;
+- ✅ vincular el proyecto EAS real y provisionar variables por ambiente (hecho, `apps/mobile/app.json`/`eas.json`);
+- ✅ Google Maps production key restringida inyectada y validada en el preflight de build (Android);
+- subir a EAS la credencial de cuenta de servicio de Google Play (bloqueante: sin ella, `eas submit` falla siempre — 4/4 intentos reales fallaron solo en este paso);
+- Apple Developer, Google Play Console y signing iOS;
 - APNs/FCM/EAS push credentials;
-- builds firmados y smoke de dispositivos físicos Android/iOS;
+- smoke de dispositivos físicos Android/iOS una vez exista un release instalable desde Play/TestFlight (el AAB firmado ya existe como artifact de CI, pero no llegó a un canal instalable);
 - Cloudflare Images production canary;
 - Veriff production credentials/canary;
 - Mercado Pago bounded real-money canary, settlement y refund;
