@@ -1,7 +1,7 @@
 # VÉRTICE OS — Market Release Completion Matrix
 
-Snapshot: 13 September 2026.  
-Evidence sync: **2026-09-13**.  
+Snapshot: 22 September 2026.  
+Evidence sync: **2026-09-22**.  
 Current market-release status: **NOT CERTIFIED**.
 
 This document separates work that can be completed and evidenced by repository automation from work that necessarily requires an operator, external account owner, provider, physical device or legal/commercial decision. A checked repository item is not a substitute for external observation.
@@ -79,15 +79,17 @@ Repository-side controls are implemented: canonical Expo/app identifiers, explic
 
 External/account-owner boundary:
 
-- [ ] Create/link the real EAS project and set its real `EAS_PROJECT_ID` in EAS environments.
-- [ ] Configure real preview/production `EXPO_PUBLIC_API_URL` values in EAS.
+- [x] Create/link the real EAS project and set its real `EAS_PROJECT_ID` in EAS environments (`apps/mobile/app.json` → `extra.eas.projectId`, confirmed by 4 real EAS production builds run against it).
+- [ ] Configure real preview/production `EXPO_PUBLIC_API_URL` values in EAS (production confirmed via preflight; preview not verified).
 - [ ] Own/configure Apple Developer account.
 - [ ] Own/configure Google Play Console account.
-- [ ] Provision Android signing identity / Play App Signing.
+- [x] Provision Android upload-signing identity in EAS (proven: 4 real CI-triggered `eas build` runs against production produced a signed AAB each time).
+- [ ] Confirm Google Play App Signing enrollment/key management (Google-side; not verified).
 - [ ] Provision iOS distribution certificates/profiles.
-- [ ] Provision the Android Google Maps key and restrict it to package `com.ctgone.verticeos` + real signing SHA-1.
+- [ ] Provision the Android Google Maps key and restrict it to package `com.ctgone.verticeos` + real signing SHA-1 (a key with valid format is injected and used successfully in builds, but real restriction is unverified).
 - [ ] Configure APNs/FCM/EAS push credentials.
-- [ ] Generate signed preview/production-representative Android and iOS builds.
+- [x] Generate a signed production-representative Android build (4 real CI runs, SHA-256-hashed artifact retained 30 days).
+- [ ] Generate a signed production-representative iOS build.
 
 Secrets and signing identities must never be committed to Git. See `docs/engineering/MOBILE_PRODUCTION_RELEASE.md`.
 

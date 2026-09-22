@@ -1,7 +1,7 @@
 # VÉRTICE OS — Market Release Certification
 
-Snapshot: 13 September 2026.  
-Evidence sync: **2026-09-13**.  
+Snapshot: 22 September 2026.  
+Evidence sync: **2026-09-22**.  
 Current market-release status: **NOT CERTIFIED**.
 
 ## Purpose

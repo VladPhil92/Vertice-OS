@@ -77,8 +77,17 @@ requireMatch(current, /Current market-release status:\s*NOT CERTIFIED\./, 'CURRE
 requireText(current, 'Un estado `ready` no equivale a una transferencia o payout ejecutado.', 'CURRENT_STATE')
 requireText(current, 'No se declara un budget de performance o bundle arbitrario en esta fase', 'CURRENT_STATE')
 
+const completedCompletionTokens = [
+  '- [x] Create/link the real EAS project',
+  '- [x] Provision Android upload-signing identity in EAS',
+  '- [x] Generate a signed production-representative Android build',
+]
+for (const token of completedCompletionTokens) requireText(completion, token, 'MARKET_RELEASE_COMPLETION')
+
 const pendingCompletionTokens = [
-  '- [ ] Create/link the real EAS project',
+  '- [ ] Confirm Google Play App Signing enrollment/key management',
+  '- [ ] Generate a signed production-representative iOS build.',
+  '- [ ] Provision the Android Google Maps key and restrict it to package `com.ctgone.verticeos` + real signing SHA-1',
   '- [ ] install signed preview/release build;',
   '- [ ] production account/contract;',
   '- [ ] production merchant account/credentials;',
