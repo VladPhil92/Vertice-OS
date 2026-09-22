@@ -1,7 +1,7 @@
 # VÉRTICE OS — Market Release Completion Matrix
 
-Snapshot: 13 September 2026.  
-Evidence sync: **2026-09-13**.  
+Snapshot: 22 September 2026.  
+Evidence sync: **2026-09-22**.  
 Current market-release status: **NOT CERTIFIED**.
 
 This document separates work that can be completed and evidenced by repository automation from work that necessarily requires an operator, external account owner, provider, physical device or legal/commercial decision. A checked repository item is not a substitute for external observation.
